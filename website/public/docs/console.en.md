@@ -68,14 +68,14 @@ iMessage, and Console.
 
 3. Fill in required credentials (fields differ by channel):
 
-   | Channel      | Required fields                                                  |
-   | ------------ | ---------------------------------------------------------------- |
-   | **DingTalk** | Client ID, Client Secret                                         |
-   | **Feishu**   | App ID, App Secret, Encrypt Key, Verification Token, Media Dir  |
-   | **Discord**  | Bot Token, HTTP Proxy, Proxy Auth                                |
-   | **QQ**       | App ID, Client Secret                                            |
-   | **iMessage** | Database path, Poll interval                                     |
-   | **Console**  | _(toggle only)_                                                  |
+   | Channel      | Required fields                                                |
+   | ------------ | -------------------------------------------------------------- |
+   | **DingTalk** | Client ID, Client Secret                                       |
+   | **Feishu**   | App ID, App Secret, Encrypt Key, Verification Token, Media Dir |
+   | **Discord**  | Bot Token, HTTP Proxy, Proxy Auth                              |
+   | **QQ**       | App ID, Client Secret                                          |
+   | **iMessage** | Database path, Poll interval                                   |
+   | **Console**  | _(toggle only)_                                                |
 
 4. Click **Save**. Changes take effect in seconds, no restart required.
 
@@ -362,18 +362,18 @@ Select rows → click **Delete** in the toolbar → confirm.
 
 ## Quick Reference
 
-| Page                  | Sidebar path                    | What you can do                                         |
-| --------------------- | ------------------------------- | ------------------------------------------------------- |
-| Chat                  | Chat → Chat                     | Talk with CoPaw, manage sessions                        |
-| Channels              | Control → Channels              | Enable/disable channels, configure credentials          |
-| Sessions              | Control → Sessions              | Filter, rename, delete sessions                         |
-| Cron Jobs             | Control → Cron Jobs             | Create/edit/delete jobs, run immediately                |
-| Workspace             | Agent → Workspace               | Edit persona files, view memory, upload/download        |
-| Skills                | Agent → Skills                  | Enable/disable/create/delete skills                     |
-| MCP                   | Agent → MCP                     | Enable/disable/create/delete MCP clients                |
-| Runtime Config        | Agent → Runtime Config          | Modify runtime configuration                            |
-| Models                | Settings → Models               | Configure providers, manage local/Ollama, pick model   |
-| Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                   |
+| Page                  | Sidebar path                     | What you can do                                      |
+| --------------------- | -------------------------------- | ---------------------------------------------------- |
+| Chat                  | Chat → Chat                      | Talk with CoPaw, manage sessions                     |
+| Channels              | Control → Channels               | Enable/disable channels, configure credentials       |
+| Sessions              | Control → Sessions               | Filter, rename, delete sessions                      |
+| Cron Jobs             | Control → Cron Jobs              | Create/edit/delete jobs, run immediately             |
+| Workspace             | Agent → Workspace                | Edit persona files, view memory, upload/download     |
+| Skills                | Agent → Skills                   | Enable/disable/create/delete skills                  |
+| MCP                   | Agent → MCP                      | Enable/disable/create/delete MCP clients             |
+| Runtime Config        | Agent → Runtime Config           | Modify runtime configuration                         |
+| Models                | Settings → Models                | Configure providers, manage local/Ollama, pick model |
+| Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                |
 
 ---
 
