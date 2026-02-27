@@ -6,6 +6,7 @@ import type { SiteConfig } from "../config";
 import { t, type Lang } from "../i18n";
 
 const COMMANDS = {
+  pip: ["pip install copaw", "copaw init --defaults", "copaw app"],
   unix: [
     "curl -fsSL https://raw.githubusercontent.com/agentscope-ai/CoPaw/master/scripts/install.sh | bash",
     "copaw init --defaults",
@@ -27,7 +28,7 @@ interface QuickStartProps {
 }
 
 export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
-  const [activeTab, setActiveTab] = useState<OsTab>("unix");
+  const [activeTab, setActiveTab] = useState<OsTab>("pip");
   const [copied, setCopied] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -104,7 +105,7 @@ export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
               marginBottom: "var(--space-3)",
             }}
           >
-            {(["unix", "windows"] as const).map((tab) => (
+            {(["pip", "unix", "windows"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -123,7 +124,9 @@ export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
                   cursor: "pointer",
                 }}
               >
-                {tab === "unix"
+                {tab === "pip"
+                  ? t(lang, "quickstart.tabPip")
+                  : tab === "unix"
                   ? t(lang, "quickstart.tabUnix")
                   : t(lang, "quickstart.tabWindows")}
               </button>
@@ -152,7 +155,9 @@ export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
                   color: "var(--text-muted)",
                 }}
               >
-                {t(lang, "quickstart.optionLocal")}
+                {activeTab === "pip"
+                  ? t(lang, "quickstart.optionPip")
+                  : t(lang, "quickstart.optionLocal")}
               </span>
             </div>
             <button
