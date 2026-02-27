@@ -56,7 +56,7 @@ Step-by-step:
 
    ![client](https://img.alicdn.com/imgextra/i3/O1CN01JsRrwx1hJImLfM7O1_!!6000000004256-2-tps-2809-1585.png)
 
-7. **Add your server's IP to the whitelist** — this is required for features that call the DingTalk Open API (e.g. downloading images and files sent by users). Go to **"Security & Compliance → IP Whitelist"** in your app settings and add the public IP of the machine running CoPaw. You can find your public IP by running `curl ifconfig.me` in a terminal. If the IP is not whitelisted, image and file downloads will fail with a `Forbidden.AccessDenied.IpNotInWhiteList` error.
+7. (Optional) **Add your server's IP to the whitelist** — this is required for features that call the DingTalk Open API (e.g. downloading images and files sent by users). Go to **"Security & Compliance → IP Whitelist"** in your app settings and add the public IP of the machine running CoPaw. You can find your public IP by running `curl ifconfig.me` in a terminal. If the IP is not whitelisted, image and file downloads will fail with a `Forbidden.AccessDenied.IpNotInWhiteList` error.
 
 ### Link the app
 
