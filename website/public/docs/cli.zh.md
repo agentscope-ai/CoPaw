@@ -187,13 +187,13 @@ copaw env delete TAVILY_API_KEY
 管理频道配置（iMessage / Discord / DingTalk / Feishu / QQ / Console 等）。
 **说明**：交互式配置用 `config`（无 `configure` 子命令）；卸载自定义频道用 `remove`（无 `uninstall`）。
 
-| 命令                           | 说明                                                                 |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `copaw channels list`          | 查看所有频道的状态（密钥脱敏）                                       |
-| `copaw channels install <key>` | 在 `custom_channels/` 安装频道：创建模板，或用 `--path` / `--url` 安装 |
-| `copaw channels add <key>`     | 安装并加入 config；内置频道只写 config；支持 `--path` / `--url`       |
-| `copaw channels remove <key>`   | 从 `custom_channels/` 删除自定义频道（内置不可删）；`--keep-config` 保留 config |
-| `copaw channels config`        | 交互式启用/禁用频道并填写凭据                                        |
+| 命令                           | 说明                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| `copaw channels list`          | 查看所有频道的状态（密钥脱敏）                                                  |
+| `copaw channels install <key>` | 在 `custom_channels/` 安装频道：创建模板，或用 `--path` / `--url` 安装          |
+| `copaw channels add <key>`     | 安装并加入 config；内置频道只写 config；支持 `--path` / `--url`                 |
+| `copaw channels remove <key>`  | 从 `custom_channels/` 删除自定义频道（内置不可删）；`--keep-config` 保留 config |
+| `copaw channels config`        | 交互式启用/禁用频道并填写凭据                                                   |
 
 ```bash
 copaw channels list                    # 看当前状态

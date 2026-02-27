@@ -199,13 +199,13 @@ Manage channel configuration (iMessage, Discord, DingTalk, Feishu, QQ,
 Console, etc.). **Note:** Use `config` for interactive setup (no `configure`
 subcommand); use `remove` to uninstall custom channels (no `uninstall`).
 
-| Command                            | What it does                                                                 |
-| ---------------------------------- | ---------------------------------------------------------------------------- |
-| `copaw channels list`              | Show all channels and their status (secrets masked)                         |
-| `copaw channels install <key>`     | Install a channel into `custom_channels/`: create stub or use `--path`/`--url` |
-| `copaw channels add <key>`         | Install and add to config; built-in channels only get config entry; supports `--path`/`--url` |
-| `copaw channels remove <key>`       | Remove a custom channel from `custom_channels/` (built-ins cannot be removed); `--keep-config` keeps config entry |
-| `copaw channels config`            | Interactively enable/disable channels and fill in credentials                |
+| Command                        | What it does                                                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `copaw channels list`          | Show all channels and their status (secrets masked)                                                               |
+| `copaw channels install <key>` | Install a channel into `custom_channels/`: create stub or use `--path`/`--url`                                    |
+| `copaw channels add <key>`     | Install and add to config; built-in channels only get config entry; supports `--path`/`--url`                     |
+| `copaw channels remove <key>`  | Remove a custom channel from `custom_channels/` (built-ins cannot be removed); `--keep-config` keeps config entry |
+| `copaw channels config`        | Interactively enable/disable channels and fill in credentials                                                     |
 
 ```bash
 copaw channels list                    # See current status
