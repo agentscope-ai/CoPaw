@@ -3,23 +3,25 @@
 The **Console** is CoPaw's built-in web interface. After running `copaw app`,
 open `http://127.0.0.1:8088/` in your browser to enter the Console.
 
-**What can you do in the Console?**
+**In the Console, you can:**
 
 - Chat with CoPaw in real time
-- Enable / disable messaging channels and fill in credentials
+- Enable/disable messaging channels
 - View and manage all chat sessions
-- Create scheduled tasks that run automatically
-- Edit CoPaw's personality and behavior files
-- Toggle skills to extend CoPaw's capabilities
-- Configure LLM providers and choose the active model
+- Manage scheduled jobs
+- Edit CoPaw's persona and behavior files
+- Enable/disable skills to extend CoPaw's capabilities
+- Manage MCP clients
+- Modify runtime configuration
+- Configure LLM providers and select active models
 - Manage environment variables needed by tools
 
-The sidebar on the left lists all functions grouped into four categories:
-**Chat**, **Control**, **Agent**, and **Settings**. Click any item to switch
-to that page. Below is a step-by-step guide for each.
+The sidebar on the left groups features into **Chat**, **Control**, **Agent**,
+and **Settings**. Click any item to switch pages. The sections below walk
+through each feature in order.
 
-> **Not seeing the Console?** Make sure the frontend is built. See
-> [CLI](./cli) for instructions.
+> **Not seeing the Console?** Make sure the frontend has been built. See
+> [CLI](./cli).
 
 ---
 
@@ -27,24 +29,24 @@ to that page. Below is a step-by-step guide for each.
 
 > Sidebar: **Chat → Chat**
 
-This is where you talk to CoPaw. Open the Console and you'll land here
-by default.
+This is where you talk to CoPaw. It is the default page when the Console
+opens.
 
-![Chat](https://img.alicdn.com/imgextra/i3/O1CN01BVgBBV26Eb6YjBPfW_!!6000000007630-2-tps-4066-2118.png)
+![Chat](https://img.alicdn.com/imgextra/i4/O1CN01iuGyNc1mNwsUU5NQI_!!6000000004943-2-tps-3822-2070.png)
 
 **Send a message:**
-Type your text in the input box at the bottom, then press **Enter** or click
-the send button (↑). CoPaw's reply will appear in real time.
+Type in the input box at the bottom, then press **Enter** or click the send
+button (↑). CoPaw replies in real time.
 
 **Create a new session:**
-Click the **+** button at the top to start a fresh conversation. Each session
-keeps its own history independently.
+Click the **+ New Chat** button at the top of the chat sidebar to start a new
+conversation. Each session keeps separate history.
 
-**Switch between sessions:**
-Click any session name in the list at the top to load its conversation history.
+**Switch sessions:**
+Click any session name in the chat sidebar to load its history.
 
 **Delete a session:**
-Hover over a session entry and click the **trash icon** that appears.
+Click the **···** button on a session item, then click the **trash** icon.
 
 ---
 
@@ -52,34 +54,35 @@ Hover over a session entry and click the **trash icon** that appears.
 
 > Sidebar: **Control → Channels**
 
-Here you manage which messaging channels (DingTalk, Feishu, Discord, QQ,
-iMessage, Console) are active and enter their credentials.
+Manage channel for DingTalk, Feishu, Discord, QQ,
+iMessage, and Console.
 
-![Channels](https://img.alicdn.com/imgextra/i2/O1CN01ra3dHP1oVqwXYLklt_!!6000000005231-2-tps-4066-2118.png)
+![Channels](https://img.alicdn.com/imgextra/i4/O1CN01tUJBg121ZbBnC5fjx_!!6000000006999-2-tps-3822-2070.png)
 
 **Enable a channel:**
 
-1. Click the card of the channel you want to configure.
-2. A settings panel slides in. Toggle the **Enabled** switch to on.
-   ![Channel Configuration](https://img.alicdn.com/imgextra/i1/O1CN011g2o2I1L2t2LPMOBv_!!6000000001242-2-tps-4066-2118.png)
-3. Fill in the required credentials — each channel has different fields:
+1. Click the channel card you want to configure.
+2. A settings panel slides out on the right. Turn on **Enable**.
 
-   | Channel      | Fields to fill in                                              |
-   | ------------ | -------------------------------------------------------------- |
-   | **DingTalk** | Client ID, Client Secret                                       |
-   | **Feishu**   | App ID, App Secret, Encrypt Key, Verification Token, Media Dir |
-   | **Discord**  | Bot Token, HTTP Proxy, Proxy Auth                              |
-   | **QQ**       | App ID, Client Secret                                          |
-   | **iMessage** | Database path, Poll interval                                   |
-   | **Console**  | _(just the toggle)_                                            |
+   ![Channel Configuration](https://img.alicdn.com/imgextra/i1/O1CN01dbZiw21S5MUOUFJ06_!!6000000002195-2-tps-3822-2070.png)
 
-4. Click **Save**. The change takes effect within seconds — no restart needed.
+3. Fill in required credentials (fields differ by channel):
+
+   | Channel      | Required fields                                                  |
+   | ------------ | ---------------------------------------------------------------- |
+   | **DingTalk** | Client ID, Client Secret                                         |
+   | **Feishu**   | App ID, App Secret, Encrypt Key, Verification Token, Media Dir  |
+   | **Discord**  | Bot Token, HTTP Proxy, Proxy Auth                                |
+   | **QQ**       | App ID, Client Secret                                            |
+   | **iMessage** | Database path, Poll interval                                     |
+   | **Console**  | _(toggle only)_                                                  |
+
+4. Click **Save**. Changes take effect in seconds, no restart required.
 
 **Disable a channel:**
-Open the same settings panel and toggle **Enabled** off, then **Save**.
+Open the same panel, turn off **Enable**, then click **Save**.
 
-> For how to obtain credentials for each platform, see
-> [Channels](./channels).
+> For credential setup details, see [Channels](./channels).
 
 ---
 
@@ -87,25 +90,22 @@ Open the same settings panel and toggle **Enabled** off, then **Save**.
 
 > Sidebar: **Control → Sessions**
 
-Here you can view, filter, and clean up chat sessions across all channels.
+View, filter, and clean up chat sessions across all channels.
 
-![Sessions](https://img.alicdn.com/imgextra/i2/O1CN01SaE3KM1zC7ed2AjKP_!!6000000006677-2-tps-4066-2118.png)
+![Sessions](https://img.alicdn.com/imgextra/i2/O1CN0142DXNW1NkyOX07sJ7_!!6000000001609-2-tps-3822-2070.png)
 
-**Find a session:**
+**Find sessions:**
 Use the search box to filter by user, or use the dropdown to filter by
-channel. The table updates instantly.
+channel. The table updates immediately.
 
 **Rename a session:**
-Click the **Edit** button on a row → change the name → click **Save**.
+Click **Edit** on a row → change the name → click **Save**.
 
-![Edit Session](https://img.alicdn.com/imgextra/i3/O1CN01kN65IC1avaZtqZM0Z_!!6000000003392-2-tps-4066-2118.png)
+**Delete one session:**
+Click **Delete** on a row → confirm.
 
-**Delete a session:**
-Click the **Delete** button on a row → confirm in the popup.
-
-**Delete multiple sessions at once:**
-Check the rows you want to remove → click the **Batch Delete** button that
-appears → confirm.
+**Batch delete:**
+Select rows → click **Batch Delete** → confirm.
 
 ---
 
@@ -113,37 +113,35 @@ appears → confirm.
 
 > Sidebar: **Control → Cron Jobs**
 
-Here you create and manage scheduled tasks that CoPaw runs automatically
-on a timed basis.
+Create and manage scheduled jobs that CoPaw runs automatically by time.
 
-![Cron Jobs](https://img.alicdn.com/imgextra/i3/O1CN01LUKrjf1KU4w5cfXQ7_!!6000000001166-2-tps-4066-2118.png)
+![Cron Jobs](https://img.alicdn.com/imgextra/i3/O1CN01JET1Aw1C9SAvXuIpk_!!6000000000038-2-tps-3822-2070.png)
 
 **Create a new job:**
 
-1. Click the **+ Create Job** button.
-   ![Create Cron Job](https://img.alicdn.com/imgextra/i2/O1CN01BjnhGv22QGjdueuBS_!!6000000007114-2-tps-4066-2118.png)
-2. Fill in each section of the form:
-   - **Basic info** — Give the job an ID (e.g. `job-001`), a name
-     (e.g. "Daily summary"), and toggle it on.
-   - **Schedule** — Enter a cron expression (e.g. `0 9 * * *` for every day
-     at 9 AM) and select a timezone.
-   - **Task** — Choose **Text** (send a fixed message) or **Agent** (ask
-     CoPaw a question and forward its reply), then fill in the content.
-   - **Delivery** — Pick the target channel (e.g. Console, DingTalk), the
-     target user, and the delivery mode (**Stream** for real-time, or
-     **Final** for a single complete response).
-   - **Advanced** — Optionally adjust max concurrency, timeout, and misfire
-     grace period.
+1. Click **+ Create Job**.
+
+   ![Create Cron Job](https://img.alicdn.com/imgextra/i2/O1CN01jFAcIZ1wCAqyxDGKX_!!6000000006271-2-tps-3822-2070.png)
+
+2. Fill in each section:
+   - **Basic Info** — Job ID (e.g. `job-001`) and job name (e.g. "Daily Summary").
+   - **Schedule** — Cron expression (e.g. `0 9 * * *` = 9:00 AM daily) and
+     timezone
+   - **Task Type & Content** — **Text** (fixed message) or **Agent** (ask
+     CoPaw and forward reply), then the content
+   - **Delivery** — Target channel (Console, DingTalk, etc.), target user & session id, and
+     mode (**Stream** = real-time, **Final** = one complete response)
+   - **Advanced** — Max concurrency, timeout, misfire grace time
 3. Click **Save**.
 
 **Edit a job:**
-Click the **Edit** button on a row → modify any fields → **Save**.
+Click **Edit** on a row → modify fields → **Save**.
 
-**Enable / Disable a job:**
-Click the toggle in the row to turn it on or off.
+**Enable/disable a job:**
+Toggle the switch in the row.
 
-**Run a job immediately:**
-Click **Execute Now** → confirm. The job runs once right away.
+**Run once immediately:**
+Click **Execute Now** → confirm.
 
 **Delete a job:**
 Click **Delete** → confirm.
@@ -154,29 +152,27 @@ Click **Delete** → confirm.
 
 > Sidebar: **Agent → Workspace**
 
-Here you edit the files that define CoPaw's personality and behavior —
-SOUL.md, AGENTS.md, HEARTBEAT.md, etc. —
-all directly in the browser.
+Edit files that define CoPaw's persona and behavior, such as `SOUL.md`,
+`AGENTS.md`, and `HEARTBEAT.md`, directly in the browser.
 
-![Workspace](https://img.alicdn.com/imgextra/i1/O1CN01nA0uDT1yjj69Msy8Q_!!6000000006615-2-tps-4066-2118.png)
+![Workspace](https://img.alicdn.com/imgextra/i3/O1CN01APrwdP1NqT9CKJMFt_!!6000000001621-2-tps-3822-2070.png)
 
-**Edit a file:**
+**Edit files:**
 
-1. Click a file name in the file list (e.g. `SOUL.md`).
-2. The file content appears in the editor. Make your changes.
+1. Click a file in the list (e.g. `SOUL.md`).
+2. The editor shows file content. Make your changes.
 3. Click **Save** to apply, or **Reset** to discard and reload.
 
 **View daily memory:**
-If `MEMORY.md` exists, click the **▶** arrow next to it to expand date-based
-entries. Click a specific date to view or edit that day's memory.
+If `MEMORY.md` exists, click the **▶** arrow to expand date-based entries.
+Click a date to view or edit that day's memory.
 
-**Download the entire workspace:**
-Click the **Download** button (⬇) to save the whole workspace as a `.zip` file.
+**Download workspace:**
+Click **Download** (⬇) to export the entire workspace as a `.zip`.
 
-**Upload / restore a workspace:**
-Click the **Upload** button (⬆) → choose a `.zip` file (max 100 MB). The
-current workspace files will be replaced. This is handy for migrating between
-machines or restoring from a backup.
+**Upload/restore workspace:**
+Click **Upload** (⬆) → choose a `.zip` (max 100 MB). Existing workspace files
+will be replaced. Useful for migration and backup restore.
 
 ---
 
@@ -184,37 +180,58 @@ machines or restoring from a backup.
 
 > Sidebar: **Agent → Skills**
 
-Here you manage the skills that extend CoPaw's capabilities (e.g. reading
-PDFs, creating Word documents, fetching news).
+Manage skills that extend CoPaw's capabilities (for example: PDF reading,
+Word document creation, news retrieval).
 
-![Skills](https://img.alicdn.com/imgextra/i3/O1CN01FCyGA01i9yKJm92L2_!!6000000004371-2-tps-4066-2118.png)
+![Skills](https://img.alicdn.com/imgextra/i1/O1CN01ZF4kVc1Yz8PlPdiM6_!!6000000003129-2-tps-3822-2070.png)
 
 **Enable a skill:**
-Click the **Enable** link at the bottom of a skill card. It takes effect
-immediately.
+Click **Enable** at the bottom of a skill card. It takes effect immediately.
 
 **View skill details:**
-Click a skill card to see its full description.
-
-![View Skill](https://img.alicdn.com/imgextra/i4/O1CN01A8WloA1wSCiLL2Iix_!!6000000006306-2-tps-4066-2118.png)
+Click a skill card to open its full description.
 
 **Disable a skill:**
-Click the **Disable** link. Also takes effect immediately.
+Click **Disable**. It also takes effect immediately.
+
+**Import from Skill Hub:**
+
+1. Click **Import Skill**.
+2. Enter a skill URL, then click import.
+3. Wait for import to complete. The skill appears as enabled.
+
+![Import Skill](https://img.alicdn.com/imgextra/i4/O1CN01LLVYzH28gCCjby41K_!!6000000007961-2-tps-3822-2070.png)
 
 **Create a custom skill:**
 
-1. Click **+ Create Skill**.
-2. Enter a skill name (e.g. `weather_query`) and the skill content in
-   Markdown format (must include `name` and `description`).
-3. Click **Save**. The new skill appears right away.
+1. Click **Create Skill**.
+2. Enter a skill name (e.g. `weather_query`) and skill content in Markdown
+   (must include `name` and `description`).
+3. Click **Save**. The new skill appears immediately.
 
-![Create Skill](https://img.alicdn.com/imgextra/i3/O1CN01XUa5Ge28W7UPEC18V_!!6000000007939-2-tps-4066-2118.png)
+![Create Skill](https://img.alicdn.com/imgextra/i3/O1CN01hW0eLY1go9qeiPrUF_!!6000000004188-2-tps-3822-2070.png)
 
 **Delete a custom skill:**
-First disable the skill, then click the **🗑** icon on its card → confirm.
+Disable the skill first, then click the **🗑** icon on its card and confirm.
 
-> For built-in skill details and how to write custom skills, see
+> For built-in skill details, Skill Hub import, and custom skill authoring, see
 > [Skills](./skills).
+
+---
+
+## MCP
+
+> Sidebar: **Agent → MCP**
+
+Use this page to create, enable/disable, and delete MCP clients.
+
+---
+
+## Runtime Config
+
+> Sidebar: **Agent → Runtime Config**
+
+Use this page to view and modify runtime configuration.
 
 ---
 
@@ -222,61 +239,50 @@ First disable the skill, then click the **🗑** icon on its card → confirm.
 
 > Sidebar: **Settings → Models**
 
-Here you configure LLM providers and choose which model CoPaw uses. CoPaw
-supports both cloud providers (API key required) and local providers (no API
-key needed).
+Configure LLM providers and choose the model CoPaw uses. CoPaw supports both
+cloud providers (API key required) and local providers (no API key required).
 
-![Models](https://img.alicdn.com/imgextra/i1/O1CN01TLjv5z200VDntmbY8_!!6000000006787-2-tps-4066-2118.png)
+![Models](https://img.alicdn.com/imgextra/i2/O1CN01Kd3lg91HdkS5SaLoF_!!6000000000781-2-tps-3822-2070.png)
 
 ### Cloud providers
 
-**Set up a provider:**
+**Configure a provider:**
 
-1. Click the **⚙ Setting** button on a provider card (ModelScope, DashScope,
-   or Custom).
-   ![Provider Settings](https://img.alicdn.com/imgextra/i1/O1CN01htkE1Q1jewjDRFCWd_!!6000000004574-2-tps-4066-2118.png)
-2. Enter your **API Key** (for the Custom provider, also fill in the
-   **Base URL**).
-3. Click **Save**. The card's status changes to "Authorized".
+1. Click **Settings** on a provider card (ModelScope, DashScope).
+2. Enter your **API Key**.
+3. Click **Save**. Card status becomes "Authorized".
+4. To add a custom provider, click **Add Provider**.
+5. Enter provider ID, display name, and required fields, then click **Create**.
+6. Open **Settings** for the created provider, fill required fields, then
+   **Save**. Status becomes "Authorized".
 
-**Revoke a provider:**
-Open the provider's setting dialog and click **Revoke Authorization**. The
-API key is cleared; if this was the active provider, the model selection is
-cleared too.
+**Revoke authorization:**
+Open the provider settings dialog and click **Revoke Authorization**. API key
+data is cleared. If this provider is currently active, model selection is also
+cleared.
 
 ### Local providers (llama.cpp / MLX)
 
-Local providers appear with a purple **Local** tag and are always shown as
-**Ready** — no API key configuration is needed. To use them, first install the
-backend dependency (`pip install 'copaw[llamacpp]'` or `pip install 'copaw[mlx]'`).
+Local providers show a purple **Local** tag. Install backend dependencies
+first (`pip install 'copaw[llamacpp]'` or `pip install 'copaw[mlx]'`).
 
 **Download a model:**
 
 1. Click **Manage Models** on a local provider card.
-   <!-- TODO: Screenshot — Model management modal with the download form expanded -->
-   ![Model management modal](images/local-models-manage-modal.png)
-2. Click **Download Model** and fill in:
+2. Click **Download Model**, then fill:
    - **Repo ID** (required) — e.g. `Qwen/Qwen3-4B-GGUF`
-   - **Filename** (optional) — leave empty to auto-select
+   - **Filename** (optional) — leave empty for auto-selection
    - **Source** — Hugging Face (default) or ModelScope
-3. Click **Download**. Progress appears in the panel; a toast notification
-   shows when it completes.
-   <!-- TODO: Screenshot — Download in progress with spinner and status text -->
-   ![Download progress](images/local-models-download-progress.png)
+3. Click **Download** and wait for completion.
 
 **View and delete models:**
-Downloaded models are listed with their size, source badge (**HF** / **MS**),
-and a delete button.
-
-<!-- TODO: Screenshot — Downloaded models list with HF/MS badges and delete button -->
-
-![Downloaded models list](images/local-models-list.png)
-
-> For a full walkthrough and backend details, see [Local Models](./local-models).
+Downloaded models are listed with file size, source badge (**HF** / **MS**),
+and delete button.
 
 ### Ollama provider
 
-The Ollama provider integrates with your local Ollama daemon, dynamically loading models from it. Models appear with a blue **Ollama** tag.
+The Ollama provider integrates with your local Ollama daemon and dynamically
+loads models from it.
 
 **Prerequisites:**
 
@@ -285,99 +291,97 @@ The Ollama provider integrates with your local Ollama daemon, dynamically loadin
 
 **Download a model:**
 
-1. Click **Manage Models** on the Ollama provider card.
-   <!-- TODO: Screenshot — Ollama model management modal showing the download form -->
-   ![Ollama manage modal](images/ollama-manage-modal.png)
-2. Click **Download Model** and enter the **Model Name** (e.g. `mistral:7b`, `qwen3:8b`).
-3. Click **Download**. Progress appears in the panel with real-time status updates.
-   <!-- TODO: Screenshot — Ollama download in progress with status and cancel button -->
-   ![Ollama download progress](images/ollama-download-progress.png)
+1. Click **Settings** on the Ollama provider card.
+2. In **API Key**, enter a value (for example `ollama`), then click **Save**.
+3. Click **Manage Models** on the Ollama card, click **Download Model**, and
+   enter a model name (e.g. `mistral:7b`, `qwen3:8b`).
+4. Click **Download Model** and wait for completion.
 
 **Cancel a download:**
-While downloading, click the **✕** button next to the progress indicator to cancel.
+During download, click **✕** next to the progress indicator to cancel.
 
 **View and delete models:**
-Downloaded models are listed with their size and a delete button. Models update automatically when you add/remove them via Ollama CLI or the Console.
+Downloaded models are listed with size and delete button. The list updates
+automatically when models are added/removed via Ollama CLI or Console.
 
-<!-- TODO: Screenshot — Ollama models list with model sizes and delete buttons -->
+**How it differs from local providers:**
 
-![Ollama models list](images/ollama-models-list.png)
+- Models come from the Ollama daemon (not downloaded directly by CoPaw)
+- Model list is auto-synced with Ollama
+- Popular model examples: `mistral:7b`, `qwen3:8b`
 
-**Key differences from local models:**
-
-- Models come from your Ollama daemon (not downloaded by CoPaw directly)
-- Model list syncs automatically with Ollama
-- Supports popular models: `mistral:7b`, `qwen3:8b`, etc.
-
-> You can also manage Ollama models via CLI: `copaw models ollama-pull`, `copaw models ollama-list`, `copaw models ollama-remove`. See [CLI](./cli#ollama-models).
+> You can also manage Ollama models via CLI: `copaw models ollama-pull`,
+> `copaw models ollama-list`, `copaw models ollama-remove`. See
+> [CLI](./cli#ollama-models).
 
 ### Choose the active model
 
-1. In the **LLM** section below the provider cards, select a **Provider**
-   from the dropdown (only authorized or local-with-models providers appear).
-2. Select or type a **Model** name.
+1. In the **LLM Config** section, select a **Provider** from the dropdown
+   (only authorized providers or local providers with downloaded models appear).
+2. Select a **Model** from the model dropdown.
 3. Click **Save**.
 
-> **Note:** You are responsible for ensuring cloud API keys are valid and have
-> sufficient quota. CoPaw does not verify key correctness.
+> **Note:** Cloud API key validity is your responsibility. CoPaw does not
+> verify key correctness.
 >
-> For more about providers, see [Config — LLM Providers](./config#llm-providers).
+> For provider details, see [Config — LLM Providers](./config#llm-providers).
 
 ---
 
-## Environments
+## Environment Variables
 
-> Sidebar: **Settings → Environments**
+> Sidebar: **Settings → Environment Variables**
 
-Here you manage environment variables that CoPaw's tools and skills need at
-runtime (e.g. `TAVILY_API_KEY` for web search).
+Manage runtime environment variables needed by CoPaw tools and skills
+(for example, `TAVILY_API_KEY`).
 
-![Environments](https://img.alicdn.com/imgextra/i1/O1CN01zxYQlK1ludWnwfNWH_!!6000000004879-2-tps-4066-2118.png)
+![Environments](https://img.alicdn.com/imgextra/i1/O1CN01jNMeBA1nMP9tQdTmU_!!6000000005075-2-tps-3822-2070.png)
 
 **Add a variable:**
 
-1. Click **+ Add Variable** at the bottom of the list.
-2. Enter the variable name (e.g. `TAVILY_API_KEY`) and its value.
-3. Click **Save** in the toolbar.
+1. Click **+ Add Variable**.
+2. Enter the variable name (e.g. `TAVILY_API_KEY`) and value.
+3. Click **Save**.
 
 **Edit a variable:**
-Change the **Value** field of an existing row, then click **Save**.
-(The variable name is read-only after saving. To rename, delete the old one
-and create a new one.)
+Change the **Value** field, then click **Save**.
+(Variable names are read-only after save; to rename, delete and recreate.)
 
 **Delete a variable:**
-Click the **🗑** icon on a row → confirm if prompted.
+Click the **🗑** icon on a row, then confirm if prompted.
 
-**Delete multiple variables at once:**
-Check the rows you want to remove → click **Delete** in the toolbar → confirm.
+**Batch delete:**
+Select rows → click **Delete** in the toolbar → confirm.
 
-> **Note:** You are responsible for ensuring the values are valid. CoPaw only
-> stores and loads them.
+> **Note:** Variable validity is your responsibility. CoPaw only stores and
+> loads values.
 >
-> For more details, see [Config — Environment Variables](./config#environment-variables).
+> See [Config — Environment Variables](./config#environment-variables) for more.
 
 ---
 
-## Quick reference
+## Quick Reference
 
-| Page         | Sidebar path            | What you can do                                                           |
-| ------------ | ----------------------- | ------------------------------------------------------------------------- |
-| Chat         | Chat → Chat             | Talk to CoPaw; manage sessions                                            |
-| Channels     | Control → Channels      | Enable/disable channels; fill in credentials                              |
-| Sessions     | Control → Sessions      | Filter, rename, delete sessions                                           |
-| Cron Jobs    | Control → Cron Jobs     | Create/edit/delete scheduled tasks; run now                               |
-| Workspace    | Agent → Workspace       | Edit personality files; view memory; upload/download                      |
-| Skills       | Agent → Skills          | Enable/disable/create/delete skills                                       |
-| Models       | Settings → Models       | Set up provider API keys; manage local/Ollama models; choose active model |
-| Environments | Settings → Environments | Add/edit/delete environment variables                                     |
+| Page                  | Sidebar path                    | What you can do                                         |
+| --------------------- | ------------------------------- | ------------------------------------------------------- |
+| Chat                  | Chat → Chat                     | Talk with CoPaw, manage sessions                        |
+| Channels              | Control → Channels              | Enable/disable channels, configure credentials          |
+| Sessions              | Control → Sessions              | Filter, rename, delete sessions                         |
+| Cron Jobs             | Control → Cron Jobs             | Create/edit/delete jobs, run immediately                |
+| Workspace             | Agent → Workspace               | Edit persona files, view memory, upload/download        |
+| Skills                | Agent → Skills                  | Enable/disable/create/delete skills                     |
+| MCP                   | Agent → MCP                     | Enable/disable/create/delete MCP clients                |
+| Runtime Config        | Agent → Runtime Config          | Modify runtime configuration                            |
+| Models                | Settings → Models               | Configure providers, manage local/Ollama, pick model   |
+| Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                   |
 
 ---
 
-## Related pages
+## Related Pages
 
 - [Config & Working Directory](./config) — Config fields, providers, env vars
 - [Channels](./channels) — Per-channel setup and credentials
-- [Skills](./skills) — Built-in skills and custom skill authoring
+- [Skills](./skills) — Built-in skills and custom skills
 - [Heartbeat](./heartbeat) — Heartbeat configuration
-- [Local Models](./local-models) — Run models locally with llama.cpp or MLX
+- [Local Models](./local-models) — Run models with llama.cpp or MLX
 - [CLI](./cli) — Command-line reference
