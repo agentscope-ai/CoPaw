@@ -217,8 +217,7 @@ copaw channels remove my_channel --keep-config   # Remove module only, keep conf
 copaw channels config                 # Interactive configuration
 ```
 
-The interactive `config` flow lets you pick a channel, enable/disable it, and
-enter credentials. It loops until you choose "Save and exit".
+The interactive `config` flow lets you pick a channel, enable/disable it, and enter credentials. It loops until you choose "Save and exit".
 
 | Channel      | Fields to fill in                             |
 | ------------ | --------------------------------------------- |
