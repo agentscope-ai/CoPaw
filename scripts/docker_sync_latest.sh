@@ -41,7 +41,7 @@ install_buildx() {
 require_buildx_imagetools() {
   command -v docker &>/dev/null || die "docker not found in PATH"
 
-  # Check whether docker recognizes the buildx subcommand (this is where you were failing)
+  # Check whether docker recognizes the buildx subcommand
   if ! docker buildx version &>/dev/null; then
     log "docker has no 'buildx' command. Will try to install buildx plugin..."
     install_buildx
