@@ -293,9 +293,8 @@ loads models from it.
 
 1. Click **Settings** on the Ollama provider card.
 2. In **API Key**, enter a value (for example `ollama`), then click **Save**.
-3. Click **Manage Models** on the Ollama card, click **Download Model**, and
    enter a model name (e.g. `mistral:7b`, `qwen3:8b`).
-4. Click **Download Model** and wait for completion.
+4. Click **Download** and wait for completion.
 
 **Cancel a download:**
 During download, click **✕** next to the progress indicator to cancel.
