@@ -93,7 +93,8 @@ def _generate_call_id() -> str:
 
 
 def _parse_single_tool_call(raw_text: str) -> ParsedToolCall | None:
-    """Parse the JSON content between a ``<tool_call>`` / ``</tool_call>`` pair.
+    """
+    Parse the JSON content between a ``<tool_call>`` / ``</tool_call>`` pair.
 
     Expected format::
 
@@ -180,7 +181,8 @@ def parse_tool_calls_from_text(text: str) -> TextWithToolCalls:
     * ``text_before`` – all text before the first ``<tool_call>`` tag
     * ``text_after``  – all text after the last ``</tool_call>`` tag
     * ``tool_calls``  – successfully parsed tool calls
-    * ``has_open_tag`` – whether there is an unclosed ``<tool_call>`` (streaming)
+    * ``has_open_tag`` – whether there is an unclosed ``<tool_call>``
+        (streaming)
     * ``partial_tool_text`` – content after the unclosed tag
     """
     matches = list(_TOOL_CALL_RE.finditer(text))

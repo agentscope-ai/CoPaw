@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint:disable=too-many-branches,too-many-statements
 """LocalChatModel — ChatModelBase implementation for local backends."""
 
 from __future__ import annotations
