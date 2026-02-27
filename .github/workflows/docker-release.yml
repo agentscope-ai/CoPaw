@@ -5,6 +5,12 @@ name: Docker Build and Push on Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag (e.g. v1.2.3)"
+        required: true
+        type: string
 
 env:
   ACR_REGISTRY: agentscope-registry.ap-southeast-1.cr.aliyuncs.com
@@ -38,7 +44,7 @@ jobs:
 
       - name: Build and push multi-arch (version + pre)
         env:
-          VERSION: ${{ github.event.release.tag_name }}
+          VERSION: ${{ github.event.release.tag_name || inputs.version }}
           COPAW_ENABLED_CHANNELS: "discord,dingtalk,feishu,qq,console"
         run: |
           TAGS="-t ${ACR_REGISTRY}/${IMAGE}:${VERSION} -t ${ACR_REGISTRY}/${IMAGE}:pre \
