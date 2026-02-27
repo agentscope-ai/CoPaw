@@ -92,4 +92,4 @@ COPY deploy/config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 EXPOSE 7860
 
 # Init working dir at container start (volume may be empty), then launch supervisord.
-CMD copaw init --defaults --accept-security && /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+CMD copaw init --defaults --accept-security --accept-telemetry && /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

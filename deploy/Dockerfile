@@ -79,7 +79,7 @@ COPY --from=console-builder /app/console/dist/ ./src/copaw/console/
 RUN pip install --no-cache-dir .
 
 # Init working dir with default config.json and HEARTBEAT.md (build time).
-RUN copaw init --defaults --accept-security
+RUN copaw init --defaults --accept-security --accept-telemetry
 
 COPY deploy/config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
