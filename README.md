@@ -60,6 +60,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 > - **I don’t want to install Python**: [One-line install](#one-line-install-recommended) handles Python automatically, or use [ModelScope one-click](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) for cloud.
 
 - [Quick Start](#-quick-start)
+- [API Key](#-api-key)
 - [Local Models](#-local-models)
 - [Documentation](#-documentation)
 - [Install from source](#-install-from-source)
@@ -161,10 +162,10 @@ Then open **http://127.0.0.1:8088/** in your browser for the Console (chat with 
 
 ```bash
 docker pull agentscope/copaw:latest
-docker run -p 7860:7860 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
-Then open **http://127.0.0.1:7860/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
+Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
 
 The image is built from scratch. To build the image yourself, please refer to the [Build Docker image](scripts/README.md#build-docker-image) section in `scripts/README.md`, and then push to your registry.
 
@@ -172,7 +173,21 @@ The image is built from scratch. To build the image yourself, please refer to th
 
 **No local install?** [ModelScope Studio](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) one-click cloud setup. Set your Studio to **non-public** so others cannot control your CoPaw.
 
----
+----
+## API Key
+
+If you use a **cloud LLM** (e.g. DashScope, ModelScope), you must set an API key before chatting. CoPaw will not work until a valid key is configured.
+
+**Where to set it:**
+
+1. **`copaw init`** — When you run `copaw init`, the command has a step to configure the LLM provider and API key. Follow the prompts to choose a provider and enter your key.
+2. **Console** — After `copaw app`, open **http://127.0.0.1:8088/** → **Settings** → **Models**. Select a provider, fill in the **API Key** field, then activate that provider and model.
+3. **Environment variable** — For DashScope you can set `DASHSCOPE_API_KEY` in your shell or in a `.env` file in the working directory. 
+
+Tools that need extra keys (e.g. `TAVILY_API_KEY` for web search) can be set in Console **Settings → Environment variables**, or see [Config](http://copaw.agentscope.io/docs/config) for details.
+
+> **Using local models only?** If you use [Local Models](#-local-models) (llama.cpp or MLX), you do **not** need any API key.
+
 
 ## Local Models
 

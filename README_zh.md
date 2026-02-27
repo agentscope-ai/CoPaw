@@ -60,6 +60,8 @@
 > - **我不想装 Python**：[一键安装](#一键安装推荐) 自动管理 Python，或使用 [魔搭一键配置](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 云端部署。
 
 - [快速开始](#-快速开始)
+- [API Key](#-api-key)
+- [本地模型](#-本地模型)
 - [文档](#-文档)
 - [从源码安装](#-从源码安装)
 - [为什么叫 CoPaw？](#-为什么叫-copaw)
@@ -156,7 +158,59 @@ copaw app
 
 ![Console](https://img.alicdn.com/imgextra/i4/O1CN01jQ8IKh1oWJL5C0v5x_!!6000000005232-2-tps-3494-1644.png)
 
+### 使用 Docker
+
+```bash
+docker pull agentscope/copaw:latest
+docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+```
+
+然后在浏览器打开 **http://127.0.0.1:8088/** 进入控制台。配置、记忆与 Skills 保存在 `copaw-data` 卷中。如需传入 API Key（如 `DASHSCOPE_API_KEY`），在 `docker run` 时添加 `-e VAR=value` 或 `--env-file .env`。
+
+镜像从零构建。若需自行构建镜像，请参阅 [scripts/README.md](scripts/README.md#build-docker-image) 中的「Build Docker image」小节，构建后推送到你的镜像仓库。
+
+### 使用魔搭创空间
+
 **不想本地安装？** 使用 [魔搭创空间](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 一键云端配置。请将创空间设为 **非公开**，否则他人可能操纵你的 CoPaw。
+
+---
+
+## API Key
+
+若使用**云端大模型**（如 DashScope、ModelScope），在开始对话前必须配置 API Key。未配置有效 Key 前，CoPaw 无法正常工作。
+
+**配置方式：**
+
+1. **`copaw init`** — 运行 `copaw init` 时，会引导你配置 LLM 提供商与 API Key。按提示选择提供商并填写 Key 即可。
+2. **控制台** — 运行 `copaw app` 后，打开 **http://127.0.0.1:8088/** → **设置** → **模型**。选择提供商、填写 **API Key**，并启用该提供商与模型。
+3. **环境变量** — 使用 DashScope 时，可在终端或工作目录下的 `.env` 文件中设置 `DASHSCOPE_API_KEY`。
+
+其他工具所需密钥（如网页搜索的 `TAVILY_API_KEY`）可在控制台 **设置 → 环境变量** 中配置，详见 [配置](http://copaw.agentscope.io/docs/config)。
+
+> **仅用本地模型？** 若使用 [本地模型](#-本地模型)（llama.cpp 或 MLX），则**无需**任何 API Key。
+
+---
+
+## 本地模型
+
+CoPaw 可在本机完全本地运行大模型，无需 API Key 或云端服务。
+
+| 后端 | 适用场景 | 安装 |
+|------|----------|------|
+| **llama.cpp** | 跨平台（macOS / Linux / Windows） | `pip install 'copaw[llamacpp]'` |
+| **MLX** | Apple Silicon（M1/M2/M3/M4） | `pip install 'copaw[mlx]'` |
+
+安装后下载模型并开始对话：
+
+```bash
+copaw models download Qwen/Qwen3-4B-GGUF
+copaw models                          # 选择已下载的模型
+copaw app                              # 启动服务
+```
+
+也可在控制台界面中下载与管理本地模型。
+
+> **完整说明：** [本地模型文档](https://copaw.agentscope.io/docs/local-models) 涵盖 CLI 命令、控制台操作及后端说明。
 
 ---
 
@@ -169,6 +223,7 @@ copaw app
 | [控制台](https://copaw.agentscope.io/docs/console) | Web 界面：对话与 Agent 配置 |
 | [频道配置](https://copaw.agentscope.io/docs/channels) | 钉钉、飞书、QQ、Discord、iMessage 等 |
 | [心跳](https://copaw.agentscope.io/docs/heartbeat) | 定时自检与摘要 |
+| [本地模型](https://copaw.agentscope.io/docs/local-models) | 使用 llama.cpp 或 MLX 本地运行模型 |
 | [CLI](https://copaw.agentscope.io/docs/cli) | 初始化、定时任务、Skills、清理 |
 | [Skills](https://copaw.agentscope.io/docs/skills) | 扩展与自定义能力 |
 | [配置与工作目录](https://copaw.agentscope.io/docs/config) | 工作目录与配置文件 |
@@ -186,7 +241,7 @@ pip install -e .
 ```
 
 - **开发**（测试、格式化）：`pip install -e ".[dev]"`
-- **控制台**（构建前端）：在 `console` 下执行 `npm ci && npm run build`，再在项目根目录运行 `copaw app`。
+- **控制台**（构建前端）：在项目根目录执行 `cd console && npm ci && npm run build`，再运行 `copaw app`。
 
 ---
 
