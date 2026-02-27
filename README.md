@@ -3,6 +3,7 @@
 # CoPaw
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/CoPaw)
+[![PyPI](https://img.shields.io/pypi/v/copaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/copaw/)
 [![Documentation](https://img.shields.io/badge/Docs-Website-green.svg?logo=readthedocs&label=Docs)](https://copaw.agentscope.io/)
 [![Python Version](https://img.shields.io/badge/python-3.10%20~%20%3C3.14-blue.svg?logo=python&label=Python)](https://www.python.org/downloads/)
 [![Last Commit](https://img.shields.io/github/last-commit/agentscope-ai/CoPaw)](https://github.com/agentscope-ai/CoPaw)
