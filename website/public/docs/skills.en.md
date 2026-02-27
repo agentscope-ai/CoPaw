@@ -1,6 +1,6 @@
 # Skills
 
-**Skills** : several are built-in, and you can add custom skills or import skills from skills hub.
+**Skills**: Several are built-in, and you can add custom skills or import skills from the Skills Hub.
 
 Two ways to manage skills:
 
