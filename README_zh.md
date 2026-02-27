@@ -55,9 +55,9 @@
 
 > **推荐阅读：**
 >
-> - **我想三条命令跑起来**： [快速开始](#-快速开始) → 浏览器打开控制台。
-> - **我想在钉钉 / 飞书 / QQ 里聊**： [快速开始](#-快速开始) → [频道配置](https://copaw.agentscope.io/docs/channels)。
-> - **我不想装 Python**：[一键安装](#一键安装推荐) 自动管理 Python，或使用 [魔搭一键配置](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 云端部署。
+> - **我想三条命令跑起来**： [快速开始](#快速开始) → 浏览器打开控制台。
+> - **我想在钉钉 / 飞书 / QQ 里聊**： [快速开始](#快速开始) → [频道配置](https://copaw.agentscope.io/docs/channels)。
+> - **我不想装 Python**：[一键安装](#键安装推荐) 自动管理 Python，或使用 [魔搭一键配置](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 云端部署。
 
 - [快速开始](#快速开始)
 - [API Key](#api-key)
@@ -187,7 +187,7 @@ docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 
 其他工具所需密钥（如网页搜索的 `TAVILY_API_KEY`）可在控制台 **设置 → 环境变量** 中配置，详见 [配置](https://copaw.agentscope.io/docs/config)。
 
-> **仅用本地模型？** 若使用 [本地模型](#-本地模型)（llama.cpp 或 MLX），则**无需**任何 API Key。
+> **仅用本地模型？** 若使用 [本地模型](#本地模型)（llama.cpp 或 MLX），则**无需**任何 API Key。
 
 ----
 
