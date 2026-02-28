@@ -21,6 +21,8 @@ dependencies = [
     "onnxruntime<1.24",
     "lark-oapi>=1.5.3",
     "python-telegram-bot>=20.0",
+    "pyyaml>=6.0",
+    "yara-x>=0.12.0",
 ]
 
 [tool.setuptools.dynamic]
@@ -37,6 +39,7 @@ include-package-data = true
     "agents/md_files/**",
     "agents/skills/**",
     "tokenizer/**",
+    "security/skill_scanner/rules/**",
 ]
 
 [build-system]
