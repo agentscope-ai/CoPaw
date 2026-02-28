@@ -34,7 +34,7 @@ class MCPClientManager:
 
     def __init__(self) -> None:
         """Initialize an empty MCP client manager."""
-        self._clients: Dict[str, StdIOStatefulClient] = {}
+        self._clients: Dict[str, Any] = {}  # StdIOStatefulClient | HttpStatefulClient
         self._lock = asyncio.Lock()
 
     async def init_from_config(self, config: "MCPConfig") -> None:

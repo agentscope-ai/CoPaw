@@ -272,6 +272,12 @@ async def update_mcp_client(
         updated_env.update(update_data["env"])
         update_data["env"] = updated_env
 
+    # Same merge logic for headers
+    if "headers" in update_data and update_data["headers"] is not None:
+        updated_headers = existing.headers.copy() if existing.headers else {}
+        updated_headers.update(update_data["headers"])
+        update_data["headers"] = updated_headers
+
     for field, value in update_data.items():
         setattr(existing, field, value)
 
