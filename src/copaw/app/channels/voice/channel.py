@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import Any, Dict, Optional
 
 from ..base import BaseChannel, OnReplySent, ProcessHandler
@@ -43,6 +44,7 @@ class VoiceChannel(BaseChannel):
         self.tunnel_mgr = None  # CloudflareTunnelDriver, set by from_config
         self._config: Any = None
         self._enabled = False
+        self._pending_ws_tokens: set[str] = set()
 
     @classmethod
     def from_config(
@@ -188,6 +190,20 @@ class VoiceChannel(BaseChannel):
     def process(self) -> ProcessHandler:
         """Public accessor for the process handler."""
         return self._process
+
+    def create_ws_token(self) -> str:
+        """Generate a single-use token for WebSocket authentication."""
+        token = secrets.token_urlsafe(32)
+        self._pending_ws_tokens.add(token)
+        return token
+
+    def validate_ws_token(self, token: str) -> bool:
+        """Validate and consume a single-use WebSocket token."""
+        try:
+            self._pending_ws_tokens.remove(token)
+            return True
+        except KeyError:
+            return False
 
     def get_tunnel_url(self) -> str | None:
         """Return the current tunnel public URL."""
