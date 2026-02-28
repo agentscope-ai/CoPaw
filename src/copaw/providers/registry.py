@@ -52,7 +52,7 @@ PROVIDER_DASHSCOPE = ProviderDefinition(
 
 PROVIDER_ALIYUN_CODINGPLAN = ProviderDefinition(
     id="aliyun-codingplan",
-    name="AliyunCodingPlan",
+    name="Aliyun Coding Plan",
     default_base_url="https://coding.dashscope.aliyuncs.com/v1",
     api_key_prefix="sk-sp",
     models=ALIYUN_CODINGPLAN_MODELS,
