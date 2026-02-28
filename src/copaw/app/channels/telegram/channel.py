@@ -19,7 +19,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 )
 
 from ....config.config import TelegramConfig as TelegramChannelConfig
-from ..base import BaseChannel, OnReplySent, ProcessHandler
+from ..base import BaseChannel, OnReplySent, ProcessHandler, OutgoingContentPart
 
 logger = logging.getLogger(__name__)
 
@@ -71,19 +71,55 @@ async def _download_telegram_file(
         return None
 
 
+async def _resolve_telegram_file_url(
+    *,
+    bot: Any,
+    file_id: str,
+    bot_token: str,
+) -> str:
+    """Resolve the remote URL for a Telegram file.
+
+    Returns the file URL (either Telegram API URL or external URL).
+    Never exposes the bot token in the returned URL.
+    """
+    try:
+        from telegram.error import TelegramError
+        tg_file = await bot.get_file(file_id)
+    except TelegramError:
+        logger.exception("telegram: get_file failed for file_id=%s", file_id)
+        return ""
+    file_path = getattr(tg_file, "file_path", None) or ""
+    if not file_path:
+        return ""
+    if file_path.startswith("http"):
+        return file_path
+    return f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+
+
 async def _build_content_parts_from_message(
     update: Any,
     *,
     bot: Any,
     media_dir: Path,
-) -> list:
-    """Build runtime content_parts from Telegram message (text, photo, doc, etc.)."""
+) -> tuple[list, bool]:
+    """Build runtime content_parts from Telegram message (text, photo, doc, etc.).
+    Returns (content_parts, has_bot_command).
+    """
     message = getattr(update, "message", None) or getattr(update, "edited_message")
     if not message:
-        return [TextContent(type=ContentType.TEXT, text="")]
+        return [TextContent(type=ContentType.TEXT, text="")], False
 
     content_parts: list[Any] = []
     text = (getattr(message, "text", None) or getattr(message, "caption") or "").strip()
+
+    entities = getattr(message, "entities", None) or getattr(message, "caption_entities", None) or []
+    has_bot_command = False
+    if entities:
+        for entity in entities:
+            if getattr(entity, "type", None) == "bot_command":
+                has_bot_command = True
+                break
+
     if text:
         content_parts.append(TextContent(type=ContentType.TEXT, text=text))
 
@@ -125,7 +161,7 @@ async def _build_content_parts_from_message(
     if not content_parts:
         content_parts.append(TextContent(type=ContentType.TEXT, text=""))
 
-    return content_parts
+    return content_parts, has_bot_command
 
 
 def _message_meta(update: Any) -> dict:
@@ -225,12 +261,14 @@ class TelegramChannel(BaseChannel):
         async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if not update.message and not getattr(update, "edited_message", None):
                 return
-            content_parts = await _build_content_parts_from_message(
+            content_parts, has_bot_command = await _build_content_parts_from_message(
                 update,
                 bot=context.bot,
                 media_dir=self._media_dir,
             )
             meta = _message_meta(update)
+            if has_bot_command:
+                meta["has_bot_command"] = True
             chat_id = meta.get("chat_id", "")
             user = getattr(update.message or getattr(update, "edited_message"), "from_user", None)
             sender_id = str(getattr(user, "id", "")) if user else chat_id
@@ -342,6 +380,54 @@ class TelegramChannel(BaseChannel):
                 logger.exception("telegram send_message failed")
                 return
 
+    async def send_media(
+        self,
+        to_handle: str,
+        part: OutgoingContentPart,
+        meta: Optional[dict] = None,
+    ) -> None:
+        """Send a media part (image, video, audio, file) to chat_id."""
+        if not self.enabled or not self._application:
+            return
+        meta = meta or {}
+        chat_id = meta.get("chat_id") or to_handle
+        if not chat_id:
+            logger.warning("telegram send_media: no chat_id in to_handle or meta")
+            return
+        bot = self._application.bot
+        if not bot:
+            return
+
+        part_type = getattr(part, "type", None)
+        try:
+            if part_type == ContentType.IMAGE:
+                image_url = getattr(part, "image_url", None)
+                if image_url and image_url.startswith("file://"):
+                    local_path = image_url.replace("file://", "")
+                    await bot.send_photo(chat_id=chat_id, photo=open(local_path, "rb"))
+                elif image_url:
+                    await bot.send_photo(chat_id=chat_id, photo=image_url)
+            elif part_type == ContentType.VIDEO:
+                video_url = getattr(part, "video_url", None)
+                if video_url and video_url.startswith("file://"):
+                    local_path = video_url.replace("file://", "")
+                    await bot.send_video(chat_id=chat_id, video=open(local_path, "rb"))
+                elif video_url:
+                    await bot.send_video(chat_id=chat_id, video=video_url)
+            elif part_type == ContentType.AUDIO:
+                data = getattr(part, "data", None)
+                if data:
+                    await bot.send_audio(chat_id=chat_id, audio=data)
+            elif part_type == ContentType.FILE:
+                file_url = getattr(part, "file_url", None)
+                if file_url and file_url.startswith("file://"):
+                    local_path = file_url.replace("file://", "")
+                    await bot.send_document(chat_id=chat_id, document=open(local_path, "rb"))
+                elif file_url:
+                    await bot.send_document(chat_id=chat_id, document=file_url)
+        except Exception:
+            logger.exception("telegram send_media failed")
+
     async def _run_polling(self) -> None:
         """Run Telegram bot in existing event loop (FastAPI/uvicorn).
         Do not use run_polling() - it calls run_until_complete() and fails when
@@ -351,6 +437,7 @@ class TelegramChannel(BaseChannel):
             return
         try:
             from telegram.error import TelegramError
+            from telegram import BotCommand
 
             def _on_poll_error(exc: TelegramError) -> None:
                 self._application.create_task(
@@ -358,6 +445,20 @@ class TelegramChannel(BaseChannel):
                 )
 
             await self._application.initialize()
+
+            commands = [
+                BotCommand(command="start", description="Start a new conversation"),
+                BotCommand(command="new", description="Start a new conversation (clear memory)"),
+                BotCommand(command="compact", description="Compact conversation memory"),
+                BotCommand(command="clear", description="Clear conversation history"),
+                BotCommand(command="history", description="Show conversation history"),
+            ]
+            try:
+                await self._application.bot.set_my_commands(commands)
+                logger.info("telegram: registered %d bot commands", len(commands))
+            except Exception:
+                logger.warning("telegram: failed to register commands (non-fatal)")
+
             await self._application.updater.start_polling(
                 allowed_updates=["message", "edited_message"],
                 error_callback=_on_poll_error,
