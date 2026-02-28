@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Form, Input, Modal, message, Button } from '@agentscope-ai/design';
-import { ApiOutlined } from '@ant-design/icons';
-import type { ProviderConfigRequest } from '../../../../../api/types';
-import api from '../../../../../api';
-import { useTranslation } from 'react-i18next';
-import styles from '../../index.module.less';
+import { useState, useEffect, useMemo } from "react";
+import { Form, Input, Modal, message, Button } from "@agentscope-ai/design";
+import { ApiOutlined } from "@ant-design/icons";
+import type { ProviderConfigRequest } from "../../../../../api/types";
+import api from "../../../../../api";
+import { useTranslation } from "react-i18next";
+import styles from "../../index.module.less";
 
 interface ProviderConfigModalProps {
   provider: {
@@ -37,22 +37,22 @@ export function ProviderConfigModal({
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
-      return t('models.currentKey', { key: provider.current_api_key });
+      return t("models.currentKey", { key: provider.current_api_key });
     }
     if (provider.api_key_prefix) {
-      return t('models.startsWith', { prefix: provider.api_key_prefix });
+      return t("models.startsWith", { prefix: provider.api_key_prefix });
     }
-    return t('models.optionalSelfHosted');
+    return t("models.optionalSelfHosted");
   }, [provider.current_api_key, provider.api_key_prefix, t]);
 
   const apiKeyPlaceholder = useMemo(() => {
     if (provider.current_api_key) {
-      return t('models.leaveBlankKeep');
+      return t("models.leaveBlankKeep");
     }
     if (provider.api_key_prefix) {
-      return t('models.enterApiKey', { prefix: provider.api_key_prefix });
+      return t("models.enterApiKey", { prefix: provider.api_key_prefix });
     }
-    return t('models.enterApiKeyOptional');
+    return t("models.enterApiKeyOptional");
   }, [provider.current_api_key, provider.api_key_prefix, t]);
 
   // Sync form when modal opens or provider data changes
@@ -74,11 +74,11 @@ export function ProviderConfigModal({
       await onSaved();
       setFormDirty(false);
       onClose();
-      message.success(t('models.configurationSaved', { name: provider.name }));
+      message.success(t("models.configurationSaved", { name: provider.name }));
     } catch (error) {
-      if (error && typeof error === 'object' && 'errorFields' in error) return;
+      if (error && typeof error === "object" && "errorFields" in error) return;
       const errMsg =
-        error instanceof Error ? error.message : t('models.failedToSaveConfig');
+        error instanceof Error ? error.message : t("models.failedToSaveConfig");
       message.error(errMsg);
     } finally {
       setSaving(false);
@@ -90,15 +90,15 @@ export function ProviderConfigModal({
     try {
       const result = await api.testProviderConnection(provider.id);
       if (result.success) {
-        message.success(result.message || t('models.testConnectionSuccess'));
+        message.success(result.message || t("models.testConnectionSuccess"));
       } else {
-        message.warning(result.message || t('models.testConnectionFailed'));
+        message.warning(result.message || t("models.testConnectionFailed"));
       }
     } catch (error) {
       const errMsg =
         error instanceof Error
           ? error.message
-          : t('models.testConnectionError');
+          : t("models.testConnectionError");
       message.error(errMsg);
     } finally {
       setTesting(false);
@@ -110,32 +110,32 @@ export function ProviderConfigModal({
 
   const handleRevoke = () => {
     const confirmContent = isActiveLlmProvider
-      ? t('models.revokeConfirmContent', { name: provider.name })
-      : t('models.revokeConfirmSimple', { name: provider.name });
+      ? t("models.revokeConfirmContent", { name: provider.name })
+      : t("models.revokeConfirmSimple", { name: provider.name });
 
     Modal.confirm({
-      title: t('models.revokeAuthorization'),
+      title: t("models.revokeAuthorization"),
       content: confirmContent,
-      okText: t('models.revokeAuthorization'),
+      okText: t("models.revokeAuthorization"),
       okButtonProps: { danger: true },
-      cancelText: t('models.cancel'),
+      cancelText: t("models.cancel"),
       onOk: async () => {
         try {
-          await api.configureProvider(provider.id, { api_key: '' });
+          await api.configureProvider(provider.id, { api_key: "" });
           await onSaved();
           onClose();
           if (isActiveLlmProvider) {
             message.success(
-              t('models.authorizationRevoked', { name: provider.name }),
+              t("models.authorizationRevoked", { name: provider.name }),
             );
           } else {
             message.success(
-              t('models.authorizationRevokedSimple', { name: provider.name }),
+              t("models.authorizationRevokedSimple", { name: provider.name }),
             );
           }
         } catch (error) {
           const errMsg =
-            error instanceof Error ? error.message : t('models.failedToRevoke');
+            error instanceof Error ? error.message : t("models.failedToRevoke");
           message.error(errMsg);
         }
       },
@@ -144,7 +144,7 @@ export function ProviderConfigModal({
 
   return (
     <Modal
-      title={t('models.configureProvider', { name: provider.name })}
+      title={t("models.configureProvider", { name: provider.name })}
       open={open}
       onCancel={onClose}
       footer={
@@ -152,7 +152,7 @@ export function ProviderConfigModal({
           <div className={styles.modalFooterLeft}>
             {provider.has_api_key && (
               <Button danger size="small" onClick={handleRevoke}>
-                {t('models.revokeAuthorization')}
+                {t("models.revokeAuthorization")}
               </Button>
             )}
             <Button
@@ -161,18 +161,18 @@ export function ProviderConfigModal({
               onClick={handleTest}
               loading={testing}
             >
-              {t('models.testConnection')}
+              {t("models.testConnection")}
             </Button>
           </div>
           <div className={styles.modalFooterRight}>
-            <Button onClick={onClose}>{t('models.cancel')}</Button>
+            <Button onClick={onClose}>{t("models.cancel")}</Button>
             <Button
               type="primary"
               loading={saving}
               disabled={!formDirty}
               onClick={handleSubmit}
             >
-              {t('models.save')}
+              {t("models.save")}
             </Button>
           </div>
         </div>
@@ -196,16 +196,16 @@ export function ProviderConfigModal({
               ? [
                   {
                     required: true,
-                    message: t('models.pleaseEnterBaseURL'),
+                    message: t("models.pleaseEnterBaseURL"),
                   },
-                  { type: 'url', message: t('models.pleaseEnterValidURL') },
+                  { type: "url", message: t("models.pleaseEnterValidURL") },
                 ]
               : []
           }
-          extra={provider.is_custom ? t('models.openAIEndpoint') : undefined}
+          extra={provider.is_custom ? t("models.openAIEndpoint") : undefined}
         >
           <Input
-            placeholder={provider.is_custom ? 'http://localhost:11434/v1' : ''}
+            placeholder={provider.is_custom ? "http://localhost:11434/v1" : ""}
             disabled={!provider.is_custom}
           />
         </Form.Item>
@@ -224,7 +224,7 @@ export function ProviderConfigModal({
                 ) {
                   return Promise.reject(
                     new Error(
-                      t('models.apiKeyShouldStart', {
+                      t("models.apiKeyShouldStart", {
                         prefix: provider.api_key_prefix,
                       }),
                     ),

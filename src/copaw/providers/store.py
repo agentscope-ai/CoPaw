@@ -466,6 +466,8 @@ def remove_model(provider_id: str, model_id: str) -> ProvidersData:
     return data
 
 
+# pylint: disable=too-many-return-statements,too-many-branches
+# pylint: disable=too-many-statements
 def test_provider_connection(provider_id: str) -> dict[str, Any]:
     """Test if a provider's URL and API key are valid.
 
@@ -652,6 +654,7 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
             }
 
 
+# pylint: disable=too-many-return-statements,too-many-branches
 def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     """Test if a specific model can be used with the configured provider.
 
