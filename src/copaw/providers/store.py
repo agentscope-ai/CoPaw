@@ -162,8 +162,13 @@ def _ensure_all_providers(providers: dict[str, ProviderSettings]) -> None:
 # -- Load / Save --
 
 
-def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
-    """Load providers.json, creating/repairing as needed."""
+def _load_and_sync(path: Optional[Path] = None) -> ProvidersData:
+    """Load providers.json and sync registries, but do NOT save back.
+
+    This is the internal workhorse used by both ``load_providers_json``
+    (which saves after loading) and mutator functions (which save after
+    their own modifications, avoiding a redundant double-write).
+    """
     if path is None:
         path = get_providers_json_path()
 
@@ -197,6 +202,12 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
         active_llm=active_llm,
     )
     _validate_active_llm(data)
+    return data
+
+
+def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
+    """Load providers.json, creating/repairing as needed."""
+    data = _load_and_sync(path)
     save_providers_json(data, path)
     return data
 
@@ -234,7 +245,7 @@ def update_provider_settings(
     base_url: Optional[str] = None,
 ) -> ProvidersData:
     """Partially update a provider's settings. Returns updated state."""
-    data = load_providers_json()
+    data = _load_and_sync()
     cpd = data.custom_providers.get(provider_id)
 
     if cpd is not None:
@@ -264,7 +275,7 @@ def update_provider_settings(
 
 
 def set_active_llm(provider_id: str, model: str) -> ProvidersData:
-    data = load_providers_json()
+    data = _load_and_sync()
     data.active_llm = ModelSlotConfig(provider_id=provider_id, model=model)
     save_providers_json(data)
     return data
@@ -333,7 +344,7 @@ def create_custom_provider(
     if err:
         raise ValueError(err)
 
-    data = load_providers_json()
+    data = _load_and_sync()
     if provider_id in data.custom_providers:
         raise ValueError(f"Custom provider '{provider_id}' already exists.")
 
@@ -355,7 +366,7 @@ def delete_custom_provider(provider_id: str) -> ProvidersData:
     if is_builtin(provider_id):
         raise ValueError(f"Cannot delete built-in provider '{provider_id}'.")
 
-    data = load_providers_json()
+    data = _load_and_sync()
     if provider_id not in data.custom_providers:
         raise ValueError(f"Custom provider '{provider_id}' not found.")
 
@@ -370,7 +381,7 @@ def delete_custom_provider(provider_id: str) -> ProvidersData:
 
 
 def add_model(provider_id: str, model: ModelInfo) -> ProvidersData:
-    data = load_providers_json()
+    data = _load_and_sync()
     defn = PROVIDERS.get(provider_id)
     if defn is None:
         raise ValueError(f"Provider '{provider_id}' not found.")
@@ -411,7 +422,7 @@ def add_model(provider_id: str, model: ModelInfo) -> ProvidersData:
 
 
 def remove_model(provider_id: str, model_id: str) -> ProvidersData:
-    data = load_providers_json()
+    data = _load_and_sync()
     defn = PROVIDERS.get(provider_id)
     if defn is None:
         raise ValueError(f"Provider '{provider_id}' not found.")

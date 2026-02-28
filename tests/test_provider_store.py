@@ -40,12 +40,10 @@ def tmp_providers(monkeypatch, tmp_path):
 
     yield json_path
 
-    # Clean up any custom providers we registered during the test
-    for pid in list(PROVIDERS):
-        try:
+    # Clean up custom providers registered during the test
+    for pid, defn in list(PROVIDERS.items()):
+        if defn.is_custom:
             unregister_custom_provider(pid)
-        except (ValueError, KeyError):
-            pass
 
 
 class TestAddModelCustomProvider:
