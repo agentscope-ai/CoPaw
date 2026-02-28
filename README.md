@@ -40,16 +40,16 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 >
 > <br>
 >
-> * **Social**: daily digest of hot posts (Xiaohongshu, Zhihu, Reddit), Bilibili/YouTube summaries.
-> * **Productivity**: newsletter digests to DingTalk/Feishu/QQ, contacts from email/calendar.
-> * **Creative**: describe your goal, run overnight, get a draft next day.
-> * **Research**: track tech/AI news, personal knowledge base.
-> * **Desktop**: organize files, read/summarize docs, request files in chat.
-> * **Explore**: combine Skills and cron into your own agentic app.
+> - **Social**: daily digest of hot posts (Xiaohongshu, Zhihu, Reddit), Bilibili/YouTube summaries.
+> - **Productivity**: newsletter digests to DingTalk/Feishu/QQ, contacts from email/calendar.
+> - **Creative**: describe your goal, run overnight, get a draft next day.
+> - **Research**: track tech/AI news, personal knowledge base.
+> - **Desktop**: organize files, read/summarize docs, request files in chat.
+> - **Explore**: combine Skills and cron into your own agentic app.
 >
 > </details>
 
-----
+---
 
 ## Table of Contents
 
@@ -68,7 +68,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 - [Built by](#built-by)
 - [License](#license)
 
-----
+---
 
 ## Quick Start
 
@@ -158,7 +158,6 @@ copaw uninstall --purge  # removes everything
 
 </details>
 
-
 ### Using Docker
 
 ```bash
@@ -174,7 +173,8 @@ The image is built from scratch. To build the image yourself, please refer to th
 
 **No local install?** [ModelScope Studio](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) one-click cloud setup. Set your Studio to **non-public** so others cannot control your CoPaw.
 
-----
+---
+
 ## API Key
 
 If you use a **cloud LLM** (e.g. DashScope, ModelScope), you must set an API key before chatting. CoPaw will not work until a valid key is configured.
@@ -189,15 +189,14 @@ Tools that need extra keys (e.g. `TAVILY_API_KEY` for web search) can be set in 
 
 > **Using local models only?** If you use [Local Models](#local-models) (llama.cpp or MLX), you do **not** need any API key.
 
-
 ## Local Models
 
 CoPaw can run LLMs entirely on your machine — no API keys or cloud services required.
 
-| Backend | Best for | Install |
-|---------|----------|---------|
+| Backend       | Best for                                 | Install                         |
+| ------------- | ---------------------------------------- | ------------------------------- |
 | **llama.cpp** | Cross-platform (macOS / Linux / Windows) | `pip install 'copaw[llamacpp]'` |
-| **MLX** | Apple Silicon Macs (M1/M2/M3/M4) | `pip install 'copaw[mlx]'` |
+| **MLX**       | Apple Silicon Macs (M1/M2/M3/M4)         | `pip install 'copaw[mlx]'`      |
 
 After installing, download a model and start chatting:
 
@@ -209,26 +208,27 @@ copaw app # start the server
 
 You can also download and manage local models from the Console UI.
 
-----
+---
 
 ## Documentation
 
-| Topic | Description |
-|-------|-------------|
-| [Introduction](https://copaw.agentscope.io/docs/intro) | What CoPaw is and how you use it |
-| [Quick start](https://copaw.agentscope.io/docs/quickstart) | Install and run (local or ModelScope Studio) |
-| [Console](https://copaw.agentscope.io/docs/console) | Web UI for chat and agent config |
-| [Channels](https://copaw.agentscope.io/docs/channels) | DingTalk, Feishu, QQ, Discord, iMessage, and more |
-| [Heartbeat](https://copaw.agentscope.io/docs/heartbeat) | Scheduled check-in or digest |
-| [Local Models](https://copaw.agentscope.io/docs/local-models) | Run models locally with llama.cpp or MLX |
-| [CLI](https://copaw.agentscope.io/docs/cli) | Init, cron jobs, skills, clean |
-| [Skills](https://copaw.agentscope.io/docs/skills) | Extend and customize capabilities |
-| [Memory](https://copaw.agentscope.io/docs/memory) | Context management and long-term memory |
-| [Config](https://copaw.agentscope.io/docs/config) | Working directory and config file |
+| Topic                                                         | Description                                       |
+| ------------------------------------------------------------- | ------------------------------------------------- |
+| [Introduction](https://copaw.agentscope.io/docs/intro)        | What CoPaw is and how you use it                  |
+| [Quick start](https://copaw.agentscope.io/docs/quickstart)    | Install and run (local or ModelScope Studio)      |
+| [Console](https://copaw.agentscope.io/docs/console)           | Web UI for chat and agent config                  |
+| [Channels](https://copaw.agentscope.io/docs/channels)         | DingTalk, Feishu, QQ, Discord, iMessage, and more |
+| [Heartbeat](https://copaw.agentscope.io/docs/heartbeat)       | Scheduled check-in or digest                      |
+| [Local Models](https://copaw.agentscope.io/docs/local-models) | Run models locally with llama.cpp or MLX          |
+| [CLI](https://copaw.agentscope.io/docs/cli)                   | Init, cron jobs, skills, clean                    |
+| [Skills](https://copaw.agentscope.io/docs/skills)             | Extend and customize capabilities                 |
+| [FAQ](https://copaw.agentscope.io/docs/faq)                   | Common questions and troubleshooting tips         |
+| [Memory](https://copaw.agentscope.io/docs/memory)             | Context management and long-term memory           |
+| [Config](https://copaw.agentscope.io/docs/config)             | Working directory and config file                 |
 
 Full docs in this repo: [website/public/docs/](website/public/docs/).
 
-----
+---
 
 ## Install from source
 
@@ -241,19 +241,19 @@ pip install -e .
 - **Dev** (tests, formatting): `pip install -e ".[dev]"`
 - **Console** (build frontend): `cd console && npm ci && npm run build`, then `copaw app` from project root.
 
-----
+---
 
 ## Why CoPaw?
 
 CoPaw represents both a **Co Personal Agent Workstation** and a "co-paw"—a partner always by your side. More than just a cold tool, CoPaw is a warm "little paw" always ready to lend a hand (or a paw!). It is the ultimate teammate for your digital life.
 
-----
+---
 
 ## Built by
 
 [AgentScope team](https://github.com/agentscope-ai) · [AgentScope](https://github.com/agentscope-ai/agentscope) · [AgentScope Runtime](https://github.com/agentscope-ai/agentscope-runtime) · [ReMe](https://github.com/agentscope-ai/ReMe)
 
-----
+---
 
 ## License
 

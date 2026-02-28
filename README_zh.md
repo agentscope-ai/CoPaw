@@ -40,16 +40,16 @@
 >
 > <br>
 >
-> * **社交媒体**：每日热帖摘要（小红书、知乎、Reddit），B 站/YouTube 新视频摘要。
-> * **生产力**：邮件与 Newsletter 精华推送到钉钉/飞书/QQ，邮件与日历整理联系人。
-> * **创意与构建**：睡前说明目标、自动执行，次日获得雏形；从选题到成片全流程。
-> * **研究与学习**：追踪科技与 AI 资讯，个人知识库检索复用。
-> * **桌面与文件**：整理与搜索本地文件、阅读与摘要文档，在会话中索要文件。
-> * **探索更多**：用 Skills 与定时任务组合成你自己的 agentic app。
+> - **社交媒体**：每日热帖摘要（小红书、知乎、Reddit），B 站/YouTube 新视频摘要。
+> - **生产力**：邮件与 Newsletter 精华推送到钉钉/飞书/QQ，邮件与日历整理联系人。
+> - **创意与构建**：睡前说明目标、自动执行，次日获得雏形；从选题到成片全流程。
+> - **研究与学习**：追踪科技与 AI 资讯，个人知识库检索复用。
+> - **桌面与文件**：整理与搜索本地文件、阅读与摘要文档，在会话中索要文件。
+> - **探索更多**：用 Skills 与定时任务组合成你自己的 agentic app。
 >
 > </details>
 
-----
+---
 
 ## 目录
 
@@ -68,7 +68,7 @@
 - [由谁构建](#由谁构建)
 - [许可证](#许可证)
 
-----
+---
 
 ## 快速开始
 
@@ -158,7 +158,6 @@ copaw uninstall --purge  # 删除所有内容
 
 </details>
 
-
 ### 使用 Docker
 
 ```bash
@@ -174,7 +173,7 @@ docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 
 **不想本地安装？** 使用 [魔搭创空间](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 一键云端配置。请将创空间设为 **非公开**，否则他人可能操纵你的 CoPaw。
 
-----
+---
 
 ## API Key
 
@@ -190,16 +189,16 @@ docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 
 > **仅用本地模型？** 若使用 [本地模型](#本地模型)（llama.cpp 或 MLX），则**无需**任何 API Key。
 
-----
+---
 
 ## 本地模型
 
 CoPaw 可在本机完全本地运行大模型，无需 API Key 或云端服务。
 
-| 后端 | 适用场景 | 安装 |
-|------|----------|------|
+| 后端          | 适用场景                          | 安装                            |
+| ------------- | --------------------------------- | ------------------------------- |
 | **llama.cpp** | 跨平台（macOS / Linux / Windows） | `pip install 'copaw[llamacpp]'` |
-| **MLX** | Apple Silicon（M1/M2/M3/M4） | `pip install 'copaw[mlx]'` |
+| **MLX**       | Apple Silicon（M1/M2/M3/M4）      | `pip install 'copaw[mlx]'`      |
 
 安装后下载模型并开始对话：
 
@@ -211,26 +210,27 @@ copaw app # 启动服务
 
 也可在控制台界面中下载与管理本地模型。
 
-----
+---
 
 ## 文档
 
-| 主题 | 说明 |
-|------|------|
-| [项目介绍](https://copaw.agentscope.io/docs/intro) | CoPaw 是什么、怎么用 |
-| [快速开始](https://copaw.agentscope.io/docs/quickstart) | 安装与运行（本地或魔搭创空间） |
-| [控制台](https://copaw.agentscope.io/docs/console) | Web 界面：对话与 Agent 配置 |
-| [频道配置](https://copaw.agentscope.io/docs/channels) | 钉钉、飞书、QQ、Discord、iMessage 等 |
-| [心跳](https://copaw.agentscope.io/docs/heartbeat) | 定时自检与摘要 |
-| [本地模型](https://copaw.agentscope.io/docs/local-models) | 使用 llama.cpp 或 MLX 本地运行模型 |
-| [CLI](https://copaw.agentscope.io/docs/cli) | 初始化、定时任务、Skills、清理 |
-| [Skills](https://copaw.agentscope.io/docs/skills) | 扩展与自定义能力 |
-| [记忆](https://copaw.agentscope.io/docs/memory) | 上下文管理与长期记忆 |
-| [配置与工作目录](https://copaw.agentscope.io/docs/config) | 工作目录与配置文件 |
+| 主题                                                      | 说明                                 |
+| --------------------------------------------------------- | ------------------------------------ |
+| [项目介绍](https://copaw.agentscope.io/docs/intro)        | CoPaw 是什么、怎么用                 |
+| [快速开始](https://copaw.agentscope.io/docs/quickstart)   | 安装与运行（本地或魔搭创空间）       |
+| [控制台](https://copaw.agentscope.io/docs/console)        | Web 界面：对话与 Agent 配置          |
+| [频道配置](https://copaw.agentscope.io/docs/channels)     | 钉钉、飞书、QQ、Discord、iMessage 等 |
+| [心跳](https://copaw.agentscope.io/docs/heartbeat)        | 定时自检与摘要                       |
+| [本地模型](https://copaw.agentscope.io/docs/local-models) | 使用 llama.cpp 或 MLX 本地运行模型   |
+| [CLI](https://copaw.agentscope.io/docs/cli)               | 初始化、定时任务、Skills、清理       |
+| [Skills](https://copaw.agentscope.io/docs/skills)         | 扩展与自定义能力                     |
+| [FAQ](https://copaw.agentscope.io/docs/faq)               | 常见问题与报错排查                   |
+| [记忆](https://copaw.agentscope.io/docs/memory)           | 上下文管理与长期记忆                 |
+| [配置与工作目录](https://copaw.agentscope.io/docs/config) | 工作目录与配置文件                   |
 
 完整文档见本仓库 [website/public/docs/](website/public/docs/)。
 
-----
+---
 
 ## 从源码安装
 
@@ -243,19 +243,19 @@ pip install -e .
 - **开发**（测试、格式化）：`pip install -e ".[dev]"`
 - **控制台**（构建前端）：在项目根目录执行 `cd console && npm ci && npm run build`，再运行 `copaw app`。
 
-----
+---
 
 ## 为什么叫 CoPaw？
 
 CoPaw 既是「你的搭档小爪子」（co-paw），也寓意 **Co Personal Agent Workstation**（协同个人智能体工作台）。我们希望它不是冰冷的工具，而是一只随时准备帮忙的温暖「小爪子」，是你数字生活中最默契的伙伴。
 
-----
+---
 
 ## 由谁构建
 
 [AgentScope 团队](https://github.com/agentscope-ai) · [AgentScope](https://github.com/agentscope-ai/agentscope) · [AgentScope Runtime](https://github.com/agentscope-ai/agentscope-runtime) · [ReMe](https://github.com/agentscope-ai/ReMe)
 
-----
+---
 
 ## 许可证
 

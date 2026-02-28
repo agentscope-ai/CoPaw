@@ -112,8 +112,29 @@ CoPaw 已开源，官方仓库地址：
 
 报错详情：
 
-```
-Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'ebc81304-2b7d-9da1-ba88-2868415d48ff'}
-```
+Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'xxx'}
 
-原因：没有配置模型 API key，需要获取 API key后，在**控制台 → 设置 → 模型**中配置。
+原因1：没有配置模型 API key，需要获取 API key后，在**控制台 → 设置 → 模型**中配置。
+
+原因2：配置了 key 但仍报错，通常是配置项填写错误（如 `base_url`、`api key` 或模型名）。
+
+CoPaw 支持百炼 Coding Plan 获取的 API key。如果仍报错，请重点检查：
+
+- `base_url` 是否填写正确；
+- API key 是否粘贴完整（无多余空格）；
+- 模型名称是否与平台一致（注意大小写）。
+
+正确获取方式可参考：
+https://help.aliyun.com/zh/model-studio/coding-plan-quickstart#2531c37fd64f9
+
+---
+
+### 报错如何获取修复帮助
+
+为了加快修复与排查，共建良好社区生态，建议遇到报错时，首选在 CoPaw 的 GitHub 仓库中提 [issue](https://github.com/agentscope-ai/CoPaw/issues)，请附上完整报错信息，并上传错误详情文件。
+
+控制台报错里通常会给出错误文件路径，例如在以下报错中：
+
+Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'xxx'}(Details: /var/folders/.../copaw_query_error_qzbx1mv1.json)
+
+请将后面的`/var/folders/.../copaw_query_error_qzbx1mv1.json`文件一并上传，同时提供你当前的模型提供商、模型名和 CoPaw 的具体版本。

@@ -128,8 +128,38 @@ clients there. See [MCP](https://copaw.agentscope.io/docs/mcp).
 Error detail:
 
 ```
-Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'ebc81304-2b7d-9da1-ba88-2868415d48ff'}
+Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'xxx'}
 ```
 
-Cause: model API key is not configured. Get an API key and configure it in
+Cause 1: model API key is not configured. Get an API key and configure it in
 **Console -> Settings -> Models**.
+
+Cause 2: key is configured but still fails. In most cases, one of the
+configuration fields is incorrect (for example `base_url`, `api key`, or model
+name).
+
+CoPaw supports API keys obtained via DashScope Coding Plan. If it still fails,
+please check:
+
+- whether `base_url` is correct;
+- whether the API key is copied completely (no extra spaces);
+- whether the model name exactly matches the provider value (case-sensitive).
+
+Reference for the correct key acquisition flow:
+https://help.aliyun.com/zh/model-studio/coding-plan-quickstart#2531c37fd64f9
+
+---
+
+### How to get support when errors occur
+
+To speed up troubleshooting and fixes, please create an issue in the CoPaw
+GitHub repository and include complete error information:
+https://github.com/agentscope-ai/CoPaw/issues
+
+In many Console errors, a detailed error file path is included. For example:
+
+Error: Unknown agent error: AuthenticationError: Error code: 401 - {'error': {'message': "You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY). ", 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'xxx'}(Details: /var/folders/.../copaw_query_error_qzbx1mv1.json)
+
+Please upload that file (for example
+`/var/folders/.../copaw_query_error_qzbx1mv1.json`) together with your current
+model provider, model name, and exact CoPaw version.
