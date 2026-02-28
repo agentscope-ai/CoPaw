@@ -1,5 +1,5 @@
-import { Drawer, Form, Input, Switch, Button } from "@agentscope-ai/design";
-import type { MCPClientInfo } from "../../../../api/types";
+import { Drawer, Form, Input, Switch, Button, Select } from "@agentscope-ai/design";
+import type { MCPClientInfo, MCPTransport } from "../../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 
@@ -11,10 +11,13 @@ interface MCPClientDrawerProps {
     key: string,
     values: {
       name: string;
-      command: string;
+      transport?: MCPTransport;
+      command?: string;
       enabled?: boolean;
       args?: string[];
       env?: Record<string, string>;
+      url?: string;
+      headers?: Record<string, string>;
     },
   ) => Promise<boolean>;
   form: any;
@@ -31,21 +34,36 @@ export function MCPClientDrawer({
   const [submitting, setSubmitting] = useState(false);
   const isEditing = !!client;
 
+  const transport: MCPTransport = Form.useWatch("transport", form) ?? "stdio";
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       setSubmitting(true);
 
-      const clientData = {
+      const currentTransport: MCPTransport = values.transport ?? "stdio";
+
+      const clientData: Record<string, unknown> = {
         name: values.name,
-        command: values.command,
         enabled: values.enabled ?? true,
-        args: values.args ? values.args.split(" ").filter(Boolean) : [],
-        env: values.env ? JSON.parse(values.env) : {},
+        transport: currentTransport,
       };
 
+      if (currentTransport === "stdio") {
+        clientData.command = values.command;
+        clientData.args = values.args
+          ? values.args.split(" ").filter(Boolean)
+          : [];
+        clientData.env = values.env ? JSON.parse(values.env) : {};
+      } else {
+        clientData.url = values.url;
+        clientData.headers = values.headers
+          ? JSON.parse(values.headers)
+          : {};
+      }
+
       const key = isEditing ? client.key : values.key;
-      const success = await onSubmit(key, clientData);
+      const success = await onSubmit(key, clientData as any);
 
       if (success) {
         onClose();
@@ -102,20 +120,80 @@ export function MCPClientDrawer({
         </Form.Item>
 
         <Form.Item
-          name="command"
-          label={t("mcp.command")}
-          rules={[{ required: true, message: t("mcp.commandRequired") }]}
+          name="transport"
+          label={t("mcp.transport")}
+          initialValue="stdio"
         >
-          <Input placeholder={t("mcp.commandPlaceholder")} />
+          <Select>
+            <Select.Option value="stdio">
+              stdio ({t("mcp.transportStdioDesc")})
+            </Select.Option>
+            <Select.Option value="sse">
+              SSE ({t("mcp.transportSseDesc")})
+            </Select.Option>
+            <Select.Option value="streamable_http">
+              Streamable HTTP ({t("mcp.transportHttpDesc")})
+            </Select.Option>
+          </Select>
         </Form.Item>
 
-        <Form.Item name="args" label={t("mcp.args")} extra={t("mcp.argsHelp")}>
-          <Input placeholder={t("mcp.argsPlaceholder")} />
-        </Form.Item>
+        {/* stdio-specific fields */}
+        {transport === "stdio" && (
+          <>
+            <Form.Item
+              name="command"
+              label={t("mcp.command")}
+              rules={[
+                { required: true, message: t("mcp.commandRequired") },
+              ]}
+            >
+              <Input placeholder={t("mcp.commandPlaceholder")} />
+            </Form.Item>
 
-        <Form.Item name="env" label={t("mcp.env")} extra={t("mcp.envHelp")}>
-          <Input.TextArea rows={4} placeholder={t("mcp.envPlaceholder")} />
-        </Form.Item>
+            <Form.Item
+              name="args"
+              label={t("mcp.args")}
+              extra={t("mcp.argsHelp")}
+            >
+              <Input placeholder={t("mcp.argsPlaceholder")} />
+            </Form.Item>
+
+            <Form.Item
+              name="env"
+              label={t("mcp.env")}
+              extra={t("mcp.envHelp")}
+            >
+              <Input.TextArea
+                rows={4}
+                placeholder={t("mcp.envPlaceholder")}
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {/* SSE / Streamable HTTP fields */}
+        {(transport === "sse" || transport === "streamable_http") && (
+          <>
+            <Form.Item
+              name="url"
+              label={t("mcp.url")}
+              rules={[{ required: true, message: t("mcp.urlRequired") }]}
+            >
+              <Input placeholder={t("mcp.urlPlaceholder")} />
+            </Form.Item>
+
+            <Form.Item
+              name="headers"
+              label={t("mcp.headers")}
+              extra={t("mcp.headersHelp")}
+            >
+              <Input.TextArea
+                rows={4}
+                placeholder={t("mcp.headersPlaceholder")}
+              />
+            </Form.Item>
+          </>
+        )}
 
         <Form.Item
           name="enabled"

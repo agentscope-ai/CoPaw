@@ -21,14 +21,29 @@ class MCPClientInfo(BaseModel):
     name: str = Field(..., description="Client display name")
     description: str = Field(default="", description="Client description")
     enabled: bool = Field(..., description="Whether the client is enabled")
-    command: str = Field(..., description="Command to launch the MCP server")
+    transport: str = Field(
+        default="stdio",
+        description='Transport: "stdio", "sse", or "streamable_http"',
+    )
+    command: str = Field(
+        default="",
+        description="Command to launch the MCP server (stdio)",
+    )
     args: List[str] = Field(
         default_factory=list,
-        description="Command-line arguments",
+        description="Command-line arguments (stdio)",
     )
     env: Dict[str, str] = Field(
         default_factory=dict,
-        description="Environment variables",
+        description="Environment variables (stdio)",
+    )
+    url: str = Field(
+        default="",
+        description="Server URL (sse / streamable_http)",
+    )
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="HTTP headers (sse / streamable_http)",
     )
 
 
@@ -41,14 +56,29 @@ class MCPClientCreateRequest(BaseModel):
         default=True,
         description="Whether to enable the client",
     )
-    command: str = Field(..., description="Command to launch the MCP server")
+    transport: str = Field(
+        default="stdio",
+        description='Transport: "stdio", "sse", or "streamable_http"',
+    )
+    command: str = Field(
+        default="",
+        description="Command to launch the MCP server (stdio)",
+    )
     args: List[str] = Field(
         default_factory=list,
-        description="Command-line arguments",
+        description="Command-line arguments (stdio)",
     )
     env: Dict[str, str] = Field(
         default_factory=dict,
-        description="Environment variables",
+        description="Environment variables (stdio)",
+    )
+    url: str = Field(
+        default="",
+        description="Server URL (sse / streamable_http)",
+    )
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="HTTP headers (sse / streamable_http)",
     )
 
 
@@ -61,17 +91,29 @@ class MCPClientUpdateRequest(BaseModel):
         None,
         description="Whether to enable the client",
     )
+    transport: Optional[str] = Field(
+        None,
+        description='Transport: "stdio", "sse", or "streamable_http"',
+    )
     command: Optional[str] = Field(
         None,
-        description="Command to launch the MCP server",
+        description="Command to launch the MCP server (stdio)",
     )
     args: Optional[List[str]] = Field(
         None,
-        description="Command-line arguments",
+        description="Command-line arguments (stdio)",
     )
     env: Optional[Dict[str, str]] = Field(
         None,
-        description="Environment variables",
+        description="Environment variables (stdio)",
+    )
+    url: Optional[str] = Field(
+        None,
+        description="Server URL (sse / streamable_http)",
+    )
+    headers: Optional[Dict[str, str]] = Field(
+        None,
+        description="HTTP headers (sse / streamable_http)",
     )
 
 
@@ -114,15 +156,24 @@ def _build_client_info(key: str, client: MCPClientConfig) -> MCPClientInfo:
         if client.env
         else {}
     )
+    # Mask header values (may contain auth tokens)
+    masked_headers = (
+        {k: _mask_env_value(v) for k, v in client.headers.items()}
+        if client.headers
+        else {}
+    )
 
     return MCPClientInfo(
         key=key,
         name=client.name,
         description=client.description,
         enabled=client.enabled,
+        transport=client.transport,
         command=client.command,
         args=client.args,
         env=masked_env,
+        url=client.url,
+        headers=masked_headers,
     )
 
 
@@ -180,9 +231,12 @@ async def create_mcp_client(
         name=client.name,
         description=client.description,
         enabled=client.enabled,
+        transport=client.transport,
         command=client.command,
         args=client.args,
         env=client.env,
+        url=client.url,
+        headers=client.headers,
     )
 
     # Add to config and save

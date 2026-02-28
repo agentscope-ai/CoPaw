@@ -11,7 +11,9 @@ import asyncio
 import logging
 from typing import Any, Dict, List, TYPE_CHECKING
 
-from agentscope.mcp import StdIOStatefulClient
+from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
+
+_VALID_TRANSPORTS = ("stdio", "sse", "streamable_http")
 
 if TYPE_CHECKING:
     from ...config.config import MCPClientConfig, MCPConfig
@@ -90,12 +92,7 @@ class MCPClientManager:
         """
         # 1. Create and connect new client outside lock (may be slow)
         logger.debug(f"Connecting new MCP client: {key}")
-        new_client = StdIOStatefulClient(
-            name=client_config.name,
-            command=client_config.command,
-            args=client_config.args,
-            env=client_config.env,
-        )
+        new_client = self._create_client(client_config)
 
         try:
             # Add timeout to prevent indefinite blocking
@@ -166,6 +163,57 @@ class MCPClientManager:
                 except Exception as e:
                     logger.warning(f"Error closing MCP client '{key}': {e}")
 
+    @staticmethod
+    def _create_client(
+        client_config: "MCPClientConfig",
+    ) -> "StdIOStatefulClient | HttpStatefulClient":
+        """Create an MCP client instance based on transport type.
+
+        Args:
+            client_config: Client configuration
+
+        Returns:
+            An MCP client (StdIO or Http) ready for ``connect()``.
+
+        Raises:
+            ValueError: If the transport type or required fields are invalid.
+        """
+        transport = getattr(client_config, "transport", "stdio")
+        if transport not in _VALID_TRANSPORTS:
+            raise ValueError(
+                f"Invalid MCP transport '{transport}' for client "
+                f"'{client_config.name}'. "
+                f"Must be one of {_VALID_TRANSPORTS}."
+            )
+
+        if transport == "stdio":
+            if not client_config.command:
+                raise ValueError(
+                    f"MCP client '{client_config.name}' uses stdio transport "
+                    f"but 'command' is not set."
+                )
+            return StdIOStatefulClient(
+                name=client_config.name,
+                command=client_config.command,
+                args=client_config.args,
+                env=client_config.env,
+            )
+
+        # sse or streamable_http
+        url = getattr(client_config, "url", "")
+        if not url:
+            raise ValueError(
+                f"MCP client '{client_config.name}' uses {transport} "
+                f"transport but 'url' is not set."
+            )
+        headers = getattr(client_config, "headers", None) or None
+        return HttpStatefulClient(
+            name=client_config.name,
+            transport=transport,  # type: ignore[arg-type]
+            url=url,
+            headers=headers,
+        )
+
     async def _add_client(
         self,
         key: str,
@@ -179,12 +227,7 @@ class MCPClientManager:
             client_config: Client configuration
             timeout: Connection timeout in seconds (default 60s)
         """
-        client = StdIOStatefulClient(
-            name=client_config.name,
-            command=client_config.command,
-            args=client_config.args,
-            env=client_config.env,
-        )
+        client = self._create_client(client_config)
 
         # Add timeout to prevent indefinite blocking
         await asyncio.wait_for(client.connect(), timeout=timeout)

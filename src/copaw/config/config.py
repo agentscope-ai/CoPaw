@@ -145,14 +145,40 @@ class LastDispatchConfig(BaseModel):
 
 
 class MCPClientConfig(BaseModel):
-    """Configuration for a single MCP client."""
+    """Configuration for a single MCP client.
+
+    Supports three transport modes:
+    - "stdio" (default): Launch a local subprocess via command + args.
+    - "sse": Connect to a remote MCP server over Server-Sent Events.
+    - "streamable_http": Connect via the Streamable HTTP transport.
+
+    For "stdio", ``command`` and ``args`` are required.
+    For "sse" / "streamable_http", ``url`` is required; ``command``/``args``
+    are ignored.
+    """
 
     name: str
     description: str = ""
     enabled: bool = True
-    command: str
+    transport: str = Field(
+        default="stdio",
+        description=(
+            'Transport mode: "stdio", "sse", or "streamable_http"'
+        ),
+    )
+    # stdio fields
+    command: str = ""
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
+    # sse / streamable_http fields
+    url: str = Field(
+        default="",
+        description="Server URL for sse / streamable_http transport",
+    )
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="HTTP headers for sse / streamable_http transport",
+    )
 
 
 class MCPConfig(BaseModel):

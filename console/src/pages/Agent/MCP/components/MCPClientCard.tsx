@@ -31,12 +31,14 @@ export function MCPClientCard({
   const [editedJson, setEditedJson] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
-  // Determine if MCP client is remote or local based on command
-  const isRemote =
-    client.command.startsWith("http://") ||
-    client.command.startsWith("https://") ||
-    client.command.includes("://");
-  const clientType = isRemote ? "Remote" : "Local";
+  // Determine client type from transport field
+  const isRemote = client.transport === "sse" || client.transport === "streamable_http";
+  const transportLabel =
+    client.transport === "sse"
+      ? "SSE"
+      : client.transport === "streamable_http"
+        ? "HTTP"
+        : "Local";
 
   const handleToggleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -100,7 +102,7 @@ export function MCPClientCard({
                 isRemote ? styles.remote : styles.local
               }`}
             >
-              {clientType}
+              {transportLabel}
             </span>
           </div>
         </div>

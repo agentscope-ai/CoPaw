@@ -2,6 +2,9 @@
  * MCP (Model Context Protocol) client types
  */
 
+/** Transport mode for MCP clients */
+export type MCPTransport = 'stdio' | 'sse' | 'streamable_http';
+
 export interface MCPClientInfo {
   /** Unique client key identifier */
   key: string;
@@ -11,12 +14,18 @@ export interface MCPClientInfo {
   description: string;
   /** Whether the client is enabled */
   enabled: boolean;
-  /** Command to launch the MCP server */
+  /** Transport mode */
+  transport: MCPTransport;
+  /** Command to launch the MCP server (stdio) */
   command: string;
-  /** Command-line arguments */
+  /** Command-line arguments (stdio) */
   args: string[];
-  /** Environment variables */
+  /** Environment variables (stdio) */
   env: Record<string, string>;
+  /** Server URL (sse / streamable_http) */
+  url: string;
+  /** HTTP headers (sse / streamable_http) */
+  headers: Record<string, string>;
 }
 
 export interface MCPClientCreateRequest {
@@ -30,12 +39,18 @@ export interface MCPClientCreateRequest {
     description?: string;
     /** Whether to enable the client */
     enabled?: boolean;
-    /** Command to launch the MCP server */
-    command: string;
-    /** Command-line arguments */
+    /** Transport mode */
+    transport?: MCPTransport;
+    /** Command to launch the MCP server (stdio) */
+    command?: string;
+    /** Command-line arguments (stdio) */
     args?: string[];
-    /** Environment variables */
+    /** Environment variables (stdio) */
     env?: Record<string, string>;
+    /** Server URL (sse / streamable_http) */
+    url?: string;
+    /** HTTP headers (sse / streamable_http) */
+    headers?: Record<string, string>;
   };
 }
 
@@ -46,10 +61,16 @@ export interface MCPClientUpdateRequest {
   description?: string;
   /** Whether to enable the client */
   enabled?: boolean;
-  /** Command to launch the MCP server */
+  /** Transport mode */
+  transport?: MCPTransport;
+  /** Command to launch the MCP server (stdio) */
   command?: string;
-  /** Command-line arguments */
+  /** Command-line arguments (stdio) */
   args?: string[];
-  /** Environment variables */
+  /** Environment variables (stdio) */
   env?: Record<string, string>;
+  /** Server URL (sse / streamable_http) */
+  url?: string;
+  /** HTTP headers (sse / streamable_http) */
+  headers?: Record<string, string>;
 }
