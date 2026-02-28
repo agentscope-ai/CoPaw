@@ -20,6 +20,19 @@ class ScheduleSpec(BaseModel):
     cron: str = Field(...)
     timezone: str = "UTC"
 
+    @field_validator("timezone", mode="before")
+    @classmethod
+    def resolve_timezone_default(cls, v: str) -> str:
+        """Replace empty timezone with the global config value."""
+        if v:
+            return v
+        try:
+            from copaw.config.utils import get_timezone
+
+            return get_timezone()
+        except Exception:
+            return "UTC"
+
     @field_validator("cron")
     @classmethod
     def normalize_cron_5_fields(cls, v: str) -> str:

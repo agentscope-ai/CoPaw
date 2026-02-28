@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Tool that returns the current local time with timezone info."""
+"""Tool that returns the current time in the configured timezone."""
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
@@ -10,9 +11,9 @@ from agentscope.tool import ToolResponse
 async def get_current_time() -> ToolResponse:
     """Get the current system time with timezone information.
 
-    Returns the local time in a human-readable format, including
-    timezone name and UTC offset. Useful for time-sensitive tasks
-    such as scheduling cron jobs.
+    Returns the time in the timezone configured in config.json (``timezone``
+    field).  Falls back to the system local timezone when no timezone is
+    configured, and to UTC if the local timezone cannot be determined.
 
     Returns:
         `ToolResponse`:
@@ -20,7 +21,11 @@ async def get_current_time() -> ToolResponse:
             e.g. "2026-02-13 19:30:45 CST (UTC+0800)".
     """
     try:
-        now = datetime.now().astimezone()
+        from copaw.config.utils import get_timezone
+
+        tz_name = get_timezone()
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
         time_str = now.strftime("%Y-%m-%d %H:%M:%S %Z (UTC%z)")
     except Exception:
         time_str = datetime.now(timezone.utc).isoformat() + " (UTC)"

@@ -186,6 +186,8 @@ class Config(BaseModel):
     last_dispatch: Optional[LastDispatchConfig] = None
     # When False, channel output hides tool call/result details (show "...").
     show_tool_details: bool = True
+    # Global timezone (IANA name, e.g. "Asia/Shanghai"). Empty = system local.
+    timezone: str = ""
 
 
 ChannelConfigUnion = Union[

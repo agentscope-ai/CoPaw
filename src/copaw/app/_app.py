@@ -15,7 +15,7 @@ from ..config import (  # pylint: disable=no-name-in-module
     update_last_dispatch,
     ConfigWatcher,
 )
-from ..config.utils import get_jobs_path, get_chats_path, get_config_path
+from ..config.utils import get_jobs_path, get_chats_path, get_config_path, get_timezone
 from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV
 from ..__version__ import __version__
 from ..utils.logging import setup_logger
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):  # pylint: disable=too-many-statements
         repo=repo,
         runner=runner,
         channel_manager=channel_manager,
-        timezone="UTC",
+        timezone=get_timezone(),
     )
     await cron_manager.start()
 
