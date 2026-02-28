@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Form, Input, Modal, message, Button } from "@agentscope-ai/design";
+import { ApiOutlined } from "@ant-design/icons";
 import type { ProviderConfigRequest } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -30,6 +31,7 @@ export function ProviderConfigModal({
 }: ProviderConfigModalProps) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [form] = Form.useForm<ProviderConfigRequest>();
 
@@ -83,6 +85,24 @@ export function ProviderConfigModal({
     }
   };
 
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const result = await api.testProviderConnection(provider.id);
+      if (result.success) {
+        message.success(result.message || t("models.testConnectionSuccess"));
+      } else {
+        message.warning(result.message || t("models.testConnectionFailed"));
+      }
+    } catch (error) {
+      const errMsg =
+        error instanceof Error ? error.message : t("models.testConnectionError");
+      message.error(errMsg);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const isActiveLlmProvider =
     activeModels?.active_llm?.provider_id === provider.id;
 
@@ -133,6 +153,14 @@ export function ProviderConfigModal({
                 {t("models.revokeAuthorization")}
               </Button>
             )}
+            <Button
+              size="small"
+              icon={<ApiOutlined />}
+              onClick={handleTest}
+              loading={testing}
+            >
+              {t("models.testConnection")}
+            </Button>
           </div>
           <div className={styles.modalFooterRight}>
             <Button onClick={onClose}>{t("models.cancel")}</Button>

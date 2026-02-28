@@ -6,6 +6,8 @@ import type {
   ModelSlotRequest,
   CreateCustomProviderRequest,
   AddModelRequest,
+  TestConnectionResponse,
+  TestModelRequest,
 } from "../types";
 
 export const providerApi = {
@@ -53,5 +55,22 @@ export const providerApi = {
         modelId,
       )}`,
       { method: "DELETE" },
+    ),
+
+  /* ---- Test Connection ---- */
+
+  testProviderConnection: (providerId: string) =>
+    request<TestConnectionResponse>(
+      `/models/${encodeURIComponent(providerId)}/test`,
+      { method: "POST" },
+    ),
+
+  testModelConnection: (providerId: string, body: TestModelRequest) =>
+    request<TestConnectionResponse>(
+      `/models/${encodeURIComponent(providerId)}/models/test`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
     ),
 };

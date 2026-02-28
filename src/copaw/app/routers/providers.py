@@ -23,6 +23,8 @@ from ...providers import (
     mask_api_key,
     remove_model,
     set_active_llm,
+    test_model_connection,
+    test_provider_connection,
     update_provider_settings,
 )
 
@@ -149,6 +151,48 @@ async def create_custom_provider_endpoint(
     provider = get_provider(body.id)
     assert provider is not None
     return _build_provider_info(provider, data)
+
+
+class TestConnectionResponse(BaseModel):
+    success: bool = Field(..., description="Whether the test passed")
+    message: str = Field(..., description="Human-readable result message")
+
+
+class TestModelRequest(BaseModel):
+    model_id: str = Field(..., description="Model ID to test")
+
+
+@router.post(
+    "/{provider_id}/test",
+    response_model=TestConnectionResponse,
+    summary="Test provider connection",
+)
+async def test_provider(
+    provider_id: str = Path(...),
+) -> TestConnectionResponse:
+    """Test if a provider's URL and API key are valid."""
+    try:
+        result = test_provider_connection(provider_id)
+        return TestConnectionResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{provider_id}/models/test",
+    response_model=TestConnectionResponse,
+    summary="Test a specific model",
+)
+async def test_model(
+    provider_id: str = Path(...),
+    body: TestModelRequest = Body(...),
+) -> TestConnectionResponse:
+    """Test if a specific model works with the configured provider."""
+    try:
+        result = test_model_connection(provider_id, body.model_id)
+        return TestConnectionResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete(
