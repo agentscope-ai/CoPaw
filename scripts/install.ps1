@@ -53,6 +53,23 @@ Write-Host "[copaw] " -ForegroundColor Green -NoNewline
 Write-Host "Installing CoPaw into " -NoNewline
 Write-Host "$CopawHome" -ForegroundColor White
 
+# ── Execution Policy Check ────────────────────────────────────────────────────
+$policy = Get-ExecutionPolicy
+if ($policy -eq "Restricted") {
+    Write-Info "Execution policy is 'Restricted', setting to RemoteSigned for current user..."
+    try {
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Write-Info "Execution policy updated to RemoteSigned"
+    } catch {
+        Write-Err "PowerShell execution policy is set to 'Restricted' which prevents script execution."
+        Write-Err "Please run the following command and retry:"
+        Write-Err ""
+        Write-Err "  Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+        Write-Err ""
+        exit 1
+    }
+}
+
 # ── Step 1: Ensure uv is available ───────────────────────────────────────────
 function Ensure-Uv {
     if (Get-Command uv -ErrorAction SilentlyContinue) {
