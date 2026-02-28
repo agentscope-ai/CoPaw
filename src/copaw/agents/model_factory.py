@@ -11,7 +11,7 @@ Example:
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type
+from typing import TYPE_CHECKING, Dict, Optional, Sequence, Tuple, Type
 
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
 from agentscope.model import ChatModelBase, OpenAIChatModel
@@ -21,6 +21,7 @@ from ..local_models import create_local_chat_model
 from ..providers import (
     get_active_llm_config,
     get_chat_model_class,
+    get_model_slot,
     get_provider_chat_model,
     load_providers_json,
 )
@@ -321,6 +322,86 @@ def _create_formatter_instance(
     return formatter_class()
 
 
+class ModelManager:
+    """Manager for cached model instances with tier-based selection.
+
+    Provides lazy instantiation and caching of model/formatter pairs
+    for efficient multi-tier model routing.
+
+    Usage:
+        model, formatter = ModelManager.get_model_for_tier("complex")
+    """
+
+    _instances: Dict[str, Tuple[ChatModelBase, FormatterBase]] = {}
+
+    @classmethod
+    def get_model_for_tier(
+        cls,
+        tier: str,
+    ) -> Tuple[ChatModelBase, FormatterBase]:
+        """Get or create a model instance for the specified tier.
+
+        Uses lazy instantiation with caching for efficiency.
+        Falls back to active_llm if tier not configured.
+
+        Args:
+            tier: Tier name (simple, medium, complex, reasoning)
+
+        Returns:
+            Tuple of (model_instance, formatter_instance)
+        """
+        # Get resolved config for tier
+        resolved = get_model_slot(tier)
+        if resolved is None:
+            # Fall back to active_llm
+            resolved = get_active_llm_config()
+            if resolved is None:
+                raise ValueError(
+                    f"No model configured for tier '{tier}' "
+                    "and no active_llm set",
+                )
+
+        # Create cache key
+        key = f"{resolved.base_url}:{resolved.model}"
+
+        # Check cache
+        if key not in cls._instances:
+            cls._instances[key] = create_model_and_formatter(resolved)
+
+        return cls._instances[key]
+
+    @classmethod
+    def get_model_for_config(
+        cls,
+        config: "ResolvedModelConfig",
+    ) -> Tuple[ChatModelBase, FormatterBase]:
+        """Get or create a model instance for a specific config.
+
+        Args:
+            config: Resolved model configuration
+
+        Returns:
+            Tuple of (model_instance, formatter_instance)
+        """
+        key = f"{config.base_url}:{config.model}"
+
+        if key not in cls._instances:
+            cls._instances[key] = create_model_and_formatter(config)
+
+        return cls._instances[key]
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear all cached model instances."""
+        cls._instances.clear()
+
+    @classmethod
+    def cached_count(cls) -> int:
+        """Return number of cached model instances."""
+        return len(cls._instances)
+
+
 __all__ = [
     "create_model_and_formatter",
+    "ModelManager",
 ]

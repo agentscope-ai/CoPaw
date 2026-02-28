@@ -9,7 +9,10 @@ from rich.panel import Panel
 
 from .channels_cmd import configure_channels_interactive
 from .env_cmd import configure_env_interactive
-from .providers_cmd import configure_providers_interactive
+from .providers_cmd import (
+    configure_providers_interactive,
+    configure_tier_slot_interactive,
+)
 from .skills_cmd import configure_skills_interactive
 from .utils import prompt_confirm, prompt_choice
 from ..config import (
@@ -24,7 +27,7 @@ from ..config.config import (
     HeartbeatConfig,
 )
 from ..constant import HEARTBEAT_DEFAULT_EVERY
-from ..providers import load_providers_json
+from ..providers import ModelTier, load_providers_json
 
 SECURITY_WARNING = """
 Security warning — please read.
@@ -237,6 +240,66 @@ def init_cmd(force: bool, use_defaults: bool, accept_security: bool) -> None:
         # No active LLM — must configure, cannot skip
         click.echo("\n=== LLM Provider Configuration (required) ===")
         configure_providers_interactive(use_defaults=use_defaults)
+
+    # --- Multi-model routing configuration ---
+    data = load_providers_json()
+
+    if use_defaults:
+        # Default: single model mode, no multi-model routing
+        data.routing.enabled = False
+        from ..providers import save_providers_json
+
+        save_providers_json(data)
+        click.echo(
+            "\n✓ Using single model mode (multi-model routing disabled)",
+        )
+    else:
+        click.echo("\n=== Model Routing Mode ===")
+        click.echo(
+            "  Single model: Use one model for all tasks\n"
+            "  Multi-model:  Route tasks to different models based on complexity\n"
+            "                (simple/medium/complex/reasoning tiers)",
+        )
+
+        use_multi_model = prompt_confirm(
+            "Enable multi-model routing?",
+            default=False,
+        )
+
+        if use_multi_model:
+            data.routing.enabled = True
+            from ..providers import save_providers_json
+
+            save_providers_json(data)
+            click.echo("✓ Multi-model routing enabled")
+
+            # Configure each tier
+            tier_descriptions = {
+                ModelTier.SIMPLE: "Simple tasks (greetings, status checks)",
+                ModelTier.MEDIUM: "Medium tasks (summarization, single-file edits)",
+                ModelTier.COMPLEX: "Complex tasks (multi-file code, architecture)",
+                ModelTier.REASONING: "Reasoning tasks (proofs, deep analysis)",
+            }
+
+            click.echo(
+                "\nConfigure model for each tier (or press Enter to skip):",
+            )
+            for tier in ModelTier.ALL_TIERS:
+                click.echo(f"\n  [{tier.upper()}] {tier_descriptions[tier]}")
+                if prompt_confirm(f"  Configure {tier} tier?", default=False):
+                    configure_tier_slot_interactive(tier, use_defaults=False)
+
+            click.echo("\n✓ Multi-model configuration complete!")
+            click.echo(
+                "  Use 'copaw models list-tiers' to view configuration\n"
+                "  Use 'copaw models set-tier <tier> -p <provider> -m <model>' to update",
+            )
+        else:
+            data.routing.enabled = False
+            from ..providers import save_providers_json
+
+            save_providers_json(data)
+            click.echo("✓ Single model mode (routing disabled)")
 
     # --- skills (prompt if needed) ---
     if use_defaults:

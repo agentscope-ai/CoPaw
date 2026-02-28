@@ -19,13 +19,14 @@ from pydantic import BaseModel
 from .command_handler import CommandHandler
 from .hooks import BootstrapHook, MemoryCompactionHook
 from .memory import CoPawInMemoryMemory
-from .model_factory import create_model_and_formatter
+from .model_factory import ModelManager, create_model_and_formatter
 from .prompt import build_system_prompt_from_working_dir
 from .skills_manager import (
     ensure_skills_initialized,
     get_working_skills_dir,
     list_available_skills,
 )
+from .task_router import TaskRouter
 from .tools import (
     browser_use,
     create_memory_search_tool,
@@ -45,6 +46,7 @@ from ..constant import (
     MEMORY_COMPACT_RATIO,
     WORKING_DIR,
 )
+from ..providers import load_providers_json
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ class CoPawAgent(ReActAgent):
     - Memory management with auto-compaction
     - Bootstrap guidance for first-time setup
     - System command handling (/compact, /new, etc.)
+    - Intelligent task routing for tier-based model selection
     """
 
     def __init__(
@@ -110,6 +113,9 @@ class CoPawAgent(ReActAgent):
             max_input_length * MEMORY_COMPACT_RATIO,
         )
 
+        # Initialize task router for intelligent model selection
+        self.task_router = TaskRouter()
+
         # Initialize toolkit with built-in tools
         toolkit = self._create_toolkit(namesake_strategy=namesake_strategy)
 
@@ -144,7 +150,7 @@ class CoPawAgent(ReActAgent):
         self.command_handler = CommandHandler(
             agent_name=self.name,
             memory=self.memory,
-            formatter=self.formatter,
+            formatter=self.formatter,  # type: ignore[has-type]
             memory_manager=self.memory_manager,
             enable_memory_manager=self._enable_memory_manager,
         )
@@ -263,8 +269,12 @@ class CoPawAgent(ReActAgent):
 
         # Register memory_search tool if enabled and available
         if self._enable_memory_manager and self.memory_manager is not None:
-            self.memory_manager.chat_model = self.model
-            self.memory_manager.formatter = self.formatter
+            self.memory_manager.chat_model = (
+                self.model  # type: ignore[has-type]
+            )
+            self.memory_manager.formatter = (
+                self.formatter  # type: ignore[has-type]
+            )
 
             memory_search_tool = create_memory_search_tool(self.memory_manager)
             self.toolkit.register_tool_function(
@@ -513,6 +523,8 @@ class CoPawAgent(ReActAgent):
     ) -> Msg:
         """Override reply to process file blocks and handle commands.
 
+        Also handles intelligent task routing for tier-based model selection.
+
         Args:
             msg: Input message(s) from user
             structured_model: Optional pydantic model for structured output
@@ -536,5 +548,76 @@ class CoPawAgent(ReActAgent):
             await self.print(msg)
             return msg
 
-        # Normal message processing
-        return await super().reply(msg=msg, structured_model=structured_model)
+        # Intelligent task routing
+        tier = None
+        cleaned_query = query
+        if query:
+            # Parse force-override prefix
+            override_tier, cleaned_query = self.task_router.parse_override(
+                query,
+            )
+
+            # Check if routing is enabled
+            try:
+                providers_data = load_providers_json()
+                routing_enabled = providers_data.routing.enabled
+            except Exception:
+                routing_enabled = False
+
+            if override_tier:
+                # User explicitly requested a tier
+                tier = override_tier
+                if cleaned_query != query and last_msg:
+                    last_msg.content = cleaned_query
+                logger.info(f"Task routing: tier={tier} (user override)")
+            elif routing_enabled:
+                # Auto-classify task
+                tier = self.task_router.classify_task(
+                    query,
+                    self.toolkit.tools
+                    if hasattr(self.toolkit, "tools")
+                    else [],
+                    self.memory.content
+                    if hasattr(self.memory, "content")
+                    else [],
+                )
+                logger.info(f"Task routing: tier={tier} (auto-classified)")
+            else:
+                logger.debug("Task routing: disabled, using default model")
+
+        # Apply tier-based model selection if tier determined
+        original_model = None
+        original_formatter = None
+        if tier:
+            try:
+                new_model, new_formatter = ModelManager.get_model_for_tier(
+                    tier,
+                )
+                # Swap model and formatter temporarily for this request
+                # pylint: disable=access-member-before-definition
+                original_model = self.model  # type: ignore[has-type]
+                original_formatter = self.formatter  # type: ignore[has-type]
+                self.model = new_model  # type: ignore[has-type]
+                self.formatter = new_formatter  # type: ignore[has-type]
+                logger.debug(
+                    f"Switched to model for tier '{tier}': "
+                    f"{new_model.model_name}",
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get model for tier '{tier}': {e}, "
+                    "using default model",
+                )
+                tier = None
+
+        try:
+            # Normal message processing
+            return await super().reply(
+                msg=msg,
+                structured_model=structured_model,
+            )
+        finally:
+            # Restore original model if we swapped it
+            if original_model is not None:
+                self.model = original_model
+                self.formatter = original_formatter

@@ -6,11 +6,13 @@ from .models import (
     CustomProviderData,
     ModelInfo,
     ModelSlotConfig,
+    ModelTier,
     ProviderDefinition,
     ProviderInfo,
     ProviderSettings,
     ProvidersData,
     ResolvedModelConfig,
+    RoutingConfig,
 )
 from .registry import (
     PROVIDERS,
@@ -26,13 +28,18 @@ from .store import (
     create_custom_provider,
     delete_custom_provider,
     get_active_llm_config,
+    get_model_slot,
     load_providers_json,
     mask_api_key,
     remove_model,
     save_providers_json,
     set_active_llm,
+<<<<<<< HEAD
     test_model_connection,
     test_provider_connection,
+=======
+    set_model_slot,
+>>>>>>> fb7ebea (feat(routing): add intelligent task routing with tier-based model selection)
     update_provider_settings,
 )
 
@@ -41,11 +48,13 @@ __all__ = [
     "CustomProviderData",
     "ModelInfo",
     "ModelSlotConfig",
+    "ModelTier",
     "ProviderDefinition",
     "ProviderInfo",
     "ProviderSettings",
     "ProvidersData",
     "ResolvedModelConfig",
+    "RoutingConfig",
     "PROVIDERS",
     "get_chat_model_class",
     "get_provider",
@@ -57,12 +66,17 @@ __all__ = [
     "create_custom_provider",
     "delete_custom_provider",
     "get_active_llm_config",
+    "get_model_slot",
     "load_providers_json",
     "mask_api_key",
     "remove_model",
     "save_providers_json",
     "set_active_llm",
+<<<<<<< HEAD
     "test_model_connection",
     "test_provider_connection",
+=======
+    "set_model_slot",
+>>>>>>> fb7ebea (feat(routing): add intelligent task routing with tier-based model selection)
     "update_provider_settings",
 ]
