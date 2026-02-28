@@ -18,6 +18,17 @@ bash scripts/website_build.sh
 
 - Installs dependencies (pnpm or npm) and runs the Vite build. Output: `website/dist/`.
 
+## Build desktop app (macOS)
+
+```bash
+bash scripts/desktop_build.sh
+```
+
+- Prerequisites: [uv](https://github.com/astral-sh/uv) and Node.js/npm.
+- Steps: builds console frontend → creates Python 3.12 venv with CoPaw installed → installs Playwright Chromium → packages via Electron Forge.
+- Output: `desktop/out/make/` (DMG and ZIP).
+- Set `SKIP_PLAYWRIGHT=1` to skip Playwright installation (browser skills will not work).
+
 ## Build Docker image
 
 ```bash

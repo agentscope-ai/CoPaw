@@ -1,0 +1,8 @@
+node_modules/
+dist/
+out/
+.vite/
+runtime/
+*.dmg
+*.zip
+.DS_Store

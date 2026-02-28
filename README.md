@@ -60,6 +60,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 > - **I don’t want to install Python**: [One-line install](#one-line-install-recommended) handles Python automatically, or use [ModelScope one-click](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) for cloud.
 
 - [Quick Start](#quick-start)
+- [Desktop App (macOS)](#desktop-app-macos)
 - [API Key](#api-key)
 - [Local Models](#local-models)
 - [Documentation](#documentation)
@@ -179,6 +180,29 @@ To run CoPaw on Alibaba Cloud (ECS), use the one-click deployment: open the [CoP
 
 ---
 
+## Desktop App (macOS)
+
+CoPaw provides a native macOS desktop app built with Electron. It bundles a Python runtime so you don't need to install Python separately — just open the app and start chatting.
+
+**Build from source** (requires [uv](https://github.com/astral-sh/uv) and Node.js):
+
+```bash
+git clone https://github.com/agentscope-ai/CoPaw.git
+cd CoPaw
+bash scripts/desktop_build.sh
+```
+
+The build script will:
+1. Build the Console frontend
+2. Create a self-contained Python runtime with CoPaw installed
+3. Package everything into a macOS app via Electron Forge
+
+Output: `desktop/out/make/` (DMG and ZIP).
+
+> **Development mode:** To run the desktop client without packaging, use `cd desktop && npm ci && npm run dev` (requires a working `copaw` CLI in the bundled runtime).
+
+---
+
 ## API Key
 
 If you use a **cloud LLM** (e.g. DashScope, ModelScope), you must set an API key before chatting. CoPaw will not work until a valid key is configured.
@@ -244,6 +268,7 @@ pip install -e .
 
 - **Dev** (tests, formatting): `pip install -e ".[dev]"`
 - **Console** (build frontend): `cd console && npm ci && npm run build`, then `copaw app` from project root.
+- **Desktop** (macOS app): `bash scripts/desktop_build.sh` — builds a standalone `.app` with bundled Python runtime. See [Desktop App (macOS)](#desktop-app-macos).
 
 ---
 

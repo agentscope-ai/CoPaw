@@ -1,0 +1,29 @@
+{
+  "name": "copaw-desktop",
+  "productName": "CoPaw",
+  "version": "0.0.1",
+  "description": "CoPaw Desktop Client - Your personal AI assistant",
+  "main": ".vite/build/index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "dev": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint src/",
+    "build": "bash ../scripts/desktop_build.sh"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.6.0",
+    "@electron-forge/maker-dmg": "^7.6.0",
+    "@electron-forge/maker-zip": "^7.6.0",
+    "@electron-forge/plugin-vite": "^7.6.0",
+    "@electron-forge/shared-types": "^7.6.0",
+    "electron": "^33.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {},
+  "author": "CoPaw Team",
+  "license": "MIT"
+}
