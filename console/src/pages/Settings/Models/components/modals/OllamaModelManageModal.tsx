@@ -1,20 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Button, Form, Input, Modal, message } from "@agentscope-ai/design";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Button, Form, Input, Modal, message } from '@agentscope-ai/design';
 import {
   CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   LoadingOutlined,
   ApiOutlined,
-} from "@ant-design/icons";
+} from '@ant-design/icons';
 import type {
   ProviderInfo,
   OllamaModelResponse,
   OllamaDownloadTaskResponse,
-} from "../../../../../api/types";
-import api from "../../../../../api";
-import { useTranslation } from "react-i18next";
-import styles from "../../index.module.less";
+} from '../../../../../api/types';
+import api from '../../../../../api';
+import { useTranslation } from 'react-i18next';
+import styles from '../../index.module.less';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -26,8 +26,8 @@ interface OllamaModelManageModalProps {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
@@ -74,26 +74,26 @@ export function OllamaModelManageModal({
       const tasksStatus = await api.getOllamaDownloadStatus();
       const tasks = Array.isArray(tasksStatus) ? tasksStatus : [];
       const active = tasks.filter(
-        (t) => t.status === "pending" || t.status === "downloading",
+        (t) => t.status === 'pending' || t.status === 'downloading',
       );
       const terminal = tasks.filter(
         (t) =>
-          t.status === "completed" ||
-          t.status === "failed" ||
-          t.status === "cancelled",
+          t.status === 'completed' ||
+          t.status === 'failed' ||
+          t.status === 'cancelled',
       );
 
       let needsRefresh = false;
       for (const task of terminal) {
         if (!ollamaNotifiedRef.current.has(task.task_id)) {
           ollamaNotifiedRef.current.add(task.task_id);
-          if (task.status === "completed") {
-            message.success(t("models.localDownloadSuccess"));
+          if (task.status === 'completed') {
+            message.success(t('models.localDownloadSuccess'));
             needsRefresh = true;
-          } else if (task.status === "cancelled") {
-            message.info(t("models.localDownloadCancelled"));
+          } else if (task.status === 'cancelled') {
+            message.info(t('models.localDownloadCancelled'));
           } else {
-            message.error(task.error || t("models.localDownloadFailed"));
+            message.error(task.error || t('models.localDownloadFailed'));
           }
         }
       }
@@ -130,7 +130,7 @@ export function OllamaModelManageModal({
       .getOllamaDownloadStatus()
       .then((tasks) => {
         const active = tasks.filter(
-          (t) => t.status === "pending" || t.status === "downloading",
+          (t) => t.status === 'pending' || t.status === 'downloading',
         );
         setOllamaTasks(active);
         if (active.length > 0) {
@@ -151,31 +151,31 @@ export function OllamaModelManageModal({
       form.resetFields();
       startOllamaPolling();
     } catch (error) {
-      if (error && typeof error === "object" && "errorFields" in error) return;
+      if (error && typeof error === 'object' && 'errorFields' in error) return;
       const errMsg =
-        error instanceof Error ? error.message : t("models.downloadFailed");
+        error instanceof Error ? error.message : t('models.downloadFailed');
       message.error(errMsg);
     }
   };
 
   const handleOllamaDelete = (model: OllamaModelResponse) => {
     Modal.confirm({
-      title: t("models.localDeleteModel"),
-      content: t("models.localDeleteConfirm", { name: model.name }),
-      okText: t("common.delete"),
+      title: t('models.localDeleteModel'),
+      content: t('models.localDeleteConfirm', { name: model.name }),
+      okText: t('common.delete'),
       okButtonProps: { danger: true },
-      cancelText: t("models.cancel"),
+      cancelText: t('models.cancel'),
       onOk: async () => {
         try {
           await api.deleteOllamaModel(model.name);
-          message.success(t("models.localModelDeleted", { name: model.name }));
+          message.success(t('models.localModelDeleted', { name: model.name }));
           onSaved();
           fetchOllamaModels();
         } catch (error) {
           const errMsg =
             error instanceof Error
               ? error.message
-              : t("models.localDeleteFailed");
+              : t('models.localDeleteFailed');
           message.error(errMsg);
         }
       },
@@ -184,15 +184,15 @@ export function OllamaModelManageModal({
 
   const handleCancelOllamaDownload = (task: OllamaDownloadTaskResponse) => {
     Modal.confirm({
-      title: t("models.localCancelDownload"),
-      content: t("models.localCancelDownloadConfirm", { repo: task.name }),
-      okText: t("models.localCancelDownload"),
+      title: t('models.localCancelDownload'),
+      content: t('models.localCancelDownloadConfirm', { repo: task.name }),
+      okText: t('models.localCancelDownload'),
       okButtonProps: { danger: true },
-      cancelText: t("models.cancel"),
+      cancelText: t('models.cancel'),
       onOk: async () => {
         try {
           await api.cancelOllamaDownload(task.task_id);
-          message.success(t("models.localDownloadCancelled"));
+          message.success(t('models.localDownloadCancelled'));
           setOllamaTasks((prev) =>
             prev.filter((t) => t.task_id !== task.task_id),
           );
@@ -200,7 +200,7 @@ export function OllamaModelManageModal({
           const errMsg =
             error instanceof Error
               ? error.message
-              : t("models.localCancelDownloadFailed");
+              : t('models.localCancelDownloadFailed');
           message.error(errMsg);
         }
       },
@@ -210,17 +210,21 @@ export function OllamaModelManageModal({
   const handleTest = async (modelName: string) => {
     setTestingModelId(modelName);
     try {
-      const result = await api.testModelConnection(provider.id, { model_id: modelName });
+      const result = await api.testModelConnection(provider.id, {
+        model_id: modelName,
+      });
       if (result.success) {
-        message.success(result.message || t("models.testConnectionSuccess"));
+        message.success(result.message || t('models.testConnectionSuccess'));
         // Refresh model list on successful test
         fetchOllamaModels();
       } else {
-        message.warning(result.message || t("models.testConnectionFailed"));
+        message.warning(result.message || t('models.testConnectionFailed'));
       }
     } catch (error) {
       const errMsg =
-        error instanceof Error ? error.message : t("models.testConnectionError");
+        error instanceof Error
+          ? error.message
+          : t('models.testConnectionError');
       message.error(errMsg);
     } finally {
       setTestingModelId(null);
@@ -235,13 +239,13 @@ export function OllamaModelManageModal({
 
   return (
     <Modal
-      title={t("models.localModelsTitle", { provider: provider.name })}
+      title={t('models.localModelsTitle', { provider: provider.name })}
       open={open}
       onCancel={handleClose}
       footer={
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterRight}>
-            <Button onClick={handleClose}>{t("models.cancel")}</Button>
+            <Button onClick={handleClose}>{t('models.cancel')}</Button>
           </div>
         </div>
       }
@@ -253,21 +257,21 @@ export function OllamaModelManageModal({
         <div
           key={task.task_id}
           style={{
-            padding: "12px 16px",
+            padding: '12px 16px',
             marginBottom: 8,
-            background: "#f6f8fa",
+            background: '#f6f8fa',
             borderRadius: 8,
-            border: "1px solid #e8e8e8",
-            display: "flex",
-            alignItems: "center",
+            border: '1px solid #e8e8e8',
+            display: 'flex',
+            alignItems: 'center',
             gap: 10,
           }}
         >
-          <LoadingOutlined spin style={{ fontSize: 16, color: "#615CED" }} />
-          <span style={{ color: "#333", fontSize: 13, flex: 1 }}>
-            {task.status === "pending"
-              ? t("models.localDownloadPending")
-              : t("models.localDownloading", { repo: task.name })}
+          <LoadingOutlined spin style={{ fontSize: 16, color: '#615CED' }} />
+          <span style={{ color: '#333', fontSize: 13, flex: 1 }}>
+            {task.status === 'pending'
+              ? t('models.localDownloadPending')
+              : t('models.localDownloading', { repo: task.name })}
           </span>
           <Button
             type="text"
@@ -275,7 +279,7 @@ export function OllamaModelManageModal({
             danger
             icon={<CloseOutlined />}
             onClick={() => handleCancelOllamaDownload(task)}
-            style={{ marginLeft: "auto" }}
+            style={{ marginLeft: 'auto' }}
           />
         </div>
       ))}
@@ -283,10 +287,10 @@ export function OllamaModelManageModal({
       {/* Downloaded models list */}
       <div className={styles.modelList}>
         {loadingOllama ? (
-          <div className={styles.modelListEmpty}>{t("common.loading")}</div>
+          <div className={styles.modelListEmpty}>{t('common.loading')}</div>
         ) : ollamaModels.length === 0 ? (
           <div className={styles.modelListEmpty}>
-            {t("models.localNoModels")}
+            {t('models.localNoModels')}
           </div>
         ) : (
           ollamaModels.map((m) => (
@@ -309,7 +313,7 @@ export function OllamaModelManageModal({
                   loading={testingModelId === m.name}
                   style={{ marginRight: 4 }}
                 >
-                  {t("models.testConnection")}
+                  {t('models.testConnection')}
                 </Button>
                 <Button
                   type="text"
@@ -330,16 +334,16 @@ export function OllamaModelManageModal({
           <Form form={form} layout="vertical" style={{ marginBottom: 0 }}>
             <Form.Item
               name="name"
-              label={t("models.modelNameLabel")}
+              label={t('models.modelNameLabel')}
               rules={[
-                { required: true, message: t("models.modelNameRequired") },
+                { required: true, message: t('models.modelNameRequired') },
               ]}
               style={{ marginBottom: 12 }}
             >
-              <Input placeholder={t("models.ollamaModelNamePlaceholder")} />
+              <Input placeholder={t('models.ollamaModelNamePlaceholder')} />
             </Form.Item>
             <div
-              style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+              style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}
             >
               <Button
                 size="small"
@@ -348,7 +352,7 @@ export function OllamaModelManageModal({
                   form.resetFields();
                 }}
               >
-                {t("models.cancel")}
+                {t('models.cancel')}
               </Button>
               <Button
                 type="primary"
@@ -356,7 +360,7 @@ export function OllamaModelManageModal({
                 onClick={handleOllamaDownload}
                 icon={<DownloadOutlined />}
               >
-                {t("models.localDownloadModel")}
+                {t('models.localDownloadModel')}
               </Button>
             </div>
           </Form>
@@ -369,7 +373,7 @@ export function OllamaModelManageModal({
           onClick={() => setAdding(true)}
           style={{ marginTop: 12 }}
         >
-          {t("models.localDownloadModel")}
+          {t('models.localDownloadModel')}
         </Button>
       )}
     </Modal>

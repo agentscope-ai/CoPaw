@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Button,
   Form,
@@ -7,22 +7,22 @@ import {
   Select,
   Tag,
   message,
-} from "@agentscope-ai/design";
+} from '@agentscope-ai/design';
 import {
   CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   LoadingOutlined,
   ApiOutlined,
-} from "@ant-design/icons";
+} from '@ant-design/icons';
 import type {
   ProviderInfo,
   LocalModelResponse,
   DownloadTaskResponse,
-} from "../../../../../api/types";
-import api from "../../../../../api";
-import { useTranslation } from "react-i18next";
-import styles from "../../index.module.less";
+} from '../../../../../api/types';
+import api from '../../../../../api';
+import { useTranslation } from 'react-i18next';
+import styles from '../../index.module.less';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -34,8 +34,8 @@ interface LocalModelManageModalProps {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
@@ -79,26 +79,26 @@ export function LocalModelManageModal({
     try {
       const tasks = await api.getDownloadStatus(provider.id);
       const active = tasks.filter(
-        (t) => t.status === "pending" || t.status === "downloading",
+        (t) => t.status === 'pending' || t.status === 'downloading',
       );
       const terminal = tasks.filter(
         (t) =>
-          t.status === "completed" ||
-          t.status === "failed" ||
-          t.status === "cancelled",
+          t.status === 'completed' ||
+          t.status === 'failed' ||
+          t.status === 'cancelled',
       );
 
       let needsRefresh = false;
       for (const task of terminal) {
         if (!notifiedRef.current.has(task.task_id)) {
           notifiedRef.current.add(task.task_id);
-          if (task.status === "completed") {
-            message.success(t("models.localDownloadSuccess"));
+          if (task.status === 'completed') {
+            message.success(t('models.localDownloadSuccess'));
             needsRefresh = true;
-          } else if (task.status === "cancelled") {
-            message.info(t("models.localDownloadCancelled"));
+          } else if (task.status === 'cancelled') {
+            message.info(t('models.localDownloadCancelled'));
           } else {
-            message.error(task.error || t("models.localDownloadFailed"));
+            message.error(task.error || t('models.localDownloadFailed'));
           }
         }
       }
@@ -136,7 +136,7 @@ export function LocalModelManageModal({
       .then((tasks) => {
         const taskList = Array.isArray(tasks) ? tasks : [];
         const active = taskList.filter(
-          (t) => t.status === "pending" || t.status === "downloading",
+          (t) => t.status === 'pending' || t.status === 'downloading',
         );
         setActiveTasks(active);
         if (active.length > 0) {
@@ -155,32 +155,32 @@ export function LocalModelManageModal({
         repo_id: values.repo_id.trim(),
         filename: values.filename?.trim() || undefined,
         backend: provider.id,
-        source: values.source || "huggingface",
+        source: values.source || 'huggingface',
       });
       setActiveTasks((prev) => [...prev, task]);
       setAdding(false);
       form.resetFields();
       startPolling();
     } catch (error) {
-      if (error && typeof error === "object" && "errorFields" in error) return;
+      if (error && typeof error === 'object' && 'errorFields' in error) return;
       const errMsg =
-        error instanceof Error ? error.message : t("models.downloadFailed");
+        error instanceof Error ? error.message : t('models.downloadFailed');
       message.error(errMsg);
     }
   };
 
   const handleDeleteLocal = (model: LocalModelResponse) => {
     Modal.confirm({
-      title: t("models.localDeleteModel"),
-      content: t("models.localDeleteConfirm", { name: model.display_name }),
-      okText: t("common.delete"),
+      title: t('models.localDeleteModel'),
+      content: t('models.localDeleteConfirm', { name: model.display_name }),
+      okText: t('common.delete'),
       okButtonProps: { danger: true },
-      cancelText: t("models.cancel"),
+      cancelText: t('models.cancel'),
       onOk: async () => {
         try {
           await api.deleteLocalModel(model.id);
           message.success(
-            t("models.localModelDeleted", { name: model.display_name }),
+            t('models.localModelDeleted', { name: model.display_name }),
           );
           onSaved();
           fetchLocalModels();
@@ -188,7 +188,7 @@ export function LocalModelManageModal({
           const errMsg =
             error instanceof Error
               ? error.message
-              : t("models.localDeleteFailed");
+              : t('models.localDeleteFailed');
           message.error(errMsg);
         }
       },
@@ -197,15 +197,15 @@ export function LocalModelManageModal({
 
   const handleCancelDownload = (task: DownloadTaskResponse) => {
     Modal.confirm({
-      title: t("models.localCancelDownload"),
-      content: t("models.localCancelDownloadConfirm", { repo: task.repo_id }),
-      okText: t("models.localCancelDownload"),
+      title: t('models.localCancelDownload'),
+      content: t('models.localCancelDownloadConfirm', { repo: task.repo_id }),
+      okText: t('models.localCancelDownload'),
       okButtonProps: { danger: true },
-      cancelText: t("models.cancel"),
+      cancelText: t('models.cancel'),
       onOk: async () => {
         try {
           await api.cancelDownload(task.task_id);
-          message.success(t("models.localDownloadCancelled"));
+          message.success(t('models.localDownloadCancelled'));
           setActiveTasks((prev) =>
             prev.filter((t) => t.task_id !== task.task_id),
           );
@@ -213,7 +213,7 @@ export function LocalModelManageModal({
           const errMsg =
             error instanceof Error
               ? error.message
-              : t("models.localCancelDownloadFailed");
+              : t('models.localCancelDownloadFailed');
           message.error(errMsg);
         }
       },
@@ -223,17 +223,21 @@ export function LocalModelManageModal({
   const handleTest = async (modelId: string) => {
     setTestingModelId(modelId);
     try {
-      const result = await api.testModelConnection(provider.id, { model_id: modelId });
+      const result = await api.testModelConnection(provider.id, {
+        model_id: modelId,
+      });
       if (result.success) {
-        message.success(result.message || t("models.testConnectionSuccess"));
+        message.success(result.message || t('models.testConnectionSuccess'));
         // Refresh model list on successful test
         fetchLocalModels();
       } else {
-        message.warning(result.message || t("models.testConnectionFailed"));
+        message.warning(result.message || t('models.testConnectionFailed'));
       }
     } catch (error) {
       const errMsg =
-        error instanceof Error ? error.message : t("models.testConnectionError");
+        error instanceof Error
+          ? error.message
+          : t('models.testConnectionError');
       message.error(errMsg);
     } finally {
       setTestingModelId(null);
@@ -248,13 +252,13 @@ export function LocalModelManageModal({
 
   return (
     <Modal
-      title={t("models.localModelsTitle", { provider: provider.name })}
+      title={t('models.localModelsTitle', { provider: provider.name })}
       open={open}
       onCancel={handleClose}
       footer={
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterRight}>
-            <Button onClick={handleClose}>{t("models.cancel")}</Button>
+            <Button onClick={handleClose}>{t('models.cancel')}</Button>
           </div>
         </div>
       }
@@ -266,21 +270,21 @@ export function LocalModelManageModal({
         <div
           key={task.task_id}
           style={{
-            padding: "12px 16px",
+            padding: '12px 16px',
             marginBottom: 8,
-            background: "#f6f8fa",
+            background: '#f6f8fa',
             borderRadius: 8,
-            border: "1px solid #e8e8e8",
-            display: "flex",
-            alignItems: "center",
+            border: '1px solid #e8e8e8',
+            display: 'flex',
+            alignItems: 'center',
             gap: 10,
           }}
         >
-          <LoadingOutlined spin style={{ fontSize: 16, color: "#615CED" }} />
-          <span style={{ color: "#333", fontSize: 13, flex: 1 }}>
-            {task.status === "pending"
-              ? t("models.downloadPending")
-              : t("models.localDownloading", { repo: task.repo_id })}
+          <LoadingOutlined spin style={{ fontSize: 16, color: '#615CED' }} />
+          <span style={{ color: '#333', fontSize: 13, flex: 1 }}>
+            {task.status === 'pending'
+              ? t('models.downloadPending')
+              : t('models.localDownloading', { repo: task.repo_id })}
           </span>
           <Button
             type="text"
@@ -288,7 +292,7 @@ export function LocalModelManageModal({
             danger
             icon={<CloseOutlined />}
             onClick={() => handleCancelDownload(task)}
-            style={{ marginLeft: "auto" }}
+            style={{ marginLeft: 'auto' }}
           />
         </div>
       ))}
@@ -296,10 +300,10 @@ export function LocalModelManageModal({
       {/* Downloaded models list */}
       <div className={styles.modelList}>
         {loadingLocal ? (
-          <div className={styles.modelListEmpty}>{t("common.loading")}</div>
+          <div className={styles.modelListEmpty}>{t('common.loading')}</div>
         ) : localModels.length === 0 ? (
           <div className={styles.modelListEmpty}>
-            {t("models.localNoModels")}
+            {t('models.localNoModels')}
           </div>
         ) : (
           localModels.map((m) => (
@@ -309,16 +313,16 @@ export function LocalModelManageModal({
                   {m.display_name}
                 </span>
                 <span className={styles.modelListItemId}>
-                  {m.repo_id}/{m.filename} &middot;{" "}
+                  {m.repo_id}/{m.filename} &middot;{' '}
                   {formatFileSize(m.file_size)}
                 </span>
               </div>
               <div className={styles.modelListItemActions}>
                 <Tag
-                  color={m.source === "huggingface" ? "orange" : "blue"}
+                  color={m.source === 'huggingface' ? 'orange' : 'blue'}
                   style={{ fontSize: 11, marginRight: 4 }}
                 >
-                  {m.source === "huggingface" ? "HF" : "MS"}
+                  {m.source === 'huggingface' ? 'HF' : 'MS'}
                 </Tag>
                 <Button
                   type="text"
@@ -328,7 +332,7 @@ export function LocalModelManageModal({
                   loading={testingModelId === m.id}
                   style={{ marginRight: 4 }}
                 >
-                  {t("models.testConnection")}
+                  {t('models.testConnection')}
                 </Button>
                 <Button
                   type="text"
@@ -349,37 +353,37 @@ export function LocalModelManageModal({
           <Form form={form} layout="vertical" style={{ marginBottom: 0 }}>
             <Form.Item
               name="repo_id"
-              label={t("models.localRepoId")}
+              label={t('models.localRepoId')}
               rules={[
-                { required: true, message: t("models.localRepoIdRequired") },
+                { required: true, message: t('models.localRepoIdRequired') },
               ]}
               style={{ marginBottom: 12 }}
             >
-              <Input placeholder={t("models.localRepoIdPlaceholder")} />
+              <Input placeholder={t('models.localRepoIdPlaceholder')} />
             </Form.Item>
             <Form.Item
               name="filename"
-              label={t("models.localFilename")}
-              extra={t("models.localFilenameHint")}
+              label={t('models.localFilename')}
+              extra={t('models.localFilenameHint')}
               style={{ marginBottom: 12 }}
             >
-              <Input placeholder={t("models.localFilenamePlaceholder")} />
+              <Input placeholder={t('models.localFilenamePlaceholder')} />
             </Form.Item>
             <Form.Item
               name="source"
-              label={t("models.localSource")}
+              label={t('models.localSource')}
               initialValue="huggingface"
               style={{ marginBottom: 12 }}
             >
               <Select
                 options={[
-                  { value: "huggingface", label: "Hugging Face" },
-                  { value: "modelscope", label: "ModelScope" },
+                  { value: 'huggingface', label: 'Hugging Face' },
+                  { value: 'modelscope', label: 'ModelScope' },
                 ]}
               />
             </Form.Item>
             <div
-              style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
+              style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}
             >
               <Button
                 size="small"
@@ -388,7 +392,7 @@ export function LocalModelManageModal({
                   form.resetFields();
                 }}
               >
-                {t("models.cancel")}
+                {t('models.cancel')}
               </Button>
               <Button
                 type="primary"
@@ -396,7 +400,7 @@ export function LocalModelManageModal({
                 onClick={handleDownload}
                 icon={<DownloadOutlined />}
               >
-                {t("models.localDownload")}
+                {t('models.localDownload')}
               </Button>
             </div>
           </Form>
@@ -409,7 +413,7 @@ export function LocalModelManageModal({
           onClick={() => setAdding(true)}
           style={{ marginTop: 12 }}
         >
-          {t("models.localDownloadModel")}
+          {t('models.localDownloadModel')}
         </Button>
       )}
     </Modal>

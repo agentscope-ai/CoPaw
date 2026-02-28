@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from .models import (
     CustomProviderData,
@@ -467,9 +467,12 @@ def remove_model(provider_id: str, model_id: str) -> ProvidersData:
 
 
 def test_provider_connection(provider_id: str) -> dict[str, Any]:
-    """Test if a provider's URL and API key are valid (without testing a specific model).
+    """Test if a provider's URL and API key are valid.
 
-    This tests network connectivity and authentication at the provider level.
+    (without testing a specific model).
+
+    This tests network connectivity and authentication at the provider
+    level.
 
     Args:
         provider_id: The provider identifier to test
@@ -482,7 +485,6 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
     Raises:
         ValueError: If provider is not found
     """
-    from typing import Any
 
     defn = PROVIDERS.get(provider_id)
     if defn is None:
@@ -496,7 +498,9 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
         if len(defn.models) > 0:
             return {
                 "success": True,
-                "message": f"{defn.name} is ready with {len(defn.models)} model(s).",
+                "message": (
+                    f"{defn.name} is ready with {len(defn.models)} model(s)."
+                ),
             }
         else:
             return {
@@ -512,7 +516,9 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
             models = OllamaModelManager.list_models()
             return {
                 "success": True,
-                "message": f"Ollama daemon is reachable with {len(models)} model(s).",
+                "message": (
+                    f"Ollama daemon is reachable with {len(models)} model(s)."
+                ),
             }
         except ImportError:
             return {
@@ -561,12 +567,15 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
                     "message": f"{defn.name} API key is invalid or expired.",
                 }
             elif response.status_code == 404:
-                # Some providers don't have /models endpoint, try model instantiation
+                # Some providers don't have /models endpoint
+                # try model instantiation
                 pass
             elif response.status_code >= 500:
                 return {
                     "success": False,
-                    "message": f"{defn.name} server error: {response.status_code}",
+                    "message": (
+                        f"{defn.name} server error: {response.status_code}"
+                    ),
                 }
             elif response.status_code == 200:
                 return {
@@ -576,7 +585,9 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
     except httpx.ConnectError:
         return {
             "success": False,
-            "message": f"Cannot connect to {defn.name}. Please check the Base URL.",
+            "message": (
+                f"Cannot connect to {defn.name}. Please check the Base URL."
+            ),
         }
     except httpx.TimeoutException:
         return {
@@ -584,10 +595,12 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
             "message": f"Connection to {defn.name} timed out.",
         }
     except Exception:
-        # If /models endpoint fails, fall through to model instantiation test
+        # If /models endpoint fails,
+        # fall through to model instantiation test
         pass
 
-    # Fallback: try to instantiate a chat model (may fail if no valid model exists)
+    # Fallback: try to instantiate a chat model
+    # (may fail if no valid model exists)
     # Use the first available model or a common one
     test_model = None
     if len(defn.models) > 0:
@@ -604,7 +617,7 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
 
     try:
         # Try to instantiate the model with the configured credentials
-        test_instance = chat_model_class(
+        chat_model_class(
             model_name=test_model,
             api_key=api_key,
             stream=True,
@@ -625,12 +638,17 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
         elif "connection" in error_msg.lower():
             return {
                 "success": False,
-                "message": f"Cannot connect to {defn.name}. Please check the Base URL.",
+                "message": (
+                    f"Cannot connect to {defn.name}. "
+                    f"Please check the Base URL."
+                ),
             }
         else:
             return {
                 "success": False,
-                "message": f"{defn.name} configuration test failed: {error_msg}",
+                "message": (
+                    f"{defn.name} configuration test failed: {error_msg}"
+                ),
             }
 
 
@@ -651,7 +669,6 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     Raises:
         ValueError: If provider is not found
     """
-    from typing import Any
 
     defn = PROVIDERS.get(provider_id)
     if defn is None:
@@ -683,7 +700,9 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
                 if model.name == model_id:
                     return {
                         "success": True,
-                        "message": f"Model '{model_id}' is available in Ollama.",
+                        "message": (
+                            f"Model '{model_id}' is available in Ollama."
+                        ),
                     }
             return {
                 "success": False,
@@ -699,7 +718,9 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     if not data.is_configured(defn):
         return {
             "success": False,
-            "message": f"{defn.name} is not configured. Please add API key first.",
+            "message": (
+                f"{defn.name} is not configured. Please add API key first."
+            ),
         }
 
     base_url, api_key = data.get_credentials(provider_id)
@@ -725,17 +746,24 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
 
     try:
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(chat_url, json=test_payload, headers=headers)
+            response = client.post(
+                chat_url,
+                json=test_payload,
+                headers=headers,
+            )
 
             if response.status_code == 401:
                 return {
                     "success": False,
-                    "message": f"API key is invalid or expired.",
+                    "message": "API key is invalid or expired.",
                 }
             elif response.status_code == 404:
                 return {
                     "success": False,
-                    "message": f"Model '{model_id}' does not exist or is not available.",
+                    "message": (
+                        f"Model '{model_id}' does not exist "
+                        f"or is not available."
+                    ),
                 }
             elif response.status_code == 400:
                 # Check error details for invalid model
@@ -744,16 +772,19 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
                     if "model" in str(error_data).lower():
                         return {
                             "success": False,
-                            "message": f"Model '{model_id}' is invalid or not supported.",
+                            "message": (
+                                f"Model '{model_id}' is invalid "
+                                f"or not supported."
+                            ),
                         }
                     return {
                         "success": False,
                         "message": f"Bad request: {error_data}",
                     }
-                except:
+                except Exception:
                     return {
                         "success": False,
-                        "message": f"Bad request (400). Model may be invalid.",
+                        "message": "Bad request (400). Model may be invalid.",
                     }
             elif response.status_code >= 500:
                 return {
@@ -768,10 +799,15 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
                     if isinstance(result, dict) and "error" in result:
                         error_info = result["error"]
                         error_msg = error_info.get("message", str(error_info))
-                        if "model" in error_msg.lower() or "not found" in error_msg.lower():
+                        if (
+                            "model" in error_msg.lower()
+                            or "not found" in error_msg.lower()
+                        ):
                             return {
                                 "success": False,
-                                "message": f"Model '{model_id}' error: {error_msg}",
+                                "message": (
+                                    f"Model '{model_id}' error: {error_msg}"
+                                ),
                             }
                         return {
                             "success": False,
@@ -782,30 +818,44 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
                     if "choices" in result and len(result["choices"]) > 0:
                         return {
                             "success": True,
-                            "message": f"Model '{model_id}' is working correctly.",
+                            "message": (
+                                f"Model '{model_id}' is working correctly."
+                            ),
                         }
                     else:
-                        # Some APIs return 200 but with no choices (e.g., processing error)
+                        # Some APIs return 200 but with no choices
+                        # (e.g., processing error)
                         return {
                             "success": False,
-                            "message": f"Model '{model_id}' returned no content. It may be unavailable.",
+                            "message": (
+                                f"Model '{model_id}' returned no content. "
+                                f"It may be unavailable."
+                            ),
                         }
                 except Exception:
-                    # If we can't parse JSON but got 200, consider it a success
+                    # If we can't parse JSON but got 200,
+                    # consider it a success
                     return {
                         "success": True,
-                        "message": f"Model '{model_id}' responded (connection test passed).",
+                        "message": (
+                            f"Model '{model_id}' responded "
+                            f"(connection test passed)."
+                        ),
                     }
             else:
                 return {
                     "success": False,
-                    "message": f"Unexpected response code: {response.status_code}",
+                    "message": (
+                        f"Unexpected response code: {response.status_code}"
+                    ),
                 }
 
     except httpx.ConnectError as e:
         return {
             "success": False,
-            "message": f"Cannot connect to {defn.name}. Check the Base URL: {str(e)}",
+            "message": (
+                f"Cannot connect to {defn.name}. Check the Base URL: {str(e)}"
+            ),
         }
     except httpx.TimeoutException:
         return {
