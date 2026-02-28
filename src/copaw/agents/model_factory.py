@@ -9,6 +9,7 @@ Example:
     >>> model, formatter = create_model_and_formatter()
 """
 
+import base64
 import logging
 import os
 from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type
@@ -19,11 +20,17 @@ from agentscope.model import ChatModelBase, OpenAIChatModel
 from .utils.tool_message_utils import _sanitize_tool_messages
 
 
-def _normalize_image_blocks(msgs) -> None:
-    """Replace image blocks with missing/empty url so the API never receives url=None.
+# Allowed image extensions for file:// URLs (AgentScope formatter check)
+_SUPPORTED_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
-    Message content is mutated in place. Any block with type 'image', source type 'url',
-    and url None or empty is replaced with a text placeholder to avoid OpenAI 400.
+
+def _normalize_image_blocks(msgs) -> None:
+    """Ensure every image block has valid content so the API never receives image_url.url=None.
+
+    - Replaces image blocks with missing/empty url, invalid source, or missing base64 data with a text placeholder.
+    - Converts file:// URLs without a supported extension to base64 so the formatter accepts them.
+    - Converts file:/// URLs to base64 since AgentScope's formatter doesn't handle file:// scheme properly.
+    Message content is mutated in place.
     """
     for msg in msgs or []:
         if not hasattr(msg, "content") or not isinstance(msg.content, list):
@@ -33,10 +40,55 @@ def _normalize_image_blocks(msgs) -> None:
                 continue
             source = block.get("source")
             if not isinstance(source, dict):
+                msg.content[i] = {"type": "text", "text": "[Image: invalid source]"}
+                logger.debug("Replaced image block with non-dict source by placeholder")
                 continue
-            if source.get("type") == "url" and not source.get("url"):
-                msg.content[i] = {"type": "text", "text": "[Image: URL missing]"}
-                logger.debug("Replaced image block with missing url by text placeholder")
+            stype = source.get("type")
+            if stype == "base64":
+                data = source.get("data")
+                if not data or not isinstance(data, str):
+                    msg.content[i] = {"type": "text", "text": "[Image: base64 data missing]"}
+                    logger.debug("Replaced image block with missing base64 data by placeholder")
+                continue
+            if stype == "url":
+                url = (source.get("url") or "").strip() if isinstance(source.get("url"), str) else ""
+                if not url:
+                    msg.content[i] = {"type": "text", "text": "[Image: URL missing]"}
+                    logger.debug("Replaced image block with missing url by text placeholder")
+                    continue
+                # If file:// or file:/// URL, convert to base64 since AgentScope's formatter
+                # doesn't handle file:// scheme properly (it expects local paths like C:\... not file://...)
+                if url.startswith("file://") or url.startswith("file:/"):
+                    # Try to read the file and convert to base64
+                    try:
+                        from urllib.parse import urlparse
+                        from urllib.request import url2pathname
+                        parsed = urlparse(url)
+                        local_path = url2pathname(parsed.path)
+                        if os.path.exists(local_path) and os.path.isfile(local_path):
+                            with open(local_path, "rb") as f:
+                                raw = f.read()
+                            b64 = base64.b64encode(raw).decode("ascii")
+                            # Determine mime type from extension
+                            ext = os.path.splitext(local_path)[1].lower()
+                            if ext == ".jpg":
+                                ext = ".jpeg"
+                            mime = f"image/{ext.lstrip('.')}" if ext else "image/png"
+                            msg.content[i] = {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": mime, "data": b64},
+                            }
+                            logger.debug("Converted file:// URL to base64 for formatter: %s", url)
+                        else:
+                            msg.content[i] = {"type": "text", "text": "[Image: file not found]"}
+                            logger.debug("Replaced image block (file not found) by text placeholder")
+                    except Exception as e:
+                        msg.content[i] = {"type": "text", "text": f"[Image: conversion failed - {e}]"}
+                        logger.debug("Failed to convert file:// URL to base64: %s", e)
+                    continue
+            # Unknown source type
+            msg.content[i] = {"type": "text", "text": "[Image: unsupported source]"}
+            logger.debug("Replaced image block with unsupported source type by placeholder")
 from ..local_models import create_local_chat_model
 from ..providers import (
     get_active_llm_config,
