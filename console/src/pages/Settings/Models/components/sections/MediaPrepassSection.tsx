@@ -237,7 +237,7 @@ export function MediaPrepassSection({ vision, onSaved }: MediaPrepassSectionProp
                 max={600}
                 value={form[item.key].timeoutSeconds}
                 onChange={(value) =>
-                  updateCapability(item.key, { timeoutSeconds: Number(value || 1) })
+                  updateCapability(item.key, { timeoutSeconds: Number(value || 5) })
                 }
               />
               <InputNumber
