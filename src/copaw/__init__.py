@@ -4,6 +4,10 @@ import os
 import time
 import warnings
 
+from .utils.logging import setup_logger
+
+LOG_LEVEL_ENV = "COPAW_LOG_LEVEL"
+
 _bootstrap_err: Exception | None = None
 try:
     # Load persisted env vars before importing modules that read env-backed
@@ -14,9 +18,6 @@ try:
 except Exception as exc:
     # Best effort: package import should not fail if env bootstrap fails.
     _bootstrap_err = exc
-
-from .constant import LOG_LEVEL_ENV
-from .utils.logging import setup_logger
 
 _t0 = time.perf_counter()
 setup_logger(os.environ.get(LOG_LEVEL_ENV, "info"))
