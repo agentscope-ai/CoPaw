@@ -10,12 +10,12 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     ports:
-      - "${COPAW_PORT:-8088}:8088"
+      - "${COPAW_PORT:-8088}:${COPAW_PORT:-8088}"
     volumes:
       # Mount host directory for persistent data
       - ./copaw-data:/app/working
     environment:
-      - COPAW_PORT=8088
+      - COPAW_PORT=${COPAW_PORT:-8088}
       # Uncomment and set your channel credentials:
       # - COPAW_ENABLED_CHANNELS=dingtalk,feishu,qq,console
     restart: unless-stopped
