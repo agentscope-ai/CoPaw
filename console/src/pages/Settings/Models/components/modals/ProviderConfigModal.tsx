@@ -14,6 +14,7 @@ interface ProviderConfigModalProps {
     api_key_prefix?: string;
     current_base_url?: string;
     is_custom: boolean;
+    needs_base_url: boolean;
     has_api_key: boolean;
   };
   activeModels: any;
@@ -34,7 +35,7 @@ export function ProviderConfigModal({
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [form] = Form.useForm<ProviderConfigRequest>();
-  const canEditBaseUrl = provider.is_custom || provider.id === "ollama";
+  const canEditBaseUrl = provider.needs_base_url || provider.id === "ollama";
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
@@ -213,7 +214,7 @@ export function ProviderConfigModal({
           rules={
             canEditBaseUrl
               ? [
-                  ...(provider.is_custom
+                  ...(provider.needs_base_url
                     ? [
                         {
                           required: true,
@@ -225,10 +226,22 @@ export function ProviderConfigModal({
                 ]
               : []
           }
-          extra={canEditBaseUrl ? t("models.openAIEndpoint") : undefined}
+          extra={
+            canEditBaseUrl
+              ? provider.id === "azure-openai"
+                ? t("models.azureEndpointHint")
+                : t("models.openAIEndpoint")
+              : undefined
+          }
         >
           <Input
-            placeholder={canEditBaseUrl ? "http://localhost:11434/v1" : ""}
+            placeholder={
+              canEditBaseUrl
+                ? provider.id === "azure-openai"
+                  ? "https://<resource>.openai.azure.com/openai/v1"
+                  : "http://localhost:11434/v1"
+                : ""
+            }
             disabled={!canEditBaseUrl}
           />
         </Form.Item>

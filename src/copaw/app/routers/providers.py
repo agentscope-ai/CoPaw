@@ -90,6 +90,7 @@ def _build_provider_info(
         extra_models=extra,
         is_custom=provider.is_custom,
         is_local=provider.is_local,
+        needs_base_url=provider.is_custom or not provider.default_base_url,
         has_api_key=configured,
         current_api_key=mask_api_key(cur_api_key),
         current_base_url=cur_base_url,
@@ -119,7 +120,13 @@ async def configure_provider(
     if provider is None:
         raise HTTPException(404, detail=f"Provider '{provider_id}' not found")
 
-    allow_base_url = provider.is_custom or provider.id == "ollama"
+    # Allow base_url for custom providers, providers without a default
+    # base URL (e.g. Azure OpenAI), and Ollama (user may override).
+    allow_base_url = (
+        provider.is_custom
+        or not provider.default_base_url
+        or provider.id == "ollama"
+    )
     base_url = body.base_url if allow_base_url else None
     data = update_provider_settings(
         provider_id,
@@ -293,7 +300,7 @@ async def set_active_model(
 
     data = load_providers_json()
     if not data.is_configured(provider):
-        if provider.is_custom:
+        if provider.is_custom or not provider.default_base_url:
             msg = (
                 f"Provider '{provider.name}' has no base_url configured. "
                 "Please configure the base URL first."
