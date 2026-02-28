@@ -21,9 +21,10 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import aiohttp
@@ -48,6 +49,7 @@ from .constants import (
     SENT_VIA_WEBHOOK,
 )
 from .content_utils import (
+    conversation_id_from_chatbot_message,
     parse_data_url,
     session_param_from_webhook_url,
     short_session_id_from_conversation_id,
@@ -396,6 +398,162 @@ class DingTalkChannel(BaseChannel):
             body = bot_prefix + body
         return body
 
+    def _extract_media_from_text(
+        self, text: str
+    ) -> tuple[List[OutgoingContentPart], str]:
+        """Extract media paths from text to avoid losing them during truncation.
+
+        Supports: Markdown images ![alt](url), MEDIA: lines, file:// paths,
+        http(s) image URLs.
+
+        Returns:
+            (extracted media parts list, text with media references removed)
+        """
+        if not text or not text.strip():
+            return [], text
+
+        media_parts: List[OutgoingContentPart] = []
+        seen_urls: Set[str] = set()
+        result = text
+
+        md_image_re = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+        replacements: List[tuple[int, int, str]] = []
+
+        def add_media_part(url: str, media_type: str = "image") -> bool:
+            url = (url or "").strip()
+            if not url or url in seen_urls:
+                return False
+            seen_urls.add(url)
+            if media_type == "image":
+                media_parts.append(
+                    OutgoingContentPart(type=ContentType.IMAGE, image_url=url)
+                )
+            else:
+                media_parts.append(
+                    OutgoingContentPart(type=ContentType.FILE, file_url=url)
+                )
+            return True
+
+        for match in md_image_re.finditer(result):
+            alt, url = match.group(1), match.group(2)
+            url_clean = url.strip()
+            if url_clean and (
+                url_clean.startswith("http://")
+                or url_clean.startswith("https://")
+                or url_clean.startswith("file://")
+                or url_clean.startswith("/")
+                or url_clean.startswith("MEDIA:")
+            ):
+                if add_media_part(url_clean, "image"):
+                    replacements.append((match.start(), match.end(), ""))
+
+        for start, end, repl in sorted(replacements, key=lambda x: -x[0]):
+            result = result[:start] + repl + result[end:]
+
+        media_line_re = re.compile(r'^MEDIA:\s*([^\s\n]+)', re.MULTILINE)
+        replacements = []
+        for match in media_line_re.finditer(result):
+            path = match.group(1).strip()
+            if path and add_media_part(path, "image"):
+                replacements.append((match.start(), match.end(), ""))
+        for start, end, repl in sorted(replacements, key=lambda x: -x[0]):
+            result = result[:start] + repl + result[end:]
+
+        file_url_re = re.compile(r'\b(file://[^\s`\'")\]]+)', re.IGNORECASE)
+        for match in file_url_re.finditer(result):
+            path = match.group(1).strip().rstrip(".,;:)")
+            if path and add_media_part(path, "file"):
+                pass
+
+        result = result.replace("\n\n\n", "\n\n").strip()
+        return media_parts, result
+
+    def _truncate_tool_results(self, text: str, max_length: int = 500) -> str:
+        """Truncate tool call results to avoid overly long replies.
+
+        Detects and truncates long text blocks that may contain tool results
+        (e.g., code blocks, JSON blocks, etc.). Content exceeding max_length
+        is truncated with a summary note.
+
+        Args:
+            text: Text content to process
+            max_length: Maximum length to retain (default 500 chars)
+
+        Returns:
+            Processed text, truncated if exceeding max_length with summary
+        """
+        if not text or len(text) <= max_length:
+            return text
+
+        code_block_pattern = re.compile(
+            r'(```[a-zA-Z]*\n.*?```)',
+            re.DOTALL
+        )
+
+        json_pattern = re.compile(
+            r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\])',
+            re.DOTALL
+        )
+
+        tool_output_patterns = [
+            r'^[✅✓]\s*\*\*[a-z_]+\*\*:',
+            r'\{\s*"ok"\s*:\s*(?:true|false)',
+            r'"snapshot"\s*:',
+            r'"error"\s*:\s*"',
+            r'^(?:Collecting|Downloading|Requirement)\s+',
+            r'---\s*\n\s*name\s*:',
+        ]
+        has_tool_output = any(
+            re.search(pat, text, re.MULTILINE | re.IGNORECASE)
+            for pat in tool_output_patterns
+        )
+
+        def truncate_block(match: "re.Match[str]") -> str:
+            block = match.group(0)
+            if len(block) <= max_length:
+                return block
+
+            if block.startswith('```'):
+                lines = block.split('\n')
+                if len(lines) >= 2:
+                    lang = lines[0]
+                    content = '\n'.join(lines[1:-1])
+                    if len(content) > max_length - len(lang) - 20:
+                        truncated = content[:max_length - len(lang) - 50]
+                        original_len = len(content)
+                        return f"{lang}\n{truncated}...\n```\n... (truncated, original: {original_len} chars)"
+                    return block
+                else:
+                    truncated = block[:max_length - 50]
+                    original_len = len(block)
+                    return f"{truncated}... (truncated, original: {original_len} chars)"
+            else:
+                truncated = block[:max_length - 50]
+                original_len = len(block)
+                return f"{truncated}... (truncated, original: {original_len} chars)"
+
+        text = code_block_pattern.sub(truncate_block, text)
+
+        if len(text) > max_length and has_tool_output:
+            text = json_pattern.sub(truncate_block, text)
+
+        if len(text) > max_length and has_tool_output:
+            truncated = text[:max_length]
+            last_newline = truncated.rfind('\n')
+            if last_newline > max_length * 0.7:
+                truncated = text[:last_newline]
+
+            original_len = len(text)
+            truncated_text = f"{truncated}...\n\n... (truncated, original: {original_len} chars)"
+
+            logger.debug(
+                f"dingtalk truncate_tool_results: truncated from {original_len} "
+                f"to {len(truncated_text)} characters"
+            )
+            return truncated_text
+
+        return text
+
     async def _send_payload_via_session_webhook(
         self,
         session_webhook: str,
@@ -622,6 +780,232 @@ class DingTalkChannel(BaseChannel):
             )
             return None
 
+    def _get_user_id_from_meta(
+        self,
+        meta: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        """Extract user_id from incoming_message in meta.
+
+        For DingTalk OpenAPI, we need senderStaffId (not senderId).
+        senderId is like '$:LWCP_v1:$xxx' which is not accepted by OpenAPI.
+        senderStaffId is the actual staff ID like 'manager1382'.
+
+        Priority: senderStaffId > senderStaff_id > senderId (fallback)
+        """
+        if not meta:
+            return None
+        inc = meta.get("incoming_message")
+        if inc is None:
+            return None
+
+        staff_id = (
+            getattr(inc, "senderStaffId", None)
+            or getattr(inc, "sender_staff_id", None)
+        )
+        if staff_id:
+            return str(staff_id).strip()
+
+        try:
+            if hasattr(inc, "to_dict"):
+                msg_dict = inc.to_dict()
+                staff_id = (
+                    msg_dict.get("senderStaffId")
+                    or msg_dict.get("sender_staff_id")
+                )
+                if staff_id:
+                    return str(staff_id).strip()
+        except Exception:
+            logger.debug("failed to get senderStaffId from incoming_message.to_dict()")
+
+        sender_id = (
+            getattr(inc, "sender_id", None)
+            or getattr(inc, "senderId", None)
+            or ""
+        )
+        if sender_id:
+            logger.warning(
+                "dingtalk: using senderId as fallback (may not work with OpenAPI): %s",
+                str(sender_id)[:50],
+            )
+            return str(sender_id).strip()
+
+        return None
+
+    def _get_chat_type_from_meta(
+        self,
+        meta: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        """Determine chat type (direct/group) from incoming_message in meta.
+        Returns 'direct' for single chat, 'group' for group chat, None if unknown.
+        """
+        if not meta:
+            return None
+        inc = meta.get("incoming_message")
+        if inc is None:
+            return None
+
+        conv_type = None
+        try:
+            conv_type = (
+                getattr(inc, "conversationType", None)
+                or getattr(inc, "conversation_type", None)
+            )
+            if conv_type is None and hasattr(inc, "to_dict"):
+                msg_dict = inc.to_dict()
+                conv_type = (
+                    msg_dict.get("conversationType")
+                    or msg_dict.get("conversation_type")
+                )
+        except Exception:
+            logger.debug("failed to get conversationType from incoming_message")
+
+        if conv_type is not None:
+            return "group" if str(conv_type) == "2" else "direct"
+
+        conv_id = meta.get("conversation_id")
+        if not conv_id:
+            conv_id = conversation_id_from_chatbot_message(inc)
+
+        if conv_id:
+            if len(conv_id) > 20:
+                logger.debug(
+                    "dingtalk: assuming group chat based on conversation_id length",
+                )
+                return "group"
+
+        logger.debug("dingtalk: defaulting to direct chat")
+        return "direct"
+
+    def _get_msg_key_for_media_type(
+        self,
+        media_type: str,
+    ) -> str:
+        """Get msgKey for DingTalk OpenAPI based on media type."""
+        mapping = {
+            "image": "sampleImageMsg",
+            "voice": "sampleAudio",
+            "video": "sampleVideo",
+            "file": "sampleFile",
+        }
+        return mapping.get(media_type, "sampleFile")
+
+    def _build_media_msg_param(
+        self,
+        media_id: str,
+        media_type: str,
+        filename: Optional[str] = None,
+    ) -> str:
+        """Build msgParam JSON string for DingTalk OpenAPI."""
+        if media_type == "image":
+            return json.dumps({"photoURL": media_id})
+        elif media_type == "voice":
+            return json.dumps({"mediaId": media_id, "duration": "1000"})
+        elif media_type == "video":
+            return json.dumps({
+                "videoMediaId": media_id,
+                "videoType": "mp4",
+                "duration": "1000",
+            })
+        elif media_type == "file":
+            return json.dumps({
+                "mediaId": media_id,
+                "fileName": filename or "file",
+                "fileType": "file",
+            })
+        else:
+            return json.dumps({"mediaId": media_id})
+
+    async def _send_media_via_openapi(
+        self,
+        user_id: str,
+        conversation_id: str,
+        chat_type: str,
+        media_id: str,
+        media_type: str,
+        filename: Optional[str] = None,
+    ) -> bool:
+        """Send media message via DingTalk OpenAPI (not sessionWebhook).
+        This allows sending images with mediaId for preview support.
+
+        Args:
+            user_id: User ID (for direct chat) or conversation ID (for group)
+            conversation_id: Conversation ID
+            chat_type: "direct" or "group"
+            media_id: Media ID from upload
+            media_type: "image" | "voice" | "video" | "file"
+            filename: Optional filename (for file type)
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        logger.info(
+            "dingtalk send_media_via_openapi: type=%s chat_type=%s user_id=%s",
+            media_type,
+            chat_type,
+            user_id[:20] if user_id else "none",
+        )
+        token = await self._get_access_token()
+        msg_key = self._get_msg_key_for_media_type(media_type)
+        msg_param = self._build_media_msg_param(media_id, media_type, filename)
+
+        if chat_type == "group":
+            url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
+            payload = {
+                "robotCode": self.client_id,
+                "openConversationId": conversation_id,
+                "msgKey": msg_key,
+                "msgParam": msg_param,
+            }
+        else:
+            url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
+            payload = {
+                "robotCode": self.client_id,
+                "userIds": [user_id],
+                "msgKey": msg_key,
+                "msgParam": msg_param,
+            }
+
+        try:
+            async with self._http.post(
+                url,
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-acs-dingtalk-access-token": token,
+                },
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                body_text = await resp.text()
+                if resp.status >= 400:
+                    logger.warning(
+                        "dingtalk openapi media send failed: type=%s status=%s body=%s",
+                        media_type,
+                        resp.status,
+                        body_text[:500],
+                    )
+                    return False
+                result = await resp.json(content_type=None)
+                if chat_type == "direct":
+                    invalid_users = result.get("invalidStaffIdList") or []
+                    if invalid_users:
+                        logger.warning(
+                            "dingtalk openapi media send: invalid user IDs: %s",
+                            invalid_users,
+                        )
+                        return False
+                logger.info(
+                    "dingtalk openapi media send ok: type=%s status=%s",
+                    media_type,
+                    resp.status,
+                )
+                return True
+        except Exception:
+            logger.exception(
+                "dingtalk openapi media send failed: type=%s",
+                media_type,
+            )
+            return False
+
     async def _get_session_webhook_for_send(
         self,
         to_handle: str,
@@ -687,8 +1071,13 @@ class DingTalkChannel(BaseChannel):
         self,
         session_webhook: str,
         part: OutgoingContentPart,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Upload and send one media part via session webhook."""
+        """Upload and send one media part via session webhook or OpenAPI.
+
+        For images with mediaId, tries OpenAPI first (for preview support),
+        falls back to sessionWebhook if OpenAPI is unavailable.
+        """
         ptype = getattr(part, "type", None)
         upload_type = self._map_upload_type(part)
 
@@ -741,8 +1130,51 @@ class DingTalkChannel(BaseChannel):
                 return False
 
             if upload_type == "image":
-                # sendBySession supports image by picURL;
-                # but if we only have mediaId, send as file
+                # Try OpenAPI first for image preview support (using mediaId)
+                if meta:
+                    user_id = self._get_user_id_from_meta(meta)
+                    conversation_id = meta.get("conversation_id")
+                    chat_type = self._get_chat_type_from_meta(meta)
+
+                    logger.debug(
+                        "dingtalk image send: user_id=%s conversation_id=%s chat_type=%s",
+                        user_id[:20] if user_id else None,
+                        conversation_id[:20] if conversation_id else None,
+                        chat_type,
+                    )
+
+                    if user_id and conversation_id and chat_type:
+                        ok = await self._send_media_via_openapi(
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                            chat_type=chat_type,
+                            media_id=media_id,
+                            media_type="image",
+                            filename=filename,
+                        )
+                        if ok:
+                            logger.info(
+                                "dingtalk image sent via OpenAPI: media_id=%s",
+                                media_id[:32] + "..." if len(media_id) > 32 else media_id,
+                            )
+                            return True
+                        logger.warning(
+                            "dingtalk OpenAPI image send failed, falling back to file",
+                        )
+                    else:
+                        missing = []
+                        if not user_id:
+                            missing.append("user_id")
+                        if not conversation_id:
+                            missing.append("conversation_id")
+                        if not chat_type:
+                            missing.append("chat_type")
+                        logger.debug(
+                            "dingtalk OpenAPI image send skipped: missing %s, "
+                            "falling back to file via sessionWebhook",
+                            ", ".join(missing),
+                        )
+                # Fallback: send as file via sessionWebhook
                 payload = {
                     "msgtype": "file",
                     "file": {
@@ -878,7 +1310,52 @@ class DingTalkChannel(BaseChannel):
 
         # ---------- send ----------
         if upload_type == "image":
-            # no public url -> safest is send as file (your current behavior)
+            # Try OpenAPI first for image preview support (using mediaId)
+            if meta:
+                user_id = self._get_user_id_from_meta(meta)
+                conversation_id = meta.get("conversation_id")
+                chat_type = self._get_chat_type_from_meta(meta)
+
+                logger.debug(
+                    "dingtalk image send (after upload): user_id=%s "
+                    "conversation_id=%s chat_type=%s",
+                    user_id[:20] if user_id else None,
+                    conversation_id[:20] if conversation_id else None,
+                    chat_type,
+                )
+
+                if user_id and conversation_id and chat_type:
+                    ok = await self._send_media_via_openapi(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        chat_type=chat_type,
+                        media_id=media_id,
+                        media_type="image",
+                        filename=filename,
+                    )
+                    if ok:
+                        logger.info(
+                            "dingtalk image sent via OpenAPI: media_id=%s",
+                            media_id[:32] + "..." if len(media_id) > 32 else media_id,
+                        )
+                        return True
+                    logger.warning(
+                        "dingtalk OpenAPI image send failed, falling back to file",
+                    )
+                else:
+                    missing = []
+                    if not user_id:
+                        missing.append("user_id")
+                    if not conversation_id:
+                        missing.append("conversation_id")
+                    if not chat_type:
+                        missing.append("chat_type")
+                    logger.debug(
+                        "dingtalk OpenAPI image send skipped (after upload): missing %s, "
+                        "falling back to file via sessionWebhook",
+                        ", ".join(missing),
+                    )
+            # Fallback: send as file via sessionWebhook
             payload = {
                 "msgtype": "file",
                 "file": {
@@ -1011,6 +1488,7 @@ class DingTalkChannel(BaseChannel):
                 ok = await self._send_media_part_via_webhook(
                     session_webhook,
                     part,
+                    meta=m,
                 )
                 logger.info(
                     "dingtalk send_content_parts: media part %s result=%s",
@@ -1200,6 +1678,7 @@ class DingTalkChannel(BaseChannel):
                             ok = await self._send_media_part_via_webhook(
                                 session_webhook,
                                 part,
+                                meta=meta,
                             )
                             logger.info(
                                 "dingtalk consume_loop: media part "
