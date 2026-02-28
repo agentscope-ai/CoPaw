@@ -22,8 +22,6 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
-from urllib.request import url2pathname
 
 import aiohttp
 
@@ -39,6 +37,7 @@ from lark_oapi.api.im.v1 import (
     P2ImMessageReceiveV1,
 )
 
+from ..utils import file_url_to_local_path
 from ....config.config import FeishuConfig as FeishuChannelConfig
 from ....config.utils import get_config_path
 from ..base import (
@@ -989,10 +988,11 @@ class FeishuChannel(BaseChannel):
     async def _fetch_bytes_from_url(self, url: str) -> Optional[bytes]:
         """Download binary from URL. Supports http(s):// and file://."""
         try:
-            parsed = urlparse(url)
-            if parsed.scheme == "file":
-                path = url2pathname(parsed.path)
+            path = file_url_to_local_path(url)
+            if path is not None:
                 return await asyncio.to_thread(Path(path).read_bytes)
+            if url.strip().lower().startswith("file:"):
+                return None
             async with self._http.get(url) as resp:
                 if resp.status >= 400:
                     return None
@@ -1199,9 +1199,11 @@ class FeishuChannel(BaseChannel):
             return str(path)
         if url:
             if url.startswith("file://"):
-                path = Path(url2pathname(urlparse(url).path))
-                if path.exists():
-                    return str(path)
+                local_path = file_url_to_local_path(url)
+                if local_path:
+                    path = Path(local_path)
+                    if path.exists():
+                        return str(path)
             else:
                 path = Path(url)
                 if path.exists():
