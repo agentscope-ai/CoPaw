@@ -470,6 +470,12 @@ class SkillService:
     """
 
     @staticmethod
+    def _get_customized_skill_dir(name: str) -> Path | None:
+        """Return the Path to a skill inside customized_skills, or None."""
+        skill_dir = get_customized_skills_dir() / name
+        return skill_dir if skill_dir.exists() else None
+
+    @staticmethod
     def list_all_skills() -> list[SkillInfo]:
         """
         List all skills from builtin and customized directories.
@@ -644,6 +650,19 @@ class SkillService:
                     name,
                 )
 
+            # --- Security scan (post-write, warning only) -------------------
+            try:
+                from ..security import scan_skill_directory
+
+                scan_skill_directory(skill_dir, skill_name=name, block=False)
+            except Exception as scan_exc:
+                logger.debug(
+                    "Security scan error for skill '%s' (non-fatal): %s",
+                    name,
+                    scan_exc,
+                )
+            # ---------------------------------------------------------------
+
             logger.debug("Created skill '%s' in customized_skills.", name)
             return True
         except Exception as e:
@@ -692,6 +711,11 @@ class SkillService:
         """
         Enable a skill by syncing it to active_skills directory.
 
+        Before syncing the skill runs through a security scan.
+        If issues are detected a warning is logged; the skill is
+        still activated (blocking will be enforced via the frontend
+        in a future update).
+
         Args:
             name: Skill name to enable.
             force: If True, overwrite existing skill in active_skills.
@@ -699,6 +723,29 @@ class SkillService:
         Returns:
             True if skill was enabled successfully, False otherwise.
         """
+        # --- Security scan (pre-activation, warning only) ------------------
+        try:
+            from ..security import scan_skill_directory
+
+            # Determine the source directory that will be synced.
+            source_dir = None
+            customized = get_customized_skills_dir() / name
+            builtin = get_builtin_skills_dir() / name
+            if customized.is_dir():
+                source_dir = customized
+            elif builtin.is_dir():
+                source_dir = builtin
+
+            if source_dir is not None:
+                scan_skill_directory(source_dir, skill_name=name, block=False)
+        except Exception as scan_exc:
+            logger.debug(
+                "Security scan error for skill '%s' (non-fatal): %s",
+                name,
+                scan_exc,
+            )
+        # -------------------------------------------------------------------
+
         sync_skills_to_working_dir(skill_names=[name], force=force)
         # Check if skill was actually synced
         active_dir = get_active_skills_dir()
