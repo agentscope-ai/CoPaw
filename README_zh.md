@@ -84,7 +84,7 @@ copaw app
 
 在浏览器打开 **http://127.0.0.1:8088/** 即可使用控制台（与 CoPaw 对话、配置 Agent）。若要在钉钉、飞书、QQ 等 app 内对话，请在 [文档](https://copaw.agentscope.io/docs/channels) 中接入频道。
 
-![Console](https://img.alicdn.com/imgextra/i4/O1CN01jQ8IKh1oWJL5C0v5x_!!6000000005232-2-tps-3494-1644.png)
+![Console](https://img.alicdn.com/imgextra/i4/O1CN01Q0kWkE1WlHCNXeUlb_!!6000000002828-2-tps-3822-2070.png)
 
 ### 一键安装（beta，持续完善中）
 
@@ -93,13 +93,13 @@ copaw app
 **macOS / Linux：**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/agentscope-ai/CoPaw/master/scripts/install.sh | bash
+curl -fsSL https://copaw.agentscope.io/install.sh | bash
 ```
 
 **Windows（PowerShell）：**
 
 ```powershell
-irm https://raw.githubusercontent.com/agentscope-ai/CoPaw/master/scripts/install.ps1 | iex
+irm https://copaw.agentscope.io/install.ps1 | iex
 ```
 
 然后打开新终端并运行：

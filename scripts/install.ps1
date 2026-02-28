@@ -4,7 +4,11 @@
 #
 # Installs CoPaw into ~/.copaw with a uv-managed Python environment.
 # Users do NOT need Python pre-installed — uv handles everything.
+#
+# The entire script is wrapped in & { ... } @args so that `irm | iex` works
+# correctly (param() is only valid inside a scriptblock/function/file scope).
 
+& {
 param(
     [string]$Version = "",
     [switch]$FromSource,
@@ -52,6 +56,23 @@ Environment:
 Write-Host "[copaw] " -ForegroundColor Green -NoNewline
 Write-Host "Installing CoPaw into " -NoNewline
 Write-Host "$CopawHome" -ForegroundColor White
+
+# ── Execution Policy Check ────────────────────────────────────────────────────
+$policy = Get-ExecutionPolicy
+if ($policy -eq "Restricted") {
+    Write-Info "Execution policy is 'Restricted', setting to RemoteSigned for current user..."
+    try {
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Write-Info "Execution policy updated to RemoteSigned"
+    } catch {
+        Write-Err "PowerShell execution policy is set to 'Restricted' which prevents script execution."
+        Write-Err "Please run the following command and retry:"
+        Write-Err ""
+        Write-Err "  Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+        Write-Err ""
+        exit 1
+    }
+}
 
 # ── Step 1: Ensure uv is available ───────────────────────────────────────────
 function Ensure-Uv {
@@ -321,3 +342,5 @@ Write-Host ""
 Write-Host "To upgrade later, re-run this installer."
 Write-Host "To uninstall, run: " -NoNewline
 Write-Host "copaw uninstall" -ForegroundColor White
+
+} @args

@@ -184,17 +184,28 @@ copaw env delete TAVILY_API_KEY
 
 ### copaw channels
 
-| 命令                    | 说明                           |
-| ----------------------- | ------------------------------ |
-| `copaw channels list`   | 查看所有频道的状态（密钥脱敏） |
-| `copaw channels config` | 交互式启用/禁用频道并填写凭据  |
+管理频道配置（iMessage / Discord / DingTalk / Feishu / QQ / Console 等）。
+**说明**：交互式配置用 `config`（无 `configure` 子命令）；卸载自定义频道用 `remove`（无 `uninstall`）。
+
+| 命令                           | 说明                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| `copaw channels list`          | 查看所有频道的状态（密钥脱敏）                                                  |
+| `copaw channels install <key>` | 在 `custom_channels/` 安装频道：创建模板，或用 `--path` / `--url` 安装          |
+| `copaw channels add <key>`     | 安装并加入 config；内置频道只写 config；支持 `--path` / `--url`                 |
+| `copaw channels remove <key>`  | 从 `custom_channels/` 删除自定义频道（内置不可删）；`--keep-config` 保留 config |
+| `copaw channels config`        | 交互式启用/禁用频道并填写凭据                                                   |
 
 ```bash
-copaw channels list     # 看当前状态
-copaw channels config   # 交互式配置
+copaw channels list                    # 看当前状态
+copaw channels install my_channel      # 创建自定义频道模板
+copaw channels install my_channel --path ./my_channel.py
+copaw channels add dingtalk            # 把钉钉加入 config
+copaw channels remove my_channel       # 删除自定义频道（并默认从 config 移除）
+copaw channels remove my_channel --keep-config   # 只删模块，保留 config 条目
+copaw channels config                  # 交互式配置
 ```
 
-交互流程让你依次选择频道、启用/禁用、填写凭据，循环操作直到选择「保存退出」。
+交互式 `config` 流程：依次选择频道、启用/禁用、填写凭据，循环直到选择「保存退出」。
 
 | 频道         | 需要填写的字段                           |
 | ------------ | ---------------------------------------- |
@@ -392,7 +403,7 @@ copaw --host 0.0.0.0 --port 9090 cron list
 | `copaw app`      | —                                                                                                                                      | —（启动服务本身） |
 | `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        否         |
 | `copaw env`      | `list` · `set` · `delete`                                                                                                              |        否         |
-| `copaw channels` | `list` · `config`                                                                                                                      |        否         |
+| `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        否         |
 | `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |      **是**       |
 | `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                        |      **是**       |
 | `copaw skills`   | `list` · `config`                                                                                                                      |        否         |
