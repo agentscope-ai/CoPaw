@@ -17,6 +17,9 @@ from typing import Optional
 
 _ENVS_DIR = Path(__file__).resolve().parent
 _ENVS_JSON = _ENVS_DIR / "envs.json"
+# Security-sensitive envs should come from process/system environment,
+# not persisted envs.json.
+_PROTECTED_BOOTSTRAP_KEYS = frozenset({"COPAW_WORKING_DIR"})
 
 
 def get_envs_json_path() -> Path:
@@ -56,8 +59,8 @@ def _sync_environ(
     new: dict[str, str],
 ) -> None:
     """Synchronise ``os.environ``: set *new*, remove stale *old*."""
-    for key in old:
-        if key not in new:
+    for key, old_value in old.items():
+        if key not in new and os.environ.get(key) == old_value:
             _remove_from_environ(key)
     _apply_to_environ(new, overwrite=True)
 
@@ -128,6 +131,11 @@ def load_envs_into_environ() -> dict[str, str]:
     immediately.
     """
     envs = load_envs()
+    envs = {
+        key: value
+        for key, value in envs.items()
+        if key not in _PROTECTED_BOOTSTRAP_KEYS
+    }
     # Do not override explicit runtime/system env vars.
     _apply_to_environ(envs, overwrite=False)
     return envs

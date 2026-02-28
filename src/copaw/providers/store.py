@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -29,6 +30,7 @@ from .registry import (
 )
 
 _LEGACY_PROVIDERS_JSON = Path(__file__).resolve().parent / "providers.json"
+logger = logging.getLogger(__name__)
 
 
 def get_providers_json_path() -> Path:
@@ -53,9 +55,8 @@ def _migrate_legacy_providers_json(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copy2(legacy, path)
-    except OSError:
-        # Ignore migration failures; normal boot path will recreate defaults.
-        pass
+    except OSError as exc:
+        logger.warning("Failed to migrate legacy providers.json: %s", exc)
 
 
 def _ensure_base_url(settings: ProviderSettings, defn) -> None:
