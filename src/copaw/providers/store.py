@@ -264,6 +264,11 @@ def update_provider_settings(
 
 
 def set_active_llm(provider_id: str, model: str) -> ProvidersData:
+    provider_id = (provider_id or "").strip()
+    model = (model or "").strip()
+    if not provider_id or not model:
+        raise ValueError("Both provider_id and model are required.")
+
     data = load_providers_json()
     data.active_llm = ModelSlotConfig(provider_id=provider_id, model=model)
     save_providers_json(data)
@@ -329,6 +334,14 @@ def create_custom_provider(
     api_key_prefix: str = "",
     models: Optional[list[ModelInfo]] = None,
 ) -> ProvidersData:
+    provider_id = (provider_id or "").strip()
+    name = (name or "").strip()
+    default_base_url = (default_base_url or "").strip()
+    api_key_prefix = (api_key_prefix or "").strip()
+
+    if not name:
+        raise ValueError("Provider name cannot be empty.")
+
     err = validate_custom_provider_id(provider_id)
     if err:
         raise ValueError(err)
@@ -370,6 +383,14 @@ def delete_custom_provider(provider_id: str) -> ProvidersData:
 
 
 def add_model(provider_id: str, model: ModelInfo) -> ProvidersData:
+    provider_id = (provider_id or "").strip()
+    model_id = (model.id or "").strip()
+    model_name = (model.name or "").strip() or model_id
+
+    if not model_id:
+        raise ValueError("Model id cannot be empty.")
+
+    model = ModelInfo(id=model_id, name=model_name)
     defn = PROVIDERS.get(provider_id)
     if defn is None:
         raise ValueError(f"Provider '{provider_id}' not found.")
@@ -412,6 +433,11 @@ def add_model(provider_id: str, model: ModelInfo) -> ProvidersData:
 
 
 def remove_model(provider_id: str, model_id: str) -> ProvidersData:
+    provider_id = (provider_id or "").strip()
+    model_id = (model_id or "").strip()
+    if not model_id:
+        raise ValueError("Model id cannot be empty.")
+
     defn = PROVIDERS.get(provider_id)
     if defn is None:
         raise ValueError(f"Provider '{provider_id}' not found.")
