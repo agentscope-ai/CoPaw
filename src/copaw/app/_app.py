@@ -16,7 +16,12 @@ from ..config import (  # pylint: disable=no-name-in-module
     ConfigWatcher,
 )
 from ..config.utils import get_jobs_path, get_chats_path, get_config_path
-from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV, WORKING_DIR, set_workspace_dir
+from ..constant import (
+    DOCS_ENABLED,
+    LOG_LEVEL_ENV,
+    WORKING_DIR,
+    set_workspace_dir,
+)
 from ..workspace.migration import ensure_workspace_layout
 from ..__version__ import __version__
 from ..utils.logging import setup_logger
@@ -78,6 +83,7 @@ async def lifespan(app: FastAPI):  # pylint: disable=too-many-statements
     # --- cron init/start ---
     repo = JsonJobRepository(get_jobs_path())
     from ..constant import get_workspace_dir as _get_ws_dir
+
     history_repo = HistoryRepo(_get_ws_dir() / "cron_history.jsonl")
     cron_manager = CronManager(
         repo=repo,
