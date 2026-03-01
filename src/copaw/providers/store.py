@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -29,16 +30,49 @@ from .registry import (
 )
 from ..constant import WORKING_DIR
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_private_file_permissions(path: Path) -> None:
+    """Best-effort: make sensitive config readable/writable by owner only."""
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        logger.debug("Failed to chmod 0600 for %s", path, exc_info=True)
+
+
+def _is_within_dir(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
 
 def _resolve_providers_json_path() -> Path:
-    raw = (
-        os.environ.get("COPAW_PROVIDERS_FILE", "providers.json").strip()
-        or "providers.json"
-    )
-    path = Path(raw).expanduser()
-    if not path.is_absolute():
-        path = (WORKING_DIR / path).expanduser()
-    return path.resolve()
+    root = WORKING_DIR.resolve()
+    default_path = (root / "providers.json").resolve()
+    raw = os.environ.get("COPAW_PROVIDERS_FILE", "").strip() or "providers.json"
+
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    candidate = candidate.resolve()
+
+    # Keep providers.json under WORKING_DIR to avoid arbitrary path writes.
+    if not _is_within_dir(candidate, root):
+        logger.warning(
+            "Ignoring COPAW_PROVIDERS_FILE=%r because it resolves outside "
+            "WORKING_DIR (%s). Falling back to %s.",
+            raw,
+            root,
+            default_path,
+        )
+        return default_path
+
+    return candidate
 
 
 _PROVIDERS_JSON = _resolve_providers_json_path()
@@ -53,8 +87,9 @@ def _migrate_legacy_providers(path: Path) -> None:
         return
     if not _LEGACY_PROVIDERS_JSON.is_file():
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(_LEGACY_PROVIDERS_JSON, path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    shutil.copyfile(_LEGACY_PROVIDERS_JSON, path)
+    _ensure_private_file_permissions(path)
 
 
 def get_providers_json_path() -> Path:
@@ -250,6 +285,7 @@ def save_providers_json(
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2, ensure_ascii=False)
+    _ensure_private_file_permissions(path)
 
 
 # -- Mutators --
