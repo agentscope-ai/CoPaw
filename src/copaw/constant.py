@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from pathlib import Path
+from typing import Optional
 
 
 class EnvVarLoader:
@@ -119,20 +120,66 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH_ENV = "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
 # (dev only; keep False in prod).
 DOCS_ENABLED = EnvVarLoader.get_bool("COPAW_OPENAPI_DOCS", False)
 
-# Skills directories
-# Active skills directory (activated skills that agents use)
+# ---------------------------------------------------------------------------
+# Multi-workspace support
+# ---------------------------------------------------------------------------
+_active_workspace_dir: Optional[Path] = None
+
+
+def set_workspace_dir(path: Path) -> None:
+    """Set the active workspace directory (called at startup)."""
+    global _active_workspace_dir
+    _active_workspace_dir = path
+
+
+def get_workspace_dir() -> Path:
+    """Return the active workspace directory.
+
+    Falls back to WORKING_DIR if no workspace has been activated yet
+    (pre-migration compatibility).
+    """
+    if _active_workspace_dir is not None:
+        return _active_workspace_dir
+    return WORKING_DIR
+
+
+# ---------------------------------------------------------------------------
+# Workspace-scoped directories (resolve from active workspace)
+# ---------------------------------------------------------------------------
+
+# Legacy constants — kept for backward compatibility at import time.
+# Prefer the get_*() functions below for workspace-aware paths.
 ACTIVE_SKILLS_DIR = WORKING_DIR / "active_skills"
-# Customized skills directory (user-created skills)
 CUSTOMIZED_SKILLS_DIR = WORKING_DIR / "customized_skills"
-
-# Memory directory
 MEMORY_DIR = WORKING_DIR / "memory"
-
-# Custom channel modules (installed via `copaw channels install`); manager
-# loads BaseChannel subclasses from here.
 CUSTOM_CHANNELS_DIR = WORKING_DIR / "custom_channels"
 
-# Local models directory
+
+def get_active_skills_dir() -> Path:
+    return get_workspace_dir() / "active_skills"
+
+
+def get_customized_skills_dir() -> Path:
+    return get_workspace_dir() / "customized_skills"
+
+
+def get_memory_dir() -> Path:
+    return get_workspace_dir() / "memory"
+
+
+def get_custom_channels_dir() -> Path:
+    return get_workspace_dir() / "custom_channels"
+
+
+def get_sessions_dir() -> Path:
+    return get_workspace_dir() / "sessions"
+
+
+# ---------------------------------------------------------------------------
+# Global directories (shared across workspaces)
+# ---------------------------------------------------------------------------
+
+# Local models directory (global)
 MODELS_DIR = WORKING_DIR / "models"
 
 # Memory compaction configuration

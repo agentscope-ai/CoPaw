@@ -24,7 +24,7 @@ from ..config.config import (
 )
 from .utils import prompt_confirm, prompt_path, prompt_select
 from ..config import get_available_channels
-from ..constant import CUSTOM_CHANNELS_DIR
+from ..constant import get_custom_channels_dir
 from ..app.channels.registry import (
     BUILTIN_CHANNEL_KEYS,
     get_channel_registry,
@@ -858,8 +858,8 @@ def _install_channel_to_dir(
     from_path: str | None = None,
     from_url: str | None = None,
 ) -> None:
-    """Write channel module to CUSTOM_CHANNELS_DIR (template or copy)."""
-    CUSTOM_CHANNELS_DIR.mkdir(parents=True, exist_ok=True)
+    """Write channel module to get_custom_channels_dir() (template or copy)."""
+    get_custom_channels_dir().mkdir(parents=True, exist_ok=True)
     if not key.isidentifier():
         click.echo(
             f"Key must be a valid Python identifier (e.g. my_channel), "
@@ -868,8 +868,8 @@ def _install_channel_to_dir(
         )
         raise SystemExit(1)
 
-    dest_file = CUSTOM_CHANNELS_DIR / f"{key}.py"
-    dest_dir = CUSTOM_CHANNELS_DIR / key
+    dest_file = get_custom_channels_dir() / f"{key}.py"
+    dest_dir = get_custom_channels_dir() / key
 
     if from_path:
         from pathlib import Path
@@ -907,7 +907,7 @@ def _install_channel_to_dir(
 
     if dest_file.exists() or dest_dir.exists():
         click.echo(
-            f"Channel '{key}' already exists in {CUSTOM_CHANNELS_DIR}. "
+            f"Channel '{key}' already exists in {get_custom_channels_dir()}. "
             "Edit the file or use --path/--url to overwrite.",
             err=True,
         )
@@ -974,8 +974,8 @@ def add_cmd(
     channels only adds to config; for custom, installs (stub or --path/--url)
     then adds to config.
     """
-    dest_file = CUSTOM_CHANNELS_DIR / f"{key}.py"
-    dest_dir = CUSTOM_CHANNELS_DIR / key
+    dest_file = get_custom_channels_dir() / f"{key}.py"
+    dest_dir = get_custom_channels_dir() / key
     already_in_dir = dest_file.exists() or dest_dir.exists()
     is_builtin = key in BUILTIN_CHANNEL_KEYS
 
@@ -1020,11 +1020,11 @@ def remove_cmd(key: str, keep_config: bool) -> None:
         )
         raise SystemExit(1)
 
-    dest_file = CUSTOM_CHANNELS_DIR / f"{key}.py"
-    dest_dir = CUSTOM_CHANNELS_DIR / key
+    dest_file = get_custom_channels_dir() / f"{key}.py"
+    dest_dir = get_custom_channels_dir() / key
     if not dest_file.exists() and not dest_dir.exists():
         click.echo(
-            f"Channel '{key}' not found in {CUSTOM_CHANNELS_DIR}.",
+            f"Channel '{key}' not found in {get_custom_channels_dir()}.",
             err=True,
         )
         raise SystemExit(1)
@@ -1035,7 +1035,7 @@ def remove_cmd(key: str, keep_config: bool) -> None:
         dest_file.unlink()
     else:
         shutil.rmtree(dest_dir)
-    click.echo(f"✓ Removed channel '{key}' from {CUSTOM_CHANNELS_DIR}.")
+    click.echo(f"✓ Removed channel '{key}' from {get_custom_channels_dir()}.")
 
     if not keep_config:
         config_path = get_config_path()

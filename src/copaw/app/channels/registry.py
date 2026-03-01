@@ -8,7 +8,7 @@ import sys
 import threading
 from typing import TYPE_CHECKING
 
-from ...constant import CUSTOM_CHANNELS_DIR
+from ...constant import get_custom_channels_dir
 from .base import BaseChannel
 
 if TYPE_CHECKING:
@@ -90,16 +90,17 @@ def clear_builtin_channel_cache() -> None:
 
 
 def _discover_custom_channels() -> dict[str, type[BaseChannel]]:
-    """Load channel classes from CUSTOM_CHANNELS_DIR."""
+    """Load channel classes from custom_channels dir."""
     out: dict[str, type[BaseChannel]] = {}
-    if not CUSTOM_CHANNELS_DIR.is_dir():
+    channels_dir = get_custom_channels_dir()
+    if not channels_dir.is_dir():
         return out
 
-    dir_str = str(CUSTOM_CHANNELS_DIR)
+    dir_str = str(channels_dir)
     if dir_str not in sys.path:
         sys.path.insert(0, dir_str)
 
-    for path in sorted(CUSTOM_CHANNELS_DIR.iterdir()):
+    for path in sorted(channels_dir.iterdir()):
         if path.suffix == ".py" and path.stem != "__init__":
             name = path.stem
         elif path.is_dir() and (path / "__init__.py").exists():

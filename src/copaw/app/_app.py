@@ -20,7 +20,14 @@ from ..config import (  # pylint: disable=no-name-in-module
     ConfigWatcher,
 )
 from ..config.utils import get_jobs_path, get_chats_path, get_config_path
-from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV, CORS_ORIGINS, WORKING_DIR
+from ..constant import (
+    CORS_ORIGINS,
+    DOCS_ENABLED,
+    LOG_LEVEL_ENV,
+    WORKING_DIR,
+    set_workspace_dir,
+)
+from ..workspace.migration import ensure_workspace_layout
 from ..__version__ import __version__
 from ..utils.logging import setup_logger, add_copaw_file_handler
 from .channels import ChannelManager  # pylint: disable=no-name-in-module
@@ -28,6 +35,7 @@ from .channels.utils import make_process_from_runner
 from .mcp import MCPClientManager, MCPConfigWatcher  # MCP hot-reload support
 from .runner.repo.json_repo import JsonChatRepository
 from .crons.repo.json_repo import JsonJobRepository
+from .crons.history import HistoryRepo
 from .crons.manager import CronManager
 from .runner.manager import ChatManager
 from .routers import router as api_router
@@ -65,6 +73,12 @@ async def lifespan(
 ):  # pylint: disable=too-many-statements,too-many-branches
     startup_start_time = time.time()
     add_copaw_file_handler(WORKING_DIR / "copaw.log")
+
+    # --- workspace init (migrate legacy layout if needed) ---
+    ws_mgr = ensure_workspace_layout(WORKING_DIR)
+    set_workspace_dir(ws_mgr.get_active_path())
+    app.state.workspace_manager = ws_mgr
+
     await runner.start()
 
     # --- MCP client manager init (independent module, hot-reloadable) ---
@@ -90,11 +104,14 @@ async def lifespan(
 
     # --- cron init/start ---
     repo = JsonJobRepository(get_jobs_path())
+    from ..constant import get_workspace_dir as _get_ws_dir
+    history_repo = HistoryRepo(_get_ws_dir() / "cron_history.jsonl")
     cron_manager = CronManager(
         repo=repo,
         runner=runner,
         channel_manager=channel_manager,
         timezone="UTC",
+        history_repo=history_repo,
     )
     await cron_manager.start()
 

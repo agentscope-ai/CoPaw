@@ -4,7 +4,7 @@ and memory directories."""
 from datetime import datetime
 from pathlib import Path
 
-from ...constant import WORKING_DIR
+from ...constant import get_workspace_dir
 
 
 class AgentMdManager:
@@ -125,4 +125,10 @@ class AgentMdManager:
         file_path.write_text(content, encoding="utf-8")
 
 
-AGENT_MD_MANAGER = AgentMdManager(working_dir=WORKING_DIR)
+def get_agent_md_manager() -> AgentMdManager:
+    """Return a workspace-aware AgentMdManager instance."""
+    return AgentMdManager(working_dir=get_workspace_dir())
+
+
+# Legacy singleton — falls back to WORKING_DIR before workspace init.
+AGENT_MD_MANAGER = AgentMdManager(working_dir=get_workspace_dir())
