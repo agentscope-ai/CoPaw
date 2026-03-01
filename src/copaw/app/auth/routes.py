@@ -2,7 +2,6 @@
 """FastAPI routes for token management (requires owner scope)."""
 
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -28,7 +27,10 @@ def _require_owner(request: Request) -> Actor:
 
 
 class CreateTokenRequest(BaseModel):
-    scope: str = Field(default="viewer", description="owner, collaborator, or viewer")
+    scope: str = Field(
+        default="viewer",
+        description="owner, collaborator, or viewer",
+    )
     label: str = Field(default="", description="Optional label")
 
 
@@ -47,11 +49,14 @@ async def create_token(body: CreateTokenRequest, request: Request):
 
     try:
         token_scope = TokenScope(body.scope)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid scope: {body.scope}. Use owner, collaborator, or viewer.",
-        )
+            detail=(
+                f"Invalid scope: {body.scope}. "
+                "Use owner, collaborator, or viewer."
+            ),
+        ) from exc
 
     plaintext = store.create(scope=token_scope, label=body.label)
     return {

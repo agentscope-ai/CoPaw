@@ -4,6 +4,7 @@
 Covers: TokenStore (create/verify/revoke/list/persistence),
         scope ranking, middleware dispatch, dependency enforcement.
 """
+# pylint: disable=redefined-outer-name,protected-access
 from __future__ import annotations
 
 import hashlib
@@ -32,8 +33,12 @@ def store(tmp_path: Path) -> TokenStore:
 
 class TestScopeRank:
     def test_ordering(self):
-        assert scope_rank(TokenScope.VIEWER) < scope_rank(TokenScope.COLLABORATOR)
-        assert scope_rank(TokenScope.COLLABORATOR) < scope_rank(TokenScope.OWNER)
+        assert scope_rank(TokenScope.VIEWER) < scope_rank(
+            TokenScope.COLLABORATOR,
+        )
+        assert scope_rank(TokenScope.COLLABORATOR) < scope_rank(
+            TokenScope.OWNER,
+        )
 
     def test_same_scope(self):
         assert scope_rank(TokenScope.OWNER) == scope_rank(TokenScope.OWNER)
@@ -117,7 +122,7 @@ class TestTokenStoreRevoke:
 
 class TestTokenStoreList:
     def test_list_empty(self, store: TokenStore):
-        assert store.list_tokens() == []
+        assert not store.list_tokens()
 
     def test_list_returns_copies(self, store: TokenStore):
         store.create(scope=TokenScope.OWNER)
@@ -144,12 +149,12 @@ class TestTokenStorePersistence:
         path.write_text("not json!!!", encoding="utf-8")
         store = TokenStore(path=path)
         # Should gracefully handle corruption
-        assert store.list_tokens() == []
+        assert not store.list_tokens()
 
     def test_missing_file(self, tmp_path: Path):
         path = tmp_path / "nonexistent" / "tokens.json"
         store = TokenStore(path=path)
-        assert store.list_tokens() == []
+        assert not store.list_tokens()
 
 
 # ── hash function ────────────────────────────────────────────────────
@@ -197,7 +202,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, _token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=False)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=False,
+        )
         req = self._make_request("/api/something")
         called = []
 
@@ -215,7 +224,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, _token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=True)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=True,
+        )
         req = self._make_request("/api/version")
         called = []
 
@@ -232,7 +245,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, _token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=True)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=True,
+        )
         req = self._make_request("/api/private")
         resp = await mw.dispatch(req, AsyncMock())
         assert resp.status_code == 401
@@ -242,7 +259,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, _token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=True)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=True,
+        )
         req = self._make_request("/api/private", "Bearer cpw_bad_token")
         resp = await mw.dispatch(req, AsyncMock())
         assert resp.status_code == 401
@@ -252,7 +273,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=True)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=True,
+        )
         req = self._make_request("/api/private", f"Bearer {token}")
         called = []
 
@@ -271,7 +296,11 @@ class TestMiddleware:
         from copaw.app.auth.middleware import TokenAuthMiddleware
 
         store, _token = store_with_token
-        mw = TokenAuthMiddleware(app=MagicMock(), token_store=store, enabled=True)
+        mw = TokenAuthMiddleware(
+            app=MagicMock(),
+            token_store=store,
+            enabled=True,
+        )
         req = self._make_request("/assets/js/app.js")
         called = []
 

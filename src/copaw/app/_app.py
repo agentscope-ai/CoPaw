@@ -79,7 +79,8 @@ async def lifespan(
     app.state.token_store = token_store
 
     auth_enabled = (
-        os.environ.get("COPAW_AUTH_ENABLED", "").lower() in ("true", "1", "yes")
+        os.environ.get("COPAW_AUTH_ENABLED", "").lower()
+        in ("true", "1", "yes")
         or config.auth.enabled
     )
     logger.info("Auth: %s", "enabled" if auth_enabled else "disabled")

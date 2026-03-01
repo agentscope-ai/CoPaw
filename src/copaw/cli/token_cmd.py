@@ -71,9 +71,13 @@ def list_cmd() -> None:
     click.echo(f"  {'ID':<14s}  {'Scope':<14s}  {'Label':<20s}  Created")
     click.echo(f"  {'─' * 70}")
     for t in tokens:
-        created = datetime.fromtimestamp(t.created_at).strftime("%Y-%m-%d %H:%M")
+        created = datetime.fromtimestamp(t.created_at).strftime(
+            "%Y-%m-%d %H:%M",
+        )
+        label = t.label or "—"
         click.echo(
-            f"  {t.id:<14s}  {t.scope.value:<14s}  {t.label or '—':<20s}  {created}",
+            f"  {t.id:<14s}  {t.scope.value:<14s}"
+            f"  {label:<20s}  {created}",
         )
     click.echo()
 

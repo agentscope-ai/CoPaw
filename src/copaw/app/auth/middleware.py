@@ -10,7 +10,6 @@ owner-level actor.
 
 import logging
 import re
-from typing import Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -24,12 +23,14 @@ logger = logging.getLogger(__name__)
 _BEARER_RE = re.compile(r"^Bearer\s+(.+)$", re.IGNORECASE)
 
 # Paths that never require authentication.
-_PUBLIC_PATHS = frozenset({
-    "/",
-    "/api/version",
-    "/logo.png",
-    "/copaw-symbol.svg",
-})
+_PUBLIC_PATHS = frozenset(
+    {
+        "/",
+        "/api/version",
+        "/logo.png",
+        "/copaw-symbol.svg",
+    },
+)
 
 
 def _is_public(path: str) -> bool:
@@ -59,12 +60,18 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         # Auth disabled → anonymous owner.
         if not self._enabled:
-            request.state.actor = Actor(scope=TokenScope.OWNER, is_anonymous=True)
+            request.state.actor = Actor(
+                scope=TokenScope.OWNER,
+                is_anonymous=True,
+            )
             return await call_next(request)
 
         # Public paths → skip auth.
         if _is_public(request.url.path):
-            request.state.actor = Actor(scope=TokenScope.OWNER, is_anonymous=True)
+            request.state.actor = Actor(
+                scope=TokenScope.OWNER,
+                is_anonymous=True,
+            )
             return await call_next(request)
 
         # Extract Bearer token.
