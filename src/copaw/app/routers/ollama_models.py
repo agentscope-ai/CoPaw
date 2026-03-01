@@ -50,15 +50,22 @@ class OllamaDownloadTaskResponse(BaseModel):
 
 
 def _is_ollama_connection_error(exc: Exception) -> bool:
-    """Return True when the exception indicates Ollama daemon is unreachable.
+    """Return True when exception indicates Ollama daemon is unreachable."""
+    message = str(exc).lower()
+    return (
+        isinstance(exc, (ConnectionError, OSError))
+        or "failed to connect to ollama" in message
+        or "connection refused" in message
+        or "timed out" in message
+    )
 
-    The ollama SDK may raise different exception types depending on version.
-    We keep detection tolerant by checking both type and message patterns.
-    """
-    if isinstance(exc, ConnectionError):
-        return True
-    msg = str(exc).lower()
-    return "failed to connect to ollama" in msg or "connection refused" in msg
+
+def _connection_error_detail(exc: Exception) -> str:
+    return (
+        "Failed to connect to Ollama. Ensure Ollama is installed and running "
+        "(for example, run `ollama serve`) and verify the host is reachable. "
+        f"Original error: {exc}"
+    )
 
 
 def _task_to_response(task: DownloadTask) -> OllamaDownloadTaskResponse:
@@ -98,16 +105,10 @@ async def list_ollama_models() -> List[OllamaModelResponse]:
         models = OllamaModelManager.list_models()
     except Exception as exc:
         if _is_ollama_connection_error(exc):
-            logger.warning(
-                "Failed to connect to Ollama while listing models: %s",
-                exc,
-            )
+            logger.warning("Ollama is unreachable: %s", exc)
             raise HTTPException(
                 status_code=503,
-                detail=(
-                    "Failed to connect to Ollama. "
-                    "Please ensure Ollama is installed and running."
-                ),
+                detail=_connection_error_detail(exc),
             ) from exc
         logger.exception("Failed to list Ollama models")
         raise HTTPException(
@@ -222,6 +223,12 @@ async def delete_ollama_model(name: str) -> dict:
     try:
         OllamaModelManager.delete_model(name)
     except Exception as exc:  # pragma: no cover - defensive
+        if _is_ollama_connection_error(exc):
+            raise HTTPException(
+                status_code=503,
+                detail=_connection_error_detail(exc),
+            ) from exc
+
         logger.exception("Failed to delete Ollama model: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
