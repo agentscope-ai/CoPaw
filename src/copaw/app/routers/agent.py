@@ -10,7 +10,7 @@ from ...config import (
     AgentsRunningConfig,
 )
 
-from ...agents.memory.agent_md_manager import AGENT_MD_MANAGER
+from ...agents.memory.agent_md_manager import get_agent_md_manager
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -42,7 +42,7 @@ async def list_working_files() -> list[MdFileInfo]:
     try:
         files = [
             MdFileInfo.model_validate(file)
-            for file in AGENT_MD_MANAGER.list_working_mds()
+            for file in get_agent_md_manager().list_working_mds()
         ]
         return files
     except Exception as exc:
@@ -60,7 +60,7 @@ async def read_working_file(
 ) -> MdFileContent:
     """Read a working directory markdown file."""
     try:
-        content = AGENT_MD_MANAGER.read_working_md(md_name)
+        content = get_agent_md_manager().read_working_md(md_name)
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -80,7 +80,7 @@ async def write_working_file(
 ) -> dict:
     """Write a working directory markdown file."""
     try:
-        AGENT_MD_MANAGER.write_working_md(md_name, request.content)
+        get_agent_md_manager().write_working_md(md_name, request.content)
         return {"written": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -97,7 +97,7 @@ async def list_memory_files() -> list[MdFileInfo]:
     try:
         files = [
             MdFileInfo.model_validate(file)
-            for file in AGENT_MD_MANAGER.list_memory_mds()
+            for file in get_agent_md_manager().list_memory_mds()
         ]
         return files
     except Exception as exc:
@@ -115,7 +115,7 @@ async def read_memory_file(
 ) -> MdFileContent:
     """Read a memory directory markdown file."""
     try:
-        content = AGENT_MD_MANAGER.read_memory_md(md_name)
+        content = get_agent_md_manager().read_memory_md(md_name)
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -135,7 +135,7 @@ async def write_memory_file(
 ) -> dict:
     """Write a memory directory markdown file."""
     try:
-        AGENT_MD_MANAGER.write_memory_md(md_name, request.content)
+        get_agent_md_manager().write_memory_md(md_name, request.content)
         return {"written": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

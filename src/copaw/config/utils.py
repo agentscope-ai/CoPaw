@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ..constant import HEARTBEAT_FILE, JOBS_FILE, CHATS_FILE, WORKING_DIR
+from ..constant import HEARTBEAT_FILE, JOBS_FILE, CHATS_FILE, get_workspace_dir
 from .config import Config, HeartbeatConfig, LastApiConfig, LastDispatchConfig
 
 
 def get_config_path() -> Path:
     """Get the path to the config file."""
-    return WORKING_DIR.joinpath("config.json")
+    return get_workspace_dir().joinpath("config.json")
 
 
 def get_heartbeat_query_path() -> Path:
@@ -89,9 +89,9 @@ def write_last_api(host: str, port: int) -> None:
 def get_jobs_path() -> Path:
     """Return cron jobs.json path."""
 
-    return (WORKING_DIR / JOBS_FILE).expanduser()
+    return (get_workspace_dir() / JOBS_FILE).expanduser()
 
 
 def get_chats_path() -> Path:
     """Return chats.json path."""
-    return (WORKING_DIR / CHATS_FILE).expanduser()
+    return (get_workspace_dir() / CHATS_FILE).expanduser()
