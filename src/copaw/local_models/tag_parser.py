@@ -26,6 +26,11 @@ THINK_END = "</think>"
 TOOL_CALL_START = "<tool_call>"
 TOOL_CALL_END = "</tool_call>"
 
+# Tags used by some local coding models (Codex-like format).
+CHANNEL_TAG = "<|channel|>"
+MESSAGE_TAG = "<|message|>"
+END_TAG = "<|end|>"
+
 # Regex to find a complete <think>...</think> block (non-greedy).
 _THINK_RE = re.compile(
     r"<think>(.*?)</think>",
@@ -37,6 +42,14 @@ _TOOL_CALL_RE = re.compile(
     r"<tool_call>\s*(.*?)\s*</tool_call>",
     re.DOTALL,
 )
+
+_CHANNEL_RE = re.compile(
+    r"<\|channel\|>\s*(analysis|final)\s*<\|message\|>(.*?)(?="
+    r"(?:<\|end\|>|<\|start\|>|<\|channel\|>|$))",
+    re.DOTALL | re.IGNORECASE,
+)
+
+_CONTROL_TAG_RE = re.compile(r"<\|[^>]+\|>")
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -81,6 +94,15 @@ class TextWithToolCalls:
     has_open_tag: bool = False
     # Raw text accumulated after the unclosed <tool_call> tag.
     partial_tool_text: str = ""
+
+
+@dataclass
+class TextWithChannelTags:
+    """Result of extracting ``<|channel|>`` style segments from text."""
+
+    thinking: str = ""
+    remaining_text: str = ""
+    has_open_tag: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +193,62 @@ def extract_thinking_from_text(text: str) -> TextWithThinking:
 def text_contains_tool_call_tag(text: str) -> bool:
     """Fast substring check for a ``<tool_call>`` tag."""
     return TOOL_CALL_START in text
+
+
+def text_contains_channel_tag(text: str) -> bool:
+    """Fast substring check for Codex-style ``<|channel|>`` tags."""
+    return CHANNEL_TAG in text
+
+
+def _strip_control_tags(text: str) -> str:
+    return _CONTROL_TAG_RE.sub("", text).strip()
+
+
+def extract_channel_tags_from_text(text: str) -> TextWithChannelTags:
+    """Extract Codex-style ``analysis/final`` channel blocks from *text*."""
+    if not text:
+        return TextWithChannelTags(remaining_text="")
+
+    matches = list(_CHANNEL_RE.finditer(text))
+    if not matches:
+        has_open_tag = (
+            CHANNEL_TAG in text
+            and MESSAGE_TAG in text
+            and END_TAG not in text
+        )
+        return TextWithChannelTags(
+            remaining_text=_strip_control_tags(text),
+            has_open_tag=has_open_tag,
+        )
+
+    thinking_parts: list[str] = []
+    final_parts: list[str] = []
+    for m in matches:
+        role = (m.group(1) or "").strip().lower()
+        content = (m.group(2) or "").strip()
+        if not content:
+            continue
+        if role == "analysis":
+            thinking_parts.append(content)
+        elif role == "final":
+            final_parts.append(content)
+
+    prefix = text[: matches[0].start()]
+    suffix = text[matches[-1].end() :]
+    extra_text = _strip_control_tags("\n".join([prefix, suffix]).strip())
+
+    remaining_parts = list(final_parts)
+    if extra_text:
+        remaining_parts.append(extra_text)
+
+    has_open_tag = text.count(CHANNEL_TAG) > text.count(END_TAG)
+    return TextWithChannelTags(
+        thinking="\n".join(thinking_parts).strip(),
+        remaining_text="\n".join(
+            p for p in remaining_parts if p and p.strip()
+        ).strip(),
+        has_open_tag=has_open_tag,
+    )
 
 
 def parse_tool_calls_from_text(text: str) -> TextWithToolCalls:
