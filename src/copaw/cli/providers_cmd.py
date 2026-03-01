@@ -23,6 +23,37 @@ from ..providers import (
 from .utils import prompt_choice
 
 
+def _resolve_provider_id(identifier: str) -> str:
+    """Resolve provider by id/name (case-insensitive)."""
+    raw = (identifier or "").strip()
+    if not raw:
+        raise ValueError("Provider id is required.")
+
+    if raw in PROVIDERS:
+        return raw
+
+    lowered = raw.lower()
+    if lowered in PROVIDERS:
+        return lowered
+
+    matches = [
+        pid
+        for pid, defn in PROVIDERS.items()
+        if defn.name.lower() == lowered
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(
+            f"Provider '{identifier}' is ambiguous. "
+            f"Use provider id instead: {', '.join(matches)}",
+        )
+    raise ValueError(
+        f"Provider '{identifier}' not found. "
+        "Use 'copaw models list' to view available providers.",
+    )
+
+
 def _select_provider_interactive(
     prompt_text: str = "Select provider:",
     *,
@@ -386,9 +417,12 @@ def config_cmd() -> None:
 @click.argument("provider_id", required=False, default=None)
 def config_key_cmd(provider_id: str | None) -> None:
     """Configure a provider's API key."""
-    if provider_id is not None and provider_id not in PROVIDERS:
-        click.echo(click.style(f"Unknown provider: {provider_id}", fg="red"))
-        raise SystemExit(1)
+    if provider_id is not None:
+        try:
+            provider_id = _resolve_provider_id(provider_id)
+        except ValueError as exc:
+            click.echo(click.style(f"Error: {exc}", fg="red"))
+            raise SystemExit(1) from exc
     configure_provider_api_key_interactive(provider_id)
 
 
@@ -434,6 +468,12 @@ def add_provider_cmd(
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
 def remove_provider_cmd(provider_id: str, yes: bool) -> None:
     """Remove a custom provider."""
+    try:
+        provider_id = _resolve_provider_id(provider_id)
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
     if is_builtin(provider_id):
         click.echo(
             click.style(
@@ -462,6 +502,12 @@ def remove_provider_cmd(provider_id: str, yes: bool) -> None:
 @click.option("--model-name", "-n", required=True, help="Model display name")
 def add_model_cmd(provider_id: str, model_id: str, model_name: str) -> None:
     """Add a model to any provider (built-in or custom)."""
+    try:
+        provider_id = _resolve_provider_id(provider_id)
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
     # Prevent manual model addition for Ollama
     if provider_id == "ollama":
         click.echo(
@@ -488,6 +534,12 @@ def add_model_cmd(provider_id: str, model_id: str, model_name: str) -> None:
 @click.option("--model-id", "-m", required=True, help="Model identifier")
 def remove_model_cmd(provider_id: str, model_id: str) -> None:
     """Remove a user-added model from any provider."""
+    try:
+        provider_id = _resolve_provider_id(provider_id)
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
     # Prevent manual model removal for Ollama
     if provider_id == "ollama":
         click.echo(
