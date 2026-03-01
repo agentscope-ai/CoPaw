@@ -14,7 +14,7 @@ from agentscope.message import TextBlock
 from copaw.constant import WORKING_DIR
 
 
-# pylint: disable=too-many-branches
+# pylint: disable=too-many-branches, too-many-statements
 async def execute_shell_command(
     command: str,
     timeout: int = 60,
@@ -27,7 +27,7 @@ async def execute_shell_command(
     Args:
         command (`str`):
             The shell command to execute.
-        timeout (`int`, defaults to `10`):
+        timeout (`int`, defaults to `60`):
             The maximum time (in seconds) allowed for the command to run.
             Default is 60 seconds.
         cwd (`Optional[Path]`, defaults to `None`):
@@ -40,11 +40,18 @@ async def execute_shell_command(
             standard error of the executed command. If timeout occurs, the
             return code will be -1 and stderr will contain timeout information.
     """
-
     cmd = (command or "").strip()
+    if not cmd:
+        return ToolResponse(
+            content=[TextBlock(type="text", text="No command provided.")],
+        )
 
     # Set working directory
     working_dir = cwd if cwd is not None else WORKING_DIR
+
+    def _decode(b: bytes) -> str:
+        enc = locale.getpreferredencoding(False) or "utf-8"
+        return b.decode(enc, errors="replace").strip("\n")
 
     try:
         proc = await asyncio.create_subprocess_shell(
@@ -55,12 +62,17 @@ async def execute_shell_command(
             cwd=str(working_dir),
         )
 
+        stdout_str = ""
+        stderr_str = ""
+        returncode = 0
+
         try:
-            await asyncio.wait_for(proc.wait(), timeout=timeout)
-            stdout, stderr = await proc.communicate()
-            encoding = locale.getpreferredencoding(False) or "utf-8"
-            stdout_str = stdout.decode(encoding, errors="replace").strip("\n")
-            stderr_str = stderr.decode(encoding, errors="replace").strip("\n")
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=timeout,
+            )
+            stdout_str = _decode(stdout)
+            stderr_str = _decode(stderr)
             returncode = proc.returncode
 
         except asyncio.TimeoutError:
@@ -72,41 +84,44 @@ async def execute_shell_command(
                 f"requires more time to complete."
             )
             returncode = -1
+
+            # Try graceful termination first
             try:
                 proc.terminate()
-                # Wait a bit for graceful termination
+            except ProcessLookupError:
+                proc = None
+
+            stdout = b""
+            stderr = b""
+            if proc is not None:
                 try:
-                    await asyncio.wait_for(proc.wait(), timeout=1)
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=1,
+                    )
                 except asyncio.TimeoutError:
                     # Force kill if graceful termination fails
-                    proc.kill()
-                    await proc.wait()
+                    try:
+                        proc.kill()
+                    except ProcessLookupError:
+                        pass
+                    stdout, stderr = await proc.communicate()
 
-                stdout, stderr = await proc.communicate()
-                encoding = locale.getpreferredencoding(False) or "utf-8"
-                stdout_str = stdout.decode(encoding, errors="replace").strip(
-                    "\n",
-                )
-                stderr_str = stderr.decode(encoding, errors="replace").strip(
-                    "\n",
-                )
-                if stderr_str:
-                    stderr_str += f"\n{stderr_suffix}"
-                else:
-                    stderr_str = stderr_suffix
-            except ProcessLookupError:
-                stdout_str = ""
+            stdout_str = _decode(stdout)
+            stderr_str = _decode(stderr)
+
+            if stderr_str:
+                stderr_str = f"{stderr_str}\n{stderr_suffix}"
+            else:
                 stderr_str = stderr_suffix
 
         # Format the response in a human-friendly way
         if returncode == 0:
-            # Success case: just show the output
             if stdout_str:
                 response_text = stdout_str
             else:
                 response_text = "Command executed successfully (no output)."
         else:
-            # Error case: show detailed information
             response_parts = [f"Command failed with exit code {returncode}."]
             if stdout_str:
                 response_parts.append(f"\n[stdout]\n{stdout_str}")
@@ -115,12 +130,7 @@ async def execute_shell_command(
             response_text = "".join(response_parts)
 
         return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=response_text,
-                ),
-            ],
+            content=[TextBlock(type="text", text=response_text)],
         )
 
     except Exception as e:
