@@ -68,6 +68,10 @@ class MCPClientCreateRequest(BaseModel):
         default="",
         description="Remote MCP endpoint URL (for HTTP/SSE transports)",
     )
+    baseUrl: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of url for backward compatibility",
+    )
     headers: Dict[str, str] = Field(
         default_factory=dict,
         description="HTTP headers for remote transport",
@@ -106,6 +110,10 @@ class MCPClientUpdateRequest(BaseModel):
     url: Optional[str] = Field(
         None,
         description="Remote MCP endpoint URL (for HTTP/SSE transports)",
+    )
+    baseUrl: Optional[str] = Field(
+        None,
+        description="Legacy alias of url for backward compatibility",
     )
     headers: Optional[Dict[str, str]] = Field(
         None,
@@ -189,6 +197,25 @@ def _build_client_info(key: str, client: MCPClientConfig) -> MCPClientInfo:
     )
 
 
+def _normalize_legacy_url(url: Optional[str], base_url: Optional[str]) -> str:
+    """Normalize URL aliases from older payload formats."""
+    return (url or base_url or "").strip()
+
+
+def _coerce_transport_for_legacy_payload(
+    transport: Literal["stdio", "streamable_http", "sse"],
+    url: str,
+    command: str,
+    transport_explicit: bool,
+) -> Literal["stdio", "streamable_http", "sse"]:
+    """Auto-switch to HTTP transport for URL-only legacy payloads."""
+    if transport_explicit:
+        return transport
+    if transport == "stdio" and url and not command.strip():
+        return "streamable_http"
+    return transport
+
+
 @router.get(
     "",
     response_model=List[MCPClientInfo],
@@ -239,12 +266,20 @@ async def create_mcp_client(
         )
 
     # Create new client config
+    transport_explicit = "transport" in client.model_fields_set
+    normalized_url = _normalize_legacy_url(client.url, client.baseUrl)
+    normalized_transport = _coerce_transport_for_legacy_payload(
+        client.transport,
+        normalized_url,
+        client.command,
+        transport_explicit,
+    )
     new_client = MCPClientConfig(
         name=client.name,
         description=client.description,
         enabled=client.enabled,
-        transport=client.transport,
-        url=client.url,
+        transport=normalized_transport,
+        url=normalized_url,
         headers=client.headers,
         command=client.command,
         args=client.args,
@@ -278,6 +313,21 @@ async def update_mcp_client(
 
     # Update fields if provided
     update_data = updates.model_dump(exclude_unset=True)
+    if "baseUrl" in update_data and not update_data.get("url"):
+        update_data["url"] = update_data["baseUrl"]
+    update_data.pop("baseUrl", None)
+
+    if "url" in update_data:
+        incoming_transport = update_data.get("transport", existing.transport)
+        transport_explicit = "transport" in update_data
+        incoming_command = update_data.get("command", existing.command) or ""
+        incoming_url = (update_data.get("url") or "").strip()
+        update_data["transport"] = _coerce_transport_for_legacy_payload(
+            incoming_transport,
+            incoming_url,
+            incoming_command,
+            transport_explicit,
+        )
 
     # Special handling for env: merge with existing, don't replace
     if "env" in update_data and update_data["env"] is not None:
