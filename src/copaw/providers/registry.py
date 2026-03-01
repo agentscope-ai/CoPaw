@@ -238,7 +238,7 @@ def sync_local_models() -> None:
         pass
 
 
-def sync_ollama_models() -> None:
+def sync_ollama_models(host: str | None = None) -> None:
     """Refresh Ollama provider model list from the Ollama daemon.
 
     Models are derived from ``ollama.list()`` via :class:`OllamaModelManager`.
@@ -249,7 +249,7 @@ def sync_ollama_models() -> None:
         from ..providers.ollama_manager import OllamaModelManager
 
         models: list[ModelInfo] = []
-        for model in OllamaModelManager.list_models():
+        for model in OllamaModelManager.list_models(host=host):
             models.append(ModelInfo(id=model.name, name=model.name))
         PROVIDER_OLLAMA.models = models
     except ImportError:

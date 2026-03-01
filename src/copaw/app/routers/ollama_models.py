@@ -24,6 +24,7 @@ from ..download_task_store import (
     update_status,
     cancel_task,
 )
+from ...providers import load_providers_json
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,13 @@ def _is_ollama_connection_error(exc: Exception) -> bool:
     return "failed to connect to ollama" in msg or "connection refused" in msg
 
 
+def _get_ollama_host() -> str:
+    """Resolve configured Ollama base URL from providers settings."""
+    providers_data = load_providers_json()
+    base_url, _ = providers_data.get_credentials("ollama")
+    return base_url
+
+
 def _task_to_response(task: DownloadTask) -> OllamaDownloadTaskResponse:
     result = None
     if task.result:
@@ -84,16 +92,18 @@ async def list_ollama_models() -> List[OllamaModelResponse]:
 
     If the Ollama SDK is not installed, returns HTTP 501.
     """
-    from ...providers.ollama_manager import OllamaModelManager
-
     try:
-        models = OllamaModelManager.list_models()
+        from ...providers.ollama_manager import OllamaModelManager
     except ImportError as exc:
         raise HTTPException(
             status_code=501,
-            detail="Ollama SDK not installed. Install with: "
-            "pip install 'copaw[ollama]'",
+            detail=(
+                "Ollama SDK not installed. Install with: pip install ollama"
+            ),
         ) from exc
+
+    try:
+        models = OllamaModelManager.list_models(host=_get_ollama_host())
     except Exception as exc:
         if _is_ollama_connection_error(exc):
             logger.warning(
@@ -140,7 +150,12 @@ async def download_ollama_model(
 
     loop = asyncio.get_running_loop()
     asyncio.create_task(
-        _run_pull_in_background(task.task_id, body.name, loop),
+        _run_pull_in_background(
+            task.task_id,
+            body.name,
+            _get_ollama_host(),
+            loop,
+        ),
         name=f"ollama-download-{task.task_id}",
     )
 
@@ -150,6 +165,7 @@ async def download_ollama_model(
 async def _run_pull_in_background(
     task_id: str,
     name: str,
+    host: str,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
     """Execute the Ollama pull in a thread and update task status."""
@@ -160,7 +176,7 @@ async def _run_pull_in_background(
     try:
         info: OllamaModelInfo = await loop.run_in_executor(
             None,
-            lambda: OllamaModelManager.pull_model(name),
+            lambda: OllamaModelManager.pull_model(name, host=host),
         )
         result_dict = info.model_dump()
         await update_status(
@@ -219,16 +235,16 @@ async def cancel_ollama_download(task_id: str) -> dict:
 )
 async def delete_ollama_model(name: str) -> dict:
     """Delete an Ollama model via the SDK."""
-    from ...providers.ollama_manager import OllamaModelManager
-
     try:
-        OllamaModelManager.delete_model(name)
-    except ImportError as exc:
+        from ...providers.ollama_manager import OllamaModelManager
+    except ImportError as exc:  # pragma: no cover - import guard
         raise HTTPException(
             status_code=501,
-            detail="Ollama SDK not installed. Install with: "
-            "pip install 'copaw[ollama]'",
+            detail="Ollama SDK not installed.",
         ) from exc
+
+    try:
+        OllamaModelManager.delete_model(name, host=_get_ollama_host())
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Failed to delete Ollama model: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc

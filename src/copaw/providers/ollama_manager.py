@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
@@ -55,6 +56,34 @@ def _ensure_ollama():
     return ollama
 
 
+def _normalize_ollama_host(host: Optional[str]) -> Optional[str]:
+    """Normalize OpenAI-compatible base URL to Ollama host URL."""
+    value = (host or "").strip()
+    if not value:
+        return None
+
+    # Users may configure ollama via OpenAI-compatible /v1 endpoint.
+    if value.endswith("/v1"):
+        value = value[:-3]
+    value = value.rstrip("/")
+    if not value:
+        return None
+
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.netloc:
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return value
+
+
+def _get_ollama_client(host: Optional[str] = None):
+    """Return an Ollama client bound to the configured host."""
+    ollama = _ensure_ollama()
+    normalized = _normalize_ollama_host(host)
+    if normalized:
+        return ollama.Client(host=normalized)
+    return ollama.Client()
+
+
 class OllamaModelManager:
     """High-level wrapper around the Ollama SDK for model lifecycle.
 
@@ -64,11 +93,11 @@ class OllamaModelManager:
     """
 
     @staticmethod
-    def list_models() -> List[OllamaModelInfo]:
+    def list_models(host: Optional[str] = None) -> List[OllamaModelInfo]:
         """Return the current model list from ``ollama.list()``."""
 
-        ollama = _ensure_ollama()
-        raw = ollama.list()
+        client = _get_ollama_client(host)
+        raw = client.list()
         models: List[OllamaModelInfo] = []
         for m in raw.get("models", []):
             models.append(
@@ -82,29 +111,29 @@ class OllamaModelManager:
         return models
 
     @staticmethod
-    def pull_model(name: str) -> OllamaModelInfo:
+    def pull_model(name: str, host: Optional[str] = None) -> OllamaModelInfo:
         """Pull/download a model via ``ollama.pull``.
 
         This call is blocking and intended to be run in a thread executor when
         used from async FastAPI endpoints.
         """
 
-        ollama = _ensure_ollama()
+        client = _get_ollama_client(host)
         logger.info("Pulling Ollama model: %s", name)
-        ollama.pull(name)
+        client.pull(name)
         logger.info("Pull completed: %s", name)
 
-        for model in OllamaModelManager.list_models():
+        for model in OllamaModelManager.list_models(host=host):
             if model.name == name:
                 return model
 
         raise ValueError(f"Ollama model '{name}' not found after pull.")
 
     @staticmethod
-    def delete_model(name: str) -> None:
+    def delete_model(name: str, host: Optional[str] = None) -> None:
         """Delete a model from the local Ollama instance."""
 
-        ollama = _ensure_ollama()
+        client = _get_ollama_client(host)
         logger.info("Deleting Ollama model: %s", name)
-        ollama.delete(name)
+        client.delete(name)
         logger.info("Ollama model deleted: %s", name)

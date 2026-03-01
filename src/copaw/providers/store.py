@@ -225,7 +225,9 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
 
     sync_custom_providers(custom_providers)
     sync_local_models()
-    sync_ollama_models()
+    ollama_settings = providers.get("ollama")
+    ollama_host = ollama_settings.base_url if ollama_settings else None
+    sync_ollama_models(host=ollama_host)
     _ensure_all_providers(providers)
 
     data = ProvidersData(
