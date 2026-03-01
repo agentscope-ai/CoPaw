@@ -2,6 +2,7 @@ import { createGlobalStyle } from "antd-style";
 import { ConfigProvider, bailianTheme } from "@agentscope-ai/design";
 import { BrowserRouter } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
+import ApprovalModal from "./components/ApprovalModal";
 import "./styles/layout.css";
 import "./styles/form-override.css";
 
@@ -17,6 +18,7 @@ function App() {
     <BrowserRouter>
       <GlobalStyle />
       <ConfigProvider {...bailianTheme} prefix="copaw" prefixCls="copaw">
+        <ApprovalModal />
         <MainLayout />
       </ConfigProvider>
     </BrowserRouter>

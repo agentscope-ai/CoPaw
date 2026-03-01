@@ -10,9 +10,9 @@ from typing import Any, List, Optional, Type
 
 from agentscope.agent import ReActAgent
 from agentscope.message import Msg
-from agentscope.tool import Toolkit
 from pydantic import BaseModel
 
+from .approval_toolkit import ApprovalToolkit
 from .command_handler import CommandHandler
 from .hooks import BootstrapHook, MemoryCompactionHook
 from .memory import CoPawInMemoryMemory
@@ -63,6 +63,7 @@ class CoPawAgent(ReActAgent):
         enable_memory_manager: bool = True,
         mcp_clients: Optional[List[Any]] = None,
         memory_manager: MemoryManager | None = None,
+        approval_service: Optional[Any] = None,
         max_iters: int = 50,
         max_input_length: int = 128 * 1024,  # 128K = 131072 tokens
     ):
@@ -75,6 +76,8 @@ class CoPawAgent(ReActAgent):
             mcp_clients: Optional list of MCP clients for tool
                 integration
             memory_manager: Optional memory manager instance
+            approval_service: Optional ApprovalService for gating
+                high-risk tool calls
             max_iters: Maximum number of reasoning-acting iterations
                 (default: 50)
             max_input_length: Maximum input length in tokens for model
@@ -89,8 +92,8 @@ class CoPawAgent(ReActAgent):
             max_input_length * MEMORY_COMPACT_RATIO,
         )
 
-        # Initialize toolkit with built-in tools
-        toolkit = self._create_toolkit()
+        # Initialize toolkit with built-in tools (and optional approval gate)
+        toolkit = self._create_toolkit(approval_service)
 
         # Load and register skills
         self._register_skills(toolkit)
@@ -130,13 +133,22 @@ class CoPawAgent(ReActAgent):
         # Register hooks
         self._register_hooks()
 
-    def _create_toolkit(self) -> Toolkit:
+    def _create_toolkit(
+        self,
+        approval_service: Optional[Any] = None,
+    ) -> ApprovalToolkit:
         """Create and populate toolkit with built-in tools.
 
+        Args:
+            approval_service: Optional ApprovalService for gating
+                high-risk tool calls
+
         Returns:
-            Configured toolkit instance
+            Configured ApprovalToolkit instance
         """
-        toolkit = Toolkit()
+        toolkit = ApprovalToolkit()
+        if approval_service is not None:
+            toolkit.set_approval_service(approval_service)
 
         # Register built-in tools
         toolkit.register_tool_function(execute_shell_command)

@@ -176,6 +176,20 @@ class MCPConfig(BaseModel):
     )
 
 
+class ApprovalConfig(BaseModel):
+    """Approval gate configuration."""
+
+    mode: str = Field(
+        default="auto",
+        description="'auto' (all approved) or 'manual' (human review required)",
+    )
+    timeout: int = Field(
+        default=120,
+        ge=10,
+        description="Seconds before an unanswered manual request is denied",
+    )
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
@@ -186,6 +200,7 @@ class Config(BaseModel):
     last_dispatch: Optional[LastDispatchConfig] = None
     # When False, channel output hides tool call/result details (show "...").
     show_tool_details: bool = True
+    approval: ApprovalConfig = Field(default_factory=ApprovalConfig)
 
 
 ChannelConfigUnion = Union[
