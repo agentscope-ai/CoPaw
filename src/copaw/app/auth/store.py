@@ -60,7 +60,12 @@ class TokenStore:
         )
         self._records.append(record)
         self._save()
-        logger.info("Created token [%s] scope=%s label=%s", record.id, scope.value, label)
+        logger.info(
+            "Created token [%s] scope=%s label=%s",
+            record.id,
+            scope.value,
+            label,
+        )
         return plaintext
 
     def verify(self, token: str) -> Optional[TokenScope]:
