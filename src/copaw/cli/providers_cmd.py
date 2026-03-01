@@ -22,11 +22,14 @@ from ..providers import (
 )
 from .utils import prompt_choice
 
+_CREATE_CUSTOM_PROVIDER_SENTINEL = "__create_custom_provider__"
+
 
 def _select_provider_interactive(
     prompt_text: str = "Select provider:",
     *,
     default_pid: str = "",
+    allow_create_custom: bool = False,
 ) -> str:
     """Prompt user to pick a provider. Returns provider_id."""
     data = load_providers_json()
@@ -38,6 +41,10 @@ def _select_provider_interactive(
         mark = "✓" if data.is_configured(d) else "✗"
         labels.append(f"{d.name} ({d.id}) [{mark}]")
         ids.append(d.id)
+
+    if allow_create_custom:
+        labels.append("Create custom provider (OpenAI-compatible)")
+        ids.append(_CREATE_CUSTOM_PROVIDER_SENTINEL)
 
     default_label: Optional[str] = None
     if default_pid in ids:
@@ -51,17 +58,68 @@ def _select_provider_interactive(
     return ids[labels.index(chosen_label)]
 
 
+def _create_custom_provider_interactive() -> str:
+    """Create a custom provider and return its provider_id."""
+    click.echo("\n--- Create Custom Provider ---")
+
+    provider_id = click.prompt(
+        "Provider ID (letters/numbers/-/_)",
+        type=str,
+    ).strip()
+    if not provider_id:
+        click.echo(click.style("Error: provider_id is required.", fg="red"))
+        raise SystemExit(1)
+
+    name = click.prompt(
+        "Provider display name",
+        default=provider_id,
+    ).strip()
+    if not name:
+        click.echo(click.style("Error: provider name is required.", fg="red"))
+        raise SystemExit(1)
+
+    default_base_url = click.prompt(
+        "Base URL (OpenAI-compatible endpoint)",
+        type=str,
+    ).strip()
+    if not default_base_url:
+        click.echo(click.style("Error: base_url is required.", fg="red"))
+        raise SystemExit(1)
+
+    api_key_prefix = click.prompt(
+        "Expected API key prefix (optional)",
+        default="",
+        show_default=False,
+    ).strip()
+
+    try:
+        create_custom_provider(
+            provider_id,
+            name,
+            default_base_url=default_base_url,
+            api_key_prefix=api_key_prefix,
+        )
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
+    click.echo(f"✓ Custom provider '{name}' ({provider_id}) created.")
+    return provider_id
+
+
 def configure_provider_api_key_interactive(
     provider_id: str | None = None,
 ) -> str:
     """Interactively configure a provider's API key. Returns provider_id."""
-    data = load_providers_json()
-
     if provider_id is None:
         provider_id = _select_provider_interactive(
             "Select provider to configure API key:",
+            allow_create_custom=True,
         )
+        if provider_id == _CREATE_CUSTOM_PROVIDER_SENTINEL:
+            provider_id = _create_custom_provider_interactive()
 
+    data = load_providers_json()
     defn = PROVIDERS[provider_id]
 
     # Local providers (llamacpp, mlx) don't need API key configuration
