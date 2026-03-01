@@ -2,6 +2,12 @@ import { request } from "../request";
 import { getApiUrl } from "../config";
 import type { MdFileInfo, MdFileContent, DailyMemoryFile } from "../types";
 
+const encodePathSegments = (path: string) =>
+  path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
 export const workspaceApi = {
   listFiles: () =>
     request<MdFileInfo[]>("/agent/files").then((files) =>
@@ -11,12 +17,12 @@ export const workspaceApi = {
       })),
     ),
 
-  loadFile: (fileName: string) =>
-    request<MdFileContent>(`/agent/files/${encodeURIComponent(fileName)}`),
+  loadFile: (filePath: string) =>
+    request<MdFileContent>(`/agent/files/${encodePathSegments(filePath)}`),
 
-  saveFile: (fileName: string, content: string) =>
+  saveFile: (filePath: string, content: string) =>
     request<Record<string, unknown>>(
-      `/agent/files/${encodeURIComponent(fileName)}`,
+      `/agent/files/${encodePathSegments(filePath)}`,
       {
         method: "PUT",
         body: JSON.stringify({ content }),

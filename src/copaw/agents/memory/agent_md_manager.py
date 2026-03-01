@@ -18,6 +18,24 @@ class AgentMdManager:
         self.memory_dir: Path = self.working_dir / "memory"
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
+    def _resolve_working_md_path(self, md_name: str) -> Path:
+        """Resolve a relative markdown path inside working_dir safely."""
+        normalized = (md_name or "").replace("\\", "/").strip().lstrip("/")
+        if not normalized:
+            raise ValueError("Working md path is empty")
+        if not normalized.endswith(".md"):
+            normalized += ".md"
+
+        relative = Path(normalized)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Unsafe working md path: {md_name}")
+
+        file_path = (self.working_dir / relative).resolve()
+        working_root = self.working_dir.resolve()
+        if not file_path.is_relative_to(working_root):
+            raise ValueError(f"Unsafe working md path: {md_name}")
+        return file_path
+
     def list_working_mds(self) -> list[dict]:
         """List all markdown files with metadata in the working dir.
 
@@ -28,14 +46,18 @@ class AgentMdManager:
                 - created_time: file creation timestamp
                 - modified_time: file modification timestamp
         """
-        md_files = list(self.working_dir.glob("*.md"))
+        md_files = sorted(self.working_dir.rglob("*.md"))
         result = []
         for f in md_files:
+            if self.memory_dir in f.parents:
+                continue
             if f.is_file():
                 stat = f.stat()
                 result.append(
                     {
-                        "filename": f.name,
+                        "filename": f.relative_to(
+                            self.working_dir,
+                        ).as_posix(),
                         "size": stat.st_size,
                         "path": str(f),
                         "created_time": datetime.fromtimestamp(
@@ -54,10 +76,7 @@ class AgentMdManager:
         Returns:
             str: The file content as string
         """
-        # Auto-append .md extension if not present
-        if not md_name.endswith(".md"):
-            md_name += ".md"
-        file_path = self.working_dir / md_name
+        file_path = self._resolve_working_md_path(md_name)
         if not file_path.exists():
             raise FileNotFoundError(f"Working md file not found: {md_name}")
 
@@ -65,10 +84,8 @@ class AgentMdManager:
 
     def write_working_md(self, md_name: str, content: str):
         """Write markdown content to a file in the working directory."""
-        # Auto-append .md extension if not present
-        if not md_name.endswith(".md"):
-            md_name += ".md"
-        file_path = self.working_dir / md_name
+        file_path = self._resolve_working_md_path(md_name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
 
     def list_memory_mds(self) -> list[dict]:

@@ -50,17 +50,17 @@ async def list_working_files() -> list[MdFileInfo]:
 
 
 @router.get(
-    "/files/{md_name}",
+    "/files/{md_path:path}",
     response_model=MdFileContent,
     summary="Read a working file",
     description="Read a working markdown file",
 )
 async def read_working_file(
-    md_name: str,
+    md_path: str,
 ) -> MdFileContent:
     """Read a working directory markdown file."""
     try:
-        content = AGENT_MD_MANAGER.read_working_md(md_name)
+        content = AGENT_MD_MANAGER.read_working_md(md_path)
         return MdFileContent(content=content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -69,18 +69,18 @@ async def read_working_file(
 
 
 @router.put(
-    "/files/{md_name}",
+    "/files/{md_path:path}",
     response_model=dict,
     summary="Write a working file",
     description="Create or update a working file",
 )
 async def write_working_file(
-    md_name: str,
+    md_path: str,
     request: MdFileContent,
 ) -> dict:
     """Write a working directory markdown file."""
     try:
-        AGENT_MD_MANAGER.write_working_md(md_name, request.content)
+        AGENT_MD_MANAGER.write_working_md(md_path, request.content)
         return {"written": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
