@@ -102,6 +102,44 @@ CoPaw 已开源，官方仓库地址：
 
 命令行也可使用 `copaw models` 系列命令完成配置、下载和切换，详情请见文档 [CLI → 模型与环境变量 → copaw models](https://copaw.agentscope.io/docs/cli#copaw-models)。
 
+### 如何运行 llama.cpp 本地模型（llmap.cpp）
+
+如果你说的是 **llama.cpp**（有时会误写成 `llmap.cpp`），可按以下步骤：
+
+1. 安装带 llama.cpp 后端的 CoPaw：
+
+```bash
+pip install "copaw[llamacpp]"
+```
+
+2. 下载本地 GGUF 模型：
+
+```bash
+copaw models download Qwen/Qwen3-4B-GGUF
+```
+
+3. 检查本地模型是否已下载：
+
+```bash
+copaw models local
+```
+
+4. 把下载的模型设为当前活跃模型：
+
+```bash
+copaw models set-llm
+```
+
+在交互流程里选择提供商 `llamacpp`，再选择下载好的模型。
+
+5. 启动服务：
+
+```bash
+copaw app
+```
+
+第 4-5 步也可以在 **控制台 -> 设置 -> 模型** 中完成。
+
 ### 如何管理Skill
 
 进入控制台 **智能体 → 技能**，可以启用/禁用技能、创建自定义技能、以及从 Skills Hub 中导入技能。详情请见文档 [Skills](https://copaw.agentscope.io/docs/skills)。

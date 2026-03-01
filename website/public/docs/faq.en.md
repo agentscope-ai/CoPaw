@@ -114,6 +114,44 @@ You can also use `copaw models` CLI commands for configuration, download, and
 switching. See
 [CLI -> Models and Environment Variables -> copaw models](https://copaw.agentscope.io/docs/cli#copaw-models).
 
+### How to run llama.cpp local models (\"llmap.cpp\")
+
+If you mean **llama.cpp** (sometimes mistyped as `llmap.cpp`), use this flow:
+
+1. Install CoPaw with llama.cpp backend support:
+
+```bash
+pip install "copaw[llamacpp]"
+```
+
+2. Download a local GGUF model:
+
+```bash
+copaw models download Qwen/Qwen3-4B-GGUF
+```
+
+3. Verify local models are present:
+
+```bash
+copaw models local
+```
+
+4. Select the downloaded model as active LLM:
+
+```bash
+copaw models set-llm
+```
+
+Choose provider `llamacpp`, then select your downloaded model.
+
+5. Start the app:
+
+```bash
+copaw app
+```
+
+You can also complete steps 4-5 in **Console -> Settings -> Models**.
+
 ### How to manage Skills
 
 Go to **Agent -> Skills** in Console. You can enable/disable Skills, create
