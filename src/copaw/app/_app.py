@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from agentscope_runtime.engine.app import AgentApp
@@ -16,7 +17,9 @@ from ..config import (  # pylint: disable=no-name-in-module
     ConfigWatcher,
 )
 from ..config.utils import get_jobs_path, get_chats_path, get_config_path
-from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV
+from .auth import TokenStore
+from .auth.middleware import TokenAuthMiddleware
+from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV, TOKENS_FILE, WORKING_DIR
 from ..__version__ import __version__
 from ..utils.logging import setup_logger
 from .channels import ChannelManager  # pylint: disable=no-name-in-module
@@ -49,8 +52,18 @@ agent_app = AgentApp(
 async def lifespan(app: FastAPI):  # pylint: disable=too-many-statements
     await runner.start()
 
-    # --- MCP client manager init (independent module, hot-reloadable) ---
+    # --- token store init ---
     config = load_config()
+    token_store = TokenStore(path=WORKING_DIR / TOKENS_FILE)
+    app.state.token_store = token_store
+
+    auth_enabled = (
+        os.environ.get("COPAW_AUTH_ENABLED", "").lower() in ("true", "1", "yes")
+        or config.auth.enabled
+    )
+    logger.info("Auth: %s", "enabled" if auth_enabled else "disabled")
+
+    # --- MCP client manager init (independent module, hot-reloadable) ---
     mcp_manager = MCPClientManager()
     if hasattr(config, "mcp"):
         try:
@@ -143,6 +156,28 @@ app = FastAPI(
     docs_url="/docs" if DOCS_ENABLED else None,
     redoc_url="/redoc" if DOCS_ENABLED else None,
     openapi_url="/openapi.json" if DOCS_ENABLED else None,
+)
+
+# --- CORS ---
+_cors_config = load_config().auth
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_config.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Token auth middleware ---
+_auth_enabled = (
+    os.environ.get("COPAW_AUTH_ENABLED", "").lower() in ("true", "1", "yes")
+    or _cors_config.enabled
+)
+_token_store = TokenStore(path=WORKING_DIR / TOKENS_FILE)
+app.add_middleware(
+    TokenAuthMiddleware,
+    token_store=_token_store,
+    enabled=_auth_enabled,
 )
 
 

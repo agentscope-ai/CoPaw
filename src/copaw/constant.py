@@ -10,6 +10,8 @@ WORKING_DIR = (
 
 JOBS_FILE = os.environ.get("COPAW_JOBS_FILE", "jobs.json")
 
+TOKENS_FILE = os.environ.get("COPAW_TOKENS_FILE", "tokens.json")
+
 CHATS_FILE = os.environ.get("COPAW_CHATS_FILE", "chats.json")
 
 CONFIG_FILE = os.environ.get("COPAW_CONFIG_FILE", "config.json")
