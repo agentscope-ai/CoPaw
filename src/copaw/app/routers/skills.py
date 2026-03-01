@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from ...agents.skills_manager import (
     SkillService,
-    SkillInfo,
     list_available_skills,
 )
 from ...agents.skills_hub import (
@@ -13,8 +12,14 @@ from ...agents.skills_hub import (
 )
 
 
-class SkillSpec(SkillInfo):
+class SkillSpec(BaseModel):
+    name: str
+    content: str
+    source: str
+    path: str
     enabled: bool = False
+    references: dict[str, Any] | None = None
+    scripts: dict[str, Any] | None = None
 
 
 class CreateSkillRequest(BaseModel):
@@ -56,20 +61,22 @@ router = APIRouter(prefix="/skills", tags=["skills"])
 
 
 @router.get("")
-async def list_skills() -> list[SkillSpec]:
+async def list_skills(include_tree: bool = False) -> list[SkillSpec]:
     all_skills = SkillService.list_all_skills()
 
     available_skills = list_available_skills()
     skills_spec = []
     for skill in all_skills:
+        references = skill.references if include_tree else None
+        scripts = skill.scripts if include_tree else None
         skills_spec.append(
             SkillSpec(
                 name=skill.name,
                 content=skill.content,
                 source=skill.source,
                 path=skill.path,
-                references=skill.references,
-                scripts=skill.scripts,
+                references=references,
+                scripts=scripts,
                 enabled=skill.name in available_skills,
             ),
         )
@@ -77,18 +84,20 @@ async def list_skills() -> list[SkillSpec]:
 
 
 @router.get("/available")
-async def get_available_skills() -> list[SkillSpec]:
+async def get_available_skills(include_tree: bool = False) -> list[SkillSpec]:
     available_skills = SkillService.list_available_skills()
     skills_spec = []
     for skill in available_skills:
+        references = skill.references if include_tree else None
+        scripts = skill.scripts if include_tree else None
         skills_spec.append(
             SkillSpec(
                 name=skill.name,
                 content=skill.content,
                 source=skill.source,
                 path=skill.path,
-                references=skill.references,
-                scripts=skill.scripts,
+                references=references,
+                scripts=scripts,
                 enabled=True,
             ),
         )
