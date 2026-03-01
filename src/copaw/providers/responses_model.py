@@ -9,6 +9,7 @@ Responses API, it falls back to the original `chat.completions` path.
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any, AsyncGenerator, Literal, Type
 
@@ -108,13 +109,21 @@ class OpenAIResponsesChatModel(OpenAIChatModel):
                 tool_choice,
             )
 
+        if self.stream:
+            request_kwargs["stream"] = True
+
         start_datetime = datetime.now()
 
         try:
+            if self.stream:
+                response = await self.client.responses.create(**request_kwargs)
+                return self._parse_responses_stream_response(
+                    start_datetime,
+                    response,
+                )
+
             response = await self.client.responses.create(**request_kwargs)
             parsed = self._parse_responses_response(start_datetime, response)
-            if self.stream:
-                return self._stream_single_response(parsed)
             return parsed
         except Exception as exc:  # pragma: no cover - provider-dependent
             if self._should_fallback_to_chat_completions(exc):
@@ -304,10 +313,115 @@ class OpenAIResponsesChatModel(OpenAIChatModel):
         return out
 
     @staticmethod
-    async def _stream_single_response(
-        response: ChatResponse,
+    async def _parse_responses_stream_response(
+        start_datetime: datetime,
+        response: Any,
     ) -> AsyncGenerator[ChatResponse, None]:
-        yield response
+        text = ""
+        usage = None
+        tool_calls: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+        async for event in response:
+            evt = _as_dict(event)
+            evt_type = evt.get("type", "")
+            emit = False
+
+            if evt_type == "response.output_text.delta":
+                text += evt.get("delta", "")
+                emit = True
+            elif evt_type == "response.output_text.done":
+                done_text = evt.get("text", "")
+                if done_text and len(done_text) >= len(text):
+                    text = done_text
+                emit = True
+            elif evt_type == "response.output_item.added":
+                item = evt.get("item", {})
+                if isinstance(item, dict) and item.get("type") == "function_call":
+                    item_id = item.get("id", "")
+                    tool_calls[item_id] = {
+                        "id": item.get("call_id", "") or item_id,
+                        "name": item.get("name", ""),
+                        "raw_input": item.get("arguments", "") or "",
+                    }
+                    emit = True
+            elif evt_type == "response.function_call_arguments.delta":
+                item_id = evt.get("item_id", "")
+                if item_id:
+                    if item_id not in tool_calls:
+                        tool_calls[item_id] = {
+                            "id": item_id,
+                            "name": "",
+                            "raw_input": "",
+                        }
+                    tool_calls[item_id]["raw_input"] += evt.get("delta", "") or ""
+                    emit = True
+            elif evt_type == "response.function_call_arguments.done":
+                item_id = evt.get("item_id", "")
+                if item_id:
+                    if item_id not in tool_calls:
+                        tool_calls[item_id] = {
+                            "id": item_id,
+                            "name": "",
+                            "raw_input": "",
+                        }
+                    done_args = evt.get("arguments")
+                    if isinstance(done_args, str):
+                        tool_calls[item_id]["raw_input"] = done_args
+                    if evt.get("name"):
+                        tool_calls[item_id]["name"] = evt["name"]
+                    emit = True
+            elif evt_type == "response.output_item.done":
+                item = evt.get("item", {})
+                if isinstance(item, dict) and item.get("type") == "function_call":
+                    item_id = item.get("id", "")
+                    if item_id:
+                        if item_id not in tool_calls:
+                            tool_calls[item_id] = {
+                                "id": item.get("call_id", "") or item_id,
+                                "name": item.get("name", ""),
+                                "raw_input": "",
+                            }
+                        tool_calls[item_id]["id"] = item.get("call_id", "") or item_id
+                        tool_calls[item_id]["name"] = item.get("name", "")
+                        if isinstance(item.get("arguments"), str):
+                            tool_calls[item_id]["raw_input"] = item["arguments"]
+                        emit = True
+            elif evt_type == "response.completed":
+                response_obj = evt.get("response", {})
+                if isinstance(response_obj, dict):
+                    usage_raw = response_obj.get("usage")
+                    if isinstance(usage_raw, dict):
+                        usage = ChatUsage(
+                            input_tokens=usage_raw.get("input_tokens", 0),
+                            output_tokens=usage_raw.get("output_tokens", 0),
+                            time=(datetime.now() - start_datetime).total_seconds(),
+                            metadata=usage_raw,
+                        )
+                emit = True
+
+            if not emit:
+                continue
+
+            content_blocks: list[
+                TextBlock | ToolUseBlock | ThinkingBlock | AudioBlock
+            ] = []
+            if text:
+                content_blocks.append(TextBlock(type="text", text=text))
+
+            for tool in tool_calls.values():
+                raw_input = tool.get("raw_input", "")
+                content_blocks.append(
+                    ToolUseBlock(
+                        type="tool_use",
+                        id=tool.get("id", ""),
+                        name=tool.get("name", ""),
+                        input=_safe_json_loads(raw_input),
+                        raw_input=raw_input,
+                    ),
+                )
+
+            if content_blocks:
+                yield ChatResponse(content=content_blocks, usage=usage)
 
     def _parse_responses_response(
         self,
