@@ -6,15 +6,15 @@ import {
   Select,
   Switch,
   Button,
-  Space,
   message,
 } from "@agentscope-ai/design";
+import { Space } from "antd";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { FormInstance } from "antd";
 import type { CronJobSpecOutput } from "../../../../api/types";
 import { TIMEZONE_OPTIONS, DEFAULT_FORM_VALUES } from "./constants";
-import { api } from "../../../../api";
+import { cronJobApi } from "../../../../api/modules/cronjob";
 
 type CronJob = CronJobSpecOutput;
 
@@ -46,17 +46,50 @@ export function JobDrawer({
 
     setConverting(true);
     try {
-      const result = await api.cronJobApi.parseCron(naturalLanguage);
+      const result = await cronJobApi.parseCron(naturalLanguage);
+      const input = naturalLanguage.trim();
 
-      // Fill cron expression
+      // Extract task description: remove time-related words
+      const taskDesc = input
+        .replace(/每天|每周[一二三四五六日天]?|每月\d+号?|每小时|每\d+[分小]钟?时?/g, "")
+        .replace(/[上下]午|早上|晚上|凌晨/g, "")
+        .replace(/[零一二三四五六七八九十]+点|\d+点/g, "")
+        .replace(/定时|提醒我?|自动/g, "")
+        .trim() || input;
+
+      // Generate prompt for agent: keep the reminder context
+      const agentPrompt = input.includes("提醒")
+        ? `提醒：${taskDesc}`
+        : taskDesc;
+
+      // Auto-generate ID
+      const jobId = `job-${Date.now().toString(36)}`;
+
+      // Fill all fields
       form.setFieldsValue({
+        id: form.getFieldValue("id") || jobId,
+        name: form.getFieldValue("name") || taskDesc,
         schedule: { cron: result.cron },
+        task_type: form.getFieldValue("task_type") || "agent",
+        enabled: true,
+        text: form.getFieldValue("text") || taskDesc,
+        request: {
+          input: form.getFieldValue(["request", "input"]) ||
+            JSON.stringify([{ role: "user", content: [{ text: agentPrompt, type: "text" }] }]),
+        },
+        dispatch: {
+          channel: form.getFieldValue(["dispatch", "channel"]) || "console",
+          target: {
+            user_id: form.getFieldValue(["dispatch", "target", "user_id"]) || "admin",
+            session_id: form.getFieldValue(["dispatch", "target", "session_id"]) || "default",
+          },
+        },
       });
 
       // Show description
       setCronDescription(result.description);
 
-      // Show success message with source indicator
+      // Show success message
       const sourceIcon = result.source === "rules" ? "⚡" : "🤖";
       message.success(`${sourceIcon} ${result.description}`);
     } catch (error) {
@@ -67,7 +100,7 @@ export function JobDrawer({
     }
   };
 
-  const handleCronChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCronChange = () => {
     // Clear description when manually editing cron
     setCronDescription("");
   };
@@ -87,6 +120,24 @@ export function JobDrawer({
         onFinish={onSubmit}
         initialValues={DEFAULT_FORM_VALUES}
       >
+        {/* Smart Input (Optional) */}
+        <Form.Item label="🪄 Smart Input (Optional)">
+          <Space.Compact style={{ width: "100%" }}>
+            <Input
+              placeholder="例如：每天下午3点提醒我跑步"
+              value={naturalLanguage}
+              onChange={(e) => setNaturalLanguage(e.target.value)}
+              onPressEnter={handleConvert}
+            />
+            <Button type="primary" loading={converting} onClick={handleConvert}>
+              生成
+            </Button>
+          </Space.Compact>
+          <div style={{ marginTop: 4, fontSize: 12, color: "#999" }}>
+            💡 输入自然语言描述，自动填充下方所有字段
+          </div>
+        </Form.Item>
+
         <Form.Item
           name="id"
           label="ID"
@@ -105,24 +156,6 @@ export function JobDrawer({
 
         <Form.Item name={["schedule", "type"]} label="ScheduleType" hidden>
           <Input disabled value="cron" />
-        </Form.Item>
-
-        {/* Smart Input (Optional) */}
-        <Form.Item label="🪄 Smart Input (Optional)">
-          <Space.Compact style={{ width: "100%" }}>
-            <Input
-              placeholder="例如：每天下午3点 / 每周一9点 / 每小时"
-              value={naturalLanguage}
-              onChange={(e) => setNaturalLanguage(e.target.value)}
-              onPressEnter={handleConvert}
-            />
-            <Button type="primary" loading={converting} onClick={handleConvert}>
-              生成
-            </Button>
-          </Space.Compact>
-          <div style={{ marginTop: 4, fontSize: 12, color: "#999" }}>
-            💡 示例：每周一9点 / 每小时 / 每30分钟 / 工作日早上9点
-          </div>
         </Form.Item>
 
         <Form.Item
