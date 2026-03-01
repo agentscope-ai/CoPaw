@@ -85,8 +85,10 @@ export function ProviderConfigModal({
 
   const isActiveLlmProvider =
     activeModels?.active_llm?.provider_id === provider.id;
+  const canRevoke = Boolean(provider.current_api_key);
 
   const handleRevoke = () => {
+    if (!canRevoke) return;
     const confirmContent = isActiveLlmProvider
       ? t("models.revokeConfirmContent", { name: provider.name })
       : t("models.revokeConfirmSimple", { name: provider.name });
@@ -128,7 +130,7 @@ export function ProviderConfigModal({
       footer={
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterLeft}>
-            {provider.has_api_key && (
+            {canRevoke && (
               <Button danger size="small" onClick={handleRevoke}>
                 {t("models.revokeAuthorization")}
               </Button>
