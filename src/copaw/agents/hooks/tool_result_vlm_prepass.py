@@ -230,7 +230,7 @@ class ToolResultVLMPrepassHook:
         timeout_seconds = getattr(image_settings, "timeout_seconds", 120)
         max_output_chars = getattr(image_settings, "max_output_chars", 2000)
 
-        vlm_model = agent._vlm_model
+        vlm_model = agent._vlm_model  # pylint: disable=protected-access
         response = await asyncio.wait_for(
             vlm_model(prompt),
             timeout=max(1, timeout_seconds),
@@ -276,8 +276,13 @@ class ToolResultVLMPrepassHook:
         Returns (image_blocks, was_labeled).
         """
         try:
-            from ..tools.browser_control import get_labeled_screenshot
+            from ..tools.browser_control import (
+                get_labeled_screenshot,
+            )  # pylint: disable=import-error,no-name-in-module
+        except ImportError:
+            return resolved, False
 
+        try:
             img_bytes = await get_labeled_screenshot()
             if img_bytes is None:
                 return resolved, False
@@ -312,7 +317,8 @@ class ToolResultVLMPrepassHook:
         output = tool_result_block.get("output", [])
         if isinstance(output, list):
             tool_result_block["output"] = [
-                b for b in output
+                b
+                for b in output
                 if not (isinstance(b, dict) and b.get("type") == "image")
             ]
 

@@ -34,7 +34,8 @@ from .registry import (
     validate_custom_provider_id,
 )
 
-# Cache for OpenAI-compatible /v1/models responses (key: (base_url, normalized_api_key)).
+# Cache for OpenAI-compatible /v1/models responses
+# (key: (base_url, normalized_api_key)).
 MODELS_CACHE_TTL_SEC = 600
 _openai_models_cache: dict[tuple[str, str], tuple[list[ModelInfo], float]] = {}
 
@@ -95,8 +96,9 @@ def _fetch_openai_models(
 ) -> list[ModelInfo]:
     """Fetch model list from OpenAI-compatible endpoint.
 
-    Results are cached for MODELS_CACHE_TTL_SEC (600s) per (base_url, api_key).
-    Pass use_cache=False to force a fresh fetch (e.g. after saving provider config).
+    Results are cached for MODELS_CACHE_TTL_SEC (600s) per (base_url,
+    api_key). Pass use_cache=False to force a fresh fetch (e.g. after
+    saving provider config).
     Returns an empty list if fetching/parsing fails.
     """
     endpoint = _build_models_url(base_url)
@@ -431,8 +433,7 @@ def save_providers_json(
         "active_llm": data.active_llm.model_dump(mode="json"),
         "active_vlm": data.active_vlm.model_dump(mode="json"),
         "active_vlm_fallbacks": [
-            slot.model_dump(mode="json")
-            for slot in data.active_vlm_fallbacks
+            slot.model_dump(mode="json") for slot in data.active_vlm_fallbacks
         ],
         "vision": data.vision.model_dump(mode="json"),
     }
@@ -485,7 +486,9 @@ def update_provider_settings(
     if api_key == "" and data.active_vlm.provider_id == provider_id:
         data.active_vlm = ModelSlotConfig()
     data.active_vlm_fallbacks = [
-        slot for slot in data.active_vlm_fallbacks if slot.provider_id != provider_id
+        slot
+        for slot in data.active_vlm_fallbacks
+        if slot.provider_id != provider_id
     ]
 
     save_providers_json(data)
@@ -566,7 +569,10 @@ def update_vision_image_settings(
         updates["timeout_seconds"] = timeout_seconds
     if max_output_chars is not None:
         updates["max_output_chars"] = max_output_chars
-    return _update_vision_capability_settings(capability="image", updates=updates)
+    return _update_vision_capability_settings(
+        capability="image",
+        updates=updates,
+    )
 
 
 def get_vision_image_settings() -> VisionImageSettings:
@@ -598,7 +604,10 @@ def update_vision_audio_settings(
         updates["timeout_seconds"] = timeout_seconds
     if max_output_chars is not None:
         updates["max_output_chars"] = max_output_chars
-    return _update_vision_capability_settings(capability="audio", updates=updates)
+    return _update_vision_capability_settings(
+        capability="audio",
+        updates=updates,
+    )
 
 
 def get_vision_audio_settings() -> VisionAudioSettings:
@@ -630,7 +639,10 @@ def update_vision_video_settings(
         updates["timeout_seconds"] = timeout_seconds
     if max_output_chars is not None:
         updates["max_output_chars"] = max_output_chars
-    return _update_vision_capability_settings(capability="video", updates=updates)
+    return _update_vision_capability_settings(
+        capability="video",
+        updates=updates,
+    )
 
 
 def get_vision_video_settings() -> VisionVideoSettings:
@@ -762,7 +774,9 @@ def delete_custom_provider(provider_id: str) -> ProvidersData:
     if data.active_vlm.provider_id == provider_id:
         data.active_vlm = ModelSlotConfig()
     data.active_vlm_fallbacks = [
-        slot for slot in data.active_vlm_fallbacks if slot.provider_id != provider_id
+        slot
+        for slot in data.active_vlm_fallbacks
+        if slot.provider_id != provider_id
     ]
 
     save_providers_json(data)

@@ -21,15 +21,19 @@ def build_vlm_prepass_prompt(user_text: str, selected_image_count: int) -> str:
     parts = [
         "You are a vision preprocessor. "
         "Describe the provided image(s) concisely and accurately.",
-        "Include: visible text (OCR), key objects/entities, layout, and any ambiguities.",
-        "Do NOT answer the user's question directly — only describe what you see.",
+        "Include: visible text (OCR), key objects/entities, layout, "
+        "and any ambiguities.",
+        "Do NOT answer the user's question directly — "
+        "only describe what you see.",
         "Do NOT claim you cannot view the image.",
         "Do NOT request external tools.",
     ]
     if selected_image_count > 1:
         parts.append(f"Number of images: {selected_image_count}")
     if user_text and user_text.strip():
-        parts.append(f"User's task context (for relevance): {user_text.strip()}")
+        parts.append(
+            f"User's task context (for relevance): {user_text.strip()}",
+        )
     return "\n".join(parts)
 
 
@@ -39,7 +43,7 @@ def normalize_vlm_prepass_output(raw: str) -> str:
     if not text:
         return ""
     if len(text) > _MAX_DESCRIPTION_CHARS:
-        text = text[:_MAX_DESCRIPTION_CHARS - 3] + "..."
+        text = text[: _MAX_DESCRIPTION_CHARS - 3] + "..."
     return text
 
 
@@ -68,4 +72,3 @@ def format_vlm_prepass_context(
         lines.append(f"User text:\n{cleaned_user_text}")
     lines.append(f"{content_title}:\n{text}")
     return "\n".join(lines)
-

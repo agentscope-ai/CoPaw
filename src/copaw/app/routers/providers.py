@@ -373,7 +373,10 @@ async def set_active_vlm_model_fallbacks(
                 detail=f"Provider '{provider.name}' is not configured.",
             )
         if not slot.model:
-            raise HTTPException(status_code=400, detail="Fallback model is required.")
+            raise HTTPException(
+                status_code=400,
+                detail="Fallback model is required.",
+            )
         validated.append(slot)
 
     data = set_active_vlm_fallbacks(

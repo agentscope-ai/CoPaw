@@ -52,7 +52,11 @@ def auto_discover_vlm(
             base_url, api_key = data.get_credentials(pid)
             defn = PROVIDERS.get(pid)
             if api_key or (defn and defn.is_local):
-                logger.debug("Auto-VLM: using default VLM %s/%s", pid, default_vlm)
+                logger.debug(
+                    "Auto-VLM: using default VLM %s/%s",
+                    pid,
+                    default_vlm,
+                )
                 return ResolvedModelConfig(
                     provider_id=pid,
                     model=default_vlm,
@@ -70,10 +74,17 @@ def auto_discover_vlm(
         if settings:
             all_models.extend(settings.extra_models)
         for model_info in all_models:
-            candidate = ResolvedModelConfig(provider_id=pid, model=model_info.id)
+            candidate = ResolvedModelConfig(
+                provider_id=pid,
+                model=model_info.id,
+            )
             if supports_input_capability(candidate, "image"):
                 base_url, api_key = data.get_credentials(pid)
-                logger.debug("Auto-VLM: found vision model %s/%s", pid, model_info.id)
+                logger.debug(
+                    "Auto-VLM: found vision model %s/%s",
+                    pid,
+                    model_info.id,
+                )
                 return ResolvedModelConfig(
                     provider_id=pid,
                     model=model_info.id,
@@ -87,10 +98,17 @@ def auto_discover_vlm(
         if not (cpd.base_url or cpd.default_base_url):
             continue
         for model_info in cpd.models:
-            candidate = ResolvedModelConfig(provider_id=pid, model=model_info.id)
+            candidate = ResolvedModelConfig(
+                provider_id=pid,
+                model=model_info.id,
+            )
             if supports_input_capability(candidate, "image"):
                 base_url = cpd.base_url or cpd.default_base_url
-                logger.debug("Auto-VLM: found custom provider model %s/%s", pid, model_info.id)
+                logger.debug(
+                    "Auto-VLM: found custom provider model %s/%s",
+                    pid,
+                    model_info.id,
+                )
                 return ResolvedModelConfig(
                     provider_id=pid,
                     model=model_info.id,

@@ -13,7 +13,11 @@ _VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".avi"}
 _AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".amr"}
 
 
-def classify_media_kind(*, mime_type: str = "", filename: str = "") -> MediaKind:
+def classify_media_kind(
+    *,
+    mime_type: str = "",
+    filename: str = "",
+) -> MediaKind:
     """Classify media kind from mime type and filename suffix."""
     mt = (mime_type or "").strip().lower()
     suffix = Path((filename or "").strip().lower()).suffix
@@ -33,4 +37,3 @@ def pick_attachment_url(att: dict[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
-

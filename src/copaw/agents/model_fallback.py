@@ -38,7 +38,11 @@ async def run_with_vlm_fallback(
     for cfg in candidates:
         try:
             result = await run(cfg)
-            return VlmFallbackResult(result=result, used=cfg, attempts=attempts)
+            return VlmFallbackResult(
+                result=result,
+                used=cfg,
+                attempts=attempts,
+            )
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             attempts.append(
@@ -52,4 +56,3 @@ async def run_with_vlm_fallback(
     if last_error is not None:
         raise last_error
     raise RuntimeError("No VLM candidates configured")
-

@@ -493,19 +493,28 @@ def list_cmd() -> None:
         for slot in data.active_vlm_fallbacks:
             click.echo(f"    - {slot.provider_id} / {slot.model}")
     image = data.vision.image
-    click.echo(f"  {'Vision image':16s}: {'enabled' if image.enabled else 'disabled'}")
+    click.echo(
+        f"  {'Vision image':16s}: "
+        f"{'enabled' if image.enabled else 'disabled'}",
+    )
     click.echo(
         f"  {'Vision policy':16s}: {image.attachments_mode} "
         f"(max_images={image.max_images})",
     )
     audio = data.vision.audio
-    click.echo(f"  {'Vision audio':16s}: {'enabled' if audio.enabled else 'disabled'}")
+    click.echo(
+        f"  {'Vision audio':16s}: "
+        f"{'enabled' if audio.enabled else 'disabled'}",
+    )
     click.echo(
         f"  {'Audio policy':16s}: {audio.attachments_mode} "
         f"(max_items={audio.max_items})",
     )
     video = data.vision.video
-    click.echo(f"  {'Vision video':16s}: {'enabled' if video.enabled else 'disabled'}")
+    click.echo(
+        f"  {'Vision video':16s}: "
+        f"{'enabled' if video.enabled else 'disabled'}",
+    )
     click.echo(
         f"  {'Video policy':16s}: {video.attachments_mode} "
         f"(max_items={video.max_items})",
@@ -548,7 +557,11 @@ def set_vlm_fallbacks_cmd() -> None:
 
 
 @models_group.command("set-vision-image")
-@click.option("--enabled/--disabled", default=None, help="Enable or disable image prepass.")
+@click.option(
+    "--enabled/--disabled",
+    default=None,
+    help="Enable or disable image prepass.",
+)
 @click.option(
     "--mode",
     "attachments_mode",
@@ -556,8 +569,18 @@ def set_vlm_fallbacks_cmd() -> None:
     default=None,
     help="Image selection mode for prepass.",
 )
-@click.option("--max-images", type=int, default=None, help="Max images in all mode.")
-@click.option("--timeout-seconds", type=int, default=None, help="Timeout per prepass attempt.")
+@click.option(
+    "--max-images",
+    type=int,
+    default=None,
+    help="Max images in all mode.",
+)
+@click.option(
+    "--timeout-seconds",
+    type=int,
+    default=None,
+    help="Timeout per prepass attempt.",
+)
 @click.option(
     "--max-output-chars",
     type=int,
@@ -596,7 +619,11 @@ def set_vision_image_cmd(
 
 
 @models_group.command("set-vision-audio")
-@click.option("--enabled/--disabled", default=None, help="Enable or disable audio prepass.")
+@click.option(
+    "--enabled/--disabled",
+    default=None,
+    help="Enable or disable audio prepass.",
+)
 @click.option(
     "--mode",
     "attachments_mode",
@@ -604,10 +631,30 @@ def set_vision_image_cmd(
     default=None,
     help="Audio selection mode for prepass.",
 )
-@click.option("--max-items", type=int, default=None, help="Max audio blocks in all mode.")
-@click.option("--timeout-seconds", type=int, default=None, help="Timeout per prepass attempt.")
-@click.option("--max-output-chars", type=int, default=None, help="Max output chars injected.")
-@click.option("--prompt-override", type=str, default=None, help="Optional prompt override.")
+@click.option(
+    "--max-items",
+    type=int,
+    default=None,
+    help="Max audio blocks in all mode.",
+)
+@click.option(
+    "--timeout-seconds",
+    type=int,
+    default=None,
+    help="Timeout per prepass attempt.",
+)
+@click.option(
+    "--max-output-chars",
+    type=int,
+    default=None,
+    help="Max output chars injected.",
+)
+@click.option(
+    "--prompt-override",
+    type=str,
+    default=None,
+    help="Optional prompt override.",
+)
 def set_vision_audio_cmd(
     enabled: bool | None,
     attachments_mode: str | None,
@@ -634,7 +681,11 @@ def set_vision_audio_cmd(
 
 
 @models_group.command("set-vision-video")
-@click.option("--enabled/--disabled", default=None, help="Enable or disable video prepass.")
+@click.option(
+    "--enabled/--disabled",
+    default=None,
+    help="Enable or disable video prepass.",
+)
 @click.option(
     "--mode",
     "attachments_mode",
@@ -642,10 +693,30 @@ def set_vision_audio_cmd(
     default=None,
     help="Video selection mode for prepass.",
 )
-@click.option("--max-items", type=int, default=None, help="Max video blocks in all mode.")
-@click.option("--timeout-seconds", type=int, default=None, help="Timeout per prepass attempt.")
-@click.option("--max-output-chars", type=int, default=None, help="Max output chars injected.")
-@click.option("--prompt-override", type=str, default=None, help="Optional prompt override.")
+@click.option(
+    "--max-items",
+    type=int,
+    default=None,
+    help="Max video blocks in all mode.",
+)
+@click.option(
+    "--timeout-seconds",
+    type=int,
+    default=None,
+    help="Timeout per prepass attempt.",
+)
+@click.option(
+    "--max-output-chars",
+    type=int,
+    default=None,
+    help="Max output chars injected.",
+)
+@click.option(
+    "--prompt-override",
+    type=str,
+    default=None,
+    help="Optional prompt override.",
+)
 def set_vision_video_cmd(
     enabled: bool | None,
     attachments_mode: str | None,

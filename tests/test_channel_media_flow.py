@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from typing import Any, AsyncIterator
@@ -82,22 +83,22 @@ def test_agentscope_msg_to_message_supports_video_block() -> None:
 
 
 def test_qq_attachment_is_mapped_to_audio_video() -> None:
-    content_parts = QQChannel._build_content_parts(  # pylint: disable=protected-access
-        "",
-        [
-            {
-                "url": "https://example.com/sample.mp3",
-                "filename": "sample.mp3",
-                "content_type": "audio/mpeg",
-            },
-            {
-                "url": "https://example.com/sample.mp4",
-                "filename": "sample.mp4",
-                "content_type": "video/mp4",
-            },
-        ],
+    attachments = [
+        {
+            "url": "https://example.com/sample.mp3",
+            "filename": "sample.mp3",
+            "content_type": "audio/mpeg",
+        },
+        {
+            "url": "https://example.com/sample.mp4",
+            "filename": "sample.mp4",
+            "content_type": "video/mp4",
+        },
+    ]
+    content_parts = QQChannel._build_content_parts(
+        text="",
+        attachments=attachments,
     )
     types = [getattr(part, "type", None) for part in content_parts]
     assert ContentType.AUDIO in types
     assert ContentType.VIDEO in types
-

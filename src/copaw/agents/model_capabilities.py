@@ -5,9 +5,14 @@ from __future__ import annotations
 
 import os
 
-from ..providers import ResolvedModelConfig, get_provider, load_providers_json
+from ..providers import (
+    ResolvedModelConfig,
+    get_provider,
+    load_providers_json,
+)
 
-# Conservative defaults: prefer explicit VLM slot unless model is clearly vision-capable.
+# Conservative defaults: prefer explicit VLM slot unless model is
+# clearly vision-capable.
 _VISION_HINTS = (
     "gpt-4o",
     "gpt-4.1",
@@ -73,7 +78,7 @@ def supports_input_capability(
     model_cfg: ResolvedModelConfig | None,
     capability: str,
 ) -> bool:
-    """Best-effort check for whether model can accept given media capability."""
+    """Check if model can accept given media capability."""
     if model_cfg is None or not model_cfg.model:
         return False
 
@@ -110,4 +115,3 @@ def supports_input_capability(
 def supports_vision(model_cfg: ResolvedModelConfig | None) -> bool:
     """Backward compatible helper for image capability checks."""
     return supports_input_capability(model_cfg, "image")
-

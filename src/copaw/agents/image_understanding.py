@@ -22,7 +22,10 @@ from urllib.request import url2pathname
 from agentscope.message import Msg, TextBlock
 
 from .model_fallback import run_with_vlm_fallback
-from .vision_prepass import build_vlm_prepass_prompt, normalize_vlm_prepass_output
+from .vision_prepass import (
+    build_vlm_prepass_prompt,
+    normalize_vlm_prepass_output,
+)
 from ..providers import ResolvedModelConfig
 
 logger = logging.getLogger(__name__)
@@ -93,8 +96,7 @@ def select_media_blocks_for_prepass(
     mode: str = "first",
     max_items: int = 4,
 ) -> list[dict]:
-    if max_items < 1:
-        max_items = 1
+    max_items = max(max_items, 1)
     if mode != "all":
         return media_blocks[:1]
     return media_blocks[:max_items]
@@ -139,7 +141,10 @@ def _read_file_url(url: str) -> bytes | None:
     try:
         return local_path.read_bytes()
     except Exception:
-        logger.debug("Failed to read local file for base64 conversion: %s", url)
+        logger.debug(
+            "Failed to read local file for base64 conversion: %s",
+            url,
+        )
         return None
 
 
@@ -226,10 +231,16 @@ def _resolve_image_blocks_to_base64(blocks: list[dict]) -> list[dict]:
                 resolved.append(block)
             else:
                 b64 = base64.b64encode(data).decode("ascii")
-                resolved.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": final_mime, "data": b64},
-                })
+                resolved.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": final_mime,
+                            "data": b64,
+                        },
+                    },
+                )
             continue
 
         url = ""
@@ -256,10 +267,16 @@ def _resolve_image_blocks_to_base64(blocks: list[dict]) -> list[dict]:
         mime = _guess_mime(url, raw_data)
         data, final_mime = _compress_image(raw_data, mime)
         b64 = base64.b64encode(data).decode("ascii")
-        resolved.append({
-            "type": "image",
-            "source": {"type": "base64", "media_type": final_mime, "data": b64},
-        })
+        resolved.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": final_mime,
+                    "data": b64,
+                },
+            },
+        )
         logger.debug(
             "Converted file:// image to base64 (%d bytes -> %d bytes)",
             len(raw_data),
@@ -279,7 +296,11 @@ def build_prepass_message(
     prompt = (
         prompt_override.strip()
         if prompt_override and prompt_override.strip()
-        else _build_prompt_by_capability(capability, user_text, len(media_blocks))
+        else _build_prompt_by_capability(
+            capability,
+            user_text,
+            len(media_blocks),
+        )
     )
     if capability == "image":
         media_blocks = _resolve_image_blocks_to_base64(media_blocks)
@@ -308,7 +329,8 @@ def _build_prompt_by_capability(
     return (
         "You are a video preprocessor. "
         "Describe the provided video concisely and accurately.\n"
-        "Do NOT answer the user directly — only describe what you see and hear.\n"
+        "Do NOT answer the user directly — "
+        "only describe what you see and hear.\n"
         f"Number of videos: {selected_count}\n"
         f"User's task context: {user_text}"
     )
@@ -317,7 +339,7 @@ def _build_prompt_by_capability(
 def _cap_output_size(analysis: str, max_output_chars: int) -> str:
     if max_output_chars <= 0 or len(analysis) <= max_output_chars:
         return analysis
-    return analysis[:max_output_chars - 3] + "..."
+    return analysis[: max_output_chars - 3] + "..."
 
 
 async def run_media_understanding_prepass(
@@ -393,7 +415,9 @@ async def run_media_understanding_prepass(
 
     model_map: dict[tuple[str, str], Any] = {}
     if active_vlm_cfg is not None and active_vlm_model is not None:
-        model_map[(active_vlm_cfg.provider_id, active_vlm_cfg.model)] = active_vlm_model
+        model_map[
+            (active_vlm_cfg.provider_id, active_vlm_cfg.model)
+        ] = active_vlm_model
     for cfg, model in vlm_fallback_models:
         model_map[(cfg.provider_id, cfg.model)] = model
 
@@ -410,7 +434,11 @@ async def run_media_understanding_prepass(
             raise RuntimeError(
                 f"Runtime VLM model missing for {cfg.provider_id}/{cfg.model}",
             )
-        raw = await run_with_runtime_model(runtime_model, vlm_msg, timeout_seconds)
+        raw = await run_with_runtime_model(
+            runtime_model,
+            vlm_msg,
+            timeout_seconds,
+        )
         if not raw:
             raise RuntimeError("VLM prepass returned empty analysis")
         normalized = normalize_vlm_prepass_output(raw)
@@ -458,9 +486,35 @@ async def run_media_understanding_prepass(
     )
 
 
-async def run_image_understanding_prepass(**kwargs):
+async def run_image_understanding_prepass(
+    *,
+    msg: Msg | list[Msg] | None,
+    enabled: bool,
+    attachments_mode: str,
+    max_items: int,
+    prompt_override: str,
+    timeout_seconds: int,
+    max_output_chars: int,
+    active_vlm_cfg: ResolvedModelConfig | None,
+    vlm_fallback_models: list[tuple[ResolvedModelConfig, Any]],
+    active_vlm_model: Any | None,
+    run_with_runtime_model: Callable[[Any, Msg, int], Awaitable[str]],
+) -> MediaUnderstandingResult:
     """Backward-compatible wrapper for image-only callers."""
-    return await run_media_understanding_prepass(capability="image", **kwargs)
+    return await run_media_understanding_prepass(
+        capability="image",
+        msg=msg,
+        enabled=enabled,
+        attachments_mode=attachments_mode,
+        max_items=max_items,
+        prompt_override=prompt_override,
+        timeout_seconds=timeout_seconds,
+        max_output_chars=max_output_chars,
+        active_vlm_cfg=active_vlm_cfg,
+        vlm_fallback_models=vlm_fallback_models,
+        active_vlm_model=active_vlm_model,
+        run_with_runtime_model=run_with_runtime_model,
+    )
 
 
 select_image_blocks_for_prepass = select_media_blocks_for_prepass

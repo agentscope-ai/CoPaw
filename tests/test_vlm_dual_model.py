@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -54,7 +55,10 @@ def test_save_and_reload_vlm_fields(tmp_path: Path) -> None:
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_key="test-key",
     )
-    data.active_vlm = ModelSlotConfig(provider_id="dashscope", model="qwen-vl-max")
+    data.active_vlm = ModelSlotConfig(
+        provider_id="dashscope",
+        model="qwen-vl-max",
+    )
     data.active_vlm_fallbacks = [
         ModelSlotConfig(provider_id="dashscope", model="qwen-vl-plus"),
     ]
@@ -67,12 +71,19 @@ def test_save_and_reload_vlm_fields(tmp_path: Path) -> None:
     assert reloaded.active_vlm_fallbacks[0].model == "qwen-vl-plus"
 
 
-def test_update_vision_image_settings_persists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_vision_image_settings_persists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     providers_path = tmp_path / "providers.json"
 
     import copaw.providers.store as store
 
-    monkeypatch.setattr(store, "get_providers_json_path", lambda: providers_path)
+    monkeypatch.setattr(
+        store,
+        "get_providers_json_path",
+        lambda: providers_path,
+    )
     updated = update_vision_image_settings(
         enabled=False,
         attachments_mode="all",
@@ -99,7 +110,11 @@ def test_update_vision_audio_video_settings_persist(
 
     import copaw.providers.store as store
 
-    monkeypatch.setattr(store, "get_providers_json_path", lambda: providers_path)
+    monkeypatch.setattr(
+        store,
+        "get_providers_json_path",
+        lambda: providers_path,
+    )
     updated = update_vision_audio_settings(
         enabled=True,
         attachments_mode="all",
@@ -143,11 +158,25 @@ async def test_run_with_vlm_fallback_uses_next_candidate() -> None:
 def test_supports_vision_heuristics() -> None:
     assert supports_vision(ResolvedModelConfig(model="qwen-vl-max")) is True
     assert supports_vision(ResolvedModelConfig(model="deepseek-v3")) is False
-    assert supports_input_capability(ResolvedModelConfig(model="whisper-large"), "audio") is True
-    assert supports_input_capability(ResolvedModelConfig(model="gemini-2.5-pro"), "video") is True
+    assert (
+        supports_input_capability(
+            ResolvedModelConfig(model="whisper-large"),
+            "audio",
+        )
+        is True
+    )
+    assert (
+        supports_input_capability(
+            ResolvedModelConfig(model="gemini-2.5-pro"),
+            "video",
+        )
+        is True
+    )
 
 
-def test_supports_vision_from_model_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_supports_vision_from_model_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Provider:
         def __init__(self):
             self.models = [
@@ -184,4 +213,3 @@ def test_supports_vision_from_model_metadata(monkeypatch: pytest.MonkeyPatch) ->
         )
         is False
     )
-

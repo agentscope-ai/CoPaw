@@ -56,7 +56,7 @@ class ProviderSettings(BaseModel):
 
 
 class CustomProviderData(BaseModel):
-    """Persisted definition + runtime config of a user-created custom provider.
+    """Persisted definition + runtime config of a custom provider.
 
     All configuration lives here; custom providers do NOT have a
     corresponding entry in the ``providers`` dict.
@@ -83,7 +83,9 @@ class ModelSlotConfig(BaseModel):
 class VisionImageSettings(BaseModel):
     enabled: bool = Field(
         default=True,
-        description="Whether image prepass is enabled when routing conditions match.",
+        description=(
+            "Whether image prepass is enabled when routing conditions match."
+        ),
     )
     attachments_mode: str = Field(
         default="first",
@@ -93,7 +95,9 @@ class VisionImageSettings(BaseModel):
         default=4,
         ge=1,
         le=16,
-        description="Maximum image blocks passed to VLM prepass in 'all' mode.",
+        description=(
+            "Maximum image blocks passed to VLM prepass in 'all' mode."
+        ),
     )
     prompt_override: str = Field(
         default="",
@@ -109,14 +113,18 @@ class VisionImageSettings(BaseModel):
         default=500,
         ge=100,
         le=20000,
-        description="Maximum normalized prepass output size kept for LLM context.",
+        description=(
+            "Maximum normalized prepass output size kept for LLM context."
+        ),
     )
 
 
 class VisionAudioSettings(BaseModel):
     enabled: bool = Field(
         default=False,
-        description="Whether audio prepass is enabled when routing conditions match.",
+        description=(
+            "Whether audio prepass is enabled when routing conditions match."
+        ),
     )
     attachments_mode: str = Field(
         default="first",
@@ -142,14 +150,18 @@ class VisionAudioSettings(BaseModel):
         default=6000,
         ge=200,
         le=30000,
-        description="Maximum normalized audio prepass output kept for LLM context.",
+        description=(
+            "Maximum normalized audio prepass output kept for LLM context."
+        ),
     )
 
 
 class VisionVideoSettings(BaseModel):
     enabled: bool = Field(
         default=False,
-        description="Whether video prepass is enabled when routing conditions match.",
+        description=(
+            "Whether video prepass is enabled when routing conditions match."
+        ),
     )
     attachments_mode: str = Field(
         default="first",
@@ -175,7 +187,9 @@ class VisionVideoSettings(BaseModel):
         default=6000,
         ge=200,
         le=30000,
-        description="Maximum normalized video prepass output kept for LLM context.",
+        description=(
+            "Maximum normalized video prepass output kept for LLM context."
+        ),
     )
 
 

@@ -17,7 +17,19 @@ from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
 from agentscope.model import ChatModelBase, OpenAIChatModel
 
+from ..local_models import create_local_chat_model
+from ..providers import (
+    get_active_llm_config,
+    get_chat_model_class,
+    get_provider_chat_model,
+    load_providers_json,
+)
 from .utils.tool_message_utils import _sanitize_tool_messages
+
+if TYPE_CHECKING:
+    from ..providers import ResolvedModelConfig
+
+logger = logging.getLogger(__name__)
 
 
 # Allowed image extensions for file:// URLs (AgentScope formatter check)
@@ -25,11 +37,17 @@ _SUPPORTED_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
 def _normalize_image_blocks(msgs) -> None:
-    """Ensure every image block has valid content so the API never receives image_url.url=None.
+    """Normalize image blocks in messages.
 
-    - Replaces image blocks with missing/empty url, invalid source, or missing base64 data with a text placeholder.
-    - Converts file:// URLs without a supported extension to base64 so the formatter accepts them.
-    - Converts file:/// URLs to base64 since AgentScope's formatter doesn't handle file:// scheme properly.
+    Ensure every image block has valid content so the API never receives
+    image_url.url=None.
+
+    - Replaces image blocks with missing/empty url, invalid source,
+      or missing base64 data with a text placeholder.
+    - Converts file:// URLs without a supported extension to base64
+      so the formatter accepts them.
+    - Converts file:/// URLs to base64 since AgentScope's formatter
+      doesn't handle file:// scheme properly.
     Message content is mutated in place.
     """
     for msg in msgs or []:
@@ -40,67 +58,85 @@ def _normalize_image_blocks(msgs) -> None:
                 continue
             source = block.get("source")
             if not isinstance(source, dict):
-                msg.content[i] = {"type": "text", "text": "[Image: invalid source]"}
-                logger.debug("Replaced image block with non-dict source by placeholder")
+                msg.content[i] = {
+                    "type": "text",
+                    "text": "[Image: invalid source]",
+                }
+                logger.debug(
+                    "Replaced image block with non-dict source by placeholder",
+                )
                 continue
             stype = source.get("type")
             if stype == "base64":
                 data = source.get("data")
                 if not data or not isinstance(data, str):
-                    msg.content[i] = {"type": "text", "text": "[Image: base64 data missing]"}
-                    logger.debug("Replaced image block with missing base64 data by placeholder")
+                    msg.content[i] = {
+                        "type": "text",
+                        "text": "[Image: base64 data missing]",
+                    }
+                    logger.debug(
+                        "Replaced image block with missing base64 data "
+                        "by placeholder",
+                    )
                 continue
             if stype == "url":
-                url = (source.get("url") or "").strip() if isinstance(source.get("url"), str) else ""
+                url = (
+                    (source.get("url") or "").strip()
+                    if isinstance(source.get("url"), str)
+                    else ""
+                )
                 if not url:
-                    msg.content[i] = {"type": "text", "text": "[Image: URL missing]"}
-                    logger.debug("Replaced image block with missing url by text placeholder")
+                    msg.content[i] = {
+                        "type": "text",
+                        "text": "[Image: empty URL]",
+                    }
+                    logger.debug(
+                        "Replaced image block with empty URL by placeholder",
+                    )
                     continue
-                # If file:// or file:/// URL, convert to base64 since AgentScope's formatter
-                # doesn't handle file:// scheme properly (it expects local paths like C:\... not file://...)
-                if url.startswith("file://") or url.startswith("file:/"):
-                    # Try to read the file and convert to base64
+                if url.lower().startswith("file://"):
+                    if any(
+                        url.lower().endswith(ext)
+                        for ext in _SUPPORTED_IMAGE_EXTENSIONS
+                    ):
+                        continue
+                    if url.lower().startswith("file:///"):
+                        msg.content[i] = {
+                            "type": "text",
+                            "text": "[Image: file:/// URL unsupported]",
+                        }
+                        logger.debug(
+                            "Replaced file:/// URL by placeholder",
+                        )
+                        continue
                     try:
-                        from urllib.parse import urlparse
-                        from urllib.request import url2pathname
-                        parsed = urlparse(url)
-                        local_path = url2pathname(parsed.path)
-                        if os.path.exists(local_path) and os.path.isfile(local_path):
-                            with open(local_path, "rb") as f:
-                                raw = f.read()
-                            b64 = base64.b64encode(raw).decode("ascii")
-                            # Determine mime type from extension
-                            ext = os.path.splitext(local_path)[1].lower()
-                            if ext == ".jpg":
-                                ext = ".jpeg"
-                            mime = f"image/{ext.lstrip('.')}" if ext else "image/png"
-                            msg.content[i] = {
-                                "type": "image",
-                                "source": {"type": "base64", "media_type": mime, "data": b64},
-                            }
-                            logger.debug("Converted file:// URL to base64 for formatter: %s", url)
-                        else:
-                            msg.content[i] = {"type": "text", "text": "[Image: file not found]"}
-                            logger.debug("Replaced image block (file not found) by text placeholder")
-                    except Exception as e:
-                        msg.content[i] = {"type": "text", "text": f"[Image: conversion failed - {e}]"}
-                        logger.debug("Failed to convert file:// URL to base64: %s", e)
+                        path = url[7:]
+                        with open(path, "rb") as f:
+                            data = base64.b64encode(f.read()).decode()
+                        msg.content[i]["source"] = {
+                            "type": "base64",
+                            "data": data,
+                            "media_type": "image/png",
+                        }
+                    except Exception:
+                        msg.content[i] = {
+                            "type": "text",
+                            "text": "[Image: file read failed]",
+                        }
+                        logger.debug(
+                            "Failed to read image file, "
+                            "replaced by placeholder",
+                        )
                     continue
-            # Unknown source type
-            msg.content[i] = {"type": "text", "text": "[Image: unsupported source]"}
-            logger.debug("Replaced image block with unsupported source type by placeholder")
-from ..local_models import create_local_chat_model
-from ..providers import (
-    get_active_llm_config,
-    get_chat_model_class,
-    get_provider_chat_model,
-    load_providers_json,
-)
-
-if TYPE_CHECKING:
-    from ..providers import ResolvedModelConfig
-
-logger = logging.getLogger(__name__)
+                continue
+            msg.content[i] = {
+                "type": "text",
+                "text": "[Image: unsupported source]",
+            }
+            logger.debug(
+                "Replaced image block with unsupported source type "
+                "by placeholder",
+            )
 
 
 # Mapping from chat model class to formatter class
@@ -145,7 +181,7 @@ def _create_file_block_support_formatter(
         """Formatter with file block support for tool results."""
 
         async def _format(self, msgs):
-            """Override to sanitize tool messages and normalize image blocks before formatting.
+            """Override to sanitize tool messages and normalize image blocks.
 
             This prevents OpenAI API errors from improperly paired
             tool messages and from image_url.url being None.
@@ -285,11 +321,7 @@ def create_formatter_for_config(
 def create_text_and_vlm_models(
     llm_cfg: Optional["ResolvedModelConfig"],
     vlm_cfg: Optional["ResolvedModelConfig"],
-) -> tuple[
-    ChatModelBase,
-    Optional[ChatModelBase],
-    FormatterBase,
-]:
+) -> tuple[ChatModelBase, Optional[ChatModelBase], FormatterBase]:
     """Create text model + optional VLM model with shared formatter."""
     text_model, text_chat_class = create_model_from_config(llm_cfg)
     formatter = _create_formatter_instance(text_chat_class)
@@ -331,7 +363,9 @@ def _create_model_instance(
     return model, chat_model_class
 
 
-def _get_chat_model_class_from_provider(provider_id: str = "") -> Type[ChatModelBase]:
+def _get_chat_model_class_from_provider(
+    provider_id: str = "",
+) -> Type[ChatModelBase]:
     """Get the chat model class from provider configuration.
 
     Returns:
@@ -340,7 +374,9 @@ def _get_chat_model_class_from_provider(provider_id: str = "") -> Type[ChatModel
     chat_model_class = OpenAIChatModel  # default
     try:
         providers_data = load_providers_json()
-        effective_provider_id = provider_id or providers_data.active_llm.provider_id
+        effective_provider_id = (
+            provider_id or providers_data.active_llm.provider_id
+        )
         if effective_provider_id:
             chat_model_name = get_provider_chat_model(
                 effective_provider_id,

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from copaw.agents.vision_prepass import (
     build_vlm_prepass_prompt,
     format_vlm_prepass_context,
