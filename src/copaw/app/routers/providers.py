@@ -221,11 +221,14 @@ async def get_active_models() -> ActiveModelsInfo:
 async def set_active_model(
     body: ModelSlotRequest = Body(...),
 ) -> ActiveModelsInfo:
-    provider = get_provider(body.provider_id)
+    provider_id = body.provider_id.strip()
+    model_id = body.model.strip()
+
+    provider = get_provider(provider_id)
     if provider is None:
         raise HTTPException(
             404,
-            detail=f"Provider '{body.provider_id}' not found",
+            detail=f"Provider '{provider_id}' not found",
         )
 
     data = load_providers_json()
@@ -242,8 +245,21 @@ async def set_active_model(
             )
         raise HTTPException(status_code=400, detail=msg)
 
-    if not body.model:
+    if not model_id:
         raise HTTPException(status_code=400, detail="Model is required.")
 
-    data = set_active_llm(body.provider_id, body.model)
+    settings = data.providers.get(provider_id)
+    extra_models = settings.extra_models if settings else []
+    supported_models = {m.id for m in provider.models}
+    supported_models.update(m.id for m in extra_models)
+    if supported_models and model_id not in supported_models:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Model '{model_id}' is not configured for provider "
+                f"'{provider.name}'."
+            ),
+        )
+
+    data = set_active_llm(provider_id, model_id)
     return ActiveModelsInfo(active_llm=data.active_llm)
