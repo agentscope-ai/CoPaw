@@ -220,6 +220,7 @@
     "baseURL": "Base URL",
     "apiKey": "API Key",
     "currentKey": "Current: {{key}}",
+    "apiKeyAlreadyConfigured": "API key already configured. Leave blank to keep it unchanged.",
     "startsWith": "Starts with \"{{prefix}}\"",
     "optionalSelfHosted": "Optional for self-hosted services",
     "leaveBlankKeep": "Leave blank to keep current key",

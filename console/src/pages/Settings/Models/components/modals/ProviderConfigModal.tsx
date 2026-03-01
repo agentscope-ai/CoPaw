@@ -35,7 +35,7 @@ export function ProviderConfigModal({
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
-      return t("models.currentKey", { key: provider.current_api_key });
+      return t("models.apiKeyAlreadyConfigured");
     }
     if (provider.api_key_prefix) {
       return t("models.startsWith", { prefix: provider.api_key_prefix });

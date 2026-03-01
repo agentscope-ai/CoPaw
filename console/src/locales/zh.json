@@ -220,6 +220,7 @@
     "baseURL": "基础 URL",
     "apiKey": "API 密钥",
     "currentKey": "当前密钥：{{key}}",
+    "apiKeyAlreadyConfigured": "API Key 已配置，留空将保持不变。",
     "startsWith": "以 \"{{prefix}}\" 开头",
     "optionalSelfHosted": "自托管服务可选",
     "leaveBlankKeep": "留空以保持当前密钥",
