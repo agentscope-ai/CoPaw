@@ -50,7 +50,6 @@ Step-by-step:
    ![save](https://img.alicdn.com/imgextra/i1/O1CN01vrzbIA1Qey2x8Jbua_!!6000000002002-2-tps-2809-1585.png)
 
 6. In the app details, copy:
-
    - **Client ID** (AppKey)
    - **Client Secret** (AppSecret)
 
