@@ -138,6 +138,9 @@ export function ChannelDrawer({
             <Form.Item name="http_proxy_auth" label="HTTP Proxy Auth">
               <Input placeholder="user:password" />
             </Form.Item>
+            <Form.Item name="show_typing" label="Show Typing" valuePropName="checked">
+              <Switch />
+            </Form.Item>
           </>
         );
       default:

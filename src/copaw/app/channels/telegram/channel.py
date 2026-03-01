@@ -19,7 +19,12 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 )
 
 from ....config.config import TelegramConfig as TelegramChannelConfig
-from ..base import BaseChannel, OnReplySent, ProcessHandler, OutgoingContentPart
+from ..base import (
+    BaseChannel,
+    OnReplySent,
+    ProcessHandler,
+    OutgoingContentPart,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +54,7 @@ async def _download_telegram_file(
     """
     try:
         from telegram.error import TelegramError
+
         tg_file = await bot.get_file(file_id)
     except TelegramError:
         logger.exception("telegram: get_file failed for file_id=%s", file_id)
@@ -84,6 +90,7 @@ async def _resolve_telegram_file_url(
     """
     try:
         from telegram.error import TelegramError
+
         tg_file = await bot.get_file(file_id)
     except TelegramError:
         logger.exception("telegram: get_file failed for file_id=%s", file_id)
@@ -105,14 +112,23 @@ async def _build_content_parts_from_message(
     """Build runtime content_parts from Telegram message (text, photo, doc, etc.).
     Returns (content_parts, has_bot_command).
     """
-    message = getattr(update, "message", None) or getattr(update, "edited_message")
+    message = getattr(update, "message", None) or getattr(
+        update,
+        "edited_message",
+    )
     if not message:
         return [TextContent(type=ContentType.TEXT, text="")], False
 
     content_parts: list[Any] = []
-    text = (getattr(message, "text", None) or getattr(message, "caption") or "").strip()
+    text = (
+        getattr(message, "text", None) or getattr(message, "caption") or ""
+    ).strip()
 
-    entities = getattr(message, "entities", None) or getattr(message, "caption_entities", None) or []
+    entities = (
+        getattr(message, "entities", None)
+        or getattr(message, "caption_entities", None)
+        or []
+    )
     has_bot_command = False
     if entities:
         for entity in entities:
@@ -166,7 +182,10 @@ async def _build_content_parts_from_message(
 
 def _message_meta(update: Any) -> dict:
     """Extract chat_id, user_id, etc. from Telegram update."""
-    message = getattr(update, "message", None) or getattr(update, "edited_message")
+    message = getattr(update, "message", None) or getattr(
+        update,
+        "edited_message",
+    )
     if not message:
         return {}
     chat = getattr(message, "chat", None)
@@ -201,6 +220,7 @@ class TelegramChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         media_dir: str = "",
+        show_typing: bool = True,
     ):
         super().__init__(
             process,
@@ -212,31 +232,41 @@ class TelegramChannel(BaseChannel):
         self._http_proxy = http_proxy or ""
         self._http_proxy_auth = http_proxy_auth or ""
         self.bot_prefix = bot_prefix
-        self._media_dir = Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
+        self._media_dir = (
+            Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
+        )
+        self._show_typing = show_typing
         self._task: Optional[asyncio.Task] = None
         self._application = None
         if self.enabled and self._bot_token:
             try:
                 self._application = self._build_application()
                 logger.info(
-                    "telegram: channel initialized (enabled=True, token set, polling will start on start())"
+                    "telegram: channel initialized (enabled=True, token set, polling will start on start())",
                 )
             except Exception:
                 logger.exception(
-                    "telegram: failed to build application (check bot_token and proxy)"
+                    "telegram: failed to build application (check bot_token and proxy)",
                 )
                 self._application = None
         else:
             if self.enabled and not self._bot_token:
                 logger.info(
-                    "telegram: channel disabled for this run (bot_token empty; set in config or TELEGRAM_BOT_TOKEN)"
+                    "telegram: channel disabled for this run (bot_token empty; set in config or TELEGRAM_BOT_TOKEN)",
                 )
             elif not self.enabled:
-                logger.debug("telegram: channel disabled (enabled=false in config)")
+                logger.debug(
+                    "telegram: channel disabled (enabled=false in config)",
+                )
 
     def _build_application(self):
         from telegram import Update
-        from telegram.ext import Application, ContextTypes, MessageHandler, filters
+        from telegram.ext import (
+            Application,
+            ContextTypes,
+            MessageHandler,
+            filters,
+        )
 
         def proxy_url() -> Optional[str]:
             if not self._http_proxy:
@@ -248,20 +278,27 @@ class TelegramChannel(BaseChannel):
                 return f"http://{self._http_proxy_auth}@{self._http_proxy}"
             return self._http_proxy
 
-        builder = (
-            Application.builder()
-            .token(self._bot_token)
-        )
+        builder = Application.builder().token(self._bot_token)
         proxy = proxy_url()
         if proxy:
             builder = builder.proxy(proxy).get_updates_proxy(proxy)
 
         app = builder.build()
 
-        async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-            if not update.message and not getattr(update, "edited_message", None):
+        async def handle_message(
+            update: Update,
+            context: ContextTypes.DEFAULT_TYPE,
+        ) -> None:
+            if not update.message and not getattr(
+                update,
+                "edited_message",
+                None,
+            ):
                 return
-            content_parts, has_bot_command = await _build_content_parts_from_message(
+            (
+                content_parts,
+                has_bot_command,
+            ) = await _build_content_parts_from_message(
                 update,
                 bot=context.bot,
                 media_dir=self._media_dir,
@@ -270,7 +307,11 @@ class TelegramChannel(BaseChannel):
             if has_bot_command:
                 meta["has_bot_command"] = True
             chat_id = meta.get("chat_id", "")
-            user = getattr(update.message or getattr(update, "edited_message"), "from_user", None)
+            user = getattr(
+                update.message or getattr(update, "edited_message"),
+                "from_user",
+                None,
+            )
             sender_id = str(getattr(user, "id", "")) if user else chat_id
             native = {
                 "channel_id": self.channel,
@@ -293,14 +334,16 @@ class TelegramChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
     ) -> "TelegramChannel":
         import os
+
         return cls(
             process=process,
             enabled=os.getenv("TELEGRAM_CHANNEL_ENABLED", "0") == "1",
             bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             http_proxy=os.getenv("TELEGRAM_HTTP_PROXY", ""),
             http_proxy_auth=os.getenv("TELEGRAM_HTTP_PROXY_AUTH", ""),
-            bot_prefix=os.getenv("TELEGRAM_BOT_PREFIX", "[Bot] "),
+            bot_prefix=os.getenv("TELEGRAM_BOT_PREFIX", ""),
             on_reply_sent=on_reply_sent,
+            show_typing=os.getenv("TELEGRAM_SHOW_TYPING", "1") == "1",
         )
 
     @classmethod
@@ -311,16 +354,26 @@ class TelegramChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
     ) -> "TelegramChannel":
+        channel_show_typing = None
         if isinstance(config, dict):
+            channel_show_typing = config.get("show_typing")
+        else:
+            channel_show_typing = getattr(config, "show_typing", None)
+
+        if isinstance(config, dict):
+            bot_prefix_raw = config.get("bot_prefix")
             return cls(
                 process=process,
                 enabled=bool(config.get("enabled", False)),
                 bot_token=(config.get("bot_token") or "").strip(),
                 http_proxy=(config.get("http_proxy") or "").strip(),
                 http_proxy_auth=(config.get("http_proxy_auth") or "").strip(),
-                bot_prefix=(config.get("bot_prefix") or "[Bot] ").strip(),
+                bot_prefix=bot_prefix_raw.strip() if bot_prefix_raw else "",
                 on_reply_sent=on_reply_sent,
                 show_tool_details=show_tool_details,
+                show_typing=channel_show_typing
+                if channel_show_typing is not None
+                else True,
             )
         return cls(
             process=process,
@@ -328,9 +381,12 @@ class TelegramChannel(BaseChannel):
             bot_token=config.bot_token or "",
             http_proxy=config.http_proxy or "",
             http_proxy_auth=config.http_proxy_auth or "",
-            bot_prefix=config.bot_prefix or "[Bot] ",
+            bot_prefix=config.bot_prefix or "",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            show_typing=channel_show_typing
+            if channel_show_typing is not None
+            else True,
         )
 
     def _chunk_text(self, text: str) -> list[str]:
@@ -355,6 +411,24 @@ class TelegramChannel(BaseChannel):
             rest = rest[len(chunk) :].lstrip("\n ")
         return chunks
 
+    async def _send_chat_action(
+        self,
+        chat_id: str,
+        action: str = "typing",
+    ) -> None:
+        """Send chat action (typing, uploading_photo, etc.) to Telegram."""
+        if not self.enabled or not self._application:
+            return
+        bot = self._application.bot
+        if not bot:
+            return
+        try:
+            await bot.send_chat_action(chat_id=chat_id, action=action)
+        except Exception:
+            logger.debug(
+                "telegram send_chat_action failed for chat_id=%s", chat_id
+            )
+
     async def send(
         self,
         to_handle: str,
@@ -372,6 +446,8 @@ class TelegramChannel(BaseChannel):
         bot = self._application.bot
         if not bot:
             return
+        if self._show_typing:
+            asyncio.create_task(self._send_chat_action(chat_id, "typing"))
         chunks = self._chunk_text(text)
         for chunk in chunks:
             try:
@@ -392,7 +468,9 @@ class TelegramChannel(BaseChannel):
         meta = meta or {}
         chat_id = meta.get("chat_id") or to_handle
         if not chat_id:
-            logger.warning("telegram send_media: no chat_id in to_handle or meta")
+            logger.warning(
+                "telegram send_media: no chat_id in to_handle or meta",
+            )
             return
         bot = self._application.bot
         if not bot:
@@ -404,14 +482,20 @@ class TelegramChannel(BaseChannel):
                 image_url = getattr(part, "image_url", None)
                 if image_url and image_url.startswith("file://"):
                     local_path = image_url.replace("file://", "")
-                    await bot.send_photo(chat_id=chat_id, photo=open(local_path, "rb"))
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=open(local_path, "rb"),
+                    )
                 elif image_url:
                     await bot.send_photo(chat_id=chat_id, photo=image_url)
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
                 if video_url and video_url.startswith("file://"):
                     local_path = video_url.replace("file://", "")
-                    await bot.send_video(chat_id=chat_id, video=open(local_path, "rb"))
+                    await bot.send_video(
+                        chat_id=chat_id,
+                        video=open(local_path, "rb"),
+                    )
                 elif video_url:
                     await bot.send_video(chat_id=chat_id, video=video_url)
             elif part_type == ContentType.AUDIO:
@@ -422,7 +506,10 @@ class TelegramChannel(BaseChannel):
                 file_url = getattr(part, "file_url", None)
                 if file_url and file_url.startswith("file://"):
                     local_path = file_url.replace("file://", "")
-                    await bot.send_document(chat_id=chat_id, document=open(local_path, "rb"))
+                    await bot.send_document(
+                        chat_id=chat_id,
+                        document=open(local_path, "rb"),
+                    )
                 elif file_url:
                     await bot.send_document(chat_id=chat_id, document=file_url)
         except Exception:
@@ -447,17 +534,37 @@ class TelegramChannel(BaseChannel):
             await self._application.initialize()
 
             commands = [
-                BotCommand(command="start", description="Start a new conversation"),
-                BotCommand(command="new", description="Start a new conversation (clear memory)"),
-                BotCommand(command="compact", description="Compact conversation memory"),
-                BotCommand(command="clear", description="Clear conversation history"),
-                BotCommand(command="history", description="Show conversation history"),
+                BotCommand(
+                    command="start",
+                    description="Start a new conversation",
+                ),
+                BotCommand(
+                    command="new",
+                    description="Start a new conversation (clear memory)",
+                ),
+                BotCommand(
+                    command="compact",
+                    description="Compact conversation memory",
+                ),
+                BotCommand(
+                    command="clear",
+                    description="Clear conversation history",
+                ),
+                BotCommand(
+                    command="history",
+                    description="Show conversation history",
+                ),
             ]
             try:
                 await self._application.bot.set_my_commands(commands)
-                logger.info("telegram: registered %d bot commands", len(commands))
+                logger.info(
+                    "telegram: registered %d bot commands",
+                    len(commands),
+                )
             except Exception:
-                logger.warning("telegram: failed to register commands (non-fatal)")
+                logger.warning(
+                    "telegram: failed to register commands (non-fatal)",
+                )
 
             await self._application.updater.start_polling(
                 allowed_updates=["message", "edited_message"],
@@ -472,7 +579,7 @@ class TelegramChannel(BaseChannel):
         except Exception:
             logger.exception(
                 "telegram: polling error (check token, network, proxy; "
-                "in China you may need TELEGRAM_HTTP_PROXY)"
+                "in China you may need TELEGRAM_HTTP_PROXY)",
             )
             raise
 
@@ -484,7 +591,10 @@ class TelegramChannel(BaseChannel):
                 "built" if self._application else "not built",
             )
             return
-        self._task = asyncio.create_task(self._run_polling(), name="telegram_polling")
+        self._task = asyncio.create_task(
+            self._run_polling(),
+            name="telegram_polling",
+        )
         logger.info("telegram: channel started (polling task created)")
 
     async def stop(self) -> None:

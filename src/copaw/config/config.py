@@ -58,6 +58,7 @@ class TelegramConfig(BaseChannelConfig):
     bot_token: str = ""
     http_proxy: str = ""
     http_proxy_auth: str = ""
+    show_typing: Optional[bool] = None
 
 
 class ConsoleConfig(BaseChannelConfig):

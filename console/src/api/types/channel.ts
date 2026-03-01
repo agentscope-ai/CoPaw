@@ -36,6 +36,7 @@ export interface TelegramConfig extends BaseChannelConfig {
   bot_token: string;
   http_proxy: string;
   http_proxy_auth: string;
+  show_typing?: boolean;
 }
 
 export type ConsoleConfig = BaseChannelConfig;
