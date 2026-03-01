@@ -49,6 +49,7 @@ curl -fsSL ... | bash -s -- --from-source
 # 安装本地模型支持（详见本地模型文档）
 bash install.sh --extras llamacpp    # llama.cpp（跨平台）
 bash install.sh --extras mlx         # MLX（Apple Silicon）
+bash install.sh --extras ollama      # Ollama（跨平台，需 Ollama 服务运行）
 ```
 
 **Windows（PowerShell）：**
@@ -63,6 +64,7 @@ bash install.sh --extras mlx         # MLX（Apple Silicon）
 # 安装本地模型支持（详见本地模型文档）
 .\install.ps1 -Extras llamacpp      # llama.cpp（跨平台）
 .\install.ps1 -Extras mlx           # MLX
+.\install.ps1 -Extras ollama        # Ollama
 ```
 
 升级只需重新运行安装命令。卸载请运行 `copaw uninstall`。

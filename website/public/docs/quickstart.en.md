@@ -49,6 +49,7 @@ curl -fsSL ... | bash -s -- --from-source
 # With local model support (see Local Models docs)
 bash install.sh --extras llamacpp    # llama.cpp (cross-platform)
 bash install.sh --extras mlx         # MLX (Apple Silicon)
+bash install.sh --extras ollama      # Ollama (cross-platform, requires Ollama service)
 ```
 
 **Windows (PowerShell):**
@@ -63,6 +64,7 @@ bash install.sh --extras mlx         # MLX (Apple Silicon)
 # With local model support (see Local Models docs)
 .\install.ps1 -Extras llamacpp      # llama.cpp (cross-platform)
 .\install.ps1 -Extras mlx           # MLX
+.\install.ps1 -Extras ollama        # Ollama
 ```
 
 To upgrade, simply re-run the install command. To uninstall, run `copaw uninstall`.
