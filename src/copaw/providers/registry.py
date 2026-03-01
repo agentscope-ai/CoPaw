@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from typing import TYPE_CHECKING, List, Optional, Type
 
 from agentscope.model import ChatModelBase, OpenAIChatModel
@@ -14,6 +15,8 @@ from .models import CustomProviderData, ModelInfo, ProviderDefinition
 
 if TYPE_CHECKING:
     from .models import ProvidersData
+
+logger = logging.getLogger(__name__)
 
 MODELSCOPE_MODELS: List[ModelInfo] = [
     ModelInfo(
@@ -140,15 +143,15 @@ def get_provider_chat_model(
 
     cpd = providers_data.custom_providers.get(provider_id)
     if cpd is not None:
-        return cpd.chat_model
+        return normalize_chat_model_name(cpd.chat_model, provider_id)
 
     settings = providers_data.providers.get(provider_id)
     if settings and settings.chat_model:
-        return settings.chat_model
+        return normalize_chat_model_name(settings.chat_model, provider_id)
 
     provider_def = get_provider(provider_id)
     if provider_def:
-        return provider_def.chat_model
+        return normalize_chat_model_name(provider_def.chat_model, provider_id)
 
     return "OpenAIChatModel"
 
@@ -268,6 +271,31 @@ _CHAT_MODEL_MAP: dict[str, Type[ChatModelBase]] = {
 }
 
 
+def normalize_chat_model_name(
+    chat_model_name: str | None,
+    provider_id: str | None = None,
+) -> str:
+    """Normalize chat model names and warn on unknown values."""
+    if chat_model_name in _CHAT_MODEL_MAP:
+        return chat_model_name
+
+    if chat_model_name:
+        if provider_id:
+            logger.warning(
+                "Unknown chat_model '%s' for provider '%s'; "
+                "fallback to OpenAIChatModel.",
+                chat_model_name,
+                provider_id,
+            )
+        else:
+            logger.warning(
+                "Unknown chat_model '%s'; fallback to OpenAIChatModel.",
+                chat_model_name,
+            )
+
+    return "OpenAIChatModel"
+
+
 def get_chat_model_class(chat_model_name: str) -> Type[ChatModelBase]:
     """Get chat model class by name.
 
@@ -277,4 +305,5 @@ def get_chat_model_class(chat_model_name: str) -> Type[ChatModelBase]:
     Returns:
         Chat model class, defaults to OpenAIChatModel if not found.
     """
-    return _CHAT_MODEL_MAP.get(chat_model_name, OpenAIChatModel)
+    normalized = normalize_chat_model_name(chat_model_name)
+    return _CHAT_MODEL_MAP[normalized]

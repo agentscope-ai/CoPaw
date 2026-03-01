@@ -18,6 +18,7 @@ from .models import (
 from .registry import (
     PROVIDERS,
     is_builtin,
+    normalize_chat_model_name,
     register_custom_provider,
     sync_custom_providers,
     sync_local_models,
@@ -244,7 +245,7 @@ def update_provider_settings(
         if base_url is not None:
             cpd.base_url = base_url
         if chat_model is not None:
-            cpd.chat_model = chat_model
+            cpd.chat_model = normalize_chat_model_name(chat_model, provider_id)
         if not cpd.base_url:
             cpd.base_url = cpd.default_base_url
         register_custom_provider(cpd)
@@ -255,7 +256,10 @@ def update_provider_settings(
         if base_url is not None:
             settings.base_url = base_url
         if chat_model is not None:
-            settings.chat_model = chat_model
+            settings.chat_model = normalize_chat_model_name(
+                chat_model,
+                provider_id,
+            )
         if not settings.base_url:
             defn = PROVIDERS.get(provider_id)
             if defn:
@@ -342,6 +346,8 @@ def create_custom_provider(
     data = load_providers_json()
     if provider_id in data.custom_providers:
         raise ValueError(f"Custom provider '{provider_id}' already exists.")
+
+    chat_model = normalize_chat_model_name(chat_model, provider_id)
 
     cpd = CustomProviderData(
         id=provider_id,
