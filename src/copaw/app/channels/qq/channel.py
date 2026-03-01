@@ -23,6 +23,8 @@ import aiohttp
 from agentscope_runtime.engine.schemas.agent_schemas import (
     RunStatus,
     TextContent,
+    AudioContent,
+    VideoContent,
     ContentType,
 )
 
@@ -230,6 +232,8 @@ class QQChannel(BaseChannel):
 
     channel = "qq"
 
+    _renderer = None
+
     def __init__(
         self,
         process: ProcessHandler,
@@ -258,6 +262,41 @@ class QQChannel(BaseChannel):
         self._token_lock = threading.Lock()
 
         self._http: Optional[aiohttp.ClientSession] = None
+
+    @staticmethod
+    def _build_content_parts(
+        text: str,
+        attachments: List[Dict[str, Any]],
+    ) -> List[Any]:
+        """Build content parts from text and attachments."""
+        from ..media_utils import classify_media_kind, pick_attachment_url
+
+        parts: List[Any] = []
+        if text:
+            parts.append(
+                TextContent(type=ContentType.TEXT, text=text),
+            )
+        for att in attachments:
+            url = pick_attachment_url(att)
+            kind = classify_media_kind(
+                mime_type=att.get("content_type", ""),
+                filename=att.get("filename", ""),
+            )
+            if kind == "audio":
+                parts.append(
+                    AudioContent(
+                        type=ContentType.AUDIO,
+                        audio_url=url,  # type: ignore[arg-type]
+                    ),
+                )
+            elif kind == "video":
+                parts.append(
+                    VideoContent(
+                        type=ContentType.VIDEO,
+                        video_url=url,
+                    ),
+                )
+        return parts
 
     def _get_access_token_sync(self) -> str:
         """Sync get access_token for WebSocket thread. Instance-level cache."""
