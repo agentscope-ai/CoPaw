@@ -179,12 +179,19 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             conversation_id = conversation_id_from_chatbot_message(
                 incoming_message,
             )
+            # Extract senderStaffId and conversationType from raw callback data
+            # These are needed for OpenAPI media sending (image/video via DingTalk OpenAPI)
+            callback_data = callback.data or {}
+            sender_staff_id = callback_data.get("senderStaffId") or callback_data.get("senderStaffID")
+            conversation_type = callback_data.get("conversationType")
             loop = asyncio.get_running_loop()
             reply_future: asyncio.Future[str] = loop.create_future()
             meta: Dict[str, Any] = {
                 "incoming_message": incoming_message,
                 "reply_future": reply_future,
                 "reply_loop": loop,
+                "sender_staff_id": sender_staff_id,
+                "conversation_type": conversation_type,
             }
             if conversation_id:
                 meta["conversation_id"] = conversation_id
@@ -215,6 +222,11 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 logger.debug(
                     "dingtalk recv: no sessionWebhook on incoming_message",
                 )
+
+            if sw:
+                preview = (text[:20] + ("…" if len(text) > 20 else "")).strip() if text else "[消息]"
+                ack_msg = f'✅ 收到\n"{preview}"\n🌀正在处理中……'
+                self.reply_text(ack_msg, incoming_message)
 
             native = {
                 "channel_id": "dingtalk",
