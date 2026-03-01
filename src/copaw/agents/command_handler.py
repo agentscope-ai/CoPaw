@@ -91,7 +91,15 @@ class CommandHandler:
 
     # Supported system commands
     SYSTEM_COMMANDS = frozenset(
-        {"start", "compact", "new", "clear", "history", "compact_str", "await_summary"},
+        {
+            "start",
+            "compact",
+            "new",
+            "clear",
+            "history",
+            "compact_str",
+            "await_summary",
+        },
     )
 
     def __init__(
