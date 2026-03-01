@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any, List, Union
 
@@ -22,6 +23,9 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Check if privacy mode is enabled for shell commands
+HIDE_SHELL_DETAILS = os.environ.get("COPAW_HIDE_SHELL_DETAILS", "false").lower() in ("true", "1", "yes")
 
 # Same union as base.OutgoingContentPart (renderer must not import base).
 _OutgoingPart = Union[
@@ -102,6 +106,13 @@ class MessageRenderer:
                     continue
                 data = getattr(c, "data", None) or {}
                 name = data.get("name") or "tool"
+                
+                # Privacy mode: hide execute_shell_command details
+                if HIDE_SHELL_DETAILS and name == "execute_shell_command":
+                    text = "🔧 **execute_shell_command** running"
+                    out.append(TextContent(text=text))
+                    continue
+                
                 if s.show_tool_details:
                     args = data.get("arguments") or "{}"
                     args_preview = (

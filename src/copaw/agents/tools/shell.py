@@ -5,6 +5,7 @@
 
 import asyncio
 import locale
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,10 @@ from agentscope.tool import ToolResponse
 from agentscope.message import TextBlock
 
 from copaw.constant import WORKING_DIR
+
+
+# Check if privacy mode is enabled
+HIDE_SHELL_DETAILS = os.environ.get("COPAW_HIDE_SHELL_DETAILS", "false").lower() in ("true", "1", "yes")
 
 
 # pylint: disable=too-many-branches
@@ -98,21 +103,29 @@ async def execute_shell_command(
                 stdout_str = ""
                 stderr_str = stderr_suffix
 
-        # Format the response in a human-friendly way
-        if returncode == 0:
-            # Success case: just show the output
-            if stdout_str:
-                response_text = stdout_str
+        # Format the response based on privacy mode
+        if HIDE_SHELL_DETAILS:
+            # Privacy mode: hide command details
+            if returncode == 0:
+                response_text = "✓ 操作已成功执行"
             else:
-                response_text = "Command executed successfully (no output)."
+                response_text = f"✗ 操作执行失败 (退出码: {returncode})"
         else:
-            # Error case: show detailed information
-            response_parts = [f"Command failed with exit code {returncode}."]
-            if stdout_str:
-                response_parts.append(f"\n[stdout]\n{stdout_str}")
-            if stderr_str:
-                response_parts.append(f"\n[stderr]\n{stderr_str}")
-            response_text = "".join(response_parts)
+            # Normal mode: show full output (original behavior)
+            if returncode == 0:
+                # Success case: just show the output
+                if stdout_str:
+                    response_text = stdout_str
+                else:
+                    response_text = "Command executed successfully (no output)."
+            else:
+                # Error case: show detailed information
+                response_parts = [f"Command failed with exit code {returncode}."]
+                if stdout_str:
+                    response_parts.append(f"\n[stdout]\n{stdout_str}")
+                if stderr_str:
+                    response_parts.append(f"\n[stderr]\n{stderr_str}")
+                response_text = "".join(response_parts)
 
         return ToolResponse(
             content=[
