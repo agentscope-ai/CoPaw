@@ -62,6 +62,7 @@ def _normalize_ollama_host(host: Optional[str]) -> Optional[str]:
     if not value:
         return None
 
+    value = value.rstrip("/")
     # Users may configure ollama via OpenAI-compatible /v1 endpoint.
     if value.endswith("/v1"):
         value = value[:-3]
