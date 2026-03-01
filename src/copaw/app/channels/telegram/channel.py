@@ -243,7 +243,7 @@ class TelegramChannel(BaseChannel):
             try:
                 self._application = self._build_application()
                 logger.info(
-                    "telegram: channel initialized (polling will start)"
+                    "telegram: channel initialized (polling will start)",
                 )
             except Exception:
                 logger.exception("telegram: failed to build application")
