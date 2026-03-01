@@ -685,7 +685,8 @@ def ollama_pull_cmd(model_name: str) -> None:
     except ImportError as exc:
         click.echo(
             click.style(
-                "Ollama SDK not installed. Install with: pip install 'copaw[ollama]'",
+                "Ollama SDK not installed. Install with: "
+                "pip install 'copaw[ollama]'",
                 fg="red",
             ),
         )
@@ -710,7 +711,8 @@ def ollama_list_cmd() -> None:
     except ImportError as exc:
         click.echo(
             click.style(
-                "Ollama SDK not installed. Install with: pip install 'copaw[ollama]'",
+                "Ollama SDK not installed. Install with: "
+                "pip install 'copaw[ollama]'",
                 fg="red",
             ),
         )
@@ -756,7 +758,8 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
     except ImportError as exc:
         click.echo(
             click.style(
-                "Ollama SDK not installed. Install with: pip install 'copaw[ollama]'",
+                "Ollama SDK not installed. Install with: "
+                "pip install 'copaw[ollama]'",
                 fg="red",
             ),
         )

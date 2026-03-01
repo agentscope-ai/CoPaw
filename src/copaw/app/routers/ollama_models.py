@@ -77,7 +77,8 @@ async def list_ollama_models() -> List[OllamaModelResponse]:
     except ImportError as exc:
         raise HTTPException(
             status_code=501,
-            detail="Ollama SDK not installed. Install with: pip install 'copaw[ollama]'",
+            detail="Ollama SDK not installed. Install with: "
+            "pip install 'copaw[ollama]'",
         ) from exc
 
     try:
