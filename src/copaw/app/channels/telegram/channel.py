@@ -109,7 +109,8 @@ async def _build_content_parts_from_message(
     bot: Any,
     media_dir: Path,
 ) -> tuple[list, bool]:
-    """Build runtime content_parts from Telegram message (text, photo, doc, etc.).
+    """Build runtime content_parts from Telegram message.
+
     Returns (content_parts, has_bot_command).
     """
     message = getattr(update, "message", None) or getattr(
@@ -242,18 +243,14 @@ class TelegramChannel(BaseChannel):
             try:
                 self._application = self._build_application()
                 logger.info(
-                    "telegram: channel initialized (enabled=True, token set, polling will start on start())",
+                    "telegram: channel initialized (polling will start)"
                 )
             except Exception:
-                logger.exception(
-                    "telegram: failed to build application (check bot_token and proxy)",
-                )
+                logger.exception("telegram: failed to build application")
                 self._application = None
         else:
             if self.enabled and not self._bot_token:
-                logger.info(
-                    "telegram: channel disabled for this run (bot_token empty; set in config or TELEGRAM_BOT_TOKEN)",
-                )
+                logger.info("telegram: channel disabled (bot_token empty)")
             elif not self.enabled:
                 logger.debug(
                     "telegram: channel disabled (enabled=false in config)",
@@ -426,7 +423,8 @@ class TelegramChannel(BaseChannel):
             await bot.send_chat_action(chat_id=chat_id, action=action)
         except Exception:
             logger.debug(
-                "telegram send_chat_action failed for chat_id=%s", chat_id
+                "telegram send_chat_action failed for chat_id=%s",
+                chat_id,
             )
 
     async def send(
@@ -435,10 +433,11 @@ class TelegramChannel(BaseChannel):
         text: str,
         meta: Optional[dict] = None,
     ) -> None:
-        """Send text to chat_id (to_handle or meta['chat_id']). Splits long messages."""
+        """Send text to chat_id (to_handle or meta['chat_id'])."""
         if not self.enabled or not self._application:
             return
-        meta = meta or {}
+        if meta is None:
+            meta = {}
         chat_id = meta.get("chat_id") or to_handle
         if not chat_id:
             logger.warning("telegram send: no chat_id in to_handle or meta")
@@ -482,20 +481,16 @@ class TelegramChannel(BaseChannel):
                 image_url = getattr(part, "image_url", None)
                 if image_url and image_url.startswith("file://"):
                     local_path = image_url.replace("file://", "")
-                    await bot.send_photo(
-                        chat_id=chat_id,
-                        photo=open(local_path, "rb"),
-                    )
+                    with open(local_path, "rb") as f:
+                        await bot.send_photo(chat_id=chat_id, photo=f)
                 elif image_url:
                     await bot.send_photo(chat_id=chat_id, photo=image_url)
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
                 if video_url and video_url.startswith("file://"):
                     local_path = video_url.replace("file://", "")
-                    await bot.send_video(
-                        chat_id=chat_id,
-                        video=open(local_path, "rb"),
-                    )
+                    with open(local_path, "rb") as f:
+                        await bot.send_video(chat_id=chat_id, video=f)
                 elif video_url:
                     await bot.send_video(chat_id=chat_id, video=video_url)
             elif part_type == ContentType.AUDIO:
@@ -506,10 +501,8 @@ class TelegramChannel(BaseChannel):
                 file_url = getattr(part, "file_url", None)
                 if file_url and file_url.startswith("file://"):
                     local_path = file_url.replace("file://", "")
-                    await bot.send_document(
-                        chat_id=chat_id,
-                        document=open(local_path, "rb"),
-                    )
+                    with open(local_path, "rb") as f:
+                        await bot.send_document(chat_id=chat_id, document=f)
                 elif file_url:
                     await bot.send_document(chat_id=chat_id, document=file_url)
         except Exception:
