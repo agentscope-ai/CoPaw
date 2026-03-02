@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from typing import Dict, List, Optional, Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, HTTPException, Path
 from pydantic import BaseModel, Field
@@ -198,6 +199,27 @@ def _build_client_info(key: str, client: MCPClientConfig) -> MCPClientInfo:
         cwd=client.cwd,
     )
 
+
+_ALLOWED_URL_SCHEMES = {"http", "https"}
+
+
+def _validate_url(value: str, field_name: str) -> str:
+    """Validate that a URL field contains a safe HTTP(S) URL."""
+    parsed = urlparse(value)
+    if parsed.scheme not in _ALLOWED_URL_SCHEMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{field_name}' must be an http:// or https:// URL, "
+            f"got scheme '{parsed.scheme or '(empty)'}'.",
+        )
+    if not parsed.hostname:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{field_name}' must contain a valid hostname.",
+        )
+    return value
+
+
 def _validate_command_input(command: str) -> str:
     """Reject command strings with control characters."""
     sanitized = (command or "").strip()
@@ -208,9 +230,14 @@ def _validate_command_input(command: str) -> str:
         )
     return sanitized
 
+
 def _normalize_legacy_url(url: Optional[str], base_url: Optional[str]) -> str:
     """Normalize URL aliases from older payload formats."""
-    return (url or base_url or "").strip()
+    value = (url or base_url or "").strip()
+    if value:
+        _validate_url(value, "url")
+    return value
+
 
 
 def _coerce_transport_for_legacy_payload(
