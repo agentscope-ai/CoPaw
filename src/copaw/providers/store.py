@@ -43,6 +43,12 @@ def _migrate_legacy_providers_json(path: Path) -> None:
     """Copy legacy providers.json from package dir into WORKING_DIR once."""
     if path.is_file():
         return
+    if path.exists() and not path.is_file():
+        logger.error(
+            "providers.json path exists but is not a regular file: %s",
+            path,
+        )
+        return
     legacy = _LEGACY_PROVIDERS_JSON
     if not legacy.is_file():
         return
@@ -53,8 +59,8 @@ def _migrate_legacy_providers_json(path: Path) -> None:
         # Resolve may fail on some filesystems; continue with best effort copy.
         pass
 
-    path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(legacy, path)
     except OSError as exc:
         logger.warning("Failed to migrate legacy providers.json: %s", exc)
@@ -229,6 +235,10 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
     if path is None:
         path = get_providers_json_path()
         _migrate_legacy_providers_json(path)
+    if path.exists() and not path.is_file():
+        raise IsADirectoryError(
+            f"providers.json path exists but is not a regular file: {path}",
+        )
 
     providers: dict[str, ProviderSettings] = {}
     custom_providers: dict[str, CustomProviderData] = {}
