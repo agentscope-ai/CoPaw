@@ -11,7 +11,7 @@ import pytest
 def _ensure_agentscope_runtime_stub() -> None:
     """Provide a tiny stub for local test envs missing agentscope_runtime."""
     try:
-        import agentscope_runtime.engine.schemas.agent_schemas  # noqa: F401
+        __import__("agentscope_runtime.engine.schemas.agent_schemas")
 
         return
     except Exception:
@@ -60,19 +60,16 @@ def _ensure_agentscope_runtime_stub() -> None:
     sys.modules["agentscope_runtime.engine.schemas"] = types.ModuleType(
         "agentscope_runtime.engine.schemas",
     )
-    sys.modules["agentscope_runtime.engine.schemas.agent_schemas"] = (
-        agent_schemas
-    )
+    sys.modules[
+        "agentscope_runtime.engine.schemas.agent_schemas"
+    ] = agent_schemas
 
 
 _ensure_agentscope_runtime_stub()
 
-from copaw.app.channels.discord_.channel import DiscordChannel
-
 
 async def _dummy_process(_):
-    if False:
-        yield None
+    return None
 
 
 class _DummyDM:
@@ -113,7 +110,6 @@ class _DummyDiscordClient:
 
     def get_user(self, user_id: int):
         self.user_ids.append(user_id)
-        return None
 
     async def fetch_user(self, user_id: int):
         self.user_ids.append(user_id)
@@ -121,14 +117,15 @@ class _DummyDiscordClient:
 
     def get_channel(self, channel_id: int):
         self.channel_ids.append(channel_id)
-        return None
 
     async def fetch_channel(self, channel_id: int):
         self.channel_ids.append(channel_id)
         return _DummyTextChannel(self.channel_messages)
 
 
-def _build_channel(client: _DummyDiscordClient) -> DiscordChannel:
+def _build_channel(client: _DummyDiscordClient):
+    from copaw.app.channels.discord_.channel import DiscordChannel
+
     channel = DiscordChannel(
         process=_dummy_process,
         enabled=False,
@@ -138,7 +135,7 @@ def _build_channel(client: _DummyDiscordClient) -> DiscordChannel:
         bot_prefix="[BOT] ",
     )
     channel.enabled = True
-    channel._client = client
+    setattr(channel, "_client", client)
     return channel
 
 
