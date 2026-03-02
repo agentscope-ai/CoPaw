@@ -83,7 +83,7 @@ def load_envs(
             data = json.load(fh)
         if isinstance(data, dict):
             return {k: str(v) for k, v in data.items()}
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, OSError):
         pass
     return {}
 
@@ -124,18 +124,19 @@ def delete_env_var(key: str) -> dict[str, str]:
 
 
 def load_envs_into_environ() -> dict[str, str]:
-    """Load envs.json and apply all entries to ``os.environ``.
+    """Load envs.json and apply bootstrap-safe entries to ``os.environ``.
 
     Call this once at application startup so that environment
     variables persisted from a previous session are available
-    immediately.
+    immediately. Protected keys are excluded from injection, and
+    existing process/system env vars are preserved.
     """
     envs = load_envs()
-    envs = {
+    bootstrap_envs = {
         key: value
         for key, value in envs.items()
         if key not in _PROTECTED_BOOTSTRAP_KEYS
     }
     # Do not override explicit runtime/system env vars.
-    _apply_to_environ(envs, overwrite=False)
+    _apply_to_environ(bootstrap_envs, overwrite=False)
     return envs
