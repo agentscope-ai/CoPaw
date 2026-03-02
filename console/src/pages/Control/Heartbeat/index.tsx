@@ -225,7 +225,9 @@ function HeartbeatPage() {
 
           <Form.Item
             noStyle
-            shouldUpdate={(prev, cur) => prev.useActiveHours !== cur.useActiveHours}
+            shouldUpdate={(prev, cur) =>
+              prev.useActiveHours !== cur.useActiveHours
+            }
           >
             {({ getFieldValue }) =>
               getFieldValue("useActiveHours") ? (

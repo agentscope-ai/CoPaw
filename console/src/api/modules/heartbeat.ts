@@ -2,8 +2,7 @@ import { request } from "../request";
 import type { HeartbeatConfig } from "../types/heartbeat";
 
 export const heartbeatApi = {
-  getHeartbeatConfig: () =>
-    request<HeartbeatConfig>("/config/heartbeat"),
+  getHeartbeatConfig: () => request<HeartbeatConfig>("/config/heartbeat"),
 
   updateHeartbeatConfig: (body: HeartbeatConfig) =>
     request<HeartbeatConfig>("/config/heartbeat", {
