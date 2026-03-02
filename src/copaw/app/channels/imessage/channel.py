@@ -13,7 +13,7 @@ import asyncio
 import base64
 import hashlib
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, Optional, List
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
     TextContent,
@@ -24,7 +24,12 @@ from ....config.config import IMessageChannelConfig
 from ..utils import file_url_to_local_path
 from ....agents.utils.file_handling import download_file_from_url
 
-from ..base import BaseChannel, OnReplySent, ProcessHandler, OutgoingContentPart
+from ..base import (
+    BaseChannel,
+    OnReplySent,
+    ProcessHandler,
+    OutgoingContentPart,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +56,7 @@ class IMessageChannel(BaseChannel):
         self.db_path = os.path.expanduser(db_path)
         self.poll_sec = poll_sec
         self.bot_prefix = bot_prefix
-        
+
         # Create media directory for downloaded files
         self._media_dir = Path("~/.copaw/media").expanduser()
         self._media_dir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +112,12 @@ class IMessageChannel(BaseChannel):
             )
         return path
 
-    def _send_sync(self, to_handle: str, text: str, file_path: Optional[str] = None) -> None:
+    def _send_sync(
+        self,
+        to_handle: str,
+        text: str,
+        file_path: Optional[str] = None,
+    ) -> None:
         if not self._imsg_path:
             raise RuntimeError(
                 "iMessage channel not initialized (imsg path missing).",
@@ -119,7 +129,7 @@ class IMessageChannel(BaseChannel):
             cmd.extend(["--text", text])
         if file_path:
             cmd.extend(["--file", file_path])
-        
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -282,10 +292,10 @@ ORDER BY m.ROWID ASC
         """
         if not parts:
             return
-            
+
         text_parts: List[str] = []
         media_parts: List[OutgoingContentPart] = []
-        
+
         for p in parts:
             t = getattr(p, "type", None)
             if t == ContentType.TEXT:
@@ -303,24 +313,154 @@ ORDER BY m.ROWID ASC
                 ContentType.FILE,
             ):
                 media_parts.append(p)
-                
+
         body = "\n".join(text_parts) if text_parts else ""
         prefix = (meta or {}).get("bot_prefix", "") or ""
         if prefix and body:
             body = prefix + body
-            
+
         # Send text message first (if any)
         if body.strip():
+            preview = body[:120] + "..." if len(body) > 120 else body
             logger.debug(
                 f"imessage send_content_parts: to_handle={to_handle} "
-                f"body_len={len(body)} preview="
-                f"{body[:120] + '...' if len(body) > 120 else body}",
+                f"body_len={len(body)} preview={preview}",
             )
             await self.send(to_handle, body.strip(), meta)
-            
+
         # Send media parts
         for media_part in media_parts:
             await self.send_media(to_handle, media_part, meta)
+
+    def _extract_url_and_filename(self, part: OutgoingContentPart):
+        """Extract URL and filename hint from media part based on
+        content type."""
+        url = None
+        filename_hint = "media_file"
+        t = getattr(part, "type", None)
+
+        if t == ContentType.IMAGE:
+            url = getattr(part, "image_url", None)
+            filename_hint = "image"
+        elif t == ContentType.FILE:
+            url = getattr(part, "file_url", None) or getattr(
+                part,
+                "file_id",
+                None,
+            )
+            filename_hint = getattr(part, "filename", "file")
+        elif t == ContentType.VIDEO:
+            url = getattr(part, "video_url", None)
+            filename_hint = "video"
+        elif t == ContentType.AUDIO:
+            url = getattr(part, "audio_url", None) or getattr(
+                part,
+                "data",
+                None,
+            )
+            filename_hint = "audio"
+
+        return url, filename_hint, t
+
+    def _get_file_extension(
+        self,
+        content_type: Any,
+        filename_hint: str,
+    ) -> str:
+        """Get appropriate file extension based on content type."""
+        if "." in filename_hint:
+            return Path(filename_hint).suffix
+        elif content_type == ContentType.IMAGE:
+            return ".jpg"
+        elif content_type == ContentType.AUDIO:
+            return ".mp3"
+        elif content_type == ContentType.VIDEO:
+            return ".mp4"
+        else:
+            return ".bin"
+
+    async def _handle_local_file(self, url: str) -> Optional[str]:
+        """Handle local file paths."""
+        local_path = file_url_to_local_path(url)
+        if local_path and Path(local_path).exists():
+            logger.info(f"imessage send_media: using local file {local_path}")
+            return local_path
+
+        path_obj = Path(url).expanduser()
+        if path_obj.exists():
+            local_path = str(path_obj.resolve())
+            logger.info(
+                f"imessage send_media: using plain file path {local_path}",
+            )
+            return local_path
+
+        logger.warning(f"imessage send_media: file not found {url}")
+        return None
+
+    async def _handle_remote_url(
+        self,
+        url: str,
+        filename_hint: str,
+        content_type: Any,
+    ) -> Optional[str]:
+        """Handle remote HTTP/HTTPS URLs."""
+        try:
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:16]
+            ext = self._get_file_extension(content_type, filename_hint)
+            safe_filename = f"{filename_hint}_{url_hash}{ext}"
+            local_path = await download_file_from_url(
+                url,
+                filename=safe_filename,
+                download_dir=str(self._media_dir),
+            )
+            logger.info(
+                f"imessage send_media: downloaded {url} to {local_path}",
+            )
+            return local_path
+        except Exception as e:
+            logger.error(f"imessage send_media: failed to download {url}: {e}")
+            return None
+
+    async def _handle_data_url(
+        self,
+        url: str,
+        content_type: Any,
+        filename_hint: str,
+    ) -> Optional[str]:
+        """Handle base64 data URLs."""
+        try:
+            if "base64," in url:
+                b64_data = url.split("base64,", 1)[-1]
+                if content_type == ContentType.IMAGE:
+                    ext = ".png" if "image/png" in url else ".jpg"
+                elif content_type == ContentType.AUDIO:
+                    ext = ".mp3"
+                elif content_type == ContentType.VIDEO:
+                    ext = ".mp4"
+                else:
+                    ext = ".bin"
+
+                url_hash = hashlib.md5(b64_data.encode()).hexdigest()[:16]
+                safe_filename = f"{filename_hint}_{url_hash}{ext}"
+                local_path = str(self._media_dir / safe_filename)
+
+                file_data = base64.b64decode(b64_data)
+                Path(local_path).write_bytes(file_data)
+                logger.info(
+                    f"imessage send_media: saved base64 data to {local_path}",
+                )
+                return local_path
+            else:
+                logger.warning(
+                    "imessage send_media: unsupported data URL "
+                    f"format: {url[:50]}...",
+                )
+                return None
+        except Exception as e:
+            logger.error(
+                f"imessage send_media: failed to process base64 data: {e}",
+            )
+            return None
 
     async def send_media(
         self,
@@ -334,106 +474,41 @@ ORDER BY m.ROWID ASC
         """
         if not self.enabled:
             return
-            
+
         # Extract URL or data from the media part
-        url = None
-        filename_hint = "media_file"
-        
-        t = getattr(part, "type", None)
-        if t == ContentType.IMAGE:
-            url = getattr(part, "image_url", None)
-            filename_hint = "image"
-        elif t == ContentType.FILE:
-            url = getattr(part, "file_url", None) or getattr(part, "file_id", None)
-            filename_hint = getattr(part, "filename", "file")
-        elif t == ContentType.VIDEO:
-            url = getattr(part, "video_url", None)
-            filename_hint = "video"
-        elif t == ContentType.AUDIO:
-            url = getattr(part, "audio_url", None) or getattr(part, "data", None)
-            filename_hint = "audio"
-            
+        url, filename_hint, content_type = self._extract_url_and_filename(part)
+
         if not url:
-            logger.warning(f"imessage send_media: no URL found for media type {t}")
+            logger.warning(
+                "imessage send_media: no URL found for media "
+                f"type {content_type}",
+            )
             return
-            
+
         # Handle different URL types
         local_path = None
-        
-        # Check if it's a local file path
+
         if isinstance(url, str):
-            local_path = file_url_to_local_path(url)
-            if local_path and Path(local_path).exists():
-                logger.info(f"imessage send_media: using local file {local_path}")
-            elif url.startswith(("http://", "https://")):
-                # Download remote URL
-                try:
-                    # Generate safe filename
-                    url_hash = hashlib.md5(url.encode()).hexdigest()[:16]
-                    ext = ""
-                    if "." in filename_hint:
-                        ext = Path(filename_hint).suffix
-                    elif t == ContentType.IMAGE:
-                        ext = ".jpg"
-                    elif t == ContentType.AUDIO:
-                        ext = ".mp3"
-                    elif t == ContentType.VIDEO:
-                        ext = ".mp4"
-                    else:
-                        ext = ".bin"
-                        
-                    safe_filename = f"{filename_hint}_{url_hash}{ext}"
-                    local_path = await download_file_from_url(
-                        url, 
-                        filename=safe_filename,
-                        download_dir=str(self._media_dir)
-                    )
-                    logger.info(f"imessage send_media: downloaded {url} to {local_path}")
-                except Exception as e:
-                    logger.error(f"imessage send_media: failed to download {url}: {e}")
-                    return
+            if url.startswith(("http://", "https://")):
+                local_path = await self._handle_remote_url(
+                    url,
+                    filename_hint,
+                    content_type,
+                )
             elif url.startswith("data:"):
-                # Handle base64 data URLs
-                try:
-                    # Extract base64 data
-                    if "base64," in url:
-                        b64_data = url.split("base64,", 1)[-1]
-                        # Generate filename based on media type
-                        if t == ContentType.IMAGE:
-                            ext = ".png" if "image/png" in url else ".jpg"
-                        elif t == ContentType.AUDIO:
-                            ext = ".mp3"
-                        elif t == ContentType.VIDEO:
-                            ext = ".mp4"
-                        else:
-                            ext = ".bin"
-                            
-                        url_hash = hashlib.md5(b64_data.encode()).hexdigest()[:16]
-                        safe_filename = f"{filename_hint}_{url_hash}{ext}"
-                        local_path = str(self._media_dir / safe_filename)
-                        
-                        # Decode and save base64 data
-                        file_data = base64.b64decode(b64_data)
-                        Path(local_path).write_bytes(file_data)
-                        logger.info(f"imessage send_media: saved base64 data to {local_path}")
-                    else:
-                        logger.warning(f"imessage send_media: unsupported data URL format: {url[:50]}...")
-                        return
-                except Exception as e:
-                    logger.error(f"imessage send_media: failed to process base64 data: {e}")
-                    return
+                local_path = await self._handle_data_url(
+                    url,
+                    content_type,
+                    filename_hint,
+                )
             else:
-                # Assume it's a plain file path
-                path_obj = Path(url).expanduser()
-                if path_obj.exists():
-                    local_path = str(path_obj.resolve())
-                    logger.info(f"imessage send_media: using plain file path {local_path}")
-                else:
-                    logger.warning(f"imessage send_media: file not found {url}")
-                    return
-                    
+                local_path = await self._handle_local_file(url)
+
         if local_path and Path(local_path).exists():
             logger.info(f"imessage sending media file: {local_path}")
             await self.send(to_handle, "", meta, local_path)
         else:
-            logger.warning(f"imessage send_media: could not resolve valid file path for {url}")
+            logger.warning(
+                "imessage send_media: could not resolve valid file "
+                f"path for {url}",
+            )
