@@ -21,6 +21,7 @@ from ..__version__ import __version__
 from ..utils.logging import setup_logger
 from .channels import ChannelManager  # pylint: disable=no-name-in-module
 from .channels.utils import make_process_from_runner
+from .approvals import ApprovalMode, ApprovalService
 from .mcp import MCPClientManager, MCPConfigWatcher  # MCP hot-reload support
 from .runner.repo.json_repo import JsonChatRepository
 from .crons.repo.json_repo import JsonJobRepository
@@ -49,8 +50,17 @@ agent_app = AgentApp(
 async def lifespan(app: FastAPI):  # pylint: disable=too-many-statements
     await runner.start()
 
-    # --- MCP client manager init (independent module, hot-reloadable) ---
+    # --- approval service init ---
     config = load_config()
+    approval_mode = ApprovalMode(config.approval.mode)
+    approval_service = ApprovalService(
+        mode=approval_mode,
+        timeout=config.approval.timeout,
+    )
+    runner.set_approval_service(approval_service)
+    logger.info("Approval service started (mode=%s)", approval_mode.value)
+
+    # --- MCP client manager init (independent module, hot-reloadable) ---
     mcp_manager = MCPClientManager()
     if hasattr(config, "mcp"):
         try:
@@ -110,6 +120,7 @@ async def lifespan(app: FastAPI):  # pylint: disable=too-many-statements
     app.state.cron_manager = cron_manager
     app.state.chat_manager = chat_manager
     app.state.config_watcher = config_watcher
+    app.state.approval_service = approval_service
     app.state.mcp_manager = mcp_manager
     app.state.mcp_watcher = mcp_watcher
 

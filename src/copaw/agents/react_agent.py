@@ -9,7 +9,7 @@ import os
 from typing import Any, List, Optional, Type
 
 from agentscope.agent import ReActAgent
-from agentscope.message import Msg
+from agentscope.message import Msg, TextBlock, ToolResultBlock
 from agentscope.tool import Toolkit
 from pydantic import BaseModel
 
@@ -63,6 +63,7 @@ class CoPawAgent(ReActAgent):
         enable_memory_manager: bool = True,
         mcp_clients: Optional[List[Any]] = None,
         memory_manager: MemoryManager | None = None,
+        approval_service: Optional[Any] = None,
         max_iters: int = 50,
         max_input_length: int = 128 * 1024,  # 128K = 131072 tokens
     ):
@@ -75,6 +76,8 @@ class CoPawAgent(ReActAgent):
             mcp_clients: Optional list of MCP clients for tool
                 integration
             memory_manager: Optional memory manager instance
+            approval_service: Optional ApprovalService for gating
+                high-risk tool calls
             max_iters: Maximum number of reasoning-acting iterations
                 (default: 50)
             max_input_length: Maximum input length in tokens for model
@@ -83,6 +86,7 @@ class CoPawAgent(ReActAgent):
         self._env_context = env_context
         self._max_input_length = max_input_length
         self._mcp_clients = mcp_clients or []
+        self._approval_service = approval_service
 
         # Memory compaction threshold: configurable ratio of max_input_length
         self._memory_compact_threshold = int(
@@ -134,7 +138,7 @@ class CoPawAgent(ReActAgent):
         """Create and populate toolkit with built-in tools.
 
         Returns:
-            Configured toolkit instance
+            Configured Toolkit instance
         """
         toolkit = Toolkit()
 
@@ -263,6 +267,72 @@ class CoPawAgent(ReActAgent):
         """Register MCP clients on this agent's toolkit after construction."""
         for client in self._mcp_clients:
             await self.toolkit.register_mcp_client(client)
+
+    async def _acting(self, tool_call) -> dict | None:
+        """Override to inject approval gate before high-risk tool calls.
+
+        If an ApprovalService is configured and the tool is high-risk,
+        we ask for human approval before delegating to the parent
+        ``_acting`` which calls ``self.toolkit.call_tool_function``.
+        """
+        from ..app.approvals.models import ApprovalStatus
+
+        name = tool_call.get("name", "")
+
+        if (
+            self._approval_service is not None
+            and self._approval_service.needs_approval(name)
+        ):
+            inputs = tool_call.get("input", {}) or {}
+            target = (
+                inputs.get("command", "")
+                or inputs.get("file_path", "")
+                or inputs.get("url", "")
+                or str(inputs)[:200]
+            )
+            summary = f"Agent wants to call {name}"
+            if target:
+                summary += f": {target[:100]}"
+
+            req = await self._approval_service.request_approval(
+                action=name,
+                target=target,
+                summary=summary,
+            )
+
+            if req.status != ApprovalStatus.APPROVED:
+                reason = req.status.value
+                logger.info("Tool call %s (%s): %s", reason, req.id, name)
+
+                # Build a denied tool result and record it, just like
+                # the parent _acting would do.
+                tool_res_msg = Msg(
+                    "system",
+                    [
+                        ToolResultBlock(
+                            type="tool_result",
+                            id=tool_call["id"],
+                            name=name,
+                            output=[
+                                TextBlock(
+                                    type="text",
+                                    text=(
+                                        f"Tool call '{name}' was {reason} "
+                                        f"by the user. Please inform the "
+                                        f"user and suggest alternatives."
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ],
+                    "system",
+                )
+                await self.print(tool_res_msg, True)
+                await self.memory.add(tool_res_msg)
+                return None
+
+        # Approved or not high-risk — delegate to parent
+        return await super()._acting(tool_call)
 
     async def reply(
         self,

@@ -28,6 +28,7 @@ class AgentRunner(Runner):
         self.framework_type = "agentscope"
         self._chat_manager = None  # Store chat_manager reference
         self._mcp_manager = None  # MCP client manager for hot-reload
+        self._approval_service = None  # Approval gate for high-risk tools
 
         self.memory_manager: MemoryManager | None = None
 
@@ -46,6 +47,14 @@ class AgentRunner(Runner):
             mcp_manager: MCPClientManager instance
         """
         self._mcp_manager = mcp_manager
+
+    def set_approval_service(self, approval_service):
+        """Set approval service for gating high-risk tool calls.
+
+        Args:
+            approval_service: ApprovalService instance
+        """
+        self._approval_service = approval_service
 
     async def query_handler(
         self,
@@ -100,6 +109,7 @@ class AgentRunner(Runner):
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
+                approval_service=self._approval_service,
                 max_iters=max_iters,
                 max_input_length=max_input_length,
             )

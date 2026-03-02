@@ -351,5 +351,10 @@
     "chatDisabledMessage": "聊天功能已禁用，因为未配置模型。请配置模型以启用聊天功能。",
     "configureNow": "配置模型",
     "modelNotConfigured": "请先在设置中配置模型后再使用聊天功能"
+  },
+  "approval": {
+    "title": "需要审批",
+    "approve": "通过",
+    "deny": "拒绝"
   }
 }
