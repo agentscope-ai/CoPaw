@@ -313,7 +313,19 @@ def dev_cmd(
     ]
     for t in watchdog_threads:
         t.start()
-    for t in watchdog_threads:
-        t.join()
+    # Wait for watchdog threads to finish, but do not block indefinitely if a
+    # child process ignores SIGTERM. After a grace period, escalate to SIGKILL.
+    for t, p in zip(watchdog_threads, procs):
+        t.join(timeout=10)
+        if t.is_alive() and p.poll() is None:
+            try:
+                click.echo(
+                    f"\nForce killing dev server (PID {p.pid}) after timeout…",
+                )
+                p.kill()
+            except Exception:  # noqa: BLE001
+                pass
+            # After killing the process, wait for the watchdog thread to finish.
+            t.join()
 
     click.secho("All dev servers stopped.", fg="yellow")
