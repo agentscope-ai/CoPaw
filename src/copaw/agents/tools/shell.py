@@ -127,7 +127,18 @@ async def execute_shell_command(
             returncode = -1
             try:
                 await _terminate_process_tree(proc)
-                stdout, stderr = await proc.communicate()
+                # Read remaining output directly from streams instead of
+                # calling communicate() again (it can only be called once).
+                stdout = (
+                    await proc.stdout.read()
+                    if proc.stdout
+                    else b""
+                )
+                stderr = (
+                    await proc.stderr.read()
+                    if proc.stderr
+                    else b""
+                )
                 stdout_str = _decode_output(stdout)
                 stderr_str = _decode_output(stderr)
                 if stderr_str:
