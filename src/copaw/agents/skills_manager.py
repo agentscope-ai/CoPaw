@@ -445,7 +445,7 @@ def _create_files_from_tree(
         return
 
     for name, value in tree.items():
-        item_path = base_dir / name
+        item_path = _safe_child_path(base_dir, name)
 
         if value is None or isinstance(value, str):
             # It's a file
@@ -460,6 +460,28 @@ def _create_files_from_tree(
                 f"Invalid tree value for '{name}': {type(value)}. "
                 "Expected None, str, or dict.",
             )
+
+
+def _safe_child_path(base_dir: Path, child_name: str) -> Path:
+    """Safely join a child name under ``base_dir`` without traversal."""
+    if (
+        not isinstance(child_name, str)
+        or not child_name
+        or "/" in child_name
+        or "\\" in child_name
+        or child_name in (".", "..")
+    ):
+        raise ValueError(f"Invalid path component: {child_name!r}")
+
+    child_path = (base_dir / child_name).resolve()
+    base_resolved = base_dir.resolve()
+    if child_path == base_resolved:
+        raise ValueError(f"Invalid path component: {child_name!r}")
+    if base_resolved not in child_path.parents:
+        raise ValueError(
+            f"Path traversal attempt detected for component: {child_name!r}",
+        )
+    return child_path
 
 
 class SkillService:

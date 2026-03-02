@@ -167,11 +167,24 @@ def _validate_skill_name(name: str) -> None:
 
 
 def _validate_tree_keys(tree: dict | None, field_name: str) -> None:
-    """Validate that keys in references/scripts trees have no path traversal."""
+    """Validate keys in references/scripts trees against traversal."""
     if not tree:
         return
+
+    def _is_unsafe_tree_key(key: str) -> bool:
+        return any(
+            (
+                not key,
+                ".." in key,
+                key.startswith("/"),
+                key.startswith("\\"),
+                "/" in key,
+                "\\" in key,
+            ),
+        )
+
     for key, value in tree.items():
-        if ".." in key or key.startswith("/"):
+        if _is_unsafe_tree_key(key):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid path in '{field_name}': '{key}'. "
@@ -199,7 +212,8 @@ async def create_skill(request: CreateSkillRequest):
             status_code=400,
             detail=(
                 "Failed to create skill. Possible reasons include: invalid "
-                "SKILL.md front matter (e.g. missing 'name' or 'description'), "
+                "SKILL.md front matter (e.g. missing 'name' or "
+                "'description'), "
                 "a duplicate skill name, or a server error."
             ),
         )
