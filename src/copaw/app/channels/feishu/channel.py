@@ -1347,13 +1347,23 @@ class FeishuChannel(BaseChannel):
                 if len(suffix) >= 4:
                     async with self._receive_id_lock:
                         for _, v in self._receive_id_store.items():
-                            if v[0] and str(v[0]).endswith(suffix):
+                            # v = (receive_id_type, receive_id)
+                            if v[1] and str(v[1]).endswith(suffix):
                                 logger.info(
                                     "feishu _get_receive_for_send: "
                                     "fallback match by suffix %s",
                                     suffix,
                                 )
                                 return v
+            # Cron dispatch may carry the target open_id in merged meta even
+            # when session-key lookup misses.
+            meta_user_id = str(m.get("user_id") or "").strip()
+            if meta_user_id.startswith("ou_"):
+                logger.info(
+                    "feishu _get_receive_for_send: fallback open_id from "
+                    "meta.user_id",
+                )
+                return ("open_id", meta_user_id)
             logger.warning(
                 "feishu _get_receive_for_send: no store entry for "
                 "session_key=%s (user must have chatted first or add "
