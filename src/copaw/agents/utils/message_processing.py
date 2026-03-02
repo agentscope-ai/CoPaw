@@ -8,6 +8,8 @@ This module handles:
 """
 import logging
 import os
+import base64
+import mimetypes
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -120,6 +122,20 @@ def _media_type_from_path(path: str) -> str:
     }.get(ext, "audio/octet-stream")
 
 
+def _image_media_type_from_path(path: str) -> str:
+    """Infer image media_type from file path, fallback to image/jpeg."""
+    media_type, _ = mimetypes.guess_type(path)
+    if isinstance(media_type, str) and media_type.startswith("image/"):
+        return media_type
+    return "image/jpeg"
+
+
+def _read_file_base64(path: str) -> str:
+    """Read file and return base64-encoded ASCII text."""
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
+
+
 def _update_block_with_local_path(
     block: dict,
     block_type: str,
@@ -131,7 +147,23 @@ def _update_block_with_local_path(
         if not block.get("filename"):
             block["filename"] = os.path.basename(local_path)
     else:
-        if block_type == "audio":
+        if block_type == "image":
+            try:
+                block["source"] = {
+                    "type": "base64",
+                    "media_type": _image_media_type_from_path(local_path),
+                    "data": _read_file_base64(local_path),
+                }
+            except Exception as e:
+                logger.warning(
+                    "Failed to convert image to base64, fallback to local path: %s",
+                    e,
+                )
+                block["source"] = {
+                    "type": "url",
+                    "url": local_path,
+                }
+        elif block_type == "audio":
             block["source"] = {
                 "type": "url",
                 "url": Path(local_path).as_uri(),
