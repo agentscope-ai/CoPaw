@@ -24,17 +24,39 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Tools whose call arguments and output are hidden in channel messages
-# when privacy mode is enabled via COPAW_HIDE_TOOL_DETAILS (or the legacy
-# COPAW_HIDE_SHELL_DETAILS).
-_PRIVACY_ENABLED = any(
-    os.environ.get(k, "false").lower() in ("true", "1", "yes")
-    for k in ("COPAW_HIDE_TOOL_DETAILS", "COPAW_HIDE_SHELL_DETAILS")
-)
-_PRIVACY_TOOLS: frozenset[str] = frozenset({
-    "execute_shell_command",
-    "read_file",
-})
+# Privacy mode for tool call/output rendering in channel messages.
+#
+# COPAW_HIDE_TOOL_DETAILS controls which tools have their arguments and
+# output hidden.  Accepted values:
+#   "*" / "true" / "1" / "yes"  → all tools
+#   "tool_a,tool_b"             → comma-separated tool names
+#   "false" / "" / unset        → disabled
+#
+# The legacy COPAW_HIDE_SHELL_DETAILS=true is still honored (equivalent
+# to listing execute_shell_command,read_file).
+
+def _parse_privacy_tools() -> frozenset[str] | None:
+    """Return the set of tool names to hide, or ``None`` if disabled.
+
+    A return value of ``frozenset()`` (empty) with ``_PRIVACY_ALL`` True
+    means *all* tools are hidden.
+    """
+    raw = os.environ.get("COPAW_HIDE_TOOL_DETAILS", "").strip()
+
+    if raw.lower() in ("false", "0", "no", ""):
+        legacy = os.environ.get("COPAW_HIDE_SHELL_DETAILS", "").strip()
+        if legacy.lower() in ("true", "1", "yes"):
+            return frozenset({"execute_shell_command", "read_file"})
+        return None
+
+    if raw in ("*",) or raw.lower() in ("true", "1", "yes"):
+        return frozenset()  # empty ⇒ match all
+
+    return frozenset(t.strip() for t in raw.split(",") if t.strip())
+
+
+_PRIVACY_TOOLS: frozenset[str] | None = _parse_privacy_tools()
+_PRIVACY_ALL: bool = _PRIVACY_TOOLS is not None and len(_PRIVACY_TOOLS) == 0
 
 # Same union as base.OutgoingContentPart (renderer must not import base).
 _OutgoingPart = Union[
@@ -116,7 +138,7 @@ class MessageRenderer:
                 data = getattr(c, "data", None) or {}
                 name = data.get("name") or "tool"
                 
-                if _PRIVACY_ENABLED and name in _PRIVACY_TOOLS:
+                if _PRIVACY_TOOLS is not None and (_PRIVACY_ALL or name in _PRIVACY_TOOLS):
                     out.append(TextContent(text=f"🔧 **{name}** running"))
                     continue
                 
@@ -183,7 +205,7 @@ class MessageRenderer:
                 name = data.get("name") or "tool"
                 output = data.get("output", "")
 
-                if _PRIVACY_ENABLED and name in _PRIVACY_TOOLS:
+                if _PRIVACY_TOOLS is not None and (_PRIVACY_ALL or name in _PRIVACY_TOOLS):
                     out.append(TextContent(text=f"✅ **{name}** done"))
                     continue
 
