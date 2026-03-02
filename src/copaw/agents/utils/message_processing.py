@@ -31,7 +31,7 @@ def _is_allowed_media_path(path: str) -> bool:
     try:
         resolved = Path(path).expanduser().resolve()
         root = _ALLOWED_MEDIA_ROOT.resolve()
-        return resolved.is_file() and str(resolved).startswith(str(root))
+        return resolved.is_file() and resolved.is_relative_to(root)
     except Exception:
         return False
 
@@ -42,13 +42,17 @@ def _extract_local_path_from_url(url: str) -> Optional[str]:
 
     if parsed.scheme == "file":
         try:
-            return urllib.request.url2pathname(parsed.path)
+            local_path = urllib.request.url2pathname(parsed.path)
+            candidate = Path(local_path).expanduser()
+            if candidate.is_file():
+                return str(candidate)
+            return None
         except Exception:
             return None
 
     if parsed.scheme == "" and parsed.netloc == "":
         candidate = Path(url).expanduser()
-        if candidate.exists():
+        if candidate.is_file():
             return str(candidate)
 
     return None

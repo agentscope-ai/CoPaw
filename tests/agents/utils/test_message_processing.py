@@ -3,9 +3,11 @@ import base64
 import asyncio
 
 from copaw.agents.utils.message_processing import (
+    _is_allowed_media_path,
     _process_single_file_block,
     _update_block_with_local_path,
 )
+from copaw.constant import WORKING_DIR
 
 
 def test_update_image_block_uses_base64_source(tmp_path):
@@ -49,3 +51,15 @@ def test_process_single_file_block_rejects_plain_local_path_outside_media_root(
     )
 
     assert result is None
+
+
+def test_is_allowed_media_path_rejects_same_prefix_not_child():
+    media_root = WORKING_DIR / "media"
+    media_root.mkdir(parents=True, exist_ok=True)
+
+    evil_dir = WORKING_DIR / "media_evil"
+    evil_dir.mkdir(parents=True, exist_ok=True)
+    evil_file = evil_dir / "bad.png"
+    evil_file.write_bytes(b"bad")
+
+    assert _is_allowed_media_path(str(evil_file)) is False
