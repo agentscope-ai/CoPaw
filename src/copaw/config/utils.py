@@ -2,11 +2,36 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ..constant import HEARTBEAT_FILE, JOBS_FILE, CHATS_FILE, WORKING_DIR
+from ..constant import (
+    COPAW_RUNNING_IN_CONTAINER_ENV,
+    HEARTBEAT_FILE,
+    JOBS_FILE,
+    CHATS_FILE,
+    WORKING_DIR,
+)
 from .config import Config, HeartbeatConfig, LastApiConfig, LastDispatchConfig
+
+
+def is_running_in_container() -> bool:
+    """Return True if running inside a container (Docker/Kubernetes).
+    Prefer env COPAW_RUNNING_IN_CONTAINER (1/true/yes); else check
+    /.dockerenv and /proc/1/cgroup.
+    """
+    val = os.environ.get(COPAW_RUNNING_IN_CONTAINER_ENV, "").strip().lower()
+    if val in ("1", "true", "yes"):
+        return True
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup", encoding="utf-8") as f:
+            content = f.read()
+            return "docker" in content or "kubepods" in content
+    except (OSError, FileNotFoundError):
+        return False
 
 
 def get_config_path() -> Path:

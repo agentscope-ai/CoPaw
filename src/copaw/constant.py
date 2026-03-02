@@ -22,6 +22,9 @@ HEARTBEAT_TARGET_LAST = "last"
 # Env key for app log level (used by CLI and app load for reload child).
 LOG_LEVEL_ENV = "COPAW_LOG_LEVEL"
 
+# Env to indicate running inside a container (e.g. Docker). Set to 1/true/yes.
+COPAW_RUNNING_IN_CONTAINER_ENV = "COPAW_RUNNING_IN_CONTAINER"
+
 # When True, expose /docs, /redoc, /openapi.json
 # (dev only; keep False in prod).
 DOCS_ENABLED = os.environ.get("COPAW_OPENAPI_DOCS", "false").lower() in (

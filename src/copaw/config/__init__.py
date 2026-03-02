@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from ..constant import COPAW_RUNNING_IN_CONTAINER_ENV
 from .config import (
     Config,
     ChannelConfig,
@@ -9,6 +10,7 @@ from .utils import (
     get_config_path,
     get_heartbeat_config,
     get_heartbeat_query_path,
+    is_running_in_container,
     load_config,
     save_config,
     update_last_dispatch,
@@ -21,10 +23,12 @@ __all__ = [
     "Config",
     "ChannelConfig",
     "ChannelConfigUnion",
+    "COPAW_RUNNING_IN_CONTAINER_ENV",
     "ConfigWatcher",
     "get_config_path",
     "get_heartbeat_config",
     "get_heartbeat_query_path",
+    "is_running_in_container",
     "load_config",
     "save_config",
     "update_last_dispatch",
