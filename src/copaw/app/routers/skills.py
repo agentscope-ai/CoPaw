@@ -64,23 +64,19 @@ router = APIRouter(prefix="/skills", tags=["skills"])
 async def list_skills(include_tree: bool = False) -> list[SkillSpec]:
     all_skills = SkillService.list_all_skills()
 
-    available_skills = list_available_skills()
-    skills_spec = []
-    for skill in all_skills:
-        references = skill.references if include_tree else None
-        scripts = skill.scripts if include_tree else None
-        skills_spec.append(
-            SkillSpec(
-                name=skill.name,
-                content=skill.content,
-                source=skill.source,
-                path=skill.path,
-                references=references,
-                scripts=scripts,
-                enabled=skill.name in available_skills,
-            ),
+    available_set = {s.name for s in list_available_skills()}
+    return [
+        SkillSpec(
+            name=skill.name,
+            content=skill.content,
+            source=skill.source,
+            path=skill.path,
+            references=skill.references if include_tree else None,
+            scripts=skill.scripts if include_tree else None,
+            enabled=skill.name in available_set,
         )
-    return skills_spec
+        for skill in all_skills
+    ]
 
 
 @router.get("/available")
