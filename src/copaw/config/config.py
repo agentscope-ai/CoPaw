@@ -98,6 +98,7 @@ class HeartbeatConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    enabled: bool = Field(default=False, description="Whether heartbeat is on")
     every: str = Field(default=HEARTBEAT_DEFAULT_EVERY)
     target: str = Field(default=HEARTBEAT_DEFAULT_TARGET)
     active_hours: Optional[ActiveHoursConfig] = Field(

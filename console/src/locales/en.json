@@ -27,6 +27,7 @@
     "channels": "Channels",
     "sessions": "Sessions",
     "cronJobs": "Cron Jobs",
+    "heartbeat": "Heartbeat",
     "agent": "Agent",
     "workspace": "Workspace",
     "skills": "Skills",
@@ -103,6 +104,22 @@
     "deleteConfirm": "Are you sure you want to delete this MCP client?",
     "deleteSuccess": "MCP client deleted successfully",
     "deleteError": "Failed to delete MCP client"
+  },
+  "heartbeat": {
+    "title": "Heartbeat",
+    "description": "Run HEARTBEAT.md at a fixed interval; optionally send replies to the last chat channel.",
+    "enabled": "Enable heartbeat",
+    "every": "Interval",
+    "everyRequired": "Please enter interval (e.g. 30m, 1h)",
+    "target": "Reply target",
+    "targetMain": "Run only, do not send (main)",
+    "targetLast": "Send to last chat channel (last)",
+    "activeHours": "Active hours (optional)",
+    "activeStart": "Start time",
+    "activeEnd": "End time",
+    "loadFailed": "Failed to load heartbeat config",
+    "saveSuccess": "Saved successfully; heartbeat hot-reloaded",
+    "saveFailed": "Failed to save heartbeat config"
   },
   "cronJobs": {
     "title": "Cron Jobs",
