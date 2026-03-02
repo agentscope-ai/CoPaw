@@ -504,7 +504,11 @@ export function Docs({ config, lang, onLangClick }: DocsProps) {
                                 activeSlug === cs ? "var(--bg)" : "transparent",
                             }}
                           >
-                            <ChildIcon size={14} strokeWidth={1.5} aria-hidden />
+                            <ChildIcon
+                              size={14}
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
                             {DOC_TITLES[lang][ct] ?? ct}
                             {activeSlug === cs && (
                               <ChevronRight
