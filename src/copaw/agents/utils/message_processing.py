@@ -156,7 +156,8 @@ def _update_block_with_local_path(
                 }
             except Exception as e:
                 logger.warning(
-                    "Failed to convert image to base64, fallback to local path: %s",
+                    "Failed to convert image to base64; "
+                    "fallback to local path: %s",
                     e,
                 )
                 block["source"] = {
