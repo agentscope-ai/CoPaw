@@ -204,6 +204,31 @@ class DiscordChannel(BaseChannel):
             show_tool_details=show_tool_details,
         )
 
+    def _normalize_discord_id(
+        self,
+        raw_value: Any,
+        *,
+        kind: str,
+    ) -> int:
+        """Normalize a Discord id from raw value or prefixed handle."""
+        text = str(raw_value or "").strip()
+        if not text:
+            raise ValueError(f"discord {kind} id is empty")
+
+        if text.startswith("discord:"):
+            route = self._route_from_handle(text)
+            if kind == "channel":
+                text = str(route.get("channel_id") or "").strip()
+            else:
+                text = str(route.get("user_id") or "").strip()
+
+        if not text.isdigit():
+            raise ValueError(
+                f"invalid discord {kind} id: {raw_value!r}",
+            )
+
+        return int(text)
+
     async def send(
         self,
         to_handle: str,
@@ -237,19 +262,27 @@ class DiscordChannel(BaseChannel):
         user_id = meta.get("user_id")
 
         if channel_id:
-            ch = self._client.get_channel(int(channel_id))
+            channel_id_int = self._normalize_discord_id(
+                channel_id,
+                kind="channel",
+            )
+            ch = self._client.get_channel(channel_id_int)
             if ch is None:
                 ch = await self._client.fetch_channel(
-                    int(channel_id),
+                    channel_id_int,
                 )
             await ch.send(text)
             return
 
         if user_id:
-            user = self._client.get_user(int(user_id))
+            user_id_int = self._normalize_discord_id(
+                user_id,
+                kind="user",
+            )
+            user = self._client.get_user(user_id_int)
             if user is None:
                 user = await self._client.fetch_user(
-                    int(user_id),
+                    user_id_int,
                 )
             dm = user.dm_channel or await user.create_dm()
             await dm.send(text)
