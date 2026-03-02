@@ -71,6 +71,8 @@ jobs:
       # downloads the DMG. Then recreate DMG so the uploaded file contains the
       # signed app (without Apple Developer ID we cannot notarize; user may need
       # right-click → Open or: xattr -cr <dmg> then open).
+      # Remove .dist-info dirs before signing: they are not valid code targets
+      # and cause "bundle format unrecognized" when using codesign --deep.
       - name: Sign app and recreate DMG
         run: |
           APP_DIR="dist/CoPaw.app"
@@ -79,6 +81,7 @@ jobs:
             echo "No $APP_DIR found" >&2
             exit 1
           fi
+          find "$APP_DIR" -type d -name "*.dist-info" -print0 | xargs -0 rm -rf
           codesign --force --deep --sign - "$APP_DIR"
           DMG_NAME=$(ls $DMG_GLOB 2>/dev/null | head -1)
           if [[ -z "$DMG_NAME" ]]; then
