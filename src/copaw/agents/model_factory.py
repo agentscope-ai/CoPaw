@@ -263,7 +263,7 @@ def _create_remote_model_instance(
     # Prefer explicit active model config whenever available. Some providers
     # (e.g. Ollama) intentionally run without API keys.
     if llm_cfg and llm_cfg.model:
-        model_name = llm_cfg.model or "qwen3-max"
+        model_name = llm_cfg.model
         api_key = llm_cfg.api_key or ""
         base_url = llm_cfg.base_url
     else:
