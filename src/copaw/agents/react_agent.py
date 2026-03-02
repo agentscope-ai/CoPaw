@@ -4,11 +4,13 @@
 This module provides the main CoPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
+import asyncio
 import logging
 import os
 from typing import Any, List, Optional, Type
 
 from agentscope.agent import ReActAgent
+from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 from agentscope.message import Msg
 from agentscope.tool import Toolkit
 from pydantic import BaseModel
@@ -84,6 +86,12 @@ class CoPawAgent(ReActAgent):
         self._max_input_length = max_input_length
         self._mcp_clients = mcp_clients or []
 
+        # Track dynamically connected MCP clients (from skills like dynamic-mcp)
+        self._dynamic_mcp_clients: dict = {}
+
+        # Session-scoped dynamic MCP connection params (persisted via register_state)
+        self._dynamic_mcp_connection_params: list = []
+
         # Memory compaction threshold: configurable ratio of max_input_length
         self._memory_compact_threshold = int(
             max_input_length * MEMORY_COMPACT_RATIO,
@@ -111,6 +119,10 @@ class CoPawAgent(ReActAgent):
             formatter=formatter,
             max_iters=max_iters,
         )
+
+        # Register dynamic MCP connection params as session state
+        # so they persist across agent recreations within the same session
+        self.register_state("_dynamic_mcp_connection_params")
 
         # Setup memory manager
         self._setup_memory_manager(
@@ -153,6 +165,10 @@ class CoPawAgent(ReActAgent):
     def _register_skills(self, toolkit: Toolkit) -> None:
         """Load and register skills from working directory.
 
+        This method performs two registrations:
+        1. Register agent skill description (adds to system prompt)
+        2. Dynamically load tools from skill's tools.py if available
+
         Args:
             toolkit: Toolkit to register skills to
         """
@@ -166,8 +182,65 @@ class CoPawAgent(ReActAgent):
             skill_dir = working_skills_dir / skill_name
             if skill_dir.exists():
                 try:
+                    # Step 1: Register agent skill (adds skill description to prompt)
                     toolkit.register_agent_skill(str(skill_dir))
-                    logger.debug("Registered skill: %s", skill_name)
+                    logger.debug("Registered agent skill: %s", skill_name)
+                    
+                    # Step 2: Dynamically load tools from tools.py if present
+                    tools_py = skill_dir / "tools.py"
+                    if tools_py.exists():
+                        try:
+                            import importlib.util
+                            
+                            # Create a unique module name to avoid conflicts
+                            module_name = f"copaw_skill_{skill_name}_tools"
+                            spec = importlib.util.spec_from_file_location(
+                                module_name, 
+                                str(tools_py)
+                            )
+                            
+                            if spec is None or spec.loader is None:
+                                logger.warning(
+                                    "Could not create module spec for tools.py in skill '%s'",
+                                    skill_name,
+                                )
+                                continue
+                                
+                            tools_module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(tools_module)
+                            
+                            # Check for get_tools function
+                            if hasattr(tools_module, 'get_tools'):
+                                # Call get_tools to retrieve tool functions
+                                # Note: get_tools signature is (agent, session_service, app_info)
+                                new_tools = tools_module.get_tools(
+                                    agent=self,
+                                    session_service=None,
+                                    app_info=None
+                                )
+                                
+                                # Register each tool to toolkit
+                                for tool_func in new_tools:
+                                    toolkit.register_tool_function(tool_func)
+                                    tool_name = getattr(tool_func, '__name__', str(tool_func))
+                                    logger.debug(
+                                        "Registered tool from skill '%s': %s",
+                                        skill_name,
+                                        tool_name,
+                                    )
+                            else:
+                                logger.debug(
+                                    "Skill '%s' tools.py has no get_tools function; skipping tool registration",
+                                    skill_name,
+                                )
+                                
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to load tools from skill '%s': %s",
+                                skill_name,
+                                e,
+                            )
+                            
                 except Exception as e:
                     logger.error(
                         "Failed to register skill '%s': %s",
@@ -263,6 +336,93 @@ class CoPawAgent(ReActAgent):
         """Register MCP clients on this agent's toolkit after construction."""
         for client in self._mcp_clients:
             await self.toolkit.register_mcp_client(client)
+
+    async def restore_dynamic_mcp_connections(self) -> int:
+        """Restore dynamic MCP connections from session state.
+
+        Called after load_session_state to re-establish MCP connections
+        that were created by connect_mcp in previous turns of this session.
+
+        Returns:
+            Number of successfully restored connections.
+        """
+        if not self._dynamic_mcp_connection_params:
+            return 0
+
+        restored = 0
+        failed_indices = []
+
+        for idx, conn in enumerate(self._dynamic_mcp_connection_params):
+            client_id = conn.get("client_id", "")
+            if client_id in self._dynamic_mcp_clients:
+                restored += 1
+                continue
+
+            mode = conn.get("mode")
+            mcp_client = None
+
+            try:
+                if mode == "remote":
+                    mcp_client = HttpStatefulClient(
+                        name=conn["client_name"],
+                        transport=conn["transport"],
+                        url=conn["source"],
+                        headers=conn.get("headers", {}),
+                        timeout=15,
+                    )
+                elif mode == "local":
+                    import os as _os
+                    final_env = _os.environ.copy()
+                    final_env.update(conn.get("env_vars", {}))
+                    mcp_client = StdIOStatefulClient(
+                        name=conn["client_name"],
+                        command=conn["source"],
+                        args=conn.get("args", []),
+                        env=final_env,
+                    )
+                else:
+                    failed_indices.append(idx)
+                    continue
+
+                await asyncio.wait_for(mcp_client.connect(), timeout=15)
+                await self.toolkit.register_mcp_client(
+                    mcp_client,
+                    namesake_strategy="skip",
+                )
+                self._dynamic_mcp_clients[client_id] = mcp_client
+                restored += 1
+                logger.info(
+                    "[DynamicMCP] Restored connection: %s",
+                    client_id,
+                )
+
+            except Exception as e:
+                logger.warning(
+                    "[DynamicMCP] Failed to restore %s: %s",
+                    client_id,
+                    e,
+                )
+                failed_indices.append(idx)
+                if mcp_client and getattr(mcp_client, "is_connected", False):
+                    try:
+                        await mcp_client.close()
+                    except Exception:
+                        pass
+
+        # Remove failed connections from session state
+        if failed_indices:
+            self._dynamic_mcp_connection_params = [
+                c for i, c in enumerate(self._dynamic_mcp_connection_params)
+                if i not in failed_indices
+            ]
+
+        if restored > 0:
+            logger.info(
+                "[DynamicMCP] Restored %d dynamic MCP connection(s)",
+                restored,
+            )
+
+        return restored
 
     async def reply(
         self,
