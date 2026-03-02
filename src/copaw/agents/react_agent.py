@@ -6,7 +6,7 @@ with integrated tools, skills, and memory management.
 """
 import logging
 import os
-from typing import Any, List, Optional, Type
+from typing import Any, List, Literal, Optional, Type
 
 from agentscope.agent import ReActAgent
 from agentscope.message import Msg
@@ -263,6 +263,16 @@ class CoPawAgent(ReActAgent):
         """Register MCP clients on this agent's toolkit after construction."""
         for client in self._mcp_clients:
             await self.toolkit.register_mcp_client(client)
+
+    async def _reasoning(
+        self,
+        tool_choice: Literal["auto", "none", "required"] | None = None,
+    ) -> Msg:
+        """Ensure a stable default tool-choice behavior across providers."""
+        if tool_choice is None and self.toolkit.get_json_schemas():
+            tool_choice = "auto"
+
+        return await super()._reasoning(tool_choice=tool_choice)
 
     async def reply(
         self,
