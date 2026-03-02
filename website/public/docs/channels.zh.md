@@ -49,6 +49,7 @@
    ![保存](https://img.alicdn.com/imgextra/i1/O1CN01vrzbIA1Qey2x8Jbua_!!6000000002002-2-tps-2809-1585.png)
 
 6. 在"基础信息→凭证与基础信息"中获取：
+
    - **Client ID**（即 AppKey）
    - **Client Secret**（即 AppSecret）
 
