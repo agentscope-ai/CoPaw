@@ -94,10 +94,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             return
         self._inflight_message_ids.discard(msg_id)
         self._processed_message_ids[msg_id] = None
-        while (
-            len(self._processed_message_ids)
-            > DINGTALK_PROCESSED_IDS_MAX
-        ):
+        while len(self._processed_message_ids) > DINGTALK_PROCESSED_IDS_MAX:
             self._processed_message_ids.popitem(last=False)
 
     def _emit_native_threadsafe(self, native: dict) -> None:
@@ -204,7 +201,10 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             logger.exception("failed to fetch richText download url(s)")
         return content
 
-    async def process(self, callback: CallbackMessage) -> tuple[int, str]:
+    async def process(  # pylint: disable=too-many-branches,too-many-statements
+        self,
+        callback: CallbackMessage,
+    ) -> tuple[int, str]:
         try:
             incoming_message = ChatbotMessage.from_dict(callback.data)
 

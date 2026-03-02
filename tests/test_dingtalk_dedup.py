@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 """Tests for DingTalk message deduplication in handler."""
+# pylint: disable=protected-access,redefined-outer-name
 
 import asyncio
 from collections import OrderedDict
@@ -55,6 +57,7 @@ class TestDingTalkDedup:
         fake_msg.to_dict = lambda: cb.data
 
         import dingtalk_stream
+
         with patch(
             "copaw.app.channels.dingtalk.handler.ChatbotMessage.from_dict",
             return_value=fake_msg,
@@ -87,6 +90,7 @@ class TestDingTalkDedup:
         fake_msg.to_dict = lambda: cb.data
 
         import dingtalk_stream
+
         with patch(
             "copaw.app.channels.dingtalk.handler.ChatbotMessage.from_dict",
             return_value=fake_msg,
@@ -119,8 +123,7 @@ class TestDingTalkDedup:
             handler._mark_completed(f"msg_{i}")
 
         assert (
-            len(handler._processed_message_ids)
-            == DINGTALK_PROCESSED_IDS_MAX
+            len(handler._processed_message_ids) == DINGTALK_PROCESSED_IDS_MAX
         )
         assert "msg_0" not in handler._processed_message_ids
         newest = f"msg_{DINGTALK_PROCESSED_IDS_MAX + 99}"
@@ -173,5 +176,6 @@ class TestDingTalkDedup:
         from copaw.app.channels.dingtalk.handler import (
             DINGTALK_PROCESSED_IDS_MAX,
         )
+
         assert DINGTALK_PROCESSED_IDS_MAX >= 1024
         assert DINGTALK_PROCESSED_IDS_MAX <= 10000
