@@ -22,6 +22,17 @@ from ...constant import WORKING_DIR
 logger = logging.getLogger(__name__)
 
 
+def _normalize_user_facing_exception(exc: Exception) -> Exception:
+    """Rewrite known upstream timeout errors into actionable messages."""
+    exc_type = type(exc).__name__
+    if exc_type in {"APITimeoutError", "ReadTimeout", "ConnectTimeout"}:
+        return RuntimeError(
+            "Model request timed out. Please retry, shorten your prompt, "
+            "or switch to a more stable endpoint/model.",
+        )
+    return exc
+
+
 class AgentRunner(Runner):
     def __init__(self) -> None:
         super().__init__()
@@ -148,6 +159,7 @@ class AgentRunner(Runner):
                 await agent.interrupt()
             raise
         except Exception as e:
+            e = _normalize_user_facing_exception(e)
             debug_dump_path = write_query_error_dump(
                 request=request,
                 exc=e,
