@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for add_model/remove_model with custom providers."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from copaw.providers.store import add_model, remove_model
 from copaw.providers.models import (
@@ -33,13 +34,20 @@ class TestAddModelCustomProvider:
     @patch("copaw.providers.store.save_providers_json")
     @patch("copaw.providers.store.load_providers_json")
     @patch("copaw.providers.store.register_custom_provider")
-    def test_add_model_to_custom_provider(self, mock_reg, mock_load, mock_save):
+    def test_add_model_to_custom_provider(
+        self,
+        _mock_reg,
+        mock_load,
+        mock_save,
+    ):
         data = _make_data_with_custom("my-custom")
         mock_load.return_value = data
 
-        result = add_model("my-custom", ModelInfo(id="gpt-4", name="GPT-4"))
+        add_model("my-custom", ModelInfo(id="gpt-4", name="GPT-4"))
 
-        assert any(m.id == "gpt-4" for m in data.custom_providers["my-custom"].models)
+        assert any(
+            m.id == "gpt-4" for m in data.custom_providers["my-custom"].models
+        )
         mock_save.assert_called_once()
 
     @patch("copaw.providers.store.load_providers_json")
@@ -52,7 +60,12 @@ class TestAddModelCustomProvider:
     @patch("copaw.providers.store.save_providers_json")
     @patch("copaw.providers.store.load_providers_json")
     @patch("copaw.providers.store.register_custom_provider")
-    def test_add_duplicate_model_raises(self, mock_reg, mock_load, mock_save):
+    def test_add_duplicate_model_raises(
+        self,
+        _mock_reg,
+        mock_load,
+        _mock_save,
+    ):
         data = _make_data_with_custom(
             "my-custom",
             models=[ModelInfo(id="gpt-4", name="GPT-4")],
@@ -69,7 +82,12 @@ class TestRemoveModelCustomProvider:
     @patch("copaw.providers.store.save_providers_json")
     @patch("copaw.providers.store.load_providers_json")
     @patch("copaw.providers.store.register_custom_provider")
-    def test_remove_model_from_custom_provider(self, mock_reg, mock_load, mock_save):
+    def test_remove_model_from_custom_provider(
+        self,
+        _mock_reg,
+        mock_load,
+        mock_save,
+    ):
         data = _make_data_with_custom(
             "my-custom",
             models=[ModelInfo(id="gpt-4", name="GPT-4")],
