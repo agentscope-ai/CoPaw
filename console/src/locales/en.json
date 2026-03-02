@@ -323,7 +323,12 @@
     "localCancelDownloadConfirm": "Cancel download of \"{{repo}}\"?",
     "localDownloadCancelled": "Download cancelled",
     "localCancelDownloadFailed": "Failed to cancel download",
-    "ollamaModelNamePlaceholder": "e.g. mistral:7b, qwen3:8b"
+    "ollamaModelNamePlaceholder": "e.g. mistral:7b, qwen3:8b",
+    "testConnection": "Test Connection",
+    "testConnectionSuccess": "Connection test successful",
+    "testConnectionFailed": "Connection test failed",
+    "testConnectionError": "An error occurred while testing connection",
+    "modelTestFailed": "Model validation failed, please check if the model ID is correct"
   },
   "agentConfig": {
     "title": "Configuration",

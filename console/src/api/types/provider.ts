@@ -111,6 +111,11 @@ export interface TestConnectionResponse {
   message: string;
 }
 
+export interface TestProviderRequest {
+  api_key?: string;
+  base_url?: string;
+}
+
 export interface TestModelRequest {
   model_id: string;
 }

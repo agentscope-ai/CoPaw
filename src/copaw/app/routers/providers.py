@@ -158,6 +158,17 @@ class TestConnectionResponse(BaseModel):
     message: str = Field(..., description="Human-readable result message")
 
 
+class TestProviderRequest(BaseModel):
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Optional API key to test",
+    )
+    base_url: Optional[str] = Field(
+        default=None,
+        description="Optional Base URL to test",
+    )
+
+
 class TestModelRequest(BaseModel):
     model_id: str = Field(..., description="Model ID to test")
 
@@ -169,10 +180,17 @@ class TestModelRequest(BaseModel):
 )
 async def test_provider(
     provider_id: str = Path(...),
+    body: Optional[TestProviderRequest] = Body(default=None),
 ) -> TestConnectionResponse:
     """Test if a provider's URL and API key are valid."""
     try:
-        result = test_provider_connection(provider_id)
+        api_key = body.api_key if body else None
+        base_url = body.base_url if body else None
+        result = await test_provider_connection(
+            provider_id,
+            api_key=api_key,
+            base_url=base_url,
+        )
         return TestConnectionResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -189,7 +207,7 @@ async def test_model(
 ) -> TestConnectionResponse:
     """Test if a specific model works with the configured provider."""
     try:
-        result = test_model_connection(provider_id, body.model_id)
+        result = await test_model_connection(provider_id, body.model_id)
         return TestConnectionResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

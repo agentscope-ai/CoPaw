@@ -70,6 +70,19 @@ export function ProviderConfigModal({
     try {
       const values = await form.validateFields();
       setSaving(true);
+
+      // Validate connection before saving
+      // For local providers, we might skip this or just check if models exist (which the backend does)
+      const result = await api.testProviderConnection(provider.id, {
+        api_key: values.api_key,
+        base_url: values.base_url,
+      });
+
+      if (!result.success) {
+        message.error(result.message || t("models.testConnectionFailed"));
+        return;
+      }
+
       await api.configureProvider(provider.id, values);
       await onSaved();
       setFormDirty(false);
@@ -88,13 +101,18 @@ export function ProviderConfigModal({
   const handleTest = async () => {
     setTesting(true);
     try {
-      const result = await api.testProviderConnection(provider.id);
+      const values = await form.validateFields();
+      const result = await api.testProviderConnection(provider.id, {
+        api_key: values.api_key,
+        base_url: values.base_url,
+      });
       if (result.success) {
         message.success(result.message || t("models.testConnectionSuccess"));
       } else {
         message.warning(result.message || t("models.testConnectionFailed"));
       }
     } catch (error) {
+      if (error && typeof error === "object" && "errorFields" in error) return;
       const errMsg =
         error instanceof Error
           ? error.message

@@ -59,10 +59,16 @@ export const providerApi = {
 
   /* ---- Test Connection ---- */
 
-  testProviderConnection: (providerId: string) =>
+  testProviderConnection: (
+    providerId: string,
+    body?: { api_key?: string; base_url?: string },
+  ) =>
     request<TestConnectionResponse>(
       `/models/${encodeURIComponent(providerId)}/test`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: body ? JSON.stringify(body) : undefined,
+      },
     ),
 
   testModelConnection: (providerId: string, body: TestModelRequest) =>

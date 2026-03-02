@@ -468,7 +468,11 @@ def remove_model(provider_id: str, model_id: str) -> ProvidersData:
 
 # pylint: disable=too-many-return-statements,too-many-branches
 # pylint: disable=too-many-statements
-def test_provider_connection(provider_id: str) -> dict[str, Any]:
+async def test_provider_connection(
+    provider_id: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> dict[str, Any]:
     """Test if a provider's URL and API key are valid.
 
     (without testing a specific model).
@@ -478,6 +482,8 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
 
     Args:
         provider_id: The provider identifier to test
+        api_key: Optional API key to use (overrides saved config)
+        base_url: Optional Base URL to use (overrides saved config)
 
     Returns:
         dict with keys:
@@ -487,6 +493,13 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
     Raises:
         ValueError: If provider is not found
     """
+    try:
+        import httpx
+    except ImportError:
+        return {
+            "success": False,
+            "message": "httpx library is not installed.",
+        }
 
     defn = PROVIDERS.get(provider_id)
     if defn is None:
@@ -534,13 +547,23 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
             }
 
     # Remote providers - test API credentials
-    if not data.is_configured(defn):
-        return {
-            "success": False,
-            "message": f"{defn.name} is not configured. Please add API key.",
-        }
+    # Use provided credentials or fall back to saved config
+    if not base_url or not api_key:
+        saved_base_url, saved_api_key = data.get_credentials(provider_id)
+        if not base_url:
+            base_url = saved_base_url
+        if not api_key:
+            api_key = saved_api_key
 
-    base_url, api_key = data.get_credentials(provider_id)
+    # If still no credentials (and provider requires them), fail
+    if not api_key and not base_url:
+        # Some providers might work without key if local custom,
+        # but generally we need something
+        if not data.is_configured(defn) and not (api_key or base_url):
+            return {
+                "success": False,
+                "message": f"{defn.name} not configured. Please add API key.",
+            }
 
     # Get chat model class for this provider
     chat_model_class_name = get_provider_chat_model(provider_id, data)
@@ -550,8 +573,6 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
     # For OpenAI-compatible APIs, we can use the models list endpoint
     # This validates URL + Key without needing a specific model ID
     try:
-        import httpx
-
         # Most OpenAI-compatible APIs have a /models endpoint
         # This is a lightweight way to test credentials
         test_url = f"{base_url.rstrip('/')}/models"
@@ -560,8 +581,8 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(test_url, headers=headers)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(test_url, headers=headers)
 
             if response.status_code == 401:
                 return {
@@ -619,6 +640,8 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
 
     try:
         # Try to instantiate the model with the configured credentials
+        # Note: This part might still be sync if the SDK init is sync,
+        # but usually init is fast.
         chat_model_class(
             model_name=test_model,
             api_key=api_key,
@@ -655,7 +678,10 @@ def test_provider_connection(provider_id: str) -> dict[str, Any]:
 
 
 # pylint: disable=too-many-return-statements,too-many-branches
-def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
+async def test_model_connection(
+    provider_id: str,
+    model_id: str,
+) -> dict[str, Any]:
     """Test if a specific model can be used with the configured provider.
 
     This tests the complete call chain: URL + Key + ModelID.
@@ -672,6 +698,13 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     Raises:
         ValueError: If provider is not found
     """
+    try:
+        import httpx
+    except ImportError:
+        return {
+            "success": False,
+            "message": "httpx library is not installed.",
+        }
 
     defn = PROVIDERS.get(provider_id)
     if defn is None:
@@ -729,8 +762,6 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     base_url, api_key = data.get_credentials(provider_id)
 
     # For remote providers, use direct API call for more reliable testing
-    import httpx
-
     # Most OpenAI-compatible APIs use the chat completions endpoint
     chat_url = f"{base_url.rstrip('/')}/chat/completions"
 
@@ -748,8 +779,8 @@ def test_model_connection(provider_id: str, model_id: str) -> dict[str, Any]:
     }
 
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
                 chat_url,
                 json=test_payload,
                 headers=headers,
