@@ -53,7 +53,6 @@ function ChannelsPage() {
     setActiveKey(key);
     setDrawerOpen(true);
     form.resetFields();
-    form.setFieldsValue(channels[key]);
   };
 
   const handleDrawerClose = () => {
