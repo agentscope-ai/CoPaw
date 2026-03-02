@@ -1,9 +1,6 @@
 import { getApiUrl, getApiToken } from "./config";
 
-function buildHeaders(
-  method?: string,
-  extra?: HeadersInit,
-): Headers {
+function buildHeaders(method?: string, extra?: HeadersInit): Headers {
   // Normalize extra to a Headers instance for consistent handling
   const headers = extra instanceof Headers ? extra : new Headers(extra);
 
