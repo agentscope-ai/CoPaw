@@ -211,16 +211,20 @@ class DiscordChannel(BaseChannel):
         kind: str,
     ) -> int:
         """Normalize a Discord id from raw value or prefixed handle."""
-        text = str(raw_value or "").strip()
+        if raw_value is None:
+            text = ""
+        else:
+            text = str(raw_value).strip()
         if not text:
             raise ValueError(f"discord {kind} id is empty")
 
         if text.startswith("discord:"):
             route = self._route_from_handle(text)
             if kind == "channel":
-                text = str(route.get("channel_id") or "").strip()
+                route_value = route.get("channel_id")
             else:
-                text = str(route.get("user_id") or "").strip()
+                route_value = route.get("user_id")
+            text = "" if route_value is None else str(route_value).strip()
 
         if not text.isdigit():
             raise ValueError(

@@ -1,72 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import sys
-import types
-from enum import Enum
-
 import pytest
 
-
-def _ensure_agentscope_runtime_stub() -> None:
-    """Provide a tiny stub for local test envs missing agentscope_runtime."""
-    try:
-        __import__("agentscope_runtime.engine.schemas.agent_schemas")
-
-        return
-    except (ImportError, ModuleNotFoundError):
-        pass
-
-    agent_schemas = types.ModuleType(
-        "agentscope_runtime.engine.schemas.agent_schemas",
+try:
+    __import__("agentscope_runtime.engine.schemas.agent_schemas")
+except (ImportError, ModuleNotFoundError):
+    pytest.skip(
+        "agentscope-runtime is required for Discord channel tests",
+        allow_module_level=True,
     )
-
-    class ContentType(str, Enum):
-        TEXT = "text"
-        IMAGE = "image"
-        VIDEO = "video"
-        AUDIO = "audio"
-        FILE = "file"
-        REFUSAL = "refusal"
-
-    class MessageType(str, Enum):
-        MESSAGE = "message"
-
-    class RunStatus(str, Enum):
-        COMPLETED = "completed"
-        Completed = COMPLETED
-
-    class _Base:
-        def __init__(self, **kwargs):
-            for key, value in kwargs.items():
-                setattr(self, key, value)
-
-    for name in (
-        "TextContent",
-        "ImageContent",
-        "VideoContent",
-        "AudioContent",
-        "FileContent",
-        "RefusalContent",
-    ):
-        setattr(agent_schemas, name, _Base)
-    setattr(agent_schemas, "ContentType", ContentType)
-    setattr(agent_schemas, "MessageType", MessageType)
-    setattr(agent_schemas, "RunStatus", RunStatus)
-
-    sys.modules["agentscope_runtime"] = types.ModuleType("agentscope_runtime")
-    sys.modules["agentscope_runtime.engine"] = types.ModuleType(
-        "agentscope_runtime.engine",
-    )
-    sys.modules["agentscope_runtime.engine.schemas"] = types.ModuleType(
-        "agentscope_runtime.engine.schemas",
-    )
-    sys.modules[
-        "agentscope_runtime.engine.schemas.agent_schemas"
-    ] = agent_schemas
-
-
-_ensure_agentscope_runtime_stub()
 
 
 async def _dummy_process(_):
