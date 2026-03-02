@@ -150,7 +150,7 @@ Choose provider `llamacpp`, then select your downloaded model.
 copaw app
 ```
 
-You can also complete steps 4-5 in **Console -> Settings -> Models**.
+After the app is running, you can also complete step 4 (model selection) in **Console -> Settings -> Models**.
 
 ### How to manage Skills
 
