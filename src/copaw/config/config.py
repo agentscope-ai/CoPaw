@@ -19,6 +19,7 @@ class BaseChannelConfig(BaseModel):
 class IMessageChannelConfig(BaseChannelConfig):
     db_path: str = "~/Library/Messages/chat.db"
     poll_sec: float = 1.0
+    media_dir: str = "~/.copaw/media"
 
 
 class DiscordConfig(BaseChannelConfig):

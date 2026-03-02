@@ -44,6 +44,7 @@ class IMessageChannel(BaseChannel):
         db_path: str,
         poll_sec: float,
         bot_prefix: str,
+        media_dir: str = "~/.copaw/media",
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
     ):
@@ -58,7 +59,7 @@ class IMessageChannel(BaseChannel):
         self.bot_prefix = bot_prefix
 
         # Create media directory for downloaded files
-        self._media_dir = Path("~/.copaw/media").expanduser()
+        self._media_dir = Path(media_dir).expanduser()
         self._media_dir.mkdir(parents=True, exist_ok=True)
 
         self._imsg_path: Optional[str] = None
@@ -80,6 +81,7 @@ class IMessageChannel(BaseChannel):
             ),
             poll_sec=float(os.getenv("IMESSAGE_POLL_SEC", "1.0")),
             bot_prefix=os.getenv("IMESSAGE_BOT_PREFIX", "[BOT] "),
+            media_dir=os.getenv("IMESSAGE_MEDIA_DIR", "~/.copaw/media"),
             on_reply_sent=on_reply_sent,
         )
 
@@ -97,6 +99,7 @@ class IMessageChannel(BaseChannel):
             db_path=config.db_path or "~/Library/Messages/chat.db",
             poll_sec=config.poll_sec,
             bot_prefix=config.bot_prefix or "[BOT] ",
+            media_dir=config.media_dir or "~/.copaw/media",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
         )
