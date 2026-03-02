@@ -14,6 +14,7 @@ def test_normalize_timeout_exception_to_runtime_error() -> None:
 
     assert isinstance(normalized, RuntimeError)
     assert "timed out" in str(normalized).lower()
+    assert normalized.__cause__ is exc
 
 
 def test_keep_unknown_exception_unchanged() -> None:

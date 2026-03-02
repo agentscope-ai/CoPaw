@@ -26,10 +26,12 @@ def _normalize_user_facing_exception(exc: Exception) -> Exception:
     """Rewrite known upstream timeout errors into actionable messages."""
     exc_type = type(exc).__name__
     if exc_type in {"APITimeoutError", "ReadTimeout", "ConnectTimeout"}:
-        return RuntimeError(
+        wrapped = RuntimeError(
             "Model request timed out. Please retry, shorten your prompt, "
             "or switch to a more stable endpoint/model.",
         )
+        wrapped.__cause__ = exc
+        return wrapped
     return exc
 
 
@@ -179,7 +181,7 @@ class AgentRunner(Runner):
                 e.args = (
                     (f"{e.args[0]}{suffix}" if e.args else suffix.strip()),
                 ) + e.args[1:]
-            raise
+            raise e
         finally:
             if agent is not None:
                 await self.session.save_session_state(
