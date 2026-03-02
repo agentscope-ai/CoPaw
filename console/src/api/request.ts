@@ -1,10 +1,16 @@
 import { getApiUrl, getApiToken } from "./config";
 
-function buildHeaders(extra?: HeadersInit): HeadersInit {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...extra,
-  };
+function buildHeaders(method?: string, extra?: HeadersInit): HeadersInit {
+  const headers: HeadersInit = {};
+
+  // Content-Type
+  if (method && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (extra) {
+    Object.assign(headers, extra);
+  }
 
   const token = getApiToken();
   if (token) {
@@ -19,8 +25,8 @@ export async function request<T = unknown>(
   options: RequestInit = {},
 ): Promise<T> {
   const url = getApiUrl(path);
-
-  const headers = buildHeaders(options.headers);
+  const method = options.method || "GET";
+  const headers = buildHeaders(method, options.headers);
 
   const response = await fetch(url, {
     ...options,
