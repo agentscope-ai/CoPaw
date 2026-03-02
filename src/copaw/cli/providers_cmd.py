@@ -29,9 +29,6 @@ def _resolve_provider_id(identifier: str) -> str:
     if not raw:
         raise ValueError("Provider id is required.")
 
-    if raw in PROVIDERS:
-        return raw
-
     lowered = raw.lower()
     if lowered in PROVIDERS:
         return lowered
