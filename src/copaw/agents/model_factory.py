@@ -37,6 +37,34 @@ _CHAT_MODEL_FORMATTER_MAP: dict[Type[ChatModelBase], Type[FormatterBase]] = {
 }
 
 
+def _strip_message_name_fields(payload: object) -> object:
+    """Remove top-level ``messages[*].name`` for strict OpenAI-compatible APIs.
+
+    Some OpenAI-compatible backends reject any extra keys under message
+    objects. Removing top-level ``name`` keeps payloads schema-safe while
+    preserving function/tool names under ``tool_calls``.
+    """
+
+    def _strip_in_messages(messages: object) -> None:
+        if not isinstance(messages, list):
+            return
+        for msg in messages:
+            if isinstance(msg, dict):
+                msg.pop("name", None)
+
+    if isinstance(payload, dict):
+        _strip_in_messages(payload.get("messages"))
+        return payload
+
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                _strip_in_messages(item.get("messages"))
+        return payload
+
+    return payload
+
+
 def _get_formatter_for_chat_model(
     chat_model_class: Type[ChatModelBase],
 ) -> Type[FormatterBase]:
@@ -79,7 +107,8 @@ def _create_file_block_support_formatter(
             tool messages.
             """
             msgs = _sanitize_tool_messages(msgs)
-            return await super()._format(msgs)
+            payload = await super()._format(msgs)
+            return _strip_message_name_fields(payload)
 
         @staticmethod
         def convert_tool_result_to_string(
