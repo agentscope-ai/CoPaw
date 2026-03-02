@@ -7,6 +7,7 @@ Base Channel: bound to AgentRequest/AgentResponse, unified by process.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from abc import ABC
 from collections import OrderedDict
@@ -260,16 +261,31 @@ class BaseChannel(ABC):
         Default: tries common dict keys (message_id, msg_id, id).
         Returns None if no ID can be extracted (dedup is skipped).
         """
+
+        def _normalize_message_id(value: Any) -> Optional[str]:
+            text = (str(value) if value is not None else "").strip()
+            if not text:
+                return None
+            # Bound memory usage if upstream sends very large IDs.
+            if len(text) > 256:
+                digest = hashlib.sha256(
+                    text.encode("utf-8", errors="ignore"),
+                ).hexdigest()
+                return f"sha256:{digest}"
+            return text
+
         if isinstance(payload, dict):
             for key in ("message_id", "msg_id", "id"):
-                val = payload.get(key)
-                if val:
-                    return str(val).strip()
+                message_id = _normalize_message_id(payload.get(key))
+                if message_id:
+                    return message_id
             meta = payload.get("meta") or {}
+            if not isinstance(meta, dict):
+                return None
             for key in ("message_id", "msg_id"):
-                val = meta.get(key)
-                if val:
-                    return str(val).strip()
+                message_id = _normalize_message_id(meta.get(key))
+                if message_id:
+                    return message_id
         return None
 
     def is_duplicate(self, payload: Any) -> bool:
