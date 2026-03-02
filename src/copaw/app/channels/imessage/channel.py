@@ -406,8 +406,11 @@ ORDER BY m.ROWID ASC
         filename_hint: str,
     ) -> str:
         """Get appropriate file extension based on content type."""
-        if "." in filename_hint:
-            return Path(filename_hint).suffix
+        # Sanitize filename_hint first to prevent path
+        # traversal in extension extraction
+        sanitized_hint = self._sanitize_filename(filename_hint)
+        if "." in sanitized_hint:
+            return Path(sanitized_hint).suffix
         elif content_type == ContentType.IMAGE:
             return ".jpg"
         elif content_type == ContentType.AUDIO:
