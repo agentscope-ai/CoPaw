@@ -70,3 +70,9 @@ DASHSCOPE_BASE_URL = os.environ.get(
 # Example: COPAW_CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
 # When unset, CORS middleware is not applied.
 CORS_ORIGINS = os.environ.get("COPAW_CORS_ORIGINS", "").strip()
+
+# Max file size for base64 conversion (default 10MB)
+# Used for vision model image processing
+MAX_BASE64_FILE_SIZE = int(
+    os.environ.get("COPAW_MAX_BASE64_FILE_SIZE", str(10 * 1024 * 1024)),
+)

@@ -28,6 +28,7 @@ export interface ProviderConfigRequest {
 export interface ModelSlotConfig {
   provider_id: string;
   model: string;
+  vision_supported?: boolean;
 }
 
 export interface ActiveModelsInfo {
@@ -37,6 +38,7 @@ export interface ActiveModelsInfo {
 export interface ModelSlotRequest {
   provider_id: string;
   model: string;
+  vision_supported?: boolean;
 }
 
 /* ---- Custom provider CRUD ---- */

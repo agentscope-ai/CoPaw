@@ -74,6 +74,10 @@ class CustomProviderData(BaseModel):
 class ModelSlotConfig(BaseModel):
     provider_id: str = Field(default="")
     model: str = Field(default="")
+    vision_supported: bool = Field(
+        default=True,
+        description="Whether this model supports vision (image/video input)",
+    )
 
 
 class ProvidersData(BaseModel):
@@ -148,3 +152,4 @@ class ResolvedModelConfig(BaseModel):
     base_url: str = Field(default="")
     api_key: str = Field(default="")
     is_local: bool = Field(default=False)
+    vision_supported: bool = Field(default=True)

@@ -6,6 +6,7 @@ This module handles:
 - Message content manipulation
 - Message validation
 """
+import base64
 import logging
 import os
 import urllib.parse
@@ -15,13 +16,62 @@ from typing import Optional
 
 from agentscope.message import Msg
 
-from ...constant import WORKING_DIR
+from ...constant import MAX_BASE64_FILE_SIZE, WORKING_DIR
+from ...providers import get_active_llm_config
 from .file_handling import download_file_from_base64, download_file_from_url
 
 logger = logging.getLogger(__name__)
 
 # Only allow local paths under this dir (channels save media here).
 _ALLOWED_MEDIA_ROOT = WORKING_DIR / "media"
+
+
+def _local_path_to_data_url(local_path: str) -> Optional[str]:
+    """Convert local file path to data URL with base64 encoding.
+
+    Returns None if the file doesn't exist, is too large, or can't be read.
+    """
+    try:
+        if not os.path.isfile(local_path):
+            return None
+
+        # Check file size before reading
+        file_size = os.path.getsize(local_path)
+        if file_size > MAX_BASE64_FILE_SIZE:
+            logger.warning(
+                "File %s exceeds max size for base64 conversion: %s > %s",
+                local_path,
+                file_size,
+                MAX_BASE64_FILE_SIZE,
+            )
+            return None
+
+        with open(local_path, "rb") as f:
+            data = f.read()
+
+        # Determine media type from extension
+        ext = os.path.splitext(local_path)[1].lower()
+        mime_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+        }
+        media_type = mime_types.get(ext, "application/octet-stream")
+
+        return (
+            f"data:{media_type};base64,"
+            f"{base64.b64encode(data).decode('utf-8')}"
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to convert local file to data URL: %s: %s",
+            local_path,
+            e,
+        )
+        return None
 
 
 def _is_allowed_media_path(path: str) -> bool:
@@ -48,46 +98,75 @@ async def _process_single_file_block(
     Returns:
         The local file path if successful, None otherwise.
     """
-    if isinstance(source, dict) and source.get("type") == "base64":
-        if "data" in source:
-            base64_data = source.get("data", "")
-            local_path = await download_file_from_base64(
-                base64_data,
-                filename,
-            )
-            logger.debug(
-                "Processed base64 file block: %s -> %s",
-                filename or "unnamed",
-                local_path,
-            )
-            return local_path
+    if not isinstance(source, dict):
+        return None
 
-    elif isinstance(source, dict) and source.get("type") == "url":
+    result = None
+    source_type = source.get("type")
+
+    if source_type == "base64":
+        if "data" not in source:
+            return None
+        base64_data = source.get("data", "")
+        result = await download_file_from_base64(
+            base64_data,
+            filename,
+        )
+        logger.debug(
+            "Processed base64 file block: %s -> %s",
+            filename or "unnamed",
+            result,
+        )
+
+    elif source_type == "url":
         url = source.get("url", "")
-        if url:
-            parsed = urllib.parse.urlparse(url)
-            if parsed.scheme == "file":
-                try:
-                    local_path = urllib.request.url2pathname(parsed.path)
-                    if not _is_allowed_media_path(local_path):
-                        logger.warning(
-                            "Rejected file:// URL outside allowed media dir",
-                        )
-                        return None
-                except Exception:
-                    return None
-            local_path = await download_file_from_url(
+        if not url:
+            return None
+
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme == "file":
+            result = _process_file_url(parsed)
+            logger.debug(
+                "Processed URL file block: %s -> %s",
+                url,
+                result,
+            )
+        else:
+            result = await download_file_from_url(
                 url,
                 filename,
             )
             logger.debug(
                 "Processed URL file block: %s -> %s",
                 url,
-                local_path,
+                result,
             )
-            return local_path
 
-    return None
+    return result
+
+
+def _process_file_url(parsed: urllib.parse.ParseResult) -> Optional[str]:
+    try:
+        # On Windows, file URLs with drive letters have the path in netloc
+        # For Unix-style URLs, use parsed.path directly.
+        if parsed.netloc in ("", "localhost"):
+            file_path = parsed.path
+        else:
+            # Convert Windows drive letter format
+            file_path = parsed.netloc + parsed.path
+            if "|" in file_path:
+                file_path = file_path.replace("|", ":", 1)
+        # Use urllib to properly decode URL-encoded characters
+        # but don't use url2pathname as it converts / to \
+        local_path = urllib.parse.unquote(file_path)
+        if not _is_allowed_media_path(local_path):
+            logger.warning(
+                "Rejected file:// URL outside allowed media dir",
+            )
+            return None
+        return local_path
+    except Exception:
+        return None
 
 
 def _extract_source_and_filename(block: dict, block_type: str):
@@ -110,14 +189,42 @@ def _extract_source_and_filename(block: dict, block_type: str):
 
 
 def _media_type_from_path(path: str) -> str:
-    """Infer audio media_type from file path suffix."""
+    """Infer media type from file path suffix."""
     ext = (os.path.splitext(path)[1] or "").lower()
-    return {
+
+    # Image types
+    image_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+    }
+    if ext in image_types:
+        return image_types[ext]
+
+    # Video types
+    video_types = {
+        ".mp4": "video/mp4",
+        ".avi": "video/avi",
+        ".mov": "video/quicktime",
+        ".webm": "video/webm",
+    }
+    if ext in video_types:
+        return video_types[ext]
+
+    # Audio types
+    audio_types = {
         ".amr": "audio/amr",
         ".wav": "audio/wav",
         ".mp3": "audio/mp3",
         ".opus": "audio/opus",
-    }.get(ext, "audio/octet-stream")
+    }
+    if ext in audio_types:
+        return audio_types[ext]
+
+    return "application/octet-stream"
 
 
 def _update_block_with_local_path(
@@ -125,23 +232,59 @@ def _update_block_with_local_path(
     block_type: str,
     local_path: str,
 ) -> dict:
-    """Update block with downloaded local path."""
+    """Update block with downloaded local path.
+
+    For images and videos: if vision_supported is True in config, convert to
+    base64 data URL; otherwise keep as file:// URL.
+    """
     if block_type == "file":
         block["source"] = local_path
         if not block.get("filename"):
             block["filename"] = os.path.basename(local_path)
-    else:
-        if block_type == "audio":
-            block["source"] = {
-                "type": "url",
-                "url": Path(local_path).as_uri(),
-                "media_type": _media_type_from_path(local_path),
-            }
+    elif block_type in ("image", "video"):
+        # Check if vision is supported by the active model
+        model_config = get_active_llm_config()
+        vision_supported = (
+            model_config.vision_supported if model_config else True
+        )
+
+        if vision_supported:
+            # Convert to base64 for vision models
+            data_url = _local_path_to_data_url(local_path)
+            if data_url:
+                block["source"] = {
+                    "type": "base64",
+                    "data": data_url.split(",", 1)[1],
+                    "media_type": _media_type_from_path(local_path),
+                }
+            else:
+                logger.warning(
+                    "Failed to convert %s to base64: %s",
+                    block_type,
+                    local_path,
+                )
+                # Fallback to file:// URL
+                block["source"] = {
+                    "type": "url",
+                    "url": Path(local_path).as_uri(),
+                }
         else:
+            # Keep as file:// URL for non-vision models
             block["source"] = {
                 "type": "url",
                 "url": Path(local_path).as_uri(),
             }
+    elif block_type == "audio":
+        block["source"] = {
+            "type": "url",
+            "url": Path(local_path).as_uri(),
+            "media_type": _media_type_from_path(local_path),
+        }
+    else:
+        block["source"] = {
+            "type": "url",
+            "url": Path(local_path).as_uri(),
+        }
     return block
 
 
@@ -258,14 +401,17 @@ async def process_file_and_media_blocks_in_message(msg) -> None:
 
             local_path = await _process_single_block(message.content, i, block)
             if local_path:
-                downloaded_files.append((i, local_path))
+                downloaded_files.append((i, local_path, block_type))
 
-        for i, local_path in reversed(downloaded_files):
-            text_block = {
-                "type": "text",
-                "text": f"用户上传文件，已经下载到 {local_path}",
-            }
-            message.content.insert(i + 1, text_block)
+        # Only add text description for non-media files (not image/video/audio)
+        for i, local_path, block_type in reversed(downloaded_files):
+            if block_type == "file":
+                text_block = {
+                    "type": "text",
+                    "text": f"用户上传文件，已经下载到 {local_path}",
+                }
+                message.content.insert(i + 1, text_block)
+            # For image/video/audio: keep the block as-is
 
 
 def is_first_user_interaction(messages: list) -> bool:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -29,6 +30,72 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 TELEGRAM_SEND_CHUNK_SIZE = 4000
+
+
+def _escape_html(text: str) -> str:
+    """Escape HTML special characters to prevent injection."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _convert_markdown_to_html(text: str) -> str:
+    """Convert markdown to Telegram HTML format.
+
+    Telegram HTML supports: <b>, <i>, <code>, <pre>, <a>, etc.
+    """
+    result = text
+
+    # Escape HTML at the start to prevent injection
+    result = _escape_html(result)
+
+    # First, remove thinking tags and their content
+    # Remove <think>...</think> blocks
+    result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL)
+    # Remove ```think ... ``` blocks
+    result = re.sub(r"```think\n?.*?```", "", result, flags=re.DOTALL)
+
+    # Strip leading thinking-like content at the beginning
+    result = re.sub(r"^<think>.*?</think>\s*", "", result, flags=re.DOTALL)
+
+    # Convert code blocks ```code``` to <pre><code>code</code></pre>
+    def code_block_replacer(match):
+        _ = match.group(1) or ""  # language tag (unused)
+        code = match.group(2)
+        return f"<pre><code>{code}</code></pre>"
+
+    result = re.sub(
+        r"```(\w*)\n?(.*?)```",
+        code_block_replacer,
+        result,
+        flags=re.DOTALL,
+    )
+
+    # Convert inline `code` to <code>code</code>
+    # But avoid replacing code already inside <pre><code>
+    result = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", result)
+
+    # Convert **bold** to <b>bold</b>
+    result = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", result)
+
+    # Convert *italic* to <i>italic</i>
+    result = re.sub(
+        r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
+        r"<i>\1</i>",
+        result,
+    )
+
+    # Convert headings # H1 to <b>H1</b> (Telegram doesn't support h1-h6)
+    result = re.sub(r"^#+\s+(.+)$", r"<b>\1</b>", result, flags=re.MULTILINE)
+
+    # Convert lists - item to • item
+    result = re.sub(r"^[\-\*]\s+", "• ", result, flags=re.MULTILINE)
+
+    # Convert tables (basic support)
+    # | a | b | -> (keep as is, Telegram will show but not format)
+    # Remove |--- for table separator
+    result = re.sub(r"\|[\s\-:]+\|", "", result)
+
+    return result
+
 
 _DEFAULT_MEDIA_DIR = Path("~/.copaw/media/telegram").expanduser()
 
@@ -125,10 +192,12 @@ async def _build_content_parts_from_message(
                 filename_hint="photo.jpg",
             )
             if local_path:
+                # Convert backslash to forward slash for cross-platform
+                file_url = "file://" + local_path.replace("\\", "/")
                 content_parts.append(
                     ImageContent(
                         type=ContentType.IMAGE,
-                        image_url=f"file://{local_path}",
+                        image_url=file_url,
                     ),
                 )
 
@@ -147,10 +216,12 @@ async def _build_content_parts_from_message(
             filename_hint=file_name,
         )
         if local_path:
+            # Convert backslash to forward slash for cross-platform
+            file_url = "file://" + local_path.replace("\\", "/")
             content_parts.append(
                 content_cls(
                     type=content_type,
-                    **{url_field: f"file://{local_path}"},
+                    **{url_field: file_url},
                 ),
             )
 
@@ -428,11 +499,13 @@ class TelegramChannel(BaseChannel):
             asyncio.create_task(self._send_chat_action(chat_id, "typing"))
         chunks = self._chunk_text(text)
         for chunk in chunks:
+            # Convert markdown to Telegram HTML format
+            html_chunk = _convert_markdown_to_html(chunk)
             try:
                 await bot.send_message(
                     chat_id=chat_id,
-                    text=chunk,
-                    parse_mode="Markdown",
+                    text=html_chunk,
+                    parse_mode="HTML",
                 )
             except Exception:
                 logger.exception("telegram send_message failed")

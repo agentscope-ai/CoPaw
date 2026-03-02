@@ -232,6 +232,8 @@
   },
   "models": {
     "llmConfiguration": "LLM Configuration",
+    "visionSupport": "Vision Support",
+    "visionSupportTooltip": "When enabled, images and videos will be converted to base64 and sent to the LLM for vision model analysis. Disable if your model doesn't support vision.",
     "providersTitle": "Providers",
     "providersDescription": "Configure API keys and endpoints for each provider.",
     "llmTitle": "LLM",
