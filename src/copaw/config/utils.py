@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from ..constant import (
-    COPAW_RUNNING_IN_CONTAINER_ENV,
+    RUNNING_IN_CONTAINER_ENV,
     HEARTBEAT_FILE,
     JOBS_FILE,
     CHATS_FILE,
@@ -21,8 +21,7 @@ def is_running_in_container() -> bool:
     Prefer env COPAW_RUNNING_IN_CONTAINER (1/true/yes); else check
     /.dockerenv and /proc/1/cgroup.
     """
-    val = os.environ.get(COPAW_RUNNING_IN_CONTAINER_ENV, "").strip().lower()
-    if val in ("1", "true", "yes"):
+    if RUNNING_IN_CONTAINER_ENV.strip().lower() in ("1", "true", "yes"):
         return True
     if os.path.exists("/.dockerenv"):
         return True
