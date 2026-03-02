@@ -2,30 +2,13 @@
 """Tests for runtime exception mapping in query handler."""
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
 from typing import Type
 
-_MODULE_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "src"
-    / "copaw"
-    / "app"
-    / "runner"
-    / "error_mapping.py"
+from copaw.app.runner.error_mapping import (
+    AgentModelTimeoutError,
+    is_model_timeout_error,
+    map_query_exception,
 )
-_SPEC = importlib.util.spec_from_file_location(
-    "copaw_runner_error_mapping",
-    _MODULE_PATH,
-)
-if _SPEC is None or _SPEC.loader is None:
-    raise RuntimeError(f"Failed to load module spec from {_MODULE_PATH}")
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-
-AgentModelTimeoutError = _MODULE.AgentModelTimeoutError
-is_model_timeout_error = _MODULE.is_model_timeout_error
-map_query_exception = _MODULE.map_query_exception
 
 
 OpenAITimeoutError: Type[Exception] = type(
