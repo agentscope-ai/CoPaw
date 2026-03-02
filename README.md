@@ -172,10 +172,14 @@ copaw uninstall --purge  # removes everything
 
 ### Using Docker
 
+Images are on **Docker Hub** (`agentscope/copaw`). Image tags: `latest` (stable); `pre` (current latest release from the beta branch).
+
 ```bash
 docker pull agentscope/copaw:latest
 docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
+
+Also available on Alibaba Cloud Container Registry (ACR) for users in China: `agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/copaw` (same tags).
 
 Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
 
