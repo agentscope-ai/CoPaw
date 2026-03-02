@@ -342,6 +342,9 @@ def create_custom_provider(
     if not name:
         raise ValueError("Provider name cannot be empty.")
 
+    if not provider_id:
+        raise ValueError("Provider id cannot be empty.")
+
     err = validate_custom_provider_id(provider_id)
     if err:
         raise ValueError(err)
