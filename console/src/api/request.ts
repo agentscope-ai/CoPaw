@@ -1,20 +1,24 @@
 import { getApiUrl, getApiToken } from "./config";
 
-function buildHeaders(method?: string, extra?: HeadersInit): HeadersInit {
-  const headers: HeadersInit = {};
+function buildHeaders(
+  method?: string,
+  extra?: HeadersInit,
+): Headers {
+  // Normalize extra to a Headers instance for consistent handling
+  const headers = extra instanceof Headers ? extra : new Headers(extra);
 
-  // Content-Type
+  // Only add Content-Type for methods that typically have a body
   if (method && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
-    headers["Content-Type"] = "application/json";
+    // Don't override if caller explicitly set Content-Type
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
   }
 
-  if (extra) {
-    Object.assign(headers, extra);
-  }
-
+  // Add authorization token if available
   const token = getApiToken();
   if (token) {
-    (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   return headers;
