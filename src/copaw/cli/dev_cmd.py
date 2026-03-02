@@ -136,18 +136,12 @@ def _start_frontend(
         "--port",
         str(frontend_port),
     ]
-    # On Windows, create a new process group so the entire tree can be
-    # terminated reliably (e.g. via `taskkill /T`).
-    creationflags = 0
-    if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     return subprocess.Popen(  # pylint: disable=consider-using-with
         frontend_cmd,
         cwd=console_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=frontend_env,
-        creationflags=creationflags,
     )
 
 
@@ -347,15 +341,19 @@ def dev_cmd(
     procs: list[subprocess.Popen] = [backend_proc]
 
     frontend_proc: subprocess.Popen | None = None
-    if use_frontend and npm is not None:
-        frontend_proc = _start_frontend(
-            npm,
-            console_dir,
-            host,
-            port,
-            frontend_port,
-        )
-        procs.append(frontend_proc)
+    try:
+        if use_frontend and npm is not None:
+            frontend_proc = _start_frontend(
+                npm,
+                console_dir,
+                host,
+                port,
+                frontend_port,
+            )
+            procs.append(frontend_proc)
+    except Exception:
+        _terminate_all(procs)
+        raise
 
     done = threading.Event()
     _start_stream_threads(backend_proc, frontend_proc)
