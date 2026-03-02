@@ -52,9 +52,15 @@ def get_available_channels() -> Tuple[str, ...]:
 
 def is_running_in_container() -> bool:
     """Return True if running inside a container (Docker/Kubernetes).
-    Prefer env COPAW_RUNNING_IN_CONTAINER (1/true/yes); else check
-    /.dockerenv and /proc/1/cgroup.
+    Prefer env COPAW_RUNNING_IN_CONTAINER (1/true/yes) at call time so
+    supervisord child gets correct value; else check /.dockerenv and cgroup.
     """
+    if os.environ.get("COPAW_RUNNING_IN_CONTAINER", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return True
     if RUNNING_IN_CONTAINER.strip().lower() in ("1", "true", "yes"):
         return True
     if os.path.exists("/.dockerenv"):
