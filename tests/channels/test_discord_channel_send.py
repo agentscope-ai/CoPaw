@@ -14,7 +14,7 @@ def _ensure_agentscope_runtime_stub() -> None:
         __import__("agentscope_runtime.engine.schemas.agent_schemas")
 
         return
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         pass
 
     agent_schemas = types.ModuleType(
@@ -34,6 +34,7 @@ def _ensure_agentscope_runtime_stub() -> None:
 
     class RunStatus(str, Enum):
         COMPLETED = "completed"
+        Completed = COMPLETED
 
     class _Base:
         def __init__(self, **kwargs):
