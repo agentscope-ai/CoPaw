@@ -49,7 +49,8 @@ def _validate_frontend(console_dir: Path) -> str:
     """Validate frontend prerequisites and return the resolved npm path."""
     if not (console_dir / "package.json").exists():
         click.secho(
-            f"ERROR: {console_dir} not found.\n"
+            f"ERROR: {console_dir} is not a valid frontend project "
+            "(package.json not found).\n"
             "Run this command from the repository root, or use "
             "`copaw app --reload` to start the backend only.",
             fg="red",
