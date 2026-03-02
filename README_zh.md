@@ -162,10 +162,16 @@ copaw uninstall --purge  # 删除所有内容
 
 ```bash
 docker pull agentscope/copaw:latest
-docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 8088:8088 \
+  -v copaw-data:/app/working \
+  -v copaw-providers:/app/venv/lib/python3.11/site-packages/copaw/providers \
+  agentscope/copaw:latest
 ```
 
 然后在浏览器打开 **http://127.0.0.1:8088/** 进入控制台。配置、记忆与 Skills 保存在 `copaw-data` 卷中。如需传入 API Key（如 `DASHSCOPE_API_KEY`），在 `docker run` 时添加 `-e VAR=value` 或 `--env-file .env`。
+
+> **⚠️ 重要：模型/提供商配置持久化**
+> 默认情况下，在控制台配置的自定义提供商和模型会保存到容器内的 `/app/venv/lib/python3.11/site-packages/copaw/providers/providers.json`。为了在容器重启后保留这些配置，需要使用 `-v copaw-providers:/app/venv/lib/python3.11/site-packages/copaw/providers` 挂载一个专用卷（如上所示）。否则，容器重新创建时自定义提供商设置会丢失。
 
 镜像从零构建。若需自行构建镜像，请参阅 [scripts/README.md](scripts/README.md#build-docker-image) 中的「Build Docker image」小节，构建后推送到你的镜像仓库。
 

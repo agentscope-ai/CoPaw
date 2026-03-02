@@ -162,10 +162,16 @@ copaw uninstall --purge  # removes everything
 
 ```bash
 docker pull agentscope/copaw:latest
-docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 8088:8088 \
+  -v copaw-data:/app/working \
+  -v copaw-providers:/app/venv/lib/python3.11/site-packages/copaw/providers \
+  agentscope/copaw:latest
 ```
 
 Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
+
+> **⚠️ Important: Model/provider configuration persistence**
+> By default, custom providers and models configured in Console are saved to `/app/venv/lib/python3.11/site-packages/copaw/providers/providers.json` inside the container. To persist this configuration across container restarts, mount a dedicated volume with `-v copaw-providers:/app/venv/lib/python3.11/site-packages/copaw/providers` as shown above. Otherwise, your custom provider settings will be lost when the container is recreated.
 
 The image is built from scratch. To build the image yourself, please refer to the [Build Docker image](scripts/README.md#build-docker-image) section in `scripts/README.md`, and then push to your registry.
 
