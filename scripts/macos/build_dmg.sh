@@ -94,6 +94,29 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
+# App icon: SVG -> PNG (qlmanage) -> iconset (sips) -> .icns (iconutil)
+ICON_SVG="$REPO_ROOT/scripts/macos/copaw-symbol.svg"
+ICON_TMP="$DIST_DIR/icon_build"
+if [[ -f "$ICON_SVG" ]]; then
+  echo "[build_dmg] Building app icon from copaw-symbol.svg..."
+  rm -rf "$ICON_TMP"
+  mkdir -p "$ICON_TMP"
+  (cd "$ICON_TMP" && qlmanage -t -s 1024 -o . "$ICON_SVG" 2>/dev/null)
+  SRC_PNG="$ICON_TMP/copaw-symbol.svg.png"
+  if [[ -f "$SRC_PNG" ]]; then
+    ICONSET="$ICON_TMP/CoPaw.iconset"
+    mkdir -p "$ICONSET"
+    for size in 16 32 128 256 512; do
+      sips -z $size $size "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}.png"
+      d=$((size * 2))
+      sips -z $d $d "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}@2x.png"
+    done
+    iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/Icon.icns"
+    echo "[build_dmg] Icon.icns installed."
+  fi
+  rm -rf "$ICON_TMP"
+fi
+
 cp -R "$PYINSTALLER_OUT/"* "$APP_DIR/Contents/MacOS/"
 
 # PyInstaller bootloader uses Contents/Frameworks as PYTHONHOME; sys.path expects
@@ -110,6 +133,8 @@ cat > "$APP_DIR/Contents/Info.plist" << INFOPLIST
 <dict>
   <key>CFBundleExecutable</key>
   <string>CoPaw</string>
+  <key>CFBundleIconFile</key>
+  <string>Icon</string>
   <key>CFBundleIdentifier</key>
   <string>ai.agentscope.copaw</string>
   <key>CFBundleName</key>
