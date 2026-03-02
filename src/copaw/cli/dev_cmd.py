@@ -275,22 +275,49 @@ def dev_cmd(
     label = "both servers" if use_frontend else "the server"
     click.echo(f"  Press Ctrl+C to stop {label}.\n")
 
-    def _shutdown(  # pylint: disable=unused-argument
-        signum: int,
-        frame: object,
-    ) -> None:
-        click.echo("\n\nShutting down…")
+    # Event shared between the signal handler and the watchdog threads so that
+    # only the first exit (deliberate or unexpected) triggers a shutdown.
+    done = threading.Event()
+
+    def _terminate_all() -> None:
         for p in procs:
             try:
                 p.terminate()
             except Exception:  # noqa: BLE001
                 pass
 
+    def _shutdown(  # pylint: disable=unused-argument
+        signum: int,
+        frame: object,
+    ) -> None:
+        if done.is_set():
+            return
+        done.set()
+        click.echo("\n\nShutting down…")
+        _terminate_all()
+
     signal.signal(signal.SIGINT, _shutdown)
     if hasattr(signal, "SIGTERM"):  # SIGTERM is not available on Windows
         signal.signal(signal.SIGTERM, _shutdown)
 
-    for p in procs:
-        p.wait()
+    def _watch(proc: "subprocess.Popen[bytes]") -> None:
+        """Wait for *proc* to exit; if it exits before *done* is set, it
+        exited unexpectedly – terminate all sibling processes."""
+        proc.wait()
+        if not done.is_set():
+            done.set()
+            click.echo(
+                "\n\nA dev server exited unexpectedly"
+                " – shutting down remaining servers…",
+            )
+            _terminate_all()
+
+    watchdog_threads = [
+        threading.Thread(target=_watch, args=(p,), daemon=True) for p in procs
+    ]
+    for t in watchdog_threads:
+        t.start()
+    for t in watchdog_threads:
+        t.join()
 
     click.secho("All dev servers stopped.", fg="yellow")
