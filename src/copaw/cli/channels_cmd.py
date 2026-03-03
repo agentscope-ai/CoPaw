@@ -419,11 +419,16 @@ def configure_telegram(current_config: TelegramConfig) -> TelegramConfig:
         hide_input=True,
         type=str,
     )
-    current_config.bot_token = bot_token
+    token = bot_token.strip()
+    current_config.bot_token = token
+    if not token:
+        click.echo("Warning: Empty bot token provided.")
+        click.echo("Disabling Telegram channel.")
+        current_config.enabled = False
 
     show_typing = prompt_confirm(
         "Show typing indicator?",
-        default=current_config.show_typing if current_config.show_typing is not None else True,
+        default=current_config.show_typing is not False,
     )
     current_config.show_typing = show_typing
 
