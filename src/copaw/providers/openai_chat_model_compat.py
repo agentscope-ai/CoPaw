@@ -123,7 +123,7 @@ def _sanitize_chunk(chunk: Any) -> Any:
 def _sanitize_stream_item(item: Any) -> Any:
     """Sanitize either plain stream chunks or structured stream items."""
     if hasattr(item, "chunk"):
-        chunk = getattr(item, "chunk")
+        chunk = item.chunk
         sanitized_chunk = _sanitize_chunk(chunk)
         if sanitized_chunk is chunk:
             return item
