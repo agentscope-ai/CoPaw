@@ -270,30 +270,30 @@ Full docs in this repo: [website/public/docs/](website/public/docs/).
 
 | Area | Item | Status |
 | --- | --- | --- |
-| **Horizontal Expansion** | More channels, models, skills, MCPs — **community contributions welcome** | Seeking Contributors |
-| **Existing Feature Extension** | Display optimization, download hints, Windows path compatibility, etc. — **community contributions welcome** | Seeking Contributors |
-| **Compatibility & Ease of Use** | App-level packaging (DMG, EXE) | In Progress |
+| Horizontal Expansion | More channels, models, skills, MCPs — **community contributions welcome** | Seeking Contributors |
+| Existing Feature Extension | Display optimization, download hints, Windows path compatibility, etc. — **community contributions welcome** | Seeking Contributors |
+| Compatibility & Ease of Use | App-level packaging (DMG, EXE) | In Progress |
 | | One-click deployment: built-in deps, dev extras, install/upgrade tutorials | In Progress |
-| **Release & Contributing** | Contributing docs and test framework | In Progress |
+| Release & Contributing | Contributing docs and test framework | In Progress |
 | | Responsive handling of community contributions | In Progress |
 | | Contributing guidance for vibe coding agents | Planned |
-| **Bugfixes & Enhancements** | Message collapse/hide in UI | Planned |
+| Bugfixes & Enhancements | Message collapse/hide in UI | Planned |
 | | Skills and MCP runtime install, hot-reload improvements | Planned |
 | | Context management and compression (long tool outputs, lower token usage) | Planned |
 | | Multimodal support | In Progress |
-| **Security** | Shell execution confirmation | Planned |
+| Security | Shell execution confirmation | Planned |
 | | Tool/skills security | Planned |
 | | Configurable security levels (user-configurable) | Planned |
-| **Multimodal** | Voice/video calls and real-time interaction | Long-term Planned |
-| **Multi-agent** | Built on [AgentScope](https://github.com/agentscope-ai/agentscope), native multi-agent workflows | Long-term Planned |
-| **Sandbox** | Deeper integration with AgentScope Runtime sandboxes | Long-term planned |
-| **Self-healing** | Daemon agent for automated recovery and health monitoring | Long-term Planned |
-| **CoPaw-optimized local models** | LLMs tuned for CoPaw's native skills and common tasks; better local personal-assistant usability | Long-term Planned |
-| **Small + large model collaboration** | Local LLMs for sensitive data; cloud LLMs for planning and coding; balance of privacy, performance, and capability | Long-term planned |
-| **Cloud-native** | Deeper integration with AgentScope Runtime; leverage cloud compute, storage, and tooling | Long-term Planned |
-| **Skills Hub** | Enrich the [AgentScope Skills](https://github.com/agentscope-ai/agentscope-skills) repository and improve discoverability of high-quality skills | Long-term Planned |
+| Multimodal | Voice/video calls and real-time interaction | Long-term Planning |
+| Multi-agent | Built on [AgentScope](https://github.com/agentscope-ai/agentscope), native multi-agent workflows | Long-term Planning |
+| Sandbox | Deeper integration with AgentScope Runtime sandboxes | Long-term Planning |
+| Self-healing | Daemon agent for automated recovery and health monitoring | Long-term Planning |
+| CoPaw-optimized local models | LLMs tuned for CoPaw's native skills and common tasks; better local personal-assistant usability | Long-term Planning |
+| Small + large model collaboration | Local LLMs for sensitive data; cloud LLMs for planning and coding; balance of privacy, performance, and capability | Long-term Planning |
+| Cloud-native | Deeper integration with AgentScope Runtime; leverage cloud compute, storage, and tooling | Long-term Planning |
+| Skills Hub | Enrich the [AgentScope Skills](https://github.com/agentscope-ai/agentscope-skills) repository and improve discoverability of high-quality skills | Long-term Planning |
 
-*Status:* *In Progress* — actively being worked on; *Planned* — queued or under design, also **welcome contributions**; *Seeking Contributors* — we **strongly encourage community contributions**; *Long-term Planned* — longer-horizon roadmap.
+*Status:* *In Progress* — actively being worked on; *Planned* — queued or under design, also **welcome contributions**; *Seeking Contributors* — we **strongly encourage community contributions**; *Long-term Planning* — longer-horizon roadmap.
 
 ### Get involved
 
