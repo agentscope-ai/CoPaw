@@ -1,5 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { Form, Input, Modal, message, Button } from "@agentscope-ai/design";
+import {
+  Form,
+  Input,
+  Modal,
+  message,
+  Button,
+  Select,
+} from "@agentscope-ai/design";
 import { ApiOutlined } from "@ant-design/icons";
 import type { ProviderConfigRequest } from "../../../../../api/types";
 import api from "../../../../../api";
@@ -15,6 +22,7 @@ interface ProviderConfigModalProps {
     current_base_url?: string;
     is_custom: boolean;
     needs_base_url: boolean;
+    chat_model: string;
   };
   activeModels: any;
   open: boolean;
@@ -34,7 +42,19 @@ export function ProviderConfigModal({
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [form] = Form.useForm<ProviderConfigRequest>();
+  const selectedChatModel = Form.useWatch("chat_model", form);
   const canEditBaseUrl = provider.needs_base_url || provider.id === "ollama";
+
+  const effectiveChatModel = useMemo(() => {
+    if (!provider.is_custom) {
+      return provider.chat_model;
+    }
+    return selectedChatModel || provider.chat_model || "OpenAIChatModel";
+  }, [
+    provider.chat_model,
+    provider.is_custom,
+    selectedChatModel,
+  ]);
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
@@ -72,8 +92,13 @@ export function ProviderConfigModal({
     if (provider.id === "ollama") {
       return t("models.ollamaEndpointHint");
     }
+    if (provider.is_custom) {
+      return effectiveChatModel === "AnthropicChatModel"
+        ? t("models.anthropicEndpointHint")
+        : t("models.openAICompatibleEndpoint");
+    }
     return t("models.apiEndpointHint");
-  }, [canEditBaseUrl, provider.id, t]);
+  }, [canEditBaseUrl, provider.id, provider.is_custom, effectiveChatModel, t]);
 
   const baseUrlPlaceholder = useMemo(() => {
     if (!canEditBaseUrl) {
@@ -91,8 +116,11 @@ export function ProviderConfigModal({
     if (provider.id === "ollama") {
       return "http://localhost:11434/v1";
     }
-    return "https://api.example.com/v1";
-  }, [canEditBaseUrl, provider.id]);
+    if (provider.is_custom && effectiveChatModel === "AnthropicChatModel") {
+      return "https://api.anthropic.com";
+    }
+    return "https://api.example.com";
+  }, [canEditBaseUrl, provider.id, provider.is_custom, effectiveChatModel]);
 
   // Sync form when modal opens or provider data changes
   useEffect(() => {
@@ -100,6 +128,7 @@ export function ProviderConfigModal({
       form.setFieldsValue({
         api_key: undefined,
         base_url: provider.current_base_url || undefined,
+        chat_model: provider.chat_model || "OpenAIChatModel",
       });
       setFormDirty(false);
     }
@@ -115,6 +144,7 @@ export function ProviderConfigModal({
       const result = await api.testProviderConnection(provider.id, {
         api_key: values.api_key,
         base_url: values.base_url,
+        chat_model: values.chat_model,
       });
 
       if (!result.success) {
@@ -130,6 +160,7 @@ export function ProviderConfigModal({
         const discovered = await api.discoverModels(provider.id, {
           api_key: values.api_key,
           base_url: values.base_url,
+          chat_model: values.chat_model,
         });
         if (discovered.success) {
           if (discovered.added_count > 0) {
@@ -175,6 +206,7 @@ export function ProviderConfigModal({
       const result = await api.testProviderConnection(provider.id, {
         api_key: values.api_key,
         base_url: values.base_url,
+        chat_model: values.chat_model,
       });
       if (result.success) {
         message.success(result.message || t("models.testConnectionSuccess"));
@@ -272,9 +304,37 @@ export function ProviderConfigModal({
         layout="vertical"
         initialValues={{
           base_url: provider.current_base_url || undefined,
+          chat_model: provider.chat_model || "OpenAIChatModel",
         }}
         onValuesChange={() => setFormDirty(true)}
       >
+        {provider.is_custom && (
+          <Form.Item
+            name="chat_model"
+            label={t("models.protocol")}
+            rules={[
+              {
+                required: true,
+                message: t("models.selectProtocol"),
+              },
+            ]}
+            extra={t("models.protocolHint")}
+          >
+            <Select
+              options={[
+                {
+                  value: "OpenAIChatModel",
+                  label: t("models.protocolOpenAI"),
+                },
+                {
+                  value: "AnthropicChatModel",
+                  label: t("models.protocolAnthropic"),
+                },
+              ]}
+            />
+          </Form.Item>
+        )}
+
         {/* Base URL */}
         <Form.Item
           name="base_url"

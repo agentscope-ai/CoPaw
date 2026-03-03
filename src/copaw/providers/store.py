@@ -89,10 +89,51 @@ def _migrate_legacy_providers_json(path: Path) -> None:
             )
             continue
 
+_SUPPORTED_CHAT_MODELS: frozenset[str] = frozenset(
+    ["OpenAIChatModel", "AnthropicChatModel"],
+)
+
 
 def get_providers_json_path() -> Path:
     """Return providers.json path under SECRET_DIR."""
     return _PROVIDERS_JSON
+
+
+def _normalize_chat_model_name(chat_model: Optional[str]) -> str:
+    """Validate and normalize chat model class name."""
+    normalized = (chat_model or "").strip()
+    if not normalized:
+        return "OpenAIChatModel"
+    if normalized not in _SUPPORTED_CHAT_MODELS:
+        allowed = ", ".join(sorted(_SUPPORTED_CHAT_MODELS))
+        raise ValueError(
+            f"Unsupported chat model '{normalized}'. "
+            f"Supported values: {allowed}.",
+        )
+    return normalized
+
+
+def _resolve_chat_model_name(
+    provider_id: str,
+    data: ProvidersData,
+    chat_model: Optional[str] = None,
+) -> str:
+    if chat_model is not None:
+        return _normalize_chat_model_name(chat_model)
+    return _normalize_chat_model_name(get_provider_chat_model(provider_id, data))
+
+
+def _uses_anthropic_protocol(
+    provider_id: str,
+    data: ProvidersData,
+    chat_model: Optional[str] = None,
+) -> bool:
+    if provider_id == "anthropic":
+        return True
+    return (
+        _resolve_chat_model_name(provider_id, data, chat_model)
+        == "AnthropicChatModel"
+    )
 
 
 def _ensure_base_url(settings: ProviderSettings, defn) -> None:
@@ -139,6 +180,7 @@ def _build_remote_provider_headers(
     provider_id: str,
     api_key: Optional[str],
     *,
+    chat_model_name: Optional[str] = None,
     json_body: bool = False,
 ) -> dict[str, str]:
     """Build request headers for remote provider APIs."""
@@ -146,7 +188,10 @@ def _build_remote_provider_headers(
     if json_body:
         headers["Content-Type"] = "application/json"
 
-    if provider_id == "anthropic":
+    if (
+        provider_id == "anthropic"
+        or chat_model_name == "AnthropicChatModel"
+    ):
         headers["anthropic-version"] = "2023-06-01"
         if api_key:
             headers["x-api-key"] = api_key
@@ -362,6 +407,7 @@ def update_provider_settings(
     *,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    chat_model: Optional[str] = None,
 ) -> ProvidersData:
     """Partially update a provider's settings. Returns updated state."""
     data = load_providers_json()
@@ -372,6 +418,8 @@ def update_provider_settings(
             cpd.api_key = api_key
         if base_url is not None:
             cpd.base_url = base_url
+        if chat_model is not None:
+            cpd.chat_model = _normalize_chat_model_name(chat_model)
         if not cpd.base_url:
             cpd.base_url = cpd.default_base_url
         register_custom_provider(cpd)
@@ -459,6 +507,7 @@ def create_custom_provider(
     default_base_url: str = "",
     api_key_prefix: str = "",
     models: Optional[list[ModelInfo]] = None,
+    chat_model: str = "OpenAIChatModel",
 ) -> ProvidersData:
     err = validate_custom_provider_id(provider_id)
     if err:
@@ -475,6 +524,7 @@ def create_custom_provider(
         api_key_prefix=api_key_prefix,
         models=models or [],
         base_url=default_base_url,
+        chat_model=_normalize_chat_model_name(chat_model),
     )
     data.custom_providers[provider_id] = cpd
     register_custom_provider(cpd)
@@ -665,6 +715,7 @@ async def discover_provider_models(
     provider_id: str,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    chat_model: Optional[str] = None,
 ) -> dict[str, Any]:
     """Discover available models from a provider's /models endpoint.
 
@@ -722,6 +773,19 @@ async def discover_provider_models(
         }
 
     data = load_providers_json()
+    try:
+        chat_model_name = _resolve_chat_model_name(
+            provider_id,
+            data,
+            chat_model,
+        )
+    except ValueError as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "models": [],
+            "added_count": 0,
+        }
     saved_base_url, saved_api_key = data.get_credentials(provider_id)
     resolved_base_url = (
         base_url or saved_base_url or defn.default_base_url
@@ -739,7 +803,11 @@ async def discover_provider_models(
     endpoint = f"{resolved_base_url.rstrip('/')}/models"
     headers = {"Accept": "application/json"}
     headers.update(
-        _build_remote_provider_headers(provider_id, resolved_api_key),
+        _build_remote_provider_headers(
+            provider_id,
+            resolved_api_key,
+            chat_model_name=chat_model_name,
+        ),
     )
 
     try:
@@ -864,6 +932,7 @@ async def test_provider_connection(
     provider_id: str,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    chat_model: Optional[str] = None,
 ) -> dict[str, Any]:
     """Test if a provider's URL and API key are valid.
 
@@ -958,7 +1027,17 @@ async def test_provider_connection(
             }
 
     # Get chat model class for this provider
-    chat_model_class_name = get_provider_chat_model(provider_id, data)
+    try:
+        chat_model_class_name = _resolve_chat_model_name(
+            provider_id,
+            data,
+            chat_model,
+        )
+    except ValueError as e:
+        return {
+            "success": False,
+            "message": str(e),
+        }
     chat_model_class = get_chat_model_class(chat_model_class_name)
 
     # Use a lightweight test approach: try to make a simple API call
@@ -969,7 +1048,11 @@ async def test_provider_connection(
         # This is a lightweight way to test credentials
         test_url = f"{base_url.rstrip('/')}/models"
 
-        headers = _build_remote_provider_headers(provider_id, api_key)
+        headers = _build_remote_provider_headers(
+            provider_id,
+            api_key,
+            chat_model_name=chat_model_class_name,
+        )
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(test_url, headers=headers)
@@ -1025,8 +1108,12 @@ async def test_provider_connection(
             "dashscope": "qwen-max",
             "modelscope": "Qwen/Qwen3-235B-A22B-Instruct-2507",
             "aliyun-codingplan": "qwen3.5-plus",
+            "anthropic": "claude-3-5-sonnet-latest",
         }
-        test_model = fallback_models.get(provider_id, "gpt-3.5-turbo")
+        if chat_model_class_name == "AnthropicChatModel":
+            test_model = fallback_models["anthropic"]
+        else:
+            test_model = fallback_models.get(provider_id, "gpt-3.5-turbo")
 
     try:
         # Try to instantiate the model with the configured credentials
@@ -1150,13 +1237,22 @@ async def test_model_connection(
         }
 
     base_url, api_key = data.get_credentials(provider_id)
+    try:
+        uses_anthropic_protocol = _uses_anthropic_protocol(provider_id, data)
+        chat_model_name = _resolve_chat_model_name(provider_id, data)
+    except ValueError as e:
+        return {
+            "success": False,
+            "message": str(e),
+        }
 
     # For remote providers, use direct API call for more reliable testing
-    if provider_id == "anthropic":
+    if uses_anthropic_protocol:
         chat_url = f"{base_url.rstrip('/')}/messages"
         headers = _build_remote_provider_headers(
             provider_id,
             api_key,
+            chat_model_name=chat_model_name,
             json_body=True,
         )
         test_payload = {
@@ -1170,6 +1266,7 @@ async def test_model_connection(
         headers = _build_remote_provider_headers(
             provider_id,
             api_key,
+            chat_model_name=chat_model_name,
             json_body=True,
         )
         test_payload = {
@@ -1250,7 +1347,7 @@ async def test_model_connection(
 
                     # Verify we got actual choices/content
                     if (
-                        provider_id == "anthropic"
+                        uses_anthropic_protocol
                         and "content" in result
                         and isinstance(result["content"], list)
                         and len(result["content"]) > 0

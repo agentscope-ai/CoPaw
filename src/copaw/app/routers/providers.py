@@ -35,6 +35,10 @@ router = APIRouter(prefix="/models", tags=["models"])
 class ProviderConfigRequest(BaseModel):
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
+    chat_model: Optional[str] = Field(
+        default=None,
+        description="Chat model class name for protocol selection",
+    )
 
 
 class ModelSlotRequest(BaseModel):
@@ -47,6 +51,7 @@ class CreateCustomProviderRequest(BaseModel):
     name: str = Field(...)
     default_base_url: str = Field(default="")
     api_key_prefix: str = Field(default="")
+    chat_model: str = Field(default="OpenAIChatModel")
     models: List[ModelInfo] = Field(default_factory=list)
 
 
@@ -70,6 +75,7 @@ def _build_provider_info(
             is_local=True,
             current_api_key="",
             current_base_url="",
+            chat_model="OpenAIChatModel",
         )
 
     cur_base_url, cur_api_key = data.get_credentials(provider.id)
@@ -92,6 +98,7 @@ def _build_provider_info(
         needs_base_url=provider.is_custom or not provider.default_base_url,
         current_api_key=mask_api_key(cur_api_key),
         current_base_url=cur_base_url,
+        chat_model=provider.chat_model,
     )
 
 
@@ -126,12 +133,18 @@ async def configure_provider(
         or provider.id == "ollama"
     )
     base_url = body.base_url if allow_base_url else None
-    data = update_provider_settings(
-        provider_id,
-        api_key=body.api_key,
-        base_url=base_url,
-    )
-    return _build_provider_info(provider, data)
+    try:
+        data = update_provider_settings(
+            provider_id,
+            api_key=body.api_key,
+            base_url=base_url,
+            chat_model=body.chat_model if provider.is_custom else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    updated_provider = get_provider(provider_id)
+    assert updated_provider is not None
+    return _build_provider_info(updated_provider, data)
 
 
 @router.post(
@@ -149,6 +162,7 @@ async def create_custom_provider_endpoint(
             name=body.name,
             default_base_url=body.default_base_url,
             api_key_prefix=body.api_key_prefix,
+            chat_model=body.chat_model,
             models=body.models,
         )
     except ValueError as exc:
@@ -173,6 +187,10 @@ class TestProviderRequest(BaseModel):
         default=None,
         description="Optional Base URL to test",
     )
+    chat_model: Optional[str] = Field(
+        default=None,
+        description="Optional chat model class to test protocol behavior",
+    )
 
 
 class TestModelRequest(BaseModel):
@@ -187,6 +205,10 @@ class DiscoverModelsRequest(BaseModel):
     base_url: Optional[str] = Field(
         default=None,
         description="Optional Base URL to use for discovery",
+    )
+    chat_model: Optional[str] = Field(
+        default=None,
+        description="Optional chat model class to use for discovery",
     )
 
 
@@ -220,6 +242,7 @@ async def test_provider(
             provider_id,
             api_key=api_key,
             base_url=base_url,
+            chat_model=body.chat_model if body else None,
         )
         return TestConnectionResponse(**result)
     except ValueError as exc:
@@ -240,6 +263,7 @@ async def discover_models(
             provider_id,
             api_key=body.api_key if body else None,
             base_url=body.base_url if body else None,
+            chat_model=body.chat_model if body else None,
         )
         return DiscoverModelsResponse(**result)
     except ValueError as exc:
