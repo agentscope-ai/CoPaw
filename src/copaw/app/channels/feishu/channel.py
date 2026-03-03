@@ -490,7 +490,10 @@ class FeishuChannel(BaseChannel):
                 self._processed_message_ids.popitem(last=False)
 
             sender_type = getattr(sender, "sender_type", "") or ""
-            if sender_type == "bot":
+            sender_type = str(sender_type).strip().lower()
+            # Feishu may mark bot-originated events as "app" instead of "bot".
+            # Skip both to avoid reply-to-self loops.
+            if sender_type in ("bot", "app"):
                 return
 
             sender_id_obj = getattr(sender, "sender_id", None)
@@ -957,24 +960,27 @@ class FeishuChannel(BaseChannel):
             logger.exception("feishu _upload_image_sync failed")
             return None
 
-    async def _upload_file(self, path_or_url: str) -> Optional[str]:
-        """Upload file to Feishu; return file_key. path_or_url can be path."""
+    async def _upload_file(
+        self,
+        path_or_url: str,
+    ) -> Tuple[Optional[str], str]:
+        """Upload file to Feishu and return (file_key, reason)."""
         token = await self._get_tenant_access_token()
         path = Path(path_or_url)
         if not path.exists():
             if path_or_url.startswith(("http://", "https://")):
                 data = await self._fetch_bytes_from_url(path_or_url)
                 if not data:
-                    return None
+                    return (None, "file_fetch_failed")
                 path = self._media_dir / "upload_temp"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
             else:
-                return None
+                return (None, "file_not_found")
         size = path.stat().st_size
         if size > FEISHU_FILE_MAX_BYTES:
             logger.warning("feishu file too large size=%s", size)
-            return None
+            return (None, "file_too_large")
         ext = path.suffix.lower().lstrip(".")
         file_type = "stream"
         if ext in (
@@ -1014,23 +1020,23 @@ class FeishuChannel(BaseChannel):
                         resp.status,
                         data,
                     )
-                    return None
+                    return (None, "file_upload_http_error")
                 if data.get("code") != 0:
                     logger.info(
                         "feishu _upload_file api code=%s msg=%s",
                         data.get("code"),
                         data.get("msg"),
                     )
-                    return None
+                    return (None, "file_upload_api_error")
                 fk = (data.get("data") or {}).get("file_key")
                 logger.info(
                     "feishu _upload_file ok: file_key=%s",
                     fk[:24] if fk else "None",
                 )
-                return fk
+                return (fk, "")
         except Exception:
             logger.exception("feishu _upload_file failed")
-            return None
+            return (None, "file_upload_exception")
 
     async def _fetch_bytes_from_url(self, url: str) -> Optional[bytes]:
         """Download binary from URL. Supports http(s):// and file://."""
@@ -1268,8 +1274,8 @@ class FeishuChannel(BaseChannel):
         receive_id_type: str,
         receive_id: str,
         part: OutgoingContentPart,
-    ) -> bool:
-        """Upload file and send file message (msg_type=file, file_key)."""
+    ) -> Tuple[bool, str]:
+        """Upload file and send file message; return (ok, reason)."""
         logger.info(
             "feishu _send_file: part type=%s",
             getattr(part, "type", None),
@@ -1279,20 +1285,20 @@ class FeishuChannel(BaseChannel):
             logger.info(
                 "feishu _send_file: no path/url/base64, skip",
             )
-            return False
-        file_key = await self._upload_file(path_or_url)
+            return (False, "file_not_found")
+        file_key, reason = await self._upload_file(path_or_url)
         if not file_key:
             logger.info(
                 "feishu _send_file: upload failed, no file_key",
             )
-            return False
+            return (False, reason or "file_upload_failed")
         logger.info(
             "feishu _send_file: upload ok file_key=%s",
             file_key[:24] if file_key else "",
         )
         content = json.dumps({"file_key": file_key}, ensure_ascii=False)
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
+        ok = await loop.run_in_executor(
             None,
             lambda: self._send_message_sync(
                 receive_id_type,
@@ -1301,6 +1307,26 @@ class FeishuChannel(BaseChannel):
                 content,
             ),
         )
+        if not ok:
+            return (False, "file_message_failed")
+        return (True, "")
+
+    def _file_send_failure_hint(self, reason: str) -> str:
+        """Return user-visible hint when file upload/send fails."""
+        if reason == "file_too_large":
+            limit_mb = FEISHU_FILE_MAX_BYTES // (1024 * 1024)
+            return (
+                "文件发送失败：飞书限制单文件大小，"
+                f"当前渠道上限约 {limit_mb}MB。"
+                "请压缩后重试，或改为发送下载链接。"
+            )
+        if reason == "file_not_found":
+            return "文件发送失败：源文件不存在或已被删除。"
+        if reason == "file_fetch_failed":
+            return "文件发送失败：文件下载失败，请检查文件链接是否可访问。"
+        if reason == "file_message_failed":
+            return "文件发送失败：上传成功但消息发送失败，请稍后重试。"
+        return "文件发送失败：请稍后重试。"
 
     async def _get_receive_for_send(
         self,
@@ -1448,16 +1474,27 @@ class FeishuChannel(BaseChannel):
                 ContentType.VIDEO,
                 ContentType.AUDIO,
             ):
-                ok = await self._send_file(
+                ok, reason = await self._send_file(
                     receive_id_type,
                     receive_id,
                     part,
                 )
                 logger.info(
-                    "feishu send_content_parts: file sent ok=%s type=%s",
+                    "feishu send_content_parts: file sent ok=%s type=%s "
+                    "reason=%s",
                     ok,
                     pt,
+                    reason or "",
                 )
+                if not ok:
+                    hint = self._file_send_failure_hint(reason)
+                    await self._send_text(
+                        receive_id_type,
+                        receive_id,
+                        hint,
+                    )
+                    # stop sending following media parts to avoid repeated spam
+                    break
 
     async def send(
         self,
