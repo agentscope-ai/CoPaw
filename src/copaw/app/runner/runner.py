@@ -134,6 +134,9 @@ class AgentRunner(Runner):
             )
             session_state_loaded = True
 
+            # Restore dynamic MCP connections from session state
+            await agent.restore_dynamic_mcp_connections()
+
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
             # in the session state.
