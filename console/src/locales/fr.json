@@ -376,5 +376,14 @@
     "chatDisabledMessage": "La fonctionnalité de chat est désactivée car aucun modèle n'est configuré. Veuillez configurer un modèle pour activer le chat.",
     "configureNow": "Configurer un modèle",
     "modelNotConfigured": "Veuillez configurer un modèle dans les Paramètres avant d'utiliser le chat"
+  },
+  "chat": {
+    "defaultPrompt1": "Commençons un nouveau voyage !",
+    "defaultPrompt2": "Pouvez-vous me dire quelles sont vos compétences ?",
+    "newChat": "Nouvelle conversation",
+    "leftHeaderTitle": "Travailler avec CoPaw",
+    "welcomeGreeting": "Bonjour, comment puis-je vous aider aujourd'hui ?",
+    "welcomeDescription": "Je suis un assistant utile qui peut répondre à vos questions.",
+    "disclaimer": "À votre service, grandissant avec vous"
   }
 }

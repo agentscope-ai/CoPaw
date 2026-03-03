@@ -4,7 +4,7 @@ import { createStyles } from "antd-style";
 import { Button, IconButton, Switch } from "@agentscope-ai/design";
 import { SparkDeleteLine, SparkPlusLine } from "@agentscope-ai/icons";
 import FormItem from "./FormItem";
-import defaultConfig from "./defaultConfig";
+import getDefaultConfig from "./defaultConfig";
 
 const useStyles = createStyles(({ token }) => ({
   container: {
@@ -49,7 +49,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value, onChange }) => {
   };
 
   const handleReset = () => {
-    form.setFieldsValue(defaultConfig);
+    form.setFieldsValue(getDefaultConfig());
   };
 
   return (
