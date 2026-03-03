@@ -163,7 +163,7 @@ https://open.bigmodel.cn/api/coding/paas/v4
 
 Also verify:
 
-- provider is set to `aliyun-codingplan` (this is the GLM Coding Plan provider name in CoPaw, not related to Alibaba Cloud);
+- Custom provider is set to glm-codingplan (this is the GLM Coding Plan provider name in CoPaw);
 - model id matches the platform exactly (case-sensitive);
 - API key has no leading/trailing spaces.
 
