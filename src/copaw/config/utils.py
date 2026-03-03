@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -17,9 +18,53 @@ from ..constant import (
 from .config import Config, HeartbeatConfig, LastApiConfig, LastDispatchConfig
 
 
+def _discover_system_chromium_path() -> Optional[str]:
+    """Scan common locations for Chrome/Chromium/Edge so we can use existing
+    browser instead of downloading via Playwright. Returns first found path.
+    """
+    candidates: list[Path] = []
+    if sys.platform == "win32":
+        pf = os.environ.get("ProgramFiles", "C:\\Program Files")
+        pf86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
+        candidates = [
+            Path(pf) / "Google" / "Chrome" / "Application" / "chrome.exe",
+            Path(pf86) / "Google" / "Chrome" / "Application" / "chrome.exe",
+            Path(pf) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+            Path(pf86) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+            Path(pf) / "Chromium" / "Application" / "chrome.exe",
+        ]
+    elif sys.platform == "darwin":
+        candidates = [
+            Path(
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            ),
+            Path("/Applications/Chromium.app/Contents/MacOS/Chromium"),
+            Path(
+                "/Applications/Microsoft Edge.app/Contents/MacOS/"
+                "Microsoft Edge",
+            ),
+        ]
+    else:
+        # Linux and other
+        candidates = [
+            Path("/usr/bin/google-chrome"),
+            Path("/usr/bin/google-chrome-stable"),
+            Path("/usr/bin/chromium"),
+            Path("/usr/bin/chromium-browser"),
+            Path("/usr/lib/chromium/chromium"),
+        ]
+    for p in candidates:
+        if p.is_file():
+            return str(p.resolve())
+    return None
+
+
 def get_playwright_chromium_executable_path() -> Optional[str]:
     """Chromium path from env when set and existing file (e.g. container).
     In container, if env unset or path missing, try common system paths.
+    When not in container and env unset, scan for installed
+    Chrome/Chromium/Edge so we prefer user's browser instead of
+    triggering a download.
     """
     path = os.environ.get(PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH_ENV)
     if path and os.path.isfile(path):
@@ -32,7 +77,8 @@ def get_playwright_chromium_executable_path() -> Optional[str]:
         ):
             if os.path.isfile(candidate):
                 return candidate
-    return None
+        return None
+    return _discover_system_chromium_path()
 
 
 def get_available_channels() -> Tuple[str, ...]:
