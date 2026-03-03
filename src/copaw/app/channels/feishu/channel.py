@@ -56,6 +56,7 @@ from ..base import (
 
 from .constants import (
     FEISHU_AVAILABLE,
+    FEISHU_BOT_INFO_URL,
     FEISHU_FILE_MAX_BYTES,
     FEISHU_NICKNAME_CACHE_MAX,
     FEISHU_PROCESSED_IDS_MAX,
@@ -98,6 +99,7 @@ class FeishuChannel(BaseChannel):
         media_dir: str = "~/.copaw/media",
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        group_at_only: bool = False,
     ):
         super().__init__(
             process,
@@ -111,6 +113,8 @@ class FeishuChannel(BaseChannel):
         self.encrypt_key = encrypt_key or ""
         self.verification_token = verification_token or ""
         self._media_dir = Path(media_dir).expanduser()
+        self.group_at_only = group_at_only
+        self._bot_open_id: Optional[str] = None
 
         self._client: Any = None
         self._ws_client: Any = None
@@ -171,6 +175,7 @@ class FeishuChannel(BaseChannel):
             media_dir=config.media_dir or "~/.copaw/media",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            group_at_only=config.group_at_only,
         )
 
     def resolve_session_id(
@@ -323,6 +328,31 @@ class FeishuChannel(BaseChannel):
             self._tenant_access_token = token
             self._tenant_access_token_expire_at = now + expire
             return token
+
+    async def _fetch_bot_open_id(self) -> Optional[str]:
+        """Fetch this bot's own open_id via GET /open-apis/bot/v3/info."""
+        try:
+            token = await self._get_tenant_access_token()
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with self._http.get(
+                FEISHU_BOT_INFO_URL,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=timeout,
+            ) as resp:
+                data = await resp.json(content_type=None)
+            open_id = ((data.get("bot") or {}).get("open_id") or "").strip()
+            if open_id:
+                logger.debug(
+                    "feishu bot open_id fetched: %s",
+                    open_id[:16],
+                )
+                return open_id
+        except Exception:
+            logger.debug(
+                "feishu: failed to fetch bot open_id",
+                exc_info=True,
+            )
+        return None
 
     async def _get_user_name_by_open_id(self, open_id: str) -> Optional[str]:
         """Fetch user name (nickname) from Feishu Contact API by open_id.
@@ -511,6 +541,21 @@ class FeishuChannel(BaseChannel):
             chat_type = str(
                 getattr(message, "chat_type", "p2p") or "p2p",
             ).strip()
+
+            if (
+                self.group_at_only
+                and chat_type == "group"
+                and self._bot_open_id
+            ):
+                mentions = getattr(message, "mentions", None) or []
+                is_mentioned = any(
+                    getattr(getattr(m, "id", None), "open_id", None)
+                    == self._bot_open_id
+                    for m in mentions
+                )
+                if not is_mentioned:
+                    return
+
             msg_type = str(
                 getattr(message, "message_type", "text") or "text",
             ).strip()
@@ -1579,6 +1624,13 @@ class FeishuChannel(BaseChannel):
         self._ws_thread.start()
         if self._http is None:
             self._http = aiohttp.ClientSession()
+        if self.group_at_only:
+            self._bot_open_id = await self._fetch_bot_open_id()
+            if not self._bot_open_id:
+                logger.warning(
+                    "feishu: group_at_only=True but failed to fetch "
+                    "bot open_id; group messages will not be filtered",
+                )
         logger.info("feishu channel started (app_id=%s)", self.app_id[:12])
 
     async def stop(self) -> None:
