@@ -34,12 +34,9 @@ from .store import (
     remove_model,
     save_providers_json,
     set_active_llm,
-<<<<<<< HEAD
+    set_model_slot,
     test_model_connection,
     test_provider_connection,
-=======
-    set_model_slot,
->>>>>>> fb7ebea (feat(routing): add intelligent task routing with tier-based model selection)
     update_provider_settings,
 )
 
@@ -72,11 +69,8 @@ __all__ = [
     "remove_model",
     "save_providers_json",
     "set_active_llm",
-<<<<<<< HEAD
+    "set_model_slot",
     "test_model_connection",
     "test_provider_connection",
-=======
-    "set_model_slot",
->>>>>>> fb7ebea (feat(routing): add intelligent task routing with tier-based model selection)
     "update_provider_settings",
 ]

@@ -230,7 +230,7 @@ def _create_model_instance(
         return model, OpenAIChatModel
 
     # Handle remote models - determine chat_model_class from provider config
-    chat_model_class = _get_chat_model_class_from_provider()
+    chat_model_class = _get_chat_model_class_from_provider(llm_cfg)
 
     # Create remote model instance with configuration
     model = _create_remote_model_instance(llm_cfg, chat_model_class)
@@ -238,8 +238,13 @@ def _create_model_instance(
     return model, chat_model_class
 
 
-def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
+def _get_chat_model_class_from_provider(
+    llm_cfg: Optional["ResolvedModelConfig"] = None,
+) -> Type[ChatModelBase]:
     """Get the chat model class from provider configuration.
+
+    Args:
+        llm_cfg: Optional resolved model configuration to determine provider from
 
     Returns:
         Chat model class, defaults to OpenAI-compatible chat model if not found
@@ -247,7 +252,14 @@ def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
     chat_model_class = get_chat_model_class("OpenAIChatModel")
     try:
         providers_data = load_providers_json()
-        provider_id = providers_data.active_llm.provider_id
+        
+        # Use provider from resolved config if available, otherwise fall back to active
+        provider_id = None
+        if llm_cfg and llm_cfg.provider_id:
+            provider_id = llm_cfg.provider_id
+        elif providers_data.active_llm.provider_id:
+            provider_id = providers_data.active_llm.provider_id
+            
         if provider_id:
             chat_model_name = get_provider_chat_model(
                 provider_id,
@@ -361,8 +373,8 @@ class ModelManager:
                     "and no active_llm set",
                 )
 
-        # Create cache key including api_key to handle credential rotation
-        key = f"{resolved.base_url}:{resolved.model}:{resolved.api_key}"
+        # Create cache key including provider_id and api_key to handle credential rotation
+        key = f"{resolved.provider_id}:{resolved.base_url}:{resolved.model}:{resolved.api_key}"
 
         # Check cache
         if key not in cls._instances:
@@ -383,7 +395,8 @@ class ModelManager:
         Returns:
             Tuple of (model_instance, formatter_instance)
         """
-        key = f"{config.base_url}:{config.model}"
+        # Create cache key including provider_id and api_key to handle credential rotation
+        key = f"{config.provider_id}:{config.base_url}:{config.model}:{config.api_key}"
 
         if key not in cls._instances:
             cls._instances[key] = create_model_and_formatter(config)

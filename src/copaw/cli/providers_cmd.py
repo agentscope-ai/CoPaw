@@ -878,6 +878,13 @@ def set_tier_cmd(tier: str, provider: str, model: str) -> None:
         click.echo(click.style(f"Unknown provider: {provider}", fg="red"))
         raise SystemExit(1)
 
+    # Validate provider is configured before setting tier
+    data = load_providers_json()
+    defn = PROVIDERS[provider]
+    if not data.is_configured(defn):
+        click.echo(click.style(f"Unconfigured provider: {provider}", fg="red"))
+        raise SystemExit(1)
+
     try:
         set_model_slot(tier, provider, model)
         click.echo(f"✓ Tier '{tier}' set to {provider} / {model}")
@@ -958,7 +965,7 @@ def routing_cmd(action: str, mode: str | None) -> None:
     Examples:
       copaw models routing enable
       copaw models routing disable
-      copaw models routing mode aggressive
+      copaw models routing mode --mode aggressive
       copaw models routing status
     """
     data = load_providers_json()

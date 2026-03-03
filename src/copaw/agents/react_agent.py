@@ -5,6 +5,7 @@ This module provides the main CoPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
 import asyncio
+import json
 import logging
 import os
 from typing import Any, List, Literal, Optional, Type

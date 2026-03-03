@@ -218,18 +218,18 @@ class TaskRouter:
         "利弊",
     ]
 
-    # Heartbeat/status patterns
+    # Heartbeat/status patterns - require full match
     HEARTBEAT_PATTERNS = [
         r"^ping$",
         r"^pong$",
         r"^status$",
         r"^heartbeat$",
         r"^health\s*check$",
-        r"^are you there",
-        r"^you there",
-        r"^你还在吗",
-        r"^在吗",
-        r"^还在吗",
+        r"^are you there$",
+        r"^you there$",
+        r"^你还在吗$",
+        r"^在吗$",
+        r"^还在吗$",
     ]
 
     # Stack trace pattern for debugging detection
@@ -350,15 +350,19 @@ class TaskRouter:
         """Check if query is a heartbeat/status check."""
         query_stripped = query_lower.strip()
         for pattern in self._heartbeat_re:
-            if pattern.match(query_stripped):
+            if pattern.fullmatch(query_stripped):
                 return True
         return False
 
     def _count_keywords(self, text: str, keywords: list[str]) -> int:
-        """Count how many keywords from the list appear in text."""
+        """Count how many keywords from the list appear in text as whole words."""
         count = 0
+        text_lower = text.lower()
         for kw in keywords:
-            if kw.lower() in text:
+            # Use word boundaries to match whole words only
+            import re
+            pattern = re.compile(rf"\b{re.escape(kw.lower())}\b", re.IGNORECASE)
+            if pattern.search(text_lower):
                 count += 1
         return count
 

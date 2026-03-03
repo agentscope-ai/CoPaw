@@ -190,10 +190,15 @@ def _parse_new_format(raw: dict):
         else ModelSlotConfig()
     )
 
-    # Parse model_slots
+    # Parse model_slots with validation
     model_slots: dict[str, ModelSlotConfig] = {}
+    slot_container = raw.get("model_slots")
+    if not isinstance(slot_container, dict):
+        # Handle malformed JSON - treat as empty dict
+        slot_container = {}
+    
     for tier in ModelTier.ALL_TIERS:
-        slot_raw = raw.get("model_slots", {}).get(tier)
+        slot_raw = slot_container.get(tier)
         if isinstance(slot_raw, dict):
             model_slots[tier] = ModelSlotConfig.model_validate(slot_raw)
 
@@ -430,12 +435,23 @@ def set_model_slot(
 
     Returns:
         Updated ProvidersData
+
+    Raises:
+        ValueError: If provider_id doesn't exist in providers collection
     """
     if tier not in ModelTier.ALL_TIERS:
         raise ValueError(
             f"Invalid tier '{tier}'. Must be one of: {ModelTier.ALL_TIERS}",
         )
+    
     data = load_providers_json()
+    
+    # Validate provider exists before setting
+    if provider_id not in data.providers and provider_id not in data.custom_providers:
+        raise ValueError(
+            f"Provider '{provider_id}' not found in providers collection"
+        )
+    
     data.model_slots[tier] = ModelSlotConfig(
         provider_id=provider_id,
         model=model,
@@ -448,6 +464,7 @@ def get_model_slot(tier: str) -> Optional[ResolvedModelConfig]:
     """Get resolved model configuration for a tier.
 
     Falls back to fallback_tier or active_llm if tier not configured.
+    Honors routing.enabled setting - bypasses tier lookup when disabled.
 
     Args:
         tier: Tier name (simple, medium, complex, reasoning)
@@ -456,6 +473,13 @@ def get_model_slot(tier: str) -> Optional[ResolvedModelConfig]:
         ResolvedModelConfig or None if no model available
     """
     data = load_providers_json()
+
+    # Check if routing is enabled before using tier slots
+    if not data.routing.enabled:
+        # Routing disabled - use active_llm directly
+        if data.active_llm.provider_id and data.active_llm.model:
+            return _resolve_slot(data.active_llm, data)
+        return None
 
     # Try requested tier first
     slot = data.model_slots.get(tier)
@@ -492,6 +516,7 @@ def _resolve_slot(
         return ResolvedModelConfig(
             model=slot.model,
             is_local=True,
+            provider_id=pid,
         )
 
     if pid not in data.custom_providers and pid not in data.providers:
@@ -501,6 +526,7 @@ def _resolve_slot(
         model=slot.model,
         base_url=base_url,
         api_key=api_key,
+        provider_id=pid,
     )
 
 
