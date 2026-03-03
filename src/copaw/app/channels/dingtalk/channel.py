@@ -1109,7 +1109,16 @@ class DingTalkChannel(BaseChannel):
             "dingtalk _run_process_loop: after set channel_meta has_sw=%s",
             bool((request.channel_meta or {}).get("session_webhook")),
         )
-        await self._process_one_request(request, reply_meta=send_meta)
+        try:
+            await self._process_one_request(request, reply_meta=send_meta)
+        except Exception:
+            logger.exception("dingtalk _process_one_request failed")
+            self._reply_sync_batch(
+                send_meta,
+                self.bot_prefix
+                + "An error occurred while processing your request.",
+            )
+            raise
 
     async def _process_one_request(
         self,

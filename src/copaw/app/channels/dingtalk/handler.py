@@ -258,6 +258,10 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     "sent to=%s via sessionWebhook (multi-message)",
                     sender,
                 )
+                # Stream connection still expects a reply frame;
+                # send minimal ack so the connection completes and next
+                # messages work.
+                self.reply_text(" ", incoming_message)
             else:
                 out = self._bot_prefix + response_text
                 self.reply_text(out, incoming_message)
