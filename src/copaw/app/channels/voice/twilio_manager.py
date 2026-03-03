@@ -49,7 +49,7 @@ class TwilioManager:
                 **kwargs,
             )
 
-        await self._run_sync(_configure)
+        await asyncio.wait_for(self._run_sync(_configure), timeout=30)
         logger.info(
             "Twilio webhook configured: sid=%s url=%s",
             phone_number_sid,

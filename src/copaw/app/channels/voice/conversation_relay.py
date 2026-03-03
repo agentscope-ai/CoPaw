@@ -276,4 +276,4 @@ class ConversationRelayHandler:
             await self.ws.send_text(json.dumps({"type": "end"}))
             await self.ws.close()
         except Exception:
-            pass
+            logger.exception("Failed to close WebSocket in ConversationRelay")
