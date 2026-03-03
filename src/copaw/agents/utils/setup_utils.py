@@ -6,9 +6,31 @@ the working directory.
 """
 import logging
 import shutil
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _md_files_root() -> Path:
+    """Root of agents/md_files (works from source and PyInstaller bundle)."""
+    base = Path(__file__).resolve().parent.parent / "md_files"
+    if base.is_dir():
+        return base
+    if not getattr(sys, "frozen", False):
+        return base
+    # PyInstaller one-file: datas under sys._MEIPASS
+    if getattr(sys, "_MEIPASS", None):
+        meipass = getattr(sys, "_MEIPASS")  # pylint: disable=protected-access
+        fallback = Path(meipass).resolve() / "copaw" / "agents" / "md_files"
+        if fallback.is_dir():
+            return fallback
+    # PyInstaller one-folder: datas next to executable
+    exe_dir = Path(sys.executable).resolve().parent
+    fallback = exe_dir / "copaw" / "agents" / "md_files"
+    if fallback.is_dir():
+        return fallback
+    return base
 
 
 def copy_md_files(
@@ -26,16 +48,15 @@ def copy_md_files(
     """
     from ...constant import WORKING_DIR
 
-    # Get md_files directory path with language subdirectory
-    md_files_dir = Path(__file__).parent.parent / "md_files" / language
+    root = _md_files_root()
+    md_files_dir = root / language
 
     if not md_files_dir.exists():
         logger.warning(
             "MD files directory not found: %s, falling back to 'en'",
             md_files_dir,
         )
-        # Fallback to English if specified language not found
-        md_files_dir = Path(__file__).parent.parent / "md_files" / "en"
+        md_files_dir = root / "en"
         if not md_files_dir.exists():
             logger.error("Default 'en' md files not found either")
             return []

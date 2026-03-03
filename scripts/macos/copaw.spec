@@ -8,18 +8,35 @@ from PyInstaller.utils.hooks import collect_submodules
 REPO_ROOT = Path.cwd().resolve()
 _SPEC_DIR = REPO_ROOT / "scripts" / "macos"
 CONSOLE_STATIC = REPO_ROOT / "src" / "copaw" / "console"
+MD_FILES_SRC = REPO_ROOT / "src" / "copaw" / "agents" / "md_files"
+SKILLS_SRC = REPO_ROOT / "src" / "copaw" / "agents" / "skills"
+TOKENIZER_SRC = REPO_ROOT / "src" / "copaw" / "tokenizer"
 _LAUNCHER = _SPEC_DIR / "gui_launcher.py"
 
 _console_datas = (
     [(str(CONSOLE_STATIC), "copaw/console")] if CONSOLE_STATIC.is_dir() else []
 )
+_md_datas = (
+    [(str(MD_FILES_SRC), "copaw/agents/md_files")] if MD_FILES_SRC.is_dir() else []
+)
+_skills_datas = (
+    [(str(SKILLS_SRC), "copaw/agents/skills")] if SKILLS_SRC.is_dir() else []
+)
+_tokenizer_datas = (
+    [(str(TOKENIZER_SRC), "copaw/tokenizer")] if TOKENIZER_SRC.is_dir() else []
+)
+try:
+    _reme_hidden = ["reme"] + list(collect_submodules("reme"))
+except Exception:
+    _reme_hidden = ["reme"]
 
 a = Analysis(
     [str(_LAUNCHER)],
     pathex=[str(REPO_ROOT), str(REPO_ROOT / "src")],
     binaries=[],
-    datas=_console_datas,
+    datas=_console_datas + _md_datas + _skills_datas + _tokenizer_datas,
     hiddenimports=collect_submodules("copaw")
+    + _reme_hidden
     + [
         "webview",
         "pyobjc",

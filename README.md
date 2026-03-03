@@ -136,6 +136,13 @@ copaw init --defaults   # or: copaw init (interactive)
 copaw app
 ```
 
+**macOS app (DMG):** [Releases](https://github.com/agentscope-ai/CoPaw/releases) provide `CoPaw-<version>.dmg` (normal) and `CoPaw-Dev-<version>.dmg` (opens a Terminal so you can see logs; use this if the app crashes with no message). If macOS says the app is **damaged**, remove the quarantine attribute and try again:
+
+```bash
+xattr -cr /path/to/CoPaw.app
+# or for Dev: xattr -cr /path/to/CoPaw-Dev.app
+```
+
 <details>
 <summary><b>Install options</b></summary>
 

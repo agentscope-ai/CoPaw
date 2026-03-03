@@ -5,11 +5,31 @@ This module provides token counting functionality for estimating
 message token usage with Qwen tokenizer.
 """
 import logging
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _token_counter = None
+
+
+def _local_tokenizer_root() -> Path:
+    """Root of copaw/tokenizer (works from source and PyInstaller bundle)."""
+    base = Path(__file__).resolve().parent.parent.parent / "tokenizer"
+    if base.is_dir() and (base / "tokenizer.json").exists():
+        return base
+    if getattr(sys, "frozen", False):
+        # pylint: disable=protected-access
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass is not None:
+            fallback = Path(meipass).resolve() / "copaw" / "tokenizer"
+            if fallback.is_dir() and (fallback / "tokenizer.json").exists():
+                return fallback
+        exe_dir = Path(sys.executable).resolve().parent
+        fallback = exe_dir / "copaw" / "tokenizer"
+        if fallback.is_dir() and (fallback / "tokenizer.json").exists():
+            return fallback
+    return base
 
 
 def _get_token_counter():
@@ -29,9 +49,7 @@ def _get_token_counter():
         # Qwen3 series uses the same tokenizer as Qwen2.5
 
         # Try local tokenizer first, fall back to online if not found
-        local_tokenizer_path = (
-            Path(__file__).parent.parent.parent / "tokenizer"
-        )
+        local_tokenizer_path = _local_tokenizer_root()
 
         if (
             local_tokenizer_path.exists()

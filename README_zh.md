@@ -136,6 +136,13 @@ copaw init --defaults   # 或：copaw init（交互式）
 copaw app
 ```
 
+**macOS 应用（DMG）：** [发布页](https://github.com/agentscope-ai/CoPaw/releases) 提供 `CoPaw-<version>.dmg`（正式版）和 `CoPaw-Dev-<version>.dmg`（Dev 版：**控制台**= 打开后的那个 CoPaw 界面窗口；**终端/日志**= 从「终端」运行 `"/Applications/CoPaw-Dev.app/Contents/MacOS/CoPaw-Dev"` 可看到实时日志，或闪退后查看 `~/Library/Application Support/CoPaw/logs/copaw_dev.log`）。若系统提示应用**已损坏**，可先去掉隔离属性再打开：
+
+```bash
+xattr -cr /path/to/CoPaw.app
+# 或 Dev 版：xattr -cr /path/to/CoPaw-Dev.app
+```
+
 <details>
 <summary><b>安装选项</b></summary>
 

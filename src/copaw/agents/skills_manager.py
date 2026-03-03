@@ -3,6 +3,7 @@
 import filecmp
 import logging
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
@@ -49,7 +50,21 @@ class SkillInfo(BaseModel):
 
 def get_builtin_skills_dir() -> Path:
     """Get the path to built-in skills directory in the code."""
-    return Path(__file__).parent / "skills"
+    base = Path(__file__).resolve().parent / "skills"
+    if base.is_dir():
+        return base
+    if getattr(sys, "frozen", False):
+        # pylint: disable=protected-access
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass is not None:
+            fallback = Path(meipass).resolve() / "copaw" / "agents" / "skills"
+            if fallback.is_dir():
+                return fallback
+        exe_dir = Path(sys.executable).resolve().parent
+        fallback = exe_dir / "copaw" / "agents" / "skills"
+        if fallback.is_dir():
+            return fallback
+    return base
 
 
 def get_customized_skills_dir() -> Path:
