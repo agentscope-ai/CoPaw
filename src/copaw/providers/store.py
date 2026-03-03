@@ -1038,7 +1038,13 @@ async def test_provider_connection(
             "success": False,
             "message": str(e),
         }
-    chat_model_class = get_chat_model_class(chat_model_class_name)
+    try:
+        chat_model_class = get_chat_model_class(chat_model_class_name)
+    except ValueError as e:
+        return {
+            "success": False,
+            "message": str(e),
+        }
 
     # Use a lightweight test approach: try to make a simple API call
     # For OpenAI-compatible APIs, we can use the models list endpoint

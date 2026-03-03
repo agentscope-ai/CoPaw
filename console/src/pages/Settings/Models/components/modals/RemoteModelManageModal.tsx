@@ -38,7 +38,7 @@ export function RemoteModelManageModal({
   const [testingModelId, setTestingModelId] = useState<string | null>(null);
   const [form] = Form.useForm();
   const canDiscover =
-    provider.is_custom || provider.id === "ollama"
+    provider.id === "ollama" || provider.needs_base_url
       ? !!provider.current_base_url
       : !!provider.current_api_key;
 
