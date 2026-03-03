@@ -92,7 +92,12 @@ def _migrate_legacy_envs_json(path: Path) -> None:
 
 # Security-sensitive envs should come from process/system environment,
 # not persisted envs.json.
-_PROTECTED_BOOTSTRAP_KEYS = frozenset({"COPAW_WORKING_DIR"})
+_PROTECTED_BOOTSTRAP_KEYS = frozenset(
+    {
+        "COPAW_WORKING_DIR",
+        "COPAW_SECRET_DIR",
+    },
+)
 _BOOTSTRAP_CACHE: Optional[dict[str, str]] = None
 
 
@@ -219,6 +224,10 @@ def load_envs_into_environ() -> dict[str, str]:
     variables persisted from a previous session are available
     immediately. Protected keys are excluded from injection, and
     existing process/system env vars are preserved.
+
+    Returns:
+        Full persisted mapping from envs.json, including protected keys
+        that are intentionally not injected into ``os.environ``.
     """
     global _BOOTSTRAP_CACHE
     if _BOOTSTRAP_CACHE is not None:
