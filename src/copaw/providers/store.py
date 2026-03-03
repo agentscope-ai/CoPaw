@@ -447,7 +447,10 @@ def set_model_slot(
     data = load_providers_json()
     
     # Validate provider exists before setting
-    if provider_id not in data.providers and provider_id not in data.custom_providers:
+    # Check data.providers, data.custom_providers, and the canonical provider registry
+    from .registry import get_provider
+    provider_def = get_provider(provider_id)
+    if provider_id not in data.providers and provider_id not in data.custom_providers and provider_def is None:
         raise ValueError(
             f"Provider '{provider_id}' not found in providers collection"
         )

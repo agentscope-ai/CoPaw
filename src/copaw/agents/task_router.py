@@ -359,11 +359,19 @@ class TaskRouter:
         count = 0
         text_lower = text.lower()
         for kw in keywords:
-            # Use word boundaries to match whole words only
-            import re
-            pattern = re.compile(rf"\b{re.escape(kw.lower())}\b", re.IGNORECASE)
-            if pattern.search(text_lower):
-                count += 1
+            kw_lower = kw.lower()
+            # Check if keyword contains CJK characters using Unicode ranges
+            has_cjk = bool(re.search(r'[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', kw))
+            
+            if has_cjk:
+                # For CJK keywords, use simple substring search
+                if kw_lower in text_lower:
+                    count += 1
+            else:
+                # For ASCII/Latin keywords, use word boundaries
+                pattern = re.compile(rf"\b{re.escape(kw_lower)}\b", re.IGNORECASE)
+                if pattern.search(text_lower):
+                    count += 1
         return count
 
     def _has_code_blocks(self, query: str) -> bool:
