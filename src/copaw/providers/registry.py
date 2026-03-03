@@ -42,7 +42,8 @@ ALIYUN_CODINGPLAN_MODELS: List[ModelInfo] = [
 ]
 
 OPENAI_MODELS: List[ModelInfo] = [
-    ModelInfo(id="gpt-5-chat", name="GPT-5 Chat"),
+    ModelInfo(id="gpt-5.2", name="GPT-5.2"),
+    ModelInfo(id="gpt-5", name="GPT-5"),
     ModelInfo(id="gpt-5-mini", name="GPT-5 Mini"),
     ModelInfo(id="gpt-5-nano", name="GPT-5 Nano"),
     ModelInfo(id="gpt-4.1", name="GPT-4.1"),
