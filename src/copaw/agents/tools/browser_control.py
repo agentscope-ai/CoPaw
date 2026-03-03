@@ -13,17 +13,19 @@ import asyncio
 import atexit
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, Optional
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...config import (
-    is_running_in_container,
     get_playwright_chromium_executable_path,
+    get_system_default_browser,
+    is_running_in_container,
 )
 
 from .browser_snapshot import build_role_snapshot_from_aria
@@ -47,6 +49,7 @@ _state: dict[str, Any] = {
     "page_counter": 0,  # monotonic counter for page_N ids, avoids reuse after close
     "last_activity_time": 0.0,  # monotonic timestamp of last browser activity
     "_idle_task": None,  # background asyncio.Task for idle watchdog
+    "_last_browser_error": None,  # message when launch failed (for user-facing error)
 }
 
 # Stop the browser after this many seconds of inactivity (default 30 minutes).
@@ -121,6 +124,14 @@ def _chromium_executable_path() -> str | None:
     return get_playwright_chromium_executable_path()
 
 
+def _use_webkit_fallback() -> bool:
+    """True only on macOS when no system Chrome/Edge/Chromium found.
+    Use WebKit (Safari) to avoid downloading Chromium. Windows has no system
+    WebKit, so we never use webkit there.
+    """
+    return sys.platform == "darwin" and _chromium_executable_path() is None
+
+
 def _ensure_playwright_async():
     """Import async_playwright; raise ImportError with hint if missing."""
     try:
@@ -129,8 +140,10 @@ def _ensure_playwright_async():
         return async_playwright
     except ImportError as exc:
         raise ImportError(
-            "Playwright not installed. Install with: pip install playwright "
-            "&& python -m playwright install",
+            "Playwright not installed. Use the same Python that runs CoPaw (e.g. "
+            "activate your venv or use 'uv run'): "
+            f"'{sys.executable}' -m pip install playwright && "
+            f"'{sys.executable}' -m playwright install",
         ) from exc
 
 
@@ -581,23 +594,48 @@ async def _ensure_browser() -> bool:
     try:
         async_playwright = _ensure_playwright_async()
         pw = await async_playwright().start()
-        launch_kwargs: dict[str, Any] = {"headless": _state["headless"]}
-        extra_args = _chromium_launch_args()
-        if extra_args:
-            launch_kwargs["args"] = extra_args
-        exe = _chromium_executable_path()
+        # Prefer OS default browser when available (e.g. user's default Chrome/Safari).
+        use_default = not is_running_in_container() and os.environ.get(
+            "COPAW_BROWSER_USE_DEFAULT",
+            "1",
+        ).strip().lower() in ("1", "true", "yes")
+        default_kind, default_path = (
+            get_system_default_browser() if use_default else (None, None)
+        )
+        exe: Optional[str] = None
+        if default_kind == "chromium" and default_path:
+            exe = default_path
+        elif default_kind != "webkit":
+            exe = _chromium_executable_path()
         if exe:
+            # System Chrome/Edge/Chromium (default or discovered)
+            launch_kwargs: dict[str, Any] = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
             launch_kwargs["executable_path"] = exe
-        pw_browser = await pw.chromium.launch(**launch_kwargs)
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
+        elif default_kind == "webkit" or sys.platform == "darwin":
+            # macOS: default Safari or no Chromium → use WebKit (Safari)
+            pw_browser = await pw.webkit.launch(headless=_state["headless"])
+        else:
+            # Windows/Linux without system Chromium → Playwright's Chromium
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
         context = await pw_browser.new_context()
         _attach_context_listeners(context)
         _state["playwright"] = pw
         _state["browser"] = pw_browser
         _state["context"] = context
+        _state["_last_browser_error"] = None
         _touch_activity()
         _start_idle_watchdog()
         return True
-    except Exception:
+    except Exception as e:
+        _state["_last_browser_error"] = str(e)
         return False
 
 
@@ -617,7 +655,10 @@ def _cancel_idle_watchdog() -> None:
     _state["_idle_task"] = None
 
 
-async def _action_start(headed: bool = False) -> ToolResponse:
+# pylint: disable=R0912,R0915
+async def _action_start(
+    headed: bool = False,
+) -> ToolResponse:
     # If user asks for visible window (headed=True)
     # but browser is already running headless, restart with headed
     if _state["browser"] is not None:
@@ -665,14 +706,33 @@ async def _action_start(headed: bool = False) -> ToolResponse:
         )
     try:
         pw = await async_playwright().start()
-        launch_kwargs: dict[str, Any] = {"headless": _state["headless"]}
-        extra_args = _chromium_launch_args()
-        if extra_args:
-            launch_kwargs["args"] = extra_args
-        exe = _chromium_executable_path()
+        use_default = not is_running_in_container() and os.environ.get(
+            "COPAW_BROWSER_USE_DEFAULT",
+            "1",
+        ).strip().lower() in ("1", "true", "yes")
+        default_kind, default_path = (
+            get_system_default_browser() if use_default else (None, None)
+        )
+        exe: Optional[str] = None
+        if default_kind == "chromium" and default_path:
+            exe = default_path
+        elif default_kind != "webkit":
+            exe = _chromium_executable_path()
         if exe:
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
             launch_kwargs["executable_path"] = exe
-        pw_browser = await pw.chromium.launch(**launch_kwargs)
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
+        elif default_kind == "webkit" or sys.platform == "darwin":
+            pw_browser = await pw.webkit.launch(headless=_state["headless"])
+        else:
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
         context = await pw_browser.new_context()
         _attach_context_listeners(context)
         _state["playwright"] = pw
@@ -685,6 +745,8 @@ async def _action_start(headed: bool = False) -> ToolResponse:
             if _state["headless"] is False
             else "Browser started"
         )
+        if not exe and (default_kind == "webkit" or sys.platform == "darwin"):
+            msg += " (Safari/WebKit)"
         return _tool_response(
             json.dumps(
                 {"ok": True, "message": msg},
@@ -759,9 +821,10 @@ async def _action_open(url: str, page_id: str) -> ToolResponse:
             ),
         )
     if not await _ensure_browser():
+        err = _state.get("_last_browser_error") or "Browser not started"
         return _tool_response(
             json.dumps(
-                {"ok": False, "error": "Browser not started"},
+                {"ok": False, "error": err},
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -1610,15 +1673,47 @@ async def _action_fill_form(page_id: str, fields_json: str) -> ToolResponse:
         )
 
 
+def _run_playwright_install() -> None:
+    """Run playwright install in a blocking way (for use in thread)."""
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=600,  # 10 minutes max
+    )
+
+
 async def _action_install() -> ToolResponse:
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120000,
+    """Install Playwright browsers. If a system Chrome/Chromium/Edge is found,
+    use it and skip download. On macOS with no Chromium, use Safari (WebKit)
+    so no download is needed. Only run playwright install when necessary.
+    """
+    exe = _chromium_executable_path()
+    if exe:
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": True,
+                    "message": f"Using system browser (no download): {exe}",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
         )
+    if _use_webkit_fallback():
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": True,
+                    "message": "On macOS using Safari (WebKit); no browser download needed.",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+    try:
+        await asyncio.to_thread(_run_playwright_install)
         return _tool_response(
             json.dumps(
                 {"ok": True, "message": "Browser installed"},
@@ -1626,10 +1721,27 @@ async def _action_install() -> ToolResponse:
                 indent=2,
             ),
         )
+    except subprocess.TimeoutExpired:
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "Browser install timed out (10 min). Run manually in terminal: "
+                    f"{sys.executable!s} -m playwright install",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
     except Exception as e:
         return _tool_response(
             json.dumps(
-                {"ok": False, "error": f"Install failed: {e!s}"},
+                {
+                    "ok": False,
+                    "error": f"Install failed: {e!s}. Install manually: "
+                    f"{sys.executable!s} -m pip install playwright && "
+                    f"{sys.executable!s} -m playwright install",
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -2006,9 +2118,12 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
         if not _state["context"]:
             ok = await _ensure_browser()
             if not ok:
+                err = (
+                    _state.get("_last_browser_error") or "Browser not started"
+                )
                 return _tool_response(
                     json.dumps(
-                        {"ok": False, "error": "Browser not started"},
+                        {"ok": False, "error": err},
                         ensure_ascii=False,
                         indent=2,
                     ),

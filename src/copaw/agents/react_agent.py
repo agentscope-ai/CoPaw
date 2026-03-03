@@ -4,12 +4,14 @@
 This module provides the main CoPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
+import asyncio
 import logging
 import os
 from typing import Any, List, Literal, Optional, Type
 
-
+from anyio import ClosedResourceError
 from agentscope.agent import ReActAgent
+from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 from agentscope.message import Msg
 from agentscope.tool import Toolkit
 from pydantic import BaseModel
@@ -327,11 +329,170 @@ class CoPawAgent(ReActAgent):
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
         """
-        for client in self._mcp_clients:
-            await self.toolkit.register_mcp_client(
-                client,
-                namesake_strategy=namesake_strategy,
+        for i, client in enumerate(self._mcp_clients):
+            client_name = getattr(client, "name", repr(client))
+            try:
+                await self.toolkit.register_mcp_client(
+                    client,
+                    namesake_strategy=namesake_strategy,
+                )
+            except (ClosedResourceError, asyncio.CancelledError) as error:
+                if self._should_propagate_cancelled_error(error):
+                    raise
+                logger.warning(
+                    "MCP client '%s' session interrupted while listing tools; "
+                    "trying recovery",
+                    client_name,
+                )
+                recovered_client = await self._recover_mcp_client(client)
+                if recovered_client is not None:
+                    self._mcp_clients[i] = recovered_client
+                    try:
+                        await self.toolkit.register_mcp_client(
+                            recovered_client,
+                            namesake_strategy=namesake_strategy,
+                        )
+                        continue
+                    except asyncio.CancelledError as recover_error:
+                        if self._should_propagate_cancelled_error(
+                            recover_error,
+                        ):
+                            raise
+                        logger.warning(
+                            "MCP client '%s' registration cancelled after "
+                            "recovery, skipping",
+                            client_name,
+                        )
+                    except Exception as e:  # pylint: disable=broad-except
+                        logger.warning(
+                            "MCP client '%s' still unavailable after "
+                            "recovery, skipping: %s",
+                            client_name,
+                            e,
+                        )
+                else:
+                    logger.warning(
+                        "MCP client '%s' recovery failed, skipping",
+                        client_name,
+                    )
+            except Exception as e:  # pylint: disable=broad-except
+                logger.exception(
+                    "Unexpected error registering MCP client '%s': %s",
+                    client_name,
+                    e,
+                )
+                raise
+
+    async def _recover_mcp_client(self, client: Any) -> Any | None:
+        """Recover MCP client from broken session and return healthy client."""
+        if await self._reconnect_mcp_client(client):
+            return client
+
+        rebuilt_client = self._rebuild_mcp_client(client)
+        if rebuilt_client is None:
+            return None
+
+        if await self._reconnect_mcp_client(rebuilt_client):
+            return self._reuse_shared_client_reference(
+                original_client=client,
+                rebuilt_client=rebuilt_client,
             )
+
+        return None
+
+    @staticmethod
+    def _reuse_shared_client_reference(
+        original_client: Any,
+        rebuilt_client: Any,
+    ) -> Any:
+        """Keep manager-shared client reference stable after rebuild."""
+        original_dict = getattr(original_client, "__dict__", None)
+        rebuilt_dict = getattr(rebuilt_client, "__dict__", None)
+        if isinstance(original_dict, dict) and isinstance(rebuilt_dict, dict):
+            original_dict.update(rebuilt_dict)
+            return original_client
+        return rebuilt_client
+
+    @staticmethod
+    def _should_propagate_cancelled_error(error: BaseException) -> bool:
+        """Only swallow MCP-internal cancellations, not task cancellation."""
+        if not isinstance(error, asyncio.CancelledError):
+            return False
+
+        task = asyncio.current_task()
+        if task is None:
+            return False
+
+        cancelling = getattr(task, "cancelling", None)
+        if callable(cancelling):
+            return cancelling() > 0
+
+        # Python < 3.11: Task.cancelling() is unavailable.
+        # Fall back to propagating CancelledError to avoid swallowing
+        # genuine task cancellations when we cannot inspect the state.
+        return True
+
+    @staticmethod
+    async def _reconnect_mcp_client(
+        client: Any,
+        timeout: float = 60.0,
+    ) -> bool:
+        """Best-effort reconnect for stateful MCP clients."""
+        close_fn = getattr(client, "close", None)
+        if callable(close_fn):
+            try:
+                await close_fn()
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
+                raise
+            except Exception:  # pylint: disable=broad-except
+                pass
+
+        connect_fn = getattr(client, "connect", None)
+        if not callable(connect_fn):
+            return False
+
+        try:
+            await asyncio.wait_for(connect_fn(), timeout=timeout)
+            return True
+        except asyncio.CancelledError:  # pylint: disable=try-except-raise
+            raise
+        except asyncio.TimeoutError:
+            return False
+        except Exception:  # pylint: disable=broad-except
+            return False
+
+    @staticmethod
+    def _rebuild_mcp_client(client: Any) -> Any | None:
+        """Rebuild a fresh MCP client instance from stored config metadata."""
+        rebuild_info = getattr(client, "_copaw_rebuild_info", None)
+        if not isinstance(rebuild_info, dict):
+            return None
+
+        transport = rebuild_info.get("transport")
+        name = rebuild_info.get("name")
+
+        try:
+            if transport == "stdio":
+                rebuilt_client = StdIOStatefulClient(
+                    name=name,
+                    command=rebuild_info.get("command"),
+                    args=rebuild_info.get("args", []),
+                    env=rebuild_info.get("env", {}),
+                    cwd=rebuild_info.get("cwd"),
+                )
+                setattr(rebuilt_client, "_copaw_rebuild_info", rebuild_info)
+                return rebuilt_client
+
+            rebuilt_client = HttpStatefulClient(
+                name=name,
+                transport=transport,
+                url=rebuild_info.get("url"),
+                headers=rebuild_info.get("headers"),
+            )
+            setattr(rebuilt_client, "_copaw_rebuild_info", rebuild_info)
+            return rebuilt_client
+        except Exception:  # pylint: disable=broad-except
+            return None
 
     async def _reasoning(
         self,

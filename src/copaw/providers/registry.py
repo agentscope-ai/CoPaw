@@ -6,9 +6,10 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, List, Optional, Type
 
-from agentscope.model import ChatModelBase, OpenAIChatModel
+from agentscope.model import ChatModelBase
 
 from .models import CustomProviderData, ModelInfo, ProviderDefinition
+from .openai_chat_model_compat import OpenAIChatModelCompat
 
 if TYPE_CHECKING:
     from .models import ProvidersData
@@ -42,7 +43,8 @@ ALIYUN_CODINGPLAN_MODELS: List[ModelInfo] = [
 ]
 
 OPENAI_MODELS: List[ModelInfo] = [
-    ModelInfo(id="gpt-5-chat", name="GPT-5 Chat"),
+    ModelInfo(id="gpt-5.2", name="GPT-5.2"),
+    ModelInfo(id="gpt-5", name="GPT-5"),
     ModelInfo(id="gpt-5-mini", name="GPT-5 Mini"),
     ModelInfo(id="gpt-5-nano", name="GPT-5 Nano"),
     ModelInfo(id="gpt-4.1", name="GPT-4.1"),
@@ -305,7 +307,7 @@ def sync_ollama_models() -> None:
 
 
 _CHAT_MODEL_MAP: dict[str, Type[ChatModelBase]] = {
-    "OpenAIChatModel": OpenAIChatModel,
+    "OpenAIChatModel": OpenAIChatModelCompat,
 }
 
 
@@ -316,6 +318,6 @@ def get_chat_model_class(chat_model_name: str) -> Type[ChatModelBase]:
         chat_model_name: Name of the chat model class (e.g., "OpenAIChatModel")
 
     Returns:
-        Chat model class, defaults to OpenAIChatModel if not found.
+        Chat model class, defaults to OpenAIChatModel-compatible parser.
     """
-    return _CHAT_MODEL_MAP.get(chat_model_name, OpenAIChatModel)
+    return _CHAT_MODEL_MAP.get(chat_model_name, OpenAIChatModelCompat)
