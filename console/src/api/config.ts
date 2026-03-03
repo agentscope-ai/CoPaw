@@ -1,6 +1,8 @@
 declare const BASE_URL: string;
 declare const TOKEN: string;
 
+const AUTH_TOKEN_KEY = "copaw_auth_token";
+
 /**
  * Get the full API URL with /api prefix
  * @param path - API path (e.g., "/models", "/skills")
@@ -14,9 +16,25 @@ export function getApiUrl(path: string): string {
 }
 
 /**
- * Get the API token
+ * Get the API token from localStorage or build-time config
  * @returns API token string or empty string
  */
 export function getApiToken(): string {
+  const stored = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (stored) return stored;
   return typeof TOKEN !== "undefined" ? TOKEN : "";
+}
+
+/**
+ * Save auth token to localStorage
+ */
+export function setAuthToken(token: string): void {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+/**
+ * Remove auth token from localStorage
+ */
+export function clearAuthToken(): void {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
 }

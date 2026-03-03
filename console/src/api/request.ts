@@ -1,4 +1,4 @@
-import { getApiUrl, getApiToken } from "./config";
+import { getApiUrl, getApiToken, clearAuthToken } from "./config";
 
 function buildHeaders(method?: string, extra?: HeadersInit): Headers {
   // Normalize extra to a Headers instance for consistent handling
@@ -33,6 +33,15 @@ export async function request<T = unknown>(
     ...options,
     headers,
   });
+
+  // Handle 401: clear token and redirect to login
+  if (response.status === 401) {
+    clearAuthToken();
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+    throw new Error("Not authenticated");
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");

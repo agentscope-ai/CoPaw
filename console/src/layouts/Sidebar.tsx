@@ -33,8 +33,10 @@ import {
   PanelLeftOpen,
   Copy,
   Check,
+  LogOut,
 } from "lucide-react";
 import api from "../api";
+import { clearAuthToken } from "../api/config";
 import styles from "./index.module.less";
 
 const { Sider } = Layout;
@@ -164,6 +166,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   const [allVersions, setAllVersions] = useState<string[]>([]);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateMarkdown, setUpdateMarkdown] = useState<string>("");
+  const [authEnabled, setAuthEnabled] = useState(false);
 
   useEffect(() => {
     if (!collapsed) {
@@ -175,6 +178,13 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     api
       .getVersion()
       .then((res) => setVersion(res?.version ?? ""))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((res) => res.json())
+      .then((data) => setAuthEnabled(!!data?.enabled))
       .catch(() => {});
   }, []);
 
@@ -302,6 +312,20 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         },
       ],
     },
+    ...(authEnabled
+      ? [
+          { type: "divider" as const },
+          {
+            key: "logout",
+            label: t("login.logout", "Logout"),
+            icon: <LogOut size={16} />,
+            onClick: () => {
+              clearAuthToken();
+              navigate("/login");
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
