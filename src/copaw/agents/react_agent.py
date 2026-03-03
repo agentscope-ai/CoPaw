@@ -420,8 +420,17 @@ class CoPawAgent(ReActAgent):
             return False
 
         task = asyncio.current_task()
-        return bool(task is not None and task.cancelling() > 0)
+        if task is None:
+            return False
 
+        cancelling = getattr(task, "cancelling", None)
+        if callable(cancelling):
+            return cancelling() > 0
+
+        # Python < 3.11: Task.cancelling() is unavailable.
+        # Fall back to propagating CancelledError to avoid swallowing
+        # genuine task cancellations when we cannot inspect the state.
+        return True
     @staticmethod
     async def _reconnect_mcp_client(
         client: Any,
