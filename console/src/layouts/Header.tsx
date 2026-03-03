@@ -1,6 +1,8 @@
 import { Layout } from "antd";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
+import { Button } from "@agentscope-ai/design";
+import { QuestionCircleOutlined } from "@ant-design/icons";
 
 const { Header: AntHeader } = Layout;
 
@@ -25,6 +27,10 @@ interface HeaderProps {
 export default function Header({ selectedKey }: HeaderProps) {
   const { t } = useTranslation();
 
+  const handleHelpClick = () => {
+    window.open("https://copaw.agentscope.io/docs/intro", "_blank");
+  };
+
   return (
     <AntHeader
       style={{
@@ -40,7 +46,17 @@ export default function Header({ selectedKey }: HeaderProps) {
       <span style={{ fontSize: 18, fontWeight: 500 }}>
         {t(keyToLabel[selectedKey] || "nav.chat")}
       </span>
-      <LanguageSwitcher />
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <Button
+          icon={<QuestionCircleOutlined />}
+          type="text"
+          onClick={handleHelpClick}
+          style={{ fontSize: 14 }}
+        >
+          {t("common.help", "Help")}
+        </Button>
+        <LanguageSwitcher />
+      </div>
     </AntHeader>
   );
 }

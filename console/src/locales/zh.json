@@ -19,7 +19,8 @@
     "loading": "加载中...",
     "copied": "已复制到剪贴板",
     "copyFailed": "复制到剪贴板失败",
-    "contentPlaceholder": "输入内容..."
+    "contentPlaceholder": "输入内容...",
+    "help": "帮助"
   },
   "nav": {
     "chat": "聊天",

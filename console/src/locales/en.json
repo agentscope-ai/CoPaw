@@ -19,7 +19,8 @@
     "loading": "Loading...",
     "copied": "Copied to clipboard",
     "copyFailed": "Failed to copy to clipboard",
-    "contentPlaceholder": "Enter content..."
+    "contentPlaceholder": "Enter content...",
+    "help": "Help"
   },
   "nav": {
     "chat": "Chat",
