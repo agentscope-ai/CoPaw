@@ -213,16 +213,16 @@ export function ProviderConfigModal({
           rules={
             canEditBaseUrl
               ? [
-                ...(provider.is_custom
-                  ? [
-                    {
-                      required: true,
-                      message: t("models.pleaseEnterBaseURL"),
-                    },
-                  ]
-                  : []),
-                { type: "url", message: t("models.pleaseEnterValidURL") },
-              ]
+                  ...(provider.is_custom
+                    ? [
+                        {
+                          required: true,
+                          message: t("models.pleaseEnterBaseURL"),
+                        },
+                      ]
+                    : []),
+                  { type: "url", message: t("models.pleaseEnterValidURL") },
+                ]
               : []
           }
           extra={canEditBaseUrl ? t("models.openAIEndpoint") : undefined}
