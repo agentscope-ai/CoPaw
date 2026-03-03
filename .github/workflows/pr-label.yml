@@ -15,36 +15,21 @@ jobs:
         with:
           script: |
             const author = context.payload.pull_request.user.login;
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'all',
-              per_page: 2,
+
+            const { data: searchResult } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} type:pr author:${author}`,
             });
 
-            const prsByAuthor = prs.filter(
-              pr => pr.user.login === author && pr.number !== context.payload.pull_request.number
-            );
+            const isFirstTime = searchResult.total_count <= 1;
 
-            if (prsByAuthor.length === 0) {
-              // Double-check with a search to handle repos with many PRs
-              const { data: searchResult } = await github.rest.search.issuesAndPullRequests({
-                q: `repo:${context.repo.owner}/${context.repo.repo} type:pr author:${author}`,
+            if (isFirstTime) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['first-time-contributor'],
               });
-
-              const isFirstTime = searchResult.total_count <= 1;
-
-              if (isFirstTime) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.payload.pull_request.number,
-                  labels: ['first-time-contributor'],
-                });
-                core.info(`Labeled PR #${context.payload.pull_request.number} as first-time-contributor`);
-              } else {
-                core.info(`${author} has ${searchResult.total_count} PRs, skipping label`);
-              }
+              core.info(`Labeled PR #${context.payload.pull_request.number} as first-time-contributor`);
             } else {
-              core.info(`${author} already has PRs in this repo, skipping label`);
+              core.info(`${author} has ${searchResult.total_count} PRs, skipping label`);
             }
