@@ -40,7 +40,7 @@ export function JobDrawer({
 
   const handleConvert = async () => {
     if (!naturalLanguage.trim()) {
-      message.warning("请输入自然语言描述");
+      message.warning("Please enter a natural language description");
       return;
     }
 
@@ -49,18 +49,39 @@ export function JobDrawer({
       const result = await cronJobApi.parseCron(naturalLanguage);
       const input = naturalLanguage.trim();
 
+      // Detect language
+      const isChinese = /[\u4e00-\u9fff]/.test(input);
+
       // Extract task description: remove time-related words
-      const taskDesc = input
-        .replace(/每天|每周[一二三四五六日天]?|每月\d+号?|每小时|每\d+[分小]钟?时?/g, "")
-        .replace(/[上下]午|早上|晚上|凌晨/g, "")
-        .replace(/[零一二三四五六七八九十]+点|\d+点/g, "")
-        .replace(/定时|提醒我?|自动/g, "")
-        .trim() || input;
+      let taskDesc: string;
+      if (isChinese) {
+        // Chinese patterns
+        taskDesc = input
+          .replace(/每天|每周[一二三四五六日天]?|每月\d+号?|每小时|每\d+[分小]钟?时?/g, "")
+          .replace(/[上下]午|早上|晚上|凌晨/g, "")
+          .replace(/[零一二三四五六七八九十]+点|\d+点/g, "")
+          .replace(/定时|提醒我?|自动/g, "")
+          .trim() || input;
+      } else {
+        // English patterns
+        taskDesc = input
+          .replace(/every\s+(day|hour|minute|morning|afternoon|evening|night)|daily|hourly/gi, "")
+          .replace(/every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)/gi, "")
+          .replace(/weekdays?|weekends?/gi, "")
+          .replace(/at\s+\d+\s*(am|pm)?/gi, "")
+          .replace(/on\s+the\s+\d+(st|nd|rd|th)?\s+of\s+every\s+month/gi, "")
+          .replace(/every\s+\d+\s+(hours?|minutes?)/gi, "")
+          .replace(/\s+/g, " ")
+          .trim() || input;
+      }
 
       // Generate prompt for agent: keep the reminder context
-      const agentPrompt = input.includes("提醒")
-        ? `提醒：${taskDesc}`
-        : taskDesc;
+      let agentPrompt: string;
+      if (isChinese) {
+        agentPrompt = input.includes("提醒") ? `提醒：${taskDesc}` : taskDesc;
+      } else {
+        agentPrompt = input.toLowerCase().includes("remind") ? `Reminder: ${taskDesc}` : taskDesc;
+      }
 
       // Auto-generate ID
       const jobId = `job-${Date.now().toString(36)}`;
@@ -93,7 +114,7 @@ export function JobDrawer({
       const sourceIcon = result.source === "rules" ? "⚡" : "🤖";
       message.success(`${sourceIcon} ${result.description}`);
     } catch (error) {
-      message.error("解析失败，请使用标准 cron 格式或更清晰的描述");
+      message.error("Failed to parse. Please use standard cron format or clearer description");
       console.error("Failed to parse cron:", error);
     } finally {
       setConverting(false);
@@ -124,17 +145,17 @@ export function JobDrawer({
         <Form.Item label="🪄 Smart Input (Optional)">
           <Space.Compact style={{ width: "100%" }}>
             <Input
-              placeholder="例如：每天下午3点提醒我跑步"
+              placeholder="e.g., every day at 3pm remind me to run / 例如：每天下午3点提醒我跑步"
               value={naturalLanguage}
               onChange={(e) => setNaturalLanguage(e.target.value)}
               onPressEnter={handleConvert}
             />
             <Button type="primary" loading={converting} onClick={handleConvert}>
-              生成
+              Generate
             </Button>
           </Space.Compact>
           <div style={{ marginTop: 4, fontSize: 12, color: "#999" }}>
-            💡 输入自然语言描述，自动填充下方所有字段
+            💡 Enter natural language (EN/中文), auto-fill all fields below
           </div>
         </Form.Item>
 

@@ -58,6 +58,7 @@ export type CronJobViewLegacy = Record<string, unknown>;
 
 export interface CronParseRequest {
   text: string;
+  lang?: "zh" | "en";
 }
 
 export interface CronParseResponse {

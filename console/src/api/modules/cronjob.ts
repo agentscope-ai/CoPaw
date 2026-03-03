@@ -54,7 +54,7 @@ export const cronJobApi = {
     request<unknown>(`/cron/jobs/${encodeURIComponent(jobId)}/state`),
 
   parseCron: (text: string) =>
-    request<CronParseResponse>("/api/cron/parse-cron", {
+    request<CronParseResponse>("/cron/parse-cron", {
       method: "POST",
       body: JSON.stringify({ text } as CronParseRequest),
     }),

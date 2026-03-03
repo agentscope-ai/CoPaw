@@ -135,6 +135,10 @@ class CronParseRequest(BaseModel):
     """Request to parse natural language to cron expression."""
 
     text: str = Field(..., description="Natural language or cron expression")
+    lang: Optional[str] = Field(
+        None,
+        description="Language for description output: 'zh' or 'en'. Auto-detected if not provided.",
+    )
 
 
 class CronParseResponse(BaseModel):

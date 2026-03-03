@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
+from agentscope.model import OpenAIChatModel
 
-from ...agents.model_factory import create_model_and_formatter
+from ...providers import get_active_llm_config
 from .manager import CronManager
 from .models import CronJobSpec, CronJobView, CronParseRequest, CronParseResponse
 from .parser import parse_with_rules, validate_cron, cron_to_human
@@ -120,8 +122,15 @@ async def parse_cron_expression(request: CronParseRequest):
 
     - First tries local rule-based parsing (fast)
     - Falls back to LLM if rules don't match (smart)
+    - Supports both Chinese and English
     """
     text = request.text.strip()
+
+    # Auto-detect language if not provided
+    lang = request.lang
+    if not lang:
+        # Simple heuristic: if contains Chinese characters, use zh, else en
+        lang = "zh" if any('\u4e00' <= c <= '\u9fff' for c in text) else "en"
 
     # 1. Try local rule-based parsing (fast)
     local_result = parse_with_rules(text)
@@ -129,27 +138,50 @@ async def parse_cron_expression(request: CronParseRequest):
         return CronParseResponse(
             cron=local_result,
             source="rules",
-            description=cron_to_human(local_result),
+            description=cron_to_human(local_result, lang=lang),
         )
 
     # 2. Try LLM parsing (smart fallback)
     try:
-        llm_result = await _parse_with_llm(text)
+        llm_result = await _parse_with_llm(text, lang=lang)
         return CronParseResponse(
             cron=llm_result,
             source="llm",
-            description=cron_to_human(llm_result),
+            description=cron_to_human(llm_result, lang=lang),
         )
     except Exception as e:
+        error_msg = (
+            f"无法解析表达式: {text}. 请使用标准 cron 格式或更清晰的自然语言描述。错误: {str(e)}"
+            if lang == "zh"
+            else f"Failed to parse: {text}. Please use standard cron format or clearer natural language. Error: {str(e)}"
+        )
         raise HTTPException(
             status_code=400,
-            detail=f"无法解析表达式: {text}. 请使用标准 cron 格式或更清晰的自然语言描述。错误: {str(e)}",
+            detail=error_msg,
         ) from e
 
 
-async def _parse_with_llm(text: str) -> str:
+async def _parse_with_llm(text: str, lang: str = "zh") -> str:
     """Use LLM to parse complex/ambiguous natural language."""
-    prompt = f"""将自然语言转换为标准 cron 表达式（5个字段）。
+    if lang == "en":
+        prompt = f"""Convert natural language to standard cron expression (5 fields).
+
+Rules:
+- Output only the cron expression, nothing else
+- Format: minute hour day month day_of_week
+- If ambiguous, choose the most reasonable interpretation
+
+Examples:
+"every day at 2pm" → 0 14 * * *
+"every Monday at 9am" → 0 9 * * 1
+"every hour" → 0 * * * *
+"every 30 minutes" → */30 * * * *
+"weekdays at 9am" → 0 9 * * 1-5
+
+Input: {text}
+Output (cron expression only):"""
+    else:
+        prompt = f"""将自然语言转换为标准 cron 表达式（5个字段）。
 
 规则：
 - 只输出 cron 表达式，不要其他内容
@@ -166,11 +198,54 @@ async def _parse_with_llm(text: str) -> str:
 输入：{text}
 输出（只输出cron表达式）："""
 
-    model, _ = create_model_and_formatter()
+    # Create a non-streaming model for this specific use case
+    llm_cfg = get_active_llm_config()
+
+    if llm_cfg and llm_cfg.api_key:
+        model_name = llm_cfg.model or "qwen3-max"
+        api_key = llm_cfg.api_key
+        base_url = llm_cfg.base_url
+    else:
+        model_name = "qwen3-max"
+        api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+    # Create non-streaming model
+    model = OpenAIChatModel(
+        model_name,
+        api_key=api_key,
+        stream=False,  # Disable streaming for simpler response handling
+        client_kwargs={"base_url": base_url},
+    )
+
     response = await model([{"role": "user", "content": prompt}])
 
-    # Extract cron from response
-    cron = response.text.strip()
+    # Extract cron from response - ChatResponse has content field with blocks
+    try:
+        # ChatResponse.content is a list of content blocks (TextBlock, etc.)
+        if hasattr(response, 'content'):
+            content = response.content
+            if isinstance(content, list):
+                # Extract text from all TextBlock items
+                text_parts = []
+                for block in content:
+                    if hasattr(block, 'text'):
+                        text_parts.append(block.text)
+                    elif isinstance(block, str):
+                        text_parts.append(block)
+                    elif isinstance(block, dict) and 'text' in block:
+                        text_parts.append(block['text'])
+                cron = ''.join(text_parts).strip()
+            elif isinstance(content, str):
+                cron = content.strip()
+            else:
+                cron = str(content).strip()
+        elif isinstance(response, str):
+            cron = response.strip()
+        else:
+            raise ValueError(f"Unexpected response structure: {type(response)}")
+    except Exception as e:
+        raise ValueError(f"Failed to extract text from response (type: {type(response).__name__}): {str(e)}")
 
     # Clean up potential extra text
     lines = cron.split("\n")
