@@ -124,6 +124,14 @@ class IMessageChannel(BaseChannel):
         if self._enqueue is not None:
             self._enqueue(request)
 
+    def _should_skip_incoming_text(self, text: Any) -> bool:
+        """Return True when incoming message should be ignored."""
+        if not text:
+            return True
+        if self.bot_prefix and not str(text).startswith(self.bot_prefix):
+            return True
+        return False
+
     def _watcher_loop(self) -> None:
         logger.info(
             "watcher thread started (poll=%.2fs, db=%s)",
@@ -158,7 +166,7 @@ ORDER BY m.ROWID ASC
                         if r["is_from_me"] == 1:
                             continue
                         text = r["text"]
-                        if not text or str(text).startswith(self.bot_prefix):
+                        if self._should_skip_incoming_text(text):
                             continue
                         sender = (r["sender"] or "").strip()
                         if not sender:
