@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access,redefined-outer-name
 from __future__ import annotations
 
 import asyncio
@@ -37,14 +38,18 @@ def _callback(
     )
 
 
-def test_extract_msg_id_prefers_message_id(handler: DingTalkChannelHandler) -> None:
+def test_extract_msg_id_prefers_message_id(
+    handler: DingTalkChannelHandler,
+) -> None:
     incoming = SimpleNamespace(message_id="mid-001")
     cb = _callback(data={"msgId": "msg-001"}, header_message_id="hdr-001")
 
     assert handler._extract_msg_id(incoming, cb) == "mid-001"
 
 
-def test_extract_msg_id_from_callback_data(handler: DingTalkChannelHandler) -> None:
+def test_extract_msg_id_from_callback_data(
+    handler: DingTalkChannelHandler,
+) -> None:
     incoming = SimpleNamespace()
     cb = _callback(data={"msgId": "msg-002"}, header_message_id="hdr-002")
 
