@@ -69,7 +69,9 @@ docker pull agentscope/copaw:latest
 docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
-After upgrading, restart the service with `copaw app`.
+After upgrading, if you run CoPaw in background mode, restart with
+`copaw service restart`. If you run in foreground mode, stop and rerun
+`copaw app`.
 
 ### How to initialize and start CoPaw service
 
@@ -83,6 +85,13 @@ Start service:
 
 ```bash
 copaw app
+```
+
+Optional background mode:
+
+```bash
+copaw service install
+copaw service status
 ```
 
 The default Console URL is `http://127.0.0.1:8088/`. After quick init, you can

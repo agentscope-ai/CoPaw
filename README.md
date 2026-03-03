@@ -97,6 +97,13 @@ copaw init --defaults
 copaw app
 ```
 
+Run as a background service (optional):
+
+```bash
+copaw service install
+copaw service status
+```
+
 Then open **http://127.0.0.1:8088/** in your browser for the Console (chat with CoPaw, configure the agent). To talk in DingTalk, Feishu, QQ, etc., add a channel in the [docs](https://copaw.agentscope.io/docs/channels).
 
 ![Console](https://img.alicdn.com/imgextra/i4/O1CN01iuGyNc1mNwsUU5NQI_!!6000000004943-2-tps-3822-2070.png)
@@ -134,6 +141,13 @@ Then open a new terminal and run:
 ```bash
 copaw init --defaults   # or: copaw init (interactive)
 copaw app
+```
+
+Run as a background service (optional):
+
+```bash
+copaw service install
+copaw service status
 ```
 
 <details>

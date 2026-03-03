@@ -66,7 +66,8 @@ docker pull agentscope/copaw:latest
 docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
-升级后重启服务 copaw app。
+升级后，若使用后台托管模式，执行 `copaw service restart`；若使用前台模式，
+停止后重新执行 `copaw app`。
 
 ### CoPaw服务如何启动及初始化
 
@@ -80,6 +81,13 @@ copaw init --defaults
 
 ```bash
 copaw app
+```
+
+可选后台托管方式：
+
+```bash
+copaw service install
+copaw service status
 ```
 
 控制台默认地址为 `http://127.0.0.1:8088/`，使用默认配置快速初始化后，可以进入控制台快捷自定义相关内容。详情请见[快速开始](https://copaw.agentscope.io/docs/quickstart)。

@@ -97,6 +97,13 @@ copaw init --defaults
 copaw app
 ```
 
+可选后台托管运行：
+
+```bash
+copaw service install
+copaw service status
+```
+
 在浏览器打开 **http://127.0.0.1:8088/** 即可使用控制台（与 CoPaw 对话、配置 Agent）。若要在钉钉、飞书、QQ 等 app 内对话，请在 [文档](https://copaw.agentscope.io/docs/channels) 中接入频道。
 
 ![Console](https://img.alicdn.com/imgextra/i4/O1CN01Q0kWkE1WlHCNXeUlb_!!6000000002828-2-tps-3822-2070.png)
@@ -134,6 +141,13 @@ irm https://copaw.agentscope.io/install.ps1 | iex
 ```bash
 copaw init --defaults   # 或：copaw init（交互式）
 copaw app
+```
+
+可选后台托管运行：
+
+```bash
+copaw service install
+copaw service status
 ```
 
 <details>

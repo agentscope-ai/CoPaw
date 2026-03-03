@@ -57,6 +57,33 @@ copaw app --log-level debug           # Verbose logging
 | `--workers`   | `1`         | Number of worker processes                                    |
 | `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
 
+### copaw service
+
+Run CoPaw as a background service managed by the OS supervisor.
+
+- macOS: `launchd` (`~/Library/LaunchAgents/ai.copaw.app.plist`)
+- Linux: `systemd --user` (`~/.config/systemd/user/copaw-app.service`)
+
+```bash
+copaw service install                    # Install + start background service
+copaw service status                     # Supervisor status + API probe
+copaw service restart                    # Restart managed service
+copaw service stop                       # Stop managed service
+copaw service uninstall                  # Remove managed service definition
+```
+
+| Command                   | What it does                                                        |
+| ------------------------- | ------------------------------------------------------------------- |
+| `copaw service install`   | Install and start service (`--host` / `--port` / `--log-level`)    |
+| `copaw service status`    | Show install/runtime status (`--no-probe` to skip `/api/version`)  |
+| `copaw service start`     | Start installed service                                             |
+| `copaw service stop`      | Stop installed service                                              |
+| `copaw service restart`   | Restart installed service                                           |
+| `copaw service uninstall` | Uninstall service definition                                        |
+
+> **Tip (Linux):** to keep the user service running after logout, run
+> `sudo loginctl enable-linger <user>`.
+
 ### Console
 
 Once `copaw app` is running, open `http://127.0.0.1:8088/` in your browser to
@@ -415,6 +442,7 @@ See [Config & Working Directory](./config) for full details.
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :--------------: |
 | `copaw init`     | —                                                                                                                                      |        No        |
 | `copaw app`      | —                                                                                                                                      |  — (starts it)   |
+| `copaw service`  | `install` · `status` · `start` · `stop` · `restart` · `uninstall`                                                                     |        No        |
 | `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        No        |
 | `copaw env`      | `list` · `set` · `delete`                                                                                                              |        No        |
 | `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        No        |
