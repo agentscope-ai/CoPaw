@@ -904,7 +904,7 @@ async def discover_provider_models(
     discovered = _dedupe_models(discovered)
     if not discovered:
         return {
-            "success": False,
+            "success": True,
             "message": "No models discovered from provider /models endpoint.",
             "models": [],
             "added_count": 0,
