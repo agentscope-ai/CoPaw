@@ -6,6 +6,7 @@ import pytest
 
 from copaw.app.channels.base import ContentType
 from copaw.app.channels.feishu.channel import FeishuChannel
+from copaw.app.channels.feishu.constants import FEISHU_FILE_MAX_BYTES
 
 
 async def _empty_process(_request):
@@ -95,4 +96,26 @@ async def test_send_content_parts_stop_after_file_failure() -> None:
 
     assert len(send_file_calls) == 1
     assert len(send_text_calls) == 1
-    assert "30MB" in send_text_calls[0]
+    expected_limit_mb = FEISHU_FILE_MAX_BYTES // (1024 * 1024)
+    assert f"{expected_limit_mb}MB" in send_text_calls[0]
+
+
+@pytest.mark.asyncio
+async def test_part_to_file_path_or_url_base64_decode_failed() -> None:
+    channel = FeishuChannel(
+        process=_empty_process,
+        enabled=True,
+        app_id="app_id",
+        app_secret="app_secret",
+        bot_prefix="[BOT] ",
+    )
+    part = SimpleNamespace(
+        type=ContentType.FILE,
+        data="data:application/octet-stream;base64,not-base64-@@@",
+        filename="broken.bin",
+    )
+
+    path_or_url, reason = await channel._part_to_file_path_or_url(part)
+
+    assert path_or_url is None
+    assert reason == "file_decode_failed"
