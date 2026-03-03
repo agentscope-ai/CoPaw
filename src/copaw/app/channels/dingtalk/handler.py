@@ -102,14 +102,24 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             for item in rich_list:
                 if not isinstance(item, dict):
                     continue
-                if item.get("text") is not None:
+                # Text may be under "text" or "content" (API variation).
+                item_text = item.get("text")
+                if item_text is None:
+                    item_text = item.get("content")
+                if item_text is not None:
                     content.append(
                         TextContent(
                             type=ContentType.TEXT,
-                            text=item.get("text") or "",
+                            text=(item_text or "").strip(),
                         ),
                     )
-                dl_code = item.get("downloadCode")
+                # Picture items may use pictureDownloadCode or downloadCode.
+                dl_code = (
+                    item.get("downloadCode")
+                    or item.get("download_code")
+                    or item.get("pictureDownloadCode")
+                    or item.get("picture_download_code")
+                )
                 if not dl_code or not robot_code:
                     continue
                 mapped = type_mapping.get(
@@ -177,13 +187,21 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             content = self._parse_rich_content(incoming_message)
             # If text was extracted separately and rich content has no
             # text items, prepend the text so both text and media are
-            # preserved in the content list.
+            # preserved. Do not prepend when top-level text is only a
+            # placeholder (e.g. "\\n", "//n") so image+text from richText
+            # is not overwritten.
+            rich_has_text = any(
+                item.type == "text" and (item.text or "").strip()
+                for item in content
+            )
+            text_is_placeholder = not (text or "").strip() or (
+                (text or "").strip() in ("\n", "\\n", "//n")
+            )
             if (
                 text
                 and content
-                and not any(
-                    item.type == "text" and item.text for item in content
-                )
+                and not rich_has_text
+                and not text_is_placeholder
             ):
                 content.insert(
                     0,
