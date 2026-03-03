@@ -196,6 +196,11 @@ class ChannelManager:
                     "filter_tool_messages",
                     False,
                 )
+                filter_thinking = getattr(
+                    ch_cfg,
+                    "filter_thinking",
+                    False,
+                )
                 channels.append(
                     ch_cls.from_config(
                         process,
@@ -203,6 +208,7 @@ class ChannelManager:
                         on_reply_sent=on_last_dispatch,
                         show_tool_details=show_tool_details,
                         filter_tool_messages=filter_tool_messages,
+                        filter_thinking=filter_thinking,
                     ),
                 )
         return cls(channels)

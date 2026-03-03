@@ -15,6 +15,7 @@ class BaseChannelConfig(BaseModel):
     enabled: bool = False
     bot_prefix: str = ""
     filter_tool_messages: bool = False
+    filter_thinking: bool = False
 
 
 class IMessageChannelConfig(BaseChannelConfig):
@@ -46,6 +47,8 @@ class FeishuConfig(BaseChannelConfig):
     encrypt_key: str = ""
     verification_token: str = ""
     media_dir: str = "~/.copaw/media"
+    filter_tool_messages: bool = True
+    filter_thinking: bool = True
 
 
 class QQConfig(BaseChannelConfig):

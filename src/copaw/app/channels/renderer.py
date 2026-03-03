@@ -43,6 +43,7 @@ class RenderStyle:
     supports_code_fence: bool = True
     use_emoji: bool = True
     filter_tool_messages: bool = False
+    filter_thinking: bool = False
 
 
 def _fmt_tool_call(
@@ -154,7 +155,8 @@ class MessageRenderer:
                                 ),
                             )
                 if btype == "thinking" and b.get("thinking"):
-                    result.append(TextContent(text=b["thinking"]))
+                    if not s.filter_thinking:
+                        result.append(TextContent(text=b["thinking"]))
             return result
 
         def _parts_for_tool_output(content_list: list) -> List[_OutgoingPart]:
