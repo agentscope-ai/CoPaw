@@ -30,6 +30,16 @@ from .registry import (
 _PROVIDERS_DIR = Path(__file__).resolve().parent
 _PROVIDERS_JSON = _PROVIDERS_DIR / "providers.json"
 _VALID_WIRE_APIS = {"chat_completions", "responses"}
+_SENSITIVE_HEADER_KEYWORDS = (
+    "api-key",
+    "apikey",
+    "auth",
+    "cookie",
+    "credential",
+    "secret",
+    "session",
+    "token",
+)
 
 
 def get_providers_json_path() -> Path:
@@ -351,18 +361,7 @@ def _resolve_slot(
         return None
 
     base_url, api_key = data.get_credentials(pid)
-    headers: dict[str, str] = {}
-    wire_api = "chat_completions"
-
-    cpd = data.custom_providers.get(pid)
-    if cpd is not None:
-        headers = dict(cpd.headers or {})
-        wire_api = cpd.wire_api
-    else:
-        settings = data.providers.get(pid)
-        if settings is not None:
-            headers = dict(settings.headers or {})
-            wire_api = settings.wire_api
+    headers, wire_api = data.get_transport_config(pid)
 
     return ResolvedModelConfig(
         model=slot.model,
@@ -390,6 +389,22 @@ def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
     suffix = api_key[-visible_chars:]
     hidden_len = len(api_key) - len(prefix) - visible_chars
     return f"{prefix}{'*' * max(hidden_len, 4)}{suffix}"
+
+
+def is_sensitive_header_name(header_name: str) -> bool:
+    normalized = header_name.strip().lower().replace("_", "-")
+    return any(keyword in normalized for keyword in _SENSITIVE_HEADER_KEYWORDS)
+
+
+def mask_headers(headers: dict[str, str]) -> dict[str, str]:
+    masked: dict[str, str] = {}
+    for key, value in headers.items():
+        text = "" if value is None else str(value)
+        if is_sensitive_header_name(key) and text:
+            masked[key] = mask_api_key(text)
+        else:
+            masked[key] = text
+    return masked
 
 
 # -- Custom provider CRUD --

@@ -16,6 +16,7 @@ from ..providers import (
     list_providers,
     load_providers_json,
     mask_api_key,
+    mask_headers,
     remove_model,
     set_active_llm,
     update_provider_settings,
@@ -365,25 +366,12 @@ def list_cmd() -> None:
                     f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
                 )
 
-            cpd = data.custom_providers.get(defn.id)
-            wire_api = (
-                cpd.wire_api
-                if cpd is not None
-                else settings.wire_api
-                if settings is not None
-                else "chat_completions"
-            )
-            headers = (
-                dict(cpd.headers)
-                if cpd is not None
-                else dict(settings.headers)
-                if settings is not None
-                else {}
-            )
+            headers, wire_api = data.get_transport_config(defn.id)
+            masked_headers = mask_headers(headers)
             click.echo(f"  {'wire_api':16s}: {wire_api}")
-            if headers:
+            if masked_headers:
                 click.echo(f"  {'headers':16s}:")
-                for key, value in headers.items():
+                for key, value in masked_headers.items():
                     click.echo(f"    - {key}: {value}")
 
             extra = (
@@ -458,16 +446,7 @@ def config_key_cmd(
         return
 
     data = load_providers_json()
-    target = data.custom_providers.get(configured_provider_id)
-    if target is None:
-        target_settings = data.providers.get(configured_provider_id)
-        current_headers = (
-            dict(target_settings.headers)
-            if target_settings is not None
-            else {}
-        )
-    else:
-        current_headers = dict(target.headers)
+    current_headers, _ = data.get_transport_config(configured_provider_id)
 
     next_headers = {} if clear_headers else current_headers
     next_headers.update(parsed_headers)
@@ -542,7 +521,7 @@ def add_provider_cmd(
     click.echo(f"  wire_api: {wire_api}")
     if parsed_headers:
         click.echo("  headers:")
-        for key, value in parsed_headers.items():
+        for key, value in mask_headers(parsed_headers).items():
             click.echo(f"    - {key}: {value}")
     click.echo(
         "  Run 'copaw models add-model' to add models, "

@@ -7,6 +7,8 @@ from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
+WireApi = Literal["chat_completions", "responses"]
+
 
 class ModelInfo(BaseModel):
     id: str = Field(..., description="Model identifier used in API calls")
@@ -53,7 +55,7 @@ class ProviderSettings(BaseModel):
         default_factory=dict,
         description="Additional HTTP headers to attach to model requests.",
     )
-    wire_api: Literal["chat_completions", "responses"] = Field(
+    wire_api: WireApi = Field(
         default="chat_completions",
         description="Wire API style for OpenAI-compatible providers.",
     )
@@ -81,7 +83,7 @@ class CustomProviderData(BaseModel):
         default_factory=dict,
         description="Additional HTTP headers to attach to model requests.",
     )
-    wire_api: Literal["chat_completions", "responses"] = Field(
+    wire_api: WireApi = Field(
         default="chat_completions",
         description="Wire API style for OpenAI-compatible providers.",
     )
@@ -108,6 +110,21 @@ class ProvidersData(BaseModel):
             return cpd.base_url or cpd.default_base_url, cpd.api_key
         s = self.providers.get(provider_id)
         return (s.base_url, s.api_key) if s else ("", "")
+
+    def get_transport_config(
+        self,
+        provider_id: str,
+    ) -> tuple[Dict[str, str], WireApi]:
+        """Return ``(headers, wire_api)`` for *provider_id*."""
+        cpd = self.custom_providers.get(provider_id)
+        if cpd is not None:
+            return dict(cpd.headers or {}), cpd.wire_api
+
+        settings = self.providers.get(provider_id)
+        if settings is not None:
+            return dict(settings.headers or {}), settings.wire_api
+
+        return {}, "chat_completions"
 
     def is_configured(self, defn: "ProviderDefinition") -> bool:
         """Custom providers need base_url; built-in providers need api_key.

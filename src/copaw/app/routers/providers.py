@@ -21,6 +21,7 @@ from ...providers import (
     list_providers,
     load_providers_json,
     mask_api_key,
+    mask_headers,
     remove_model,
     set_active_llm,
     update_provider_settings,
@@ -80,14 +81,12 @@ def _build_provider_info(
     configured = data.is_configured(provider)
 
     settings = data.providers.get(provider.id)
-    cpd = data.custom_providers.get(provider.id)
     extra = (
         list(settings.extra_models)
         if settings and not provider.is_custom
         else []
     )
-    headers = dict(cpd.headers if cpd else (settings.headers if settings else {}))
-    wire_api = cpd.wire_api if cpd else (settings.wire_api if settings else "chat_completions")
+    headers, wire_api = data.get_transport_config(provider.id)
 
     return ProviderInfo(
         id=provider.id,
@@ -100,7 +99,7 @@ def _build_provider_info(
         has_api_key=configured,
         current_api_key=mask_api_key(cur_api_key),
         current_base_url=cur_base_url,
-        current_headers=headers,
+        current_headers=mask_headers(headers),
         wire_api=wire_api,
     )
 

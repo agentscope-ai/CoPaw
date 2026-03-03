@@ -37,7 +37,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
         self,
         model_name: str,
         api_key: str | None = None,
-        stream: bool = True,
+        stream: bool = False,  # This model does not support true streaming.
         reasoning_effort: Literal["low", "medium", "high"] | None = None,
         organization: str | None = None,
         client_type: Literal["openai", "azure"] = "openai",
@@ -62,6 +62,9 @@ class OpenAIResponsesChatModel(ChatModelBase):
                 **(client_kwargs or {}),
             )
 
+        self._responses_fallback_errors: tuple[type[Exception], ...] = (
+            openai.APIError,
+        )
         self.reasoning_effort = reasoning_effort
         self.generate_kwargs = generate_kwargs or {}
 
@@ -87,7 +90,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
                 structured_model,
                 **kwargs,
             )
-        except Exception:
+        except self._responses_fallback_errors:
             response = await self._call_chat_completions(
                 messages,
                 tools,
