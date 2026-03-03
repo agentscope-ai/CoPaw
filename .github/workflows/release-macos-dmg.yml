@@ -51,53 +51,59 @@ jobs:
           pip install -e ".[dev]"
           pip install pyinstaller
 
-      - name: Build DMG
+      - name: Build DMG (release + dev)
         env:
           MACOSX_DEPLOYMENT_TARGET: "10.15"
           VERSION_ARG: ${{ github.event.release.tag_name || inputs.version }}
         run: |
           if [[ -n "$VERSION_ARG" ]]; then
-            bash scripts/macos/build_dmg.sh "$VERSION_ARG"
+            bash scripts/macos/build_dmg.sh "$VERSION_ARG" --dev
           else
-            bash scripts/macos/build_dmg.sh
+            bash scripts/macos/build_dmg.sh --dev
           fi
 
-      - name: Ad-hoc sign Mach-O files and recreate DMG (skip main exe)
+      - name: Ad-hoc sign apps and recreate DMGs (macOS compatibility)
         shell: bash
         run: |
           set -euo pipefail
 
-          APP_DIR="dist/CoPaw.app"
-          MAIN_EXE="$APP_DIR/Contents/MacOS/CoPaw"
-          DMG_GLOB="dist/CoPaw-*.dmg"
+          sign_app() {
+            local APP_DIR="$1"
+            [[ -d "$APP_DIR" ]] || return 0
+            local MAIN_EXE="$APP_DIR/Contents/MacOS/$(basename "$APP_DIR" .app)"
+            find "$APP_DIR" -type d -name "*.dist-info" -print0 | xargs -0 rm -rf 2>/dev/null || true
+            find "$APP_DIR" -type f -name "py.typed" -delete 2>/dev/null || true
+            # Sign all Mach-O binaries (including main exe) for Gatekeeper
+            while IFS= read -r -d '' f; do
+              if /usr/bin/file -b "$f" | /usr/bin/grep -q 'Mach-O'; then
+                /usr/bin/codesign --force --sign - --timestamp=none "$f" || true
+              fi
+            done < <(find "$APP_DIR" -type f -print0)
+            # Sign the app bundle so macOS does not show "damaged"
+            /usr/bin/codesign --force --sign - --timestamp=none "$APP_DIR" || true
+          }
 
-          [[ -d "$APP_DIR" ]] || { echo "No $APP_DIR found" >&2; exit 1; }
+          for APP_DIR in dist/CoPaw.app dist/CoPaw-Dev.app; do
+            sign_app "$APP_DIR"
+          done
 
-          # Optional cleanup
-          find "$APP_DIR" -type d -name "*.dist-info" -print0 | xargs -0 rm -rf || true
-          find "$APP_DIR" -type f -name "py.typed" -delete || true
+          # Recreate release DMG (exclude CoPaw-Dev-*.dmg)
+          RELEASE_DMG="$(ls dist/CoPaw-*.dmg 2>/dev/null | grep -v 'CoPaw-Dev-' | head -1)"
+          if [[ -n "${RELEASE_DMG:-}" ]]; then
+            VERSION="$(basename "$RELEASE_DMG" .dmg | sed 's/^CoPaw-//')"
+            rm -f "$RELEASE_DMG"
+            /usr/bin/hdiutil create -volname "CoPaw $VERSION" -srcfolder dist/CoPaw.app \
+              -ov -format UDZO "$RELEASE_DMG"
+          fi
 
-          # Sign ONLY Mach-O binaries, but SKIP the main executable to avoid
-          # subcomponent/resource validation failures (e.g. grpc roots.pem).
-          while IFS= read -r -d '' f; do
-            if [[ "$f" == "$MAIN_EXE" ]]; then
-              continue
-            fi
-
-            if /usr/bin/file -b "$f" | /usr/bin/grep -q 'Mach-O'; then
-              /usr/bin/codesign --force --sign - --timestamp=none "$f"
-            fi
-          done < <(find "$APP_DIR" -type f -print0)
-
-          # Recreate DMG so it contains the signed binaries
-          DMG_NAME="$(ls $DMG_GLOB 2>/dev/null | head -1 || true)"
-          [[ -n "${DMG_NAME:-}" ]] || { echo "No DMG found" >&2; exit 1; }
-
-          VERSION="$(basename "$DMG_NAME" .dmg | sed 's/^CoPaw-//')"
-          rm -f "$DMG_NAME"
-
-          /usr/bin/hdiutil create -volname "CoPaw $VERSION" -srcfolder "$APP_DIR" \
-            -ov -format UDZO "$DMG_NAME"
+          # Recreate dev DMG
+          DEV_DMG="$(ls dist/CoPaw-Dev-*.dmg 2>/dev/null | head -1)"
+          if [[ -n "${DEV_DMG:-}" ]]; then
+            VERSION="$(basename "$DEV_DMG" .dmg | sed 's/^CoPaw-Dev-//')"
+            rm -f "$DEV_DMG"
+            /usr/bin/hdiutil create -volname "CoPaw Dev $VERSION" \
+              -srcfolder dist/CoPaw-Dev.app -ov -format UDZO "$DEV_DMG"
+          fi
 
       - name: Upload DMG to Release
         if: github.event_name == 'release' && github.event.action == 'published'

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build CoPaw as a macOS .app and DMG for distribution.
-# Run from repo root: bash scripts/macos/build_dmg.sh [version]
+# Run from repo root: bash scripts/macos/build_dmg.sh [version] [--dev]
 #
 # Prerequisites: macOS, Node.js, Python 3.10+, pip install pyinstaller
 # Output: dist/CoPaw.app, dist/CoPaw-<version>.dmg
+# With --dev: also dist/CoPaw-Dev.app, dist/CoPaw-Dev-<version>.dmg (console window)
 
 set -e
 
@@ -11,9 +12,19 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 VERSION="${1:-}"
+BUILD_DEV=false
+if [[ "${2:-}" == "--dev" ]]; then
+  BUILD_DEV=true
+fi
 VERSION="${VERSION#v}"
-if [[ -z "$VERSION" ]]; then
-  VERSION=$(python3 -c "from src.copaw.__version__ import __version__; print(__version__)" 2>/dev/null || echo "0.0.0")
+if [[ -z "$VERSION" || "$VERSION" == "--dev" ]]; then
+  if [[ "$VERSION" == "--dev" ]]; then
+    BUILD_DEV=true
+    VERSION=""
+  fi
+  if [[ -z "$VERSION" ]]; then
+    VERSION=$(python3 -c "from src.copaw.__version__ import __version__; print(__version__)" 2>/dev/null || echo "0.0.0")
+  fi
 fi
 
 CONSOLE_DIR="$REPO_ROOT/console"
@@ -175,3 +186,104 @@ fi
 
 echo "[build_dmg] Done. App: $APP_DIR  DMG: $DMG_PATH"
 echo "  Double-click CoPaw to open the Console in a window."
+
+# Optional dev build: same app with console=True so Terminal shows logs/errors.
+if [[ "$BUILD_DEV" != "true" ]]; then
+  exit 0
+fi
+
+echo "[build_dmg] Building Dev variant (console window for logs)..."
+DEV_APP_NAME="CoPaw-Dev"
+DEV_PYINSTALLER_OUT="$DIST_DIR/$DEV_APP_NAME"
+DEV_APP_DIR="$DIST_DIR/${DEV_APP_NAME}.app"
+DEV_DMG_NAME="${DEV_APP_NAME}-${VERSION}"
+rm -rf "$REPO_ROOT/build" "$DEV_PYINSTALLER_OUT" "$DEV_APP_DIR"
+
+"$PYTHON" -m PyInstaller --noconfirm --clean "scripts/macos/copaw_dev.spec" &
+PYPID=$!
+NEED_KILL=true
+for _ in $(seq 1 200); do
+  sleep 2
+  if [[ -f "$DEV_PYINSTALLER_OUT/$DEV_APP_NAME" ]]; then
+    if [[ -f "$DEV_PYINSTALLER_OUT/base_library.zip" ]] || \
+       [[ -d "$DEV_PYINSTALLER_OUT/_internal" && -f "$DEV_PYINSTALLER_OUT/_internal/libpython"* ]]; then
+      sleep 2
+      if ! kill -0 "$PYPID" 2>/dev/null; then
+        NEED_KILL=false
+      fi
+      kill "$PYPID" 2>/dev/null || true
+      wait "$PYPID" 2>/dev/null || true
+      break
+    fi
+  fi
+  if ! kill -0 "$PYPID" 2>/dev/null; then
+    wait "$PYPID" 2>/dev/null || true
+    NEED_KILL=false
+    break
+  fi
+done
+
+if [[ ! -f "$DEV_PYINSTALLER_OUT/$DEV_APP_NAME" ]]; then
+  echo "[build_dmg] ERROR: PyInstaller did not produce $DEV_PYINSTALLER_OUT/$DEV_APP_NAME" >&2
+  kill "$PYPID" 2>/dev/null || true
+  exit 1
+fi
+
+rm -rf "$DEV_APP_DIR"
+mkdir -p "$DEV_APP_DIR/Contents/MacOS"
+mkdir -p "$DEV_APP_DIR/Contents/Resources"
+
+# Reuse icon from release app
+if [[ -f "$APP_DIR/Contents/Resources/Icon.icns" ]]; then
+  cp "$APP_DIR/Contents/Resources/Icon.icns" "$DEV_APP_DIR/Contents/Resources/"
+fi
+
+cp -R "$DEV_PYINSTALLER_OUT/"* "$DEV_APP_DIR/Contents/MacOS/"
+FRAMEWORKS="$DEV_APP_DIR/Contents/Frameworks"
+INTERNAL="$DEV_APP_DIR/Contents/MacOS/_internal"
+mkdir -p "$FRAMEWORKS"
+cp -R "$INTERNAL/"* "$FRAMEWORKS/"
+
+cat > "$DEV_APP_DIR/Contents/Info.plist" << INFOPLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>${DEV_APP_NAME}</string>
+  <key>CFBundleIconFile</key>
+  <string>Icon</string>
+  <key>CFBundleIdentifier</key>
+  <string>ai.agentscope.copaw.dev</string>
+  <key>CFBundleName</key>
+  <string>${DEV_APP_NAME}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>${VERSION}</string>
+  <key>CFBundleVersion</key>
+  <string>${VERSION}</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>${MACOSX_DEPLOYMENT_TARGET}</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+INFOPLIST
+
+rm -rf "$DEV_PYINSTALLER_OUT"
+
+DEV_DMG_PATH="$DIST_DIR/${DEV_DMG_NAME}.dmg"
+if command -v create-dmg &>/dev/null; then
+  rm -f "$DEV_DMG_PATH"
+  create-dmg --volname "CoPaw Dev $VERSION" --window-pos 200 120 --window-size 600 400 \
+    --icon-size 100 --app-drop-link 450 200 --no-internet-enable "$DEV_DMG_PATH" "$DEV_APP_DIR"
+else
+  TMP_DMG="$DIST_DIR/tmp_${DEV_DMG_NAME}.dmg"
+  rm -f "$TMP_DMG" "$DEV_DMG_PATH"
+  hdiutil create -volname "CoPaw Dev $VERSION" -srcfolder "$DEV_APP_DIR" -ov -format UDZO "$TMP_DMG"
+  mv "$TMP_DMG" "$DEV_DMG_PATH"
+fi
+
+echo "[build_dmg] Dev done. App: $DEV_APP_DIR  DMG: $DEV_DMG_PATH"
+echo "  CoPaw-Dev opens a Terminal window so you can see backend logs and errors."
