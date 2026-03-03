@@ -40,6 +40,9 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install librsvg (for correct app icon rendering)
+        run: brew install librsvg
+
       - name: Build console frontend
         run: |
           cd console && npm ci && npm run build
@@ -67,7 +70,7 @@ jobs:
             bash scripts/macos/build_dmg.sh
           fi
 
-      - name: Sign app and recreate DMG (ad-hoc)
+      - name: Sign app and recreate DMG (ad-hoc, no --deep)
         shell: bash
         run: |
           set -euo pipefail
@@ -75,40 +78,25 @@ jobs:
           APP_DIR="dist/CoPaw.app"
           DMG_GLOB="dist/CoPaw-*.dmg"
 
-          if [[ ! -d "$APP_DIR" ]]; then
-            echo "No $APP_DIR found" >&2
-            exit 1
-          fi
+          [[ -d "$APP_DIR" ]] || { echo "No $APP_DIR found" >&2; exit 1; }
 
-          # Remove packaging metadata not needed at runtime
+          # Optional cleanup
           find "$APP_DIR" -type d -name "*.dist-info" -print0 | xargs -0 rm -rf || true
-
-          # Some Python packages ship marker files like py.typed which are not Mach-O.
-          # They can trigger subcomponent checks during bundle signing in some layouts.
           find "$APP_DIR" -type f -name "py.typed" -delete || true
 
-          # Ad-hoc sign only Mach-O files (executables, dylibs, extension modules).
-          # Using `file` avoids trying to sign text/data files.
+          # Ad-hoc sign ONLY Mach-O files (executables/dylibs/extension modules)
           while IFS= read -r -d '' f; do
             if file -b "$f" | grep -qE 'Mach-O'; then
               codesign --force --sign - "$f"
             fi
           done < <(find "$APP_DIR" -type f -print0)
 
-          # Sign main executable explicitly (belt-and-suspenders)
-          if [[ -f "$APP_DIR/Contents/MacOS/CoPaw" ]]; then
-            codesign --force --sign - "$APP_DIR/Contents/MacOS/CoPaw"
-          fi
-
-          # Finally sign the app bundle (no --deep; PyInstaller layout may include non-bundles/symlinks)
+          # Finally sign the .app bundle itself (no --deep)
           codesign --force --sign - "$APP_DIR"
 
           # Recreate DMG so it contains the signed app
           DMG_NAME="$(ls $DMG_GLOB 2>/dev/null | head -1 || true)"
-          if [[ -z "${DMG_NAME:-}" ]]; then
-            echo "No DMG found" >&2
-            exit 1
-          fi
+          [[ -n "${DMG_NAME:-}" ]] || { echo "No DMG found" >&2; exit 1; }
 
           VERSION="$(basename "$DMG_NAME" .dmg | sed 's/^CoPaw-//')"
           rm -f "$DMG_NAME"

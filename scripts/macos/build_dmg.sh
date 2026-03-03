@@ -94,15 +94,21 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
-# App icon: SVG -> PNG (qlmanage) -> iconset (sips) -> .icns (iconutil)
+# App icon: SVG -> PNG -> iconset (sips) -> .icns (iconutil)
+# Prefer rsvg-convert (librsvg) to preserve gradient; qlmanage often yields white bg.
 ICON_SVG="$REPO_ROOT/scripts/macos/copaw-symbol.svg"
 ICON_TMP="$DIST_DIR/icon_build"
 if [[ -f "$ICON_SVG" ]]; then
   echo "[build_dmg] Building app icon from copaw-symbol.svg..."
   rm -rf "$ICON_TMP"
   mkdir -p "$ICON_TMP"
-  (cd "$ICON_TMP" && qlmanage -t -s 1024 -o . "$ICON_SVG" 2>/dev/null)
-  SRC_PNG="$ICON_TMP/copaw-symbol.svg.png"
+  SRC_PNG="$ICON_TMP/icon_1024.png"
+  if command -v rsvg-convert &>/dev/null; then
+    rsvg-convert -w 1024 -h 1024 "$ICON_SVG" -o "$SRC_PNG"
+  else
+    (cd "$ICON_TMP" && qlmanage -t -s 1024 -o . "$ICON_SVG" 2>/dev/null)
+    SRC_PNG="$ICON_TMP/copaw-symbol.svg.png"
+  fi
   if [[ -f "$SRC_PNG" ]]; then
     ICONSET="$ICON_TMP/CoPaw.iconset"
     mkdir -p "$ICONSET"
