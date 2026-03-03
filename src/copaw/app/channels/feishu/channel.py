@@ -98,11 +98,13 @@ class FeishuChannel(BaseChannel):
         media_dir: str = "~/.copaw/media",
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = True,
     ):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
         )
         self.enabled = enabled
         self.app_id = app_id
@@ -123,12 +125,9 @@ class FeishuChannel(BaseChannel):
         self._token_lock = asyncio.Lock()
         self._http: Optional[aiohttp.ClientSession] = None
 
-        # message_id dedup (ordered, trim when over limit)
         self._processed_message_ids: OrderedDict[str, None] = OrderedDict()
-        # session_id -> (receive_id, receive_id_type) for send
         self._receive_id_store: Dict[str, Tuple[str, str]] = {}
         self._receive_id_lock = asyncio.Lock()
-        # open_id -> nickname (from Contact API) for sender display
         self._nickname_cache: Dict[str, str] = {}
         self._nickname_cache_lock = asyncio.Lock()
 
@@ -159,6 +158,7 @@ class FeishuChannel(BaseChannel):
         config: FeishuChannelConfig,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = True,
     ) -> "FeishuChannel":
         return cls(
             process=process,
@@ -171,6 +171,7 @@ class FeishuChannel(BaseChannel):
             media_dir=config.media_dir or "~/.copaw/media",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
         )
 
     def resolve_session_id(

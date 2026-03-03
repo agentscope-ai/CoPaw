@@ -80,23 +80,20 @@ class BaseChannel(ABC):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = True,
     ):
         self._process = process
         self._on_reply_sent = on_reply_sent
         self._show_tool_details = show_tool_details
-        # Set by ChannelManager.start_all(); channel calls this to enqueue.
+        self._filter_tool_messages = filter_tool_messages
         self._enqueue: EnqueueCallback = None
-        # Pluggable renderer; subclasses may replace or inject style.
-        self._render_style = RenderStyle(show_tool_details=show_tool_details)
+        self._render_style = RenderStyle(
+            show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+        )
         self._renderer = MessageRenderer(self._render_style)
-        # Optional shared aiohttp.ClientSession; subclasses create in start(),
-        # close in stop().
         self._http: Optional[Any] = None
-        # Debounce: content from messages that had no text; merged when text
-        # arrives. Key = session_id.
         self._pending_content_by_session: Dict[str, List[Any]] = {}
-        # Time debounce: merge native payloads within _debounce_seconds.
-        # Set > 0 in subclass (e.g. 0.3). Key = get_debounce_key(payload).
         self._debounce_seconds: float = 0.0
         self._debounce_pending: Dict[str, List[Any]] = {}
         self._debounce_timers: Dict[str, asyncio.Task[None]] = {}
@@ -256,6 +253,7 @@ class BaseChannel(ABC):
         config: Any,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = True,
     ) -> "BaseChannel":
         raise NotImplementedError
 
@@ -702,6 +700,7 @@ class BaseChannel(ABC):
             config=config,
             on_reply_sent=self._on_reply_sent,
             show_tool_details=getattr(self, "_show_tool_details", True),
+            filter_tool_messages=getattr(self, "_filter_tool_messages", True),
         )
 
     async def start(self) -> None:
