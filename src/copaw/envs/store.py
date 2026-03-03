@@ -11,12 +11,66 @@ Persistence strategy (two layers):
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
-_ENVS_DIR = Path(__file__).resolve().parent
-_ENVS_JSON = _ENVS_DIR / "envs.json"
+from ..constant import SECRET_DIR, WORKING_DIR
+
+logger = logging.getLogger(__name__)
+
+_ENVS_JSON = SECRET_DIR / "envs.json"
+_LEGACY_ENVS_JSON_CANDIDATES = (
+    Path(__file__).resolve().parent / "envs.json",
+    WORKING_DIR / "envs.json",
+)
+
+
+def _same_path(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return False
+
+
+def _chmod_best_effort(path: Path, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        # Some systems/filesystems may not support chmod semantics.
+        pass
+
+
+def _prepare_secret_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _chmod_best_effort(path.parent, 0o700)
+
+
+def _migrate_legacy_envs_json(path: Path) -> None:
+    """Copy old envs.json into secret dir once (best effort)."""
+    if path.is_file():
+        return
+    if path.exists() and not path.is_file():
+        logger.error(
+            "envs.json path exists but is not a regular file: %s",
+            path,
+        )
+        return
+
+    for legacy in _LEGACY_ENVS_JSON_CANDIDATES:
+        if not legacy.is_file() or _same_path(legacy, path):
+            continue
+        try:
+            _prepare_secret_parent(path)
+            shutil.copy2(legacy, path)
+            _chmod_best_effort(path, 0o600)
+            return
+        except OSError as exc:
+            logger.warning("Failed to migrate legacy envs.json: %s", exc)
+            return
+
 # Security-sensitive envs should come from process/system environment,
 # not persisted envs.json.
 _PROTECTED_BOOTSTRAP_KEYS = frozenset({"COPAW_WORKING_DIR"})
@@ -24,7 +78,7 @@ _BOOTSTRAP_CACHE: Optional[dict[str, str]] = None
 
 
 def get_envs_json_path() -> Path:
-    """Return the default envs.json path."""
+    """Return envs.json path under SECRET_DIR."""
     return _ENVS_JSON
 
 
@@ -77,6 +131,13 @@ def load_envs(
     """Load env vars from envs.json."""
     if path is None:
         path = get_envs_json_path()
+        _migrate_legacy_envs_json(path)
+    if path.exists() and not path.is_file():
+        logger.error(
+            "envs.json path exists but is not a regular file: %s",
+            path,
+        )
+        return {}
     if not path.is_file():
         return {}
     try:
@@ -99,9 +160,15 @@ def save_envs(
 
     if path is None:
         path = get_envs_json_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+        _migrate_legacy_envs_json(path)
+    if path.exists() and not path.is_file():
+        raise IsADirectoryError(
+            f"envs.json path exists but is not a regular file: {path}",
+        )
+    _prepare_secret_parent(path)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(envs, fh, indent=2, ensure_ascii=False)
+    _chmod_best_effort(path, 0o600)
 
     _sync_environ(old, envs)
     _BOOTSTRAP_CACHE = dict(envs)
