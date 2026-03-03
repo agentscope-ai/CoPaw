@@ -24,9 +24,19 @@ export default function LanguageSwitcher() {
       label: "简体中文",
       onClick: () => changeLanguage("zh"),
     },
+    {
+      key: "fr",
+      label: "Français",
+      onClick: () => changeLanguage("fr"),
+    },
   ];
 
-  const currentLabel = currentLanguage === "zh" ? "简体中文" : "English";
+  const currentLabel =
+    currentLanguage === "zh"
+      ? "简体中文"
+      : currentLanguage === "fr"
+        ? "Français"
+        : "English";
 
   return (
     <Dropdown
