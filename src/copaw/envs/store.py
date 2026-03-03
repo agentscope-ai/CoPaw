@@ -168,8 +168,14 @@ def load_envs(
             data = json.load(fh)
         if isinstance(data, dict):
             return {k: str(v) for k, v in data.items()}
-    except (json.JSONDecodeError, ValueError, OSError):
+    except (json.JSONDecodeError, ValueError):
         pass
+    except OSError as exc:
+        logger.warning(
+            "Failed to read envs.json from %s due to OS error: %s",
+            path,
+            exc,
+        )
     return {}
 
 
@@ -178,11 +184,10 @@ def save_envs(
     path: Optional[Path] = None,
 ) -> None:
     """Write env vars to envs.json and sync to ``os.environ``."""
-    old = load_envs(path)
-
     if path is None:
         path = get_envs_json_path()
         _migrate_legacy_envs_json(path)
+    old = load_envs(path)
     if path.exists() and not path.is_file():
         raise IsADirectoryError(
             f"envs.json path exists but is not a regular file: {path}",
