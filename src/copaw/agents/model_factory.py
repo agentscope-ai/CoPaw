@@ -16,6 +16,13 @@ from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
 from agentscope.model import ChatModelBase, OpenAIChatModel
 
+try:
+    from agentscope.formatter import AnthropicChatFormatter
+    from agentscope.model import AnthropicChatModel
+except ImportError:  # pragma: no cover - compatibility fallback
+    AnthropicChatFormatter = OpenAIChatFormatter
+    AnthropicChatModel = OpenAIChatModel
+
 from .utils.tool_message_utils import _sanitize_tool_messages
 from ..local_models import create_local_chat_model
 from ..providers import (
@@ -34,6 +41,7 @@ logger = logging.getLogger(__name__)
 # Mapping from chat model class to formatter class
 _CHAT_MODEL_FORMATTER_MAP: dict[Type[ChatModelBase], Type[FormatterBase]] = {
     OpenAIChatModel: OpenAIChatFormatter,
+    AnthropicChatModel: AnthropicChatFormatter,
 }
 
 

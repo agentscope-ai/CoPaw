@@ -135,6 +135,28 @@ def _normalize_special_provider_settings(
         settings.base_url = _normalize_ollama_base_url(settings.base_url)
 
 
+def _build_remote_provider_headers(
+    provider_id: str,
+    api_key: Optional[str],
+    *,
+    json_body: bool = False,
+) -> dict[str, str]:
+    """Build request headers for remote provider APIs."""
+    headers: dict[str, str] = {}
+    if json_body:
+        headers["Content-Type"] = "application/json"
+
+    if provider_id == "anthropic":
+        headers["anthropic-version"] = "2023-06-01"
+        if api_key:
+            headers["x-api-key"] = api_key
+        return headers
+
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
 def _migrate_legacy_custom(
     providers: dict[str, ProviderSettings],
     custom_providers: dict[str, CustomProviderData],
@@ -716,8 +738,9 @@ async def discover_provider_models(
 
     endpoint = f"{resolved_base_url.rstrip('/')}/models"
     headers = {"Accept": "application/json"}
-    if resolved_api_key:
-        headers["Authorization"] = f"Bearer {resolved_api_key}"
+    headers.update(
+        _build_remote_provider_headers(provider_id, resolved_api_key),
+    )
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -800,7 +823,14 @@ async def discover_provider_models(
         model_id = str(row.get("id") or row.get("name") or "").strip()
         if not model_id:
             continue
-        model_name = str(row.get("name") or model_id).strip() or model_id
+        model_name = (
+            str(
+                row.get("name")
+                or row.get("display_name")
+                or model_id,
+            ).strip()
+            or model_id
+        )
         discovered.append(ModelInfo(id=model_id, name=model_name))
 
     discovered = _dedupe_models(discovered)
@@ -913,7 +943,7 @@ async def test_provider_connection(
     if not base_url or not api_key:
         saved_base_url, saved_api_key = data.get_credentials(provider_id)
         if not base_url:
-            base_url = saved_base_url
+            base_url = saved_base_url or defn.default_base_url
         if not api_key:
             api_key = saved_api_key
 
@@ -939,14 +969,12 @@ async def test_provider_connection(
         # This is a lightweight way to test credentials
         test_url = f"{base_url.rstrip('/')}/models"
 
-        headers = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        headers = _build_remote_provider_headers(provider_id, api_key)
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(test_url, headers=headers)
 
-            if response.status_code == 401:
+            if response.status_code in (401, 403):
                 return {
                     "success": False,
                     "message": f"{defn.name} API key is invalid or expired.",
@@ -1124,21 +1152,31 @@ async def test_model_connection(
     base_url, api_key = data.get_credentials(provider_id)
 
     # For remote providers, use direct API call for more reliable testing
-    # Most OpenAI-compatible APIs use the chat completions endpoint
-    chat_url = f"{base_url.rstrip('/')}/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    # Prepare a minimal test request
-    test_payload = {
-        "model": model_id,
-        "messages": [{"role": "user", "content": "hi"}],
-        "max_tokens": 1,
-    }
+    if provider_id == "anthropic":
+        chat_url = f"{base_url.rstrip('/')}/messages"
+        headers = _build_remote_provider_headers(
+            provider_id,
+            api_key,
+            json_body=True,
+        )
+        test_payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 1,
+        }
+    else:
+        # Most OpenAI-compatible APIs use the chat completions endpoint
+        chat_url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = _build_remote_provider_headers(
+            provider_id,
+            api_key,
+            json_body=True,
+        )
+        test_payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 1,
+        }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -1148,7 +1186,7 @@ async def test_model_connection(
                 headers=headers,
             )
 
-            if response.status_code == 401:
+            if response.status_code in (401, 403):
                 return {
                     "success": False,
                     "message": "API key is invalid or expired.",
@@ -1211,6 +1249,19 @@ async def test_model_connection(
                         }
 
                     # Verify we got actual choices/content
+                    if (
+                        provider_id == "anthropic"
+                        and "content" in result
+                        and isinstance(result["content"], list)
+                        and len(result["content"]) > 0
+                    ):
+                        return {
+                            "success": True,
+                            "message": (
+                                f"Model '{model_id}' is working correctly."
+                            ),
+                        }
+
                     if "choices" in result and len(result["choices"]) > 0:
                         return {
                             "success": True,
