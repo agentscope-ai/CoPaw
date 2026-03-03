@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=protected-access,unused-argument
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -57,7 +58,7 @@ class _FakeMCPClient:
             raise RuntimeError("connect failed")
 
 
-def test_build_client_attaches_rebuild_info() -> None:
+def test_build_client_attaches_rebuild_info(tmp_path: Path) -> None:
     cfg = MCPClientConfig(
         name="mcp_everything",
         enabled=True,
@@ -65,7 +66,7 @@ def test_build_client_attaches_rebuild_info() -> None:
         command="npx",
         args=["-y", "@modelcontextprotocol/server-everything"],
         env={"A": "1"},
-        cwd="/tmp",
+        cwd=str(tmp_path),
     )
 
     client = MCPClientManager._build_client(cfg)
@@ -79,7 +80,7 @@ def test_build_client_attaches_rebuild_info() -> None:
         "@modelcontextprotocol/server-everything",
     ]
     assert rebuild_info["env"] == {"A": "1"}
-    assert rebuild_info["cwd"] == "/tmp"
+    assert rebuild_info["cwd"] == str(tmp_path)
 
 
 @pytest.mark.asyncio
@@ -158,7 +159,24 @@ async def test_register_mcp_clients_rebuilds_client_when_reconnect_fails(
     assert broken.connect_calls == 1
     assert rebuilt.connect_calls == 1
     assert toolkit.registered == ["rebuilt"]
-    assert agent._mcp_clients[0] is rebuilt
+    assert agent._mcp_clients[0] is broken
+    assert agent._mcp_clients[0].name == "rebuilt"
+
+
+@pytest.mark.asyncio
+async def test_reconnect_mcp_client_respects_timeout() -> None:
+    class _SlowClient:
+        async def close(self) -> None:
+            return
+
+        async def connect(self) -> None:
+            await asyncio.sleep(0.1)
+
+    ok = await CoPawAgent._reconnect_mcp_client(
+        _SlowClient(),
+        timeout=0.01,
+    )
+    assert ok is False
 
 
 @pytest.mark.asyncio

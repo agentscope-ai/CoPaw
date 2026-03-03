@@ -333,9 +333,25 @@ class CoPawAgent(ReActAgent):
             return None
 
         if await self._reconnect_mcp_client(rebuilt_client):
-            return rebuilt_client
+            return self._reuse_shared_client_reference(
+                original_client=client,
+                rebuilt_client=rebuilt_client,
+            )
 
         return None
+
+    @staticmethod
+    def _reuse_shared_client_reference(
+        original_client: Any,
+        rebuilt_client: Any,
+    ) -> Any:
+        """Keep manager-shared client reference stable after rebuild."""
+        original_dict = getattr(original_client, "__dict__", None)
+        rebuilt_dict = getattr(rebuilt_client, "__dict__", None)
+        if isinstance(original_dict, dict) and isinstance(rebuilt_dict, dict):
+            original_dict.update(rebuilt_dict)
+            return original_client
+        return rebuilt_client
 
     @staticmethod
     def _should_propagate_cancelled_error(error: BaseException) -> bool:
@@ -347,23 +363,29 @@ class CoPawAgent(ReActAgent):
         return bool(task is not None and task.cancelling() > 0)
 
     @staticmethod
-    async def _reconnect_mcp_client(client: Any) -> bool:
+    async def _reconnect_mcp_client(
+        client: Any,
+        timeout: float = 60.0,
+    ) -> bool:
         """Best-effort reconnect for stateful MCP clients."""
         close_fn = getattr(client, "close", None)
         if callable(close_fn):
             try:
                 await close_fn()
-            except Exception:  # pylint: disable=broad-except
-                pass
+            except BaseException as e:  # pylint: disable=broad-except
+                if isinstance(e, asyncio.CancelledError):
+                    raise
 
         connect_fn = getattr(client, "connect", None)
         if not callable(connect_fn):
             return False
 
         try:
-            await connect_fn()
+            await asyncio.wait_for(connect_fn(), timeout=timeout)
             return True
-        except Exception:  # pylint: disable=broad-except
+        except BaseException as e:  # pylint: disable=broad-except
+            if isinstance(e, asyncio.CancelledError):
+                raise
             return False
 
     @staticmethod
