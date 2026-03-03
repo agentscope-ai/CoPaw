@@ -53,7 +53,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 
 ## News
 
-[2026-03-02] We release v0.0.4! See the [v0.0.4 Release Notes](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.4) for the full changelog.
+[2026-03-02] We released v0.0.4! See the [v0.0.4 Release Notes](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.4) for the full changelog.
 
 - **[v0.0.4]** **FEAT:** Telegram channel; OpenAI & Azure OpenAI providers; Ollama SDK; coding-plan provider; model connection testing; heartbeat monitoring panel; CORS configuration; audio file support for DingTalk & Feishu.
 - **[v0.0.4]** **FEAT:** Token-based memory compaction; file block processing; embedding configuration; normalized tool_choice behavior.
@@ -297,7 +297,7 @@ Full docs in this repo: [website/public/docs/](website/public/docs/).
 
 ### Get involved
 
-We are building CoPaw in the open and welcome contributions of all kinds! Check the [Roadmap](#roadmap) above (especially items marked **Seeking contributors**) to find areas that interest you, and read [CONTRIBUTING](https://github.com/agentscope-ai/CoPaw/blob/main/CONTRIBUTING.md) to get started. We particularly welcome:
+We are building CoPaw in the open and welcome contributions of all kinds! Check the [Roadmap](#roadmap) above (especially items marked **Seeking Contributors**) to find areas that interest you, and read [CONTRIBUTING](https://github.com/agentscope-ai/CoPaw/blob/main/CONTRIBUTING.md) to get started. We particularly welcome:
 
 - **Horizontal expansion** — new channels, model providers, skills, MCPs.
 - **Existing feature extension** — display and UX improvements, download hints, Windows path compatibility, and the like.
