@@ -56,6 +56,44 @@ export function ProviderConfigModal({
     return t("models.enterApiKeyOptional");
   }, [provider.current_api_key, provider.api_key_prefix, t]);
 
+  const baseUrlExtra = useMemo(() => {
+    if (!canEditBaseUrl) {
+      return undefined;
+    }
+    if (provider.id === "azure-openai") {
+      return t("models.azureEndpointHint");
+    }
+    if (provider.id === "anthropic") {
+      return t("models.anthropicEndpointHint");
+    }
+    if (provider.id === "openai") {
+      return t("models.openAIEndpoint");
+    }
+    if (provider.id === "ollama") {
+      return t("models.ollamaEndpointHint");
+    }
+    return t("models.apiEndpointHint");
+  }, [canEditBaseUrl, provider.id, t]);
+
+  const baseUrlPlaceholder = useMemo(() => {
+    if (!canEditBaseUrl) {
+      return "";
+    }
+    if (provider.id === "azure-openai") {
+      return "https://<resource>.openai.azure.com/openai/v1";
+    }
+    if (provider.id === "anthropic") {
+      return "https://api.anthropic.com/v1";
+    }
+    if (provider.id === "openai") {
+      return "https://api.openai.com/v1";
+    }
+    if (provider.id === "ollama") {
+      return "http://localhost:11434/v1";
+    }
+    return "https://api.example.com/v1";
+  }, [canEditBaseUrl, provider.id]);
+
   // Sync form when modal opens or provider data changes
   useEffect(() => {
     if (open) {
@@ -240,7 +278,7 @@ export function ProviderConfigModal({
         {/* Base URL */}
         <Form.Item
           name="base_url"
-          label="Base URL"
+          label={t("models.baseURL")}
           rules={
             canEditBaseUrl
               ? [
@@ -256,22 +294,10 @@ export function ProviderConfigModal({
                 ]
               : []
           }
-          extra={
-            canEditBaseUrl
-              ? provider.id === "azure-openai"
-                ? t("models.azureEndpointHint")
-                : t("models.openAIEndpoint")
-              : undefined
-          }
+          extra={baseUrlExtra}
         >
           <Input
-            placeholder={
-              canEditBaseUrl
-                ? provider.id === "azure-openai"
-                  ? "https://<resource>.openai.azure.com/openai/v1"
-                  : "http://localhost:11434/v1"
-                : ""
-            }
+            placeholder={baseUrlPlaceholder}
             disabled={!canEditBaseUrl}
           />
         </Form.Item>
@@ -279,7 +305,7 @@ export function ProviderConfigModal({
         {/* API Key */}
         <Form.Item
           name="api_key"
-          label="API Key"
+          label={t("models.apiKey")}
           rules={[
             {
               validator: (_, value) => {
