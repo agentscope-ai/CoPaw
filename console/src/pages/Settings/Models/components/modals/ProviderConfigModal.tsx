@@ -180,8 +180,7 @@ export function ProviderConfigModal({
         } else {
           message.warning(discovered.message || t("models.autoDiscoverFailed"));
         }
-      } catch (discoverError) {
-        console.warn("Failed to auto-discover models:", discoverError);
+      } catch {
         message.warning(t("models.autoDiscoverFailed"));
       }
 
