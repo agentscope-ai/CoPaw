@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 from types import SimpleNamespace
 
 import pytest
@@ -8,8 +9,7 @@ from copaw.app.channels.feishu.channel import FeishuChannel
 
 
 async def _empty_process(_request):
-    if False:  # pragma: no cover
-        yield None
+    return None
 
 
 def _build_text_event(message_id: str, sender_type: str) -> SimpleNamespace:
@@ -45,7 +45,7 @@ async def test_on_message_skip_app_sender() -> None:
 
     await channel._on_message(_build_text_event("m-app", "app"))
 
-    assert enqueued == []
+    assert not enqueued
 
 
 @pytest.mark.asyncio
