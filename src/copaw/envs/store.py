@@ -98,7 +98,6 @@ _PROTECTED_BOOTSTRAP_KEYS = frozenset(
         "COPAW_SECRET_DIR",
     },
 )
-_BOOTSTRAP_CACHE: Optional[dict[str, str]] = None
 
 
 def get_envs_json_path() -> Path:
@@ -179,7 +178,6 @@ def save_envs(
     path: Optional[Path] = None,
 ) -> None:
     """Write env vars to envs.json and sync to ``os.environ``."""
-    global _BOOTSTRAP_CACHE
     old = load_envs(path)
 
     if path is None:
@@ -195,7 +193,6 @@ def save_envs(
     _chmod_best_effort(path, 0o600)
 
     _sync_environ(old, envs)
-    _BOOTSTRAP_CACHE = dict(envs)
 
 
 def set_env_var(
@@ -229,10 +226,6 @@ def load_envs_into_environ() -> dict[str, str]:
         Full persisted mapping from envs.json, including protected keys
         that are intentionally not injected into ``os.environ``.
     """
-    global _BOOTSTRAP_CACHE
-    if _BOOTSTRAP_CACHE is not None:
-        return dict(_BOOTSTRAP_CACHE)
-
     envs = load_envs()
     bootstrap_envs = {
         key: value
@@ -241,5 +234,4 @@ def load_envs_into_environ() -> dict[str, str]:
     }
     # Do not override explicit runtime/system env vars.
     _apply_to_environ(bootstrap_envs, overwrite=False)
-    _BOOTSTRAP_CACHE = dict(envs)
     return envs

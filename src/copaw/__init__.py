@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import importlib
 import logging
 import os
 import time
@@ -19,21 +18,6 @@ try:
 except Exception as exc:
     # Best effort: package import should not fail if env bootstrap fails.
     _bootstrap_err = exc
-
-if _bootstrap_err is None:
-    try:
-        constant_module = importlib.import_module(
-            ".constant",
-            __package__,
-        )
-        LOG_LEVEL_ENV = getattr(
-            constant_module,
-            "LOG_LEVEL_ENV",
-            LOG_LEVEL_ENV,
-        )
-    except Exception:
-        # Keep fallback literal if canonical import unexpectedly fails.
-        pass
 
 _t0 = time.perf_counter()
 setup_logger(os.environ.get(LOG_LEVEL_ENV, "info"))
