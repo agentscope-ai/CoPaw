@@ -222,11 +222,13 @@ class TelegramChannel(BaseChannel):
         show_tool_details: bool = True,
         media_dir: str = "",
         show_typing: bool = True,
+        filter_tool_messages: bool = False,
     ):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
         )
         self.enabled = enabled
         self._bot_token = bot_token
@@ -350,6 +352,7 @@ class TelegramChannel(BaseChannel):
         config: Union[TelegramChannelConfig, dict],
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
     ) -> "TelegramChannel":
         channel_show_typing = None
         if isinstance(config, dict):
@@ -368,6 +371,7 @@ class TelegramChannel(BaseChannel):
                 bot_prefix=bot_prefix_raw.strip() if bot_prefix_raw else "",
                 on_reply_sent=on_reply_sent,
                 show_tool_details=show_tool_details,
+                filter_tool_messages=filter_tool_messages,
                 show_typing=channel_show_typing
                 if channel_show_typing is not None
                 else True,
@@ -381,6 +385,7 @@ class TelegramChannel(BaseChannel):
             bot_prefix=config.bot_prefix or "",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
             show_typing=channel_show_typing
             if channel_show_typing is not None
             else True,
