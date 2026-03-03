@@ -369,9 +369,10 @@ class DingTalkChannel(BaseChannel):
         if reply_loop is None or reply_future is None:
             return
         reply_loop.call_soon_threadsafe(reply_future.set_result, text)
-        ids = meta.get("_message_ids") or (
-            [meta.get("message_id")] if meta.get("message_id") else []
-        )
+        if "_message_ids" in meta:
+            ids = meta["_message_ids"]
+        else:
+            ids = [meta.get("message_id")] if meta.get("message_id") else []
         self._release_message_ids(ids)
 
     def _reply_sync_batch(self, meta: Dict[str, Any], text: str) -> None:
@@ -386,7 +387,8 @@ class DingTalkChannel(BaseChannel):
                         reply_future.set_result,
                         text,
                     )
-            self._release_message_ids(meta.get("_message_ids") or [])
+            ids = meta["_message_ids"] if "_message_ids" in meta else []
+            self._release_message_ids(ids)
         else:
             self._reply_sync(meta, text)
 
