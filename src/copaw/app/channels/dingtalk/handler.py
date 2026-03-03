@@ -103,9 +103,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 if not isinstance(item, dict):
                     continue
                 # Text may be under "text" or "content" (API variation).
-                item_text = item.get("text")
-                if item_text is None:
-                    item_text = item.get("content")
+                item_text = item.get("text") or item.get("content")
                 if item_text is not None:
                     content.append(
                         TextContent(
@@ -195,7 +193,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 for item in content
             )
             text_is_placeholder = not (text or "").strip() or (
-                (text or "").strip() in ("\n", "\\n", "//n")
+                (text or "").strip() in ("\\n", "//n")
             )
             if (
                 text
