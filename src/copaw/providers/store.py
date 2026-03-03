@@ -466,6 +466,7 @@ def set_model_slot(
 def get_model_slot(tier: str) -> Optional[ResolvedModelConfig]:
     """Get resolved model configuration for a tier.
 
+    Validates tier against allowed values before proceeding.
     Falls back to fallback_tier or active_llm if tier not configured.
     Honors routing.enabled setting - bypasses tier lookup when disabled.
 
@@ -474,7 +475,18 @@ def get_model_slot(tier: str) -> Optional[ResolvedModelConfig]:
 
     Returns:
         ResolvedModelConfig or None if no model available
+
+    Raises:
+        ValueError: If tier is not in the allowed set
     """
+    from .models import ModelTier
+    
+    # Validate tier is in allowed set
+    if tier not in ModelTier.ALL_TIERS:
+        raise ValueError(
+            f"Invalid tier '{tier}'. Must be one of: {ModelTier.ALL_TIERS}"
+        )
+    
     data = load_providers_json()
 
     # Check if routing is enabled before using tier slots

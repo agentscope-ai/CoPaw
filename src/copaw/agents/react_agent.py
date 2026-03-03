@@ -125,10 +125,8 @@ class CoPawAgent(ReActAgent):
         # Initialize task router for intelligent model selection
         self.task_router = TaskRouter()
         
-        # Initialize routing cache and lock
-        self._routing_cache = None
+        # Initialize lock for concurrency safety
         self._model_swap_lock = asyncio.Lock()
-        self._refresh_routing_cache()
 
         # Initialize toolkit with built-in tools
         toolkit = self._create_toolkit(namesake_strategy=namesake_strategy)
@@ -171,10 +169,6 @@ class CoPawAgent(ReActAgent):
 
         # Register hooks
         self._register_hooks()
-
-    def _refresh_routing_cache(self):
-        """Refresh the cached routing enabled status."""
-        self._routing_cache = _load_routing_enabled()
 
     def _create_toolkit(
         self,
@@ -416,8 +410,8 @@ class CoPawAgent(ReActAgent):
                 query,
             )
 
-            # Check if routing is enabled (using cached value)
-            routing_enabled = self._routing_cache
+            # Check if routing is enabled (read live config)
+            routing_enabled = _load_routing_enabled()
 
             if override_tier:
                 # User explicitly requested a tier
@@ -441,15 +435,15 @@ class CoPawAgent(ReActAgent):
                 logger.debug("Task routing: disabled, using default model")
 
         # Apply tier-based model selection if tier determined
-        original_model = None
-        original_formatter = None
-        if tier:
-            try:
-                new_model, new_formatter = ModelManager.get_model_for_tier(
-                    tier,
-                )
-                # Use lock to ensure concurrency safety for the entire swap operation
-                async with self._model_swap_lock:
+        # Use lock to ensure concurrency safety for the entire reply execution
+        async with self._model_swap_lock:
+            original_model = None
+            original_formatter = None
+            if tier:
+                try:
+                    new_model, new_formatter = ModelManager.get_model_for_tier(
+                        tier,
+                    )
                     # pylint: disable=access-member-before-definition
                     original_model = self.model  # type: ignore[has-type]
                     original_formatter = self.formatter  # type: ignore[has-type]
@@ -459,35 +453,29 @@ class CoPawAgent(ReActAgent):
                         f"Switched to model for tier '{tier}': "
                         f"{new_model.model_name}",
                     )
-                    
-                    # Perform the actual reply while holding the lock
-                    try:
-                        result = await super().reply(
-                            msg=msg,
-                            structured_model=structured_model,
-                        )
-                        return result
-                    finally:
-                        # Restore original model if we swapped it
-                        if original_model is not None:
-                            self.model = original_model
-                            self.formatter = original_formatter
-            except ValueError as e:
-                # Handle known error cases that should trigger fallback
-                logger.warning(
-                    f"Failed to get model for tier '{tier}': {e}, "
-                    "using default model",
-                )
-                tier = None
-            except Exception as e:
-                # Handle unexpected errors with full stack trace
-                logger.exception(
-                    f"Unexpected error getting model for tier '{tier}': {e}"
-                )
-                raise
+                except ValueError as e:
+                    # Handle known error cases that should trigger fallback
+                    logger.warning(
+                        f"Failed to get model for tier '{tier}': {e}, "
+                        "using default model",
+                    )
+                    tier = None
+                except Exception as e:
+                    # Handle unexpected errors with full stack trace
+                    logger.exception(
+                        f"Unexpected error getting model for tier '{tier}': {e}"
+                    )
+                    raise
 
-        # Normal message processing without tier swap
-        return await super().reply(
-            msg=msg,
-            structured_model=structured_model,
-        )
+            # Perform the actual reply while holding the lock
+            try:
+                result = await super().reply(
+                    msg=msg,
+                    structured_model=structured_model,
+                )
+                return result
+            finally:
+                # Restore original model if we swapped it
+                if original_model is not None:
+                    self.model = original_model
+                    self.formatter = original_formatter
