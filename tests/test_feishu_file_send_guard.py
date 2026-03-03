@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=protected-access
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -119,3 +120,98 @@ async def test_part_to_file_path_or_url_base64_decode_failed() -> None:
 
     assert path_or_url is None
     assert reason == "file_decode_failed"
+
+
+@pytest.mark.asyncio
+async def test_part_to_file_path_or_url_write_failed(monkeypatch) -> None:
+    channel = FeishuChannel(
+        process=_empty_process,
+        enabled=True,
+        app_id="app_id",
+        app_secret="app_secret",
+        bot_prefix="[BOT] ",
+    )
+    part = SimpleNamespace(
+        type=ContentType.FILE,
+        data="data:application/octet-stream;base64,YQ==",
+        filename="ok.bin",
+    )
+
+    def _raise_oserror(*args, **kwargs):
+        del args
+        del kwargs
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_bytes", _raise_oserror)
+
+    path_or_url, reason = await channel._part_to_file_path_or_url(part)
+
+    assert path_or_url is None
+    assert reason == "file_write_failed"
+
+
+@pytest.mark.asyncio
+async def test_part_to_file_path_or_url_block_disallowed_local_file(
+    tmp_path,
+) -> None:
+    channel = FeishuChannel(
+        process=_empty_process,
+        enabled=True,
+        app_id="app_id",
+        app_secret="app_secret",
+        bot_prefix="[BOT] ",
+    )
+    p = tmp_path / "secret.bin"
+    p.write_bytes(b"secret")
+    part = SimpleNamespace(
+        type=ContentType.FILE,
+        file_url=p.as_uri(),
+        filename="secret.bin",
+    )
+
+    path_or_url, reason = await channel._part_to_file_path_or_url(part)
+
+    assert path_or_url is None
+    assert reason == "file_not_allowed"
+
+
+@pytest.mark.asyncio
+async def test_part_to_file_path_or_url_allow_env_dir(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("FEISHU_ALLOWED_FILE_DIRS", str(tmp_path))
+    channel = FeishuChannel(
+        process=_empty_process,
+        enabled=True,
+        app_id="app_id",
+        app_secret="app_secret",
+        bot_prefix="[BOT] ",
+    )
+    p = tmp_path / "allowed.bin"
+    p.write_bytes(b"ok")
+    part = SimpleNamespace(
+        type=ContentType.FILE,
+        file_url=p.as_uri(),
+        filename="allowed.bin",
+    )
+
+    path_or_url, reason = await channel._part_to_file_path_or_url(part)
+
+    assert path_or_url == str(p)
+    assert reason == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_from_url_block_loopback() -> None:
+    channel = FeishuChannel(
+        process=_empty_process,
+        enabled=True,
+        app_id="app_id",
+        app_secret="app_secret",
+        bot_prefix="[BOT] ",
+    )
+
+    data = await channel._fetch_bytes_from_url("http://127.0.0.1/internal")
+
+    assert data is None
