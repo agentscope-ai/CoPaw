@@ -93,12 +93,10 @@ def _sanitize_chunk(chunk: Any) -> Any:
         sanitized_tool_calls: list[Any] = []
         for tool_call in raw_tool_calls:
             sanitized = _sanitize_tool_call(tool_call)
-            if sanitized is None:
-                choice_changed = True
-                continue
             if sanitized is not tool_call:
                 choice_changed = True
-            sanitized_tool_calls.append(sanitized)
+            if sanitized is not None:
+                sanitized_tool_calls.append(sanitized)
 
         if choice_changed:
             changed = True
