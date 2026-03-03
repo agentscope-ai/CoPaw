@@ -6,11 +6,12 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, build_opener, urlopen
 from xml.sax.saxutils import escape as xml_escape
 
 import click
@@ -93,7 +94,7 @@ def _service_program_arguments(
     return [
         sys.executable,
         "-m",
-        "copaw.cli.main",
+        "copaw",
         "app",
         "--host",
         host,
@@ -185,14 +186,12 @@ def build_launchd_plist(
 
 
 def _parse_launchctl_print(output: str) -> tuple[bool, Optional[int], str]:
-    running = False
     pid: Optional[int] = None
     state = ""
     for raw in output.splitlines():
         line = raw.strip()
         if line.startswith("state ="):
             state = line.split("=", 1)[1].strip().strip('"')
-            running = state.lower() == "running"
         if line.startswith("pid ="):
             pid_raw = line.split("=", 1)[1].strip()
             try:
@@ -201,7 +200,8 @@ def _parse_launchctl_print(output: str) -> tuple[bool, Optional[int], str]:
                 continue
             if parsed > 0:
                 pid = parsed
-                running = True
+    normalized_state = state.lower()
+    running = pid is not None or normalized_state in {"running", "active"}
     return running, pid, state
 
 
@@ -260,7 +260,7 @@ def _launchd_install(
     )
     plist_path.write_text(plist, encoding="utf-8")
 
-    _run_command(["launchctl", "bootout", domain, f"{domain}/{label}"], check=False)
+    _run_command(["launchctl", "bootout", f"{domain}/{label}"], check=False)
     _run_command(["launchctl", "bootout", domain, str(plist_path)], check=False)
     _run_command(["launchctl", "bootstrap", domain, str(plist_path)], check=True)
     _run_command(["launchctl", "kickstart", "-k", f"{domain}/{label}"], check=True)
@@ -280,12 +280,19 @@ def _launchd_start() -> None:
     )
     if kick.returncode == 0:
         return
-    boot = _run_command(
-        ["launchctl", "bootstrap", domain, str(plist_path)],
-        check=False,
-    )
-    if boot.returncode != 0:
-        detail = (boot.stderr or boot.stdout).strip()
+    boot: Optional[subprocess.CompletedProcess[str]] = None
+    for _ in range(30):
+        boot = _run_command(
+            ["launchctl", "bootstrap", domain, str(plist_path)],
+            check=False,
+        )
+        if boot.returncode == 0:
+            break
+        time.sleep(0.5)
+    if boot is None or boot.returncode != 0:
+        detail = ((boot.stderr or boot.stdout).strip() if boot else "").strip()
+        if not detail:
+            detail = "bootstrap failed"
         raise click.ClickException(f"Failed to start LaunchAgent: {detail}")
     _run_command(["launchctl", "kickstart", "-k", f"{domain}/{label}"], check=True)
 
@@ -293,7 +300,15 @@ def _launchd_start() -> None:
 def _launchd_stop() -> None:
     label = _launchd_label()
     domain = _launchd_domain()
-    _run_command(["launchctl", "bootout", domain, f"{domain}/{label}"], check=False)
+    bootout = _run_command(
+        ["launchctl", "bootout", f"{domain}/{label}"],
+        check=False,
+    )
+    if bootout.returncode == 0:
+        return
+    plist_path = _launchd_plist_path(label)
+    if plist_path.exists():
+        _run_command(["launchctl", "bootout", domain, str(plist_path)], check=False)
 
 
 def _launchd_restart() -> None:
@@ -513,13 +528,27 @@ def _uninstall_service() -> None:
 
 def _probe_version(host: str, port: int, timeout: float) -> tuple[bool, str]:
     url = f"http://{host}:{port}/api/version"
-    try:
-        with urlopen(url, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-    except URLError as exc:
-        return False, f"unreachable ({exc.reason})"
-    except OSError as exc:
-        return False, f"unreachable ({exc})"
+    request_timeout = max(min(timeout, 5.0), 0.2)
+    deadline = time.monotonic() + max(timeout, 0.2)
+    last_error = "unreachable"
+    while True:
+        try:
+            probe_host = host.strip().lower()
+            if probe_host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
+                opener = build_opener(ProxyHandler({}))
+                response = opener.open(url, timeout=request_timeout)
+            else:
+                response = urlopen(url, timeout=request_timeout)
+            with response as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+            break
+        except URLError as exc:
+            last_error = f"unreachable ({exc.reason})"
+        except OSError as exc:
+            last_error = f"unreachable ({exc})"
+        if time.monotonic() >= deadline:
+            return False, last_error
+        time.sleep(0.25)
 
     try:
         payload = json.loads(body)
