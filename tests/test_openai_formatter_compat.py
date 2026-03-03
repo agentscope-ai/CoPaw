@@ -27,7 +27,7 @@ async def test_formatter_strips_top_level_name_fields() -> None:
                     "id": "call_1",
                     "name": "read_file",
                     "input": {"path": "README.md"},
-                    "raw_input": "{\"path\":\"README.md\"}",
+                    "raw_input": '{"path":"README.md"}',
                 },
             ],
         ),
@@ -53,14 +53,9 @@ async def test_formatter_strips_top_level_name_fields() -> None:
     assistant_with_tool_call = next(
         message for message in payload if message.get("tool_calls")
     )
-    assert (
-        assistant_with_tool_call["tool_calls"][0]["function"]["name"]
-        == "read_file"
-    )
+    assert assistant_with_tool_call["tool_calls"][0]["function"]["name"] == "read_file"
 
-    tool_message = next(
-        message for message in payload if message.get("role") == "tool"
-    )
+    tool_message = next(message for message in payload if message.get("role") == "tool")
     assert "name" not in tool_message
 
 
