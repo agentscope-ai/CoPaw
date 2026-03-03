@@ -96,25 +96,13 @@ No Python required — the installer handles everything:
 curl -fsSL https://copaw.agentscope.io/install.sh | bash
 ```
 
-To install with Ollama support:
-
-```bash
-curl -fsSL https://copaw.agentscope.io/install.sh | bash -s -- --extras ollama
-```
-
-To install with multiple extras (e.g., Ollama + llama.cpp):
-
-```bash
-curl -fsSL https://copaw.agentscope.io/install.sh | bash -s -- --extras ollama,llamacpp
-```
-
 **Windows (PowerShell):**
 
 ```powershell
 irm https://copaw.agentscope.io/install.ps1 | iex
 ```
-
-Then open a new terminal and run:
+> **Note**: The installer automatically sets up uv and Python. If automatic installation fails (e.g., due to enterprise security policies or Windows LTSC restrictions), the script will prompt you to manually install uv first. In that case, follow the on-screen instructions or run python -m pip install -U uv, then re-run the installer.
+Once installed, open a new terminal and run:
 
 ```bash
 copaw init --defaults   # or: copaw init (interactive)
@@ -172,14 +160,10 @@ copaw uninstall --purge  # removes everything
 
 ### Using Docker
 
-Images are on **Docker Hub** (`agentscope/copaw`). Image tags: `latest` (stable); `pre` (PyPI pre-release).
-
 ```bash
 docker pull agentscope/copaw:latest
 docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
-
-Also available on Alibaba Cloud Container Registry (ACR) for users in China: `agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/copaw` (same tags).
 
 Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
 
@@ -213,11 +197,10 @@ Tools that need extra keys (e.g. `TAVILY_API_KEY` for web search) can be set in 
 
 CoPaw can run LLMs entirely on your machine — no API keys or cloud services required.
 
-| Backend       | Best for                                 | Install                                                              |
-| ------------- | ---------------------------------------- | -------------------------------------------------------------------- |
-| **llama.cpp** | Cross-platform (macOS / Linux / Windows) | `pip install 'copaw[llamacpp]'` or `bash install.sh --extras llamacpp` |
-| **MLX**       | Apple Silicon Macs (M1/M2/M3/M4)         | `pip install 'copaw[mlx]'` or `bash install.sh --extras mlx`         |
-| **Ollama**    | Cross-platform (requires Ollama service) | `pip install 'copaw[ollama]'` or `bash install.sh --extras ollama`   |
+| Backend       | Best for                                 | Install                         |
+| ------------- | ---------------------------------------- | ------------------------------- |
+| **llama.cpp** | Cross-platform (macOS / Linux / Windows) | `pip install 'copaw[llamacpp]'` |
+| **MLX**       | Apple Silicon Macs (M1/M2/M3/M4)         | `pip install 'copaw[mlx]'`      |
 
 After installing, download a model and start chatting:
 
