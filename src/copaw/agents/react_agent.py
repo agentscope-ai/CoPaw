@@ -441,6 +441,8 @@ class CoPawAgent(ReActAgent):
         if callable(close_fn):
             try:
                 await close_fn()
+            except asyncio.CancelledError:
+                raise
             except Exception:  # pylint: disable=broad-except
                 pass
 
@@ -451,6 +453,10 @@ class CoPawAgent(ReActAgent):
         try:
             await asyncio.wait_for(connect_fn(), timeout=timeout)
             return True
+        except asyncio.CancelledError:
+            raise
+        except asyncio.TimeoutError:
+            return False
         except Exception:  # pylint: disable=broad-except
             return False
 
