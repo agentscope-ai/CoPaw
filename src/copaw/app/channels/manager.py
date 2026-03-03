@@ -186,15 +186,23 @@ class ChannelManager:
                         process,
                         ch_cfg,
                         on_reply_sent=on_last_dispatch,
+                        show_tool_details=show_tool_details,
+                        filter_tool_messages=False,
                     ),
                 )
             else:
+                filter_tool_messages = getattr(
+                    ch_cfg,
+                    "filter_tool_messages",
+                    False,
+                )
                 channels.append(
                     ch_cls.from_config(
                         process,
                         ch_cfg,
                         on_reply_sent=on_last_dispatch,
                         show_tool_details=show_tool_details,
+                        filter_tool_messages=filter_tool_messages,
                     ),
                 )
         return cls(channels)

@@ -80,17 +80,18 @@ class BaseChannel(ABC):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
     ):
         self._process = process
         self._on_reply_sent = on_reply_sent
         self._show_tool_details = show_tool_details
-        # Set by ChannelManager.start_all(); channel calls this to enqueue.
+        self._filter_tool_messages = filter_tool_messages
         self._enqueue: EnqueueCallback = None
-        # Pluggable renderer; subclasses may replace or inject style.
-        self._render_style = RenderStyle(show_tool_details=show_tool_details)
+        self._render_style = RenderStyle(
+            show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+        )
         self._renderer = MessageRenderer(self._render_style)
-        # Optional shared aiohttp.ClientSession; subclasses create in start(),
-        # close in stop().
         self._http: Optional[Any] = None
         # Debounce: content from messages that had no text; merged when text
         # arrives. Key = session_id.
@@ -256,6 +257,7 @@ class BaseChannel(ABC):
         config: Any,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
     ) -> "BaseChannel":
         raise NotImplementedError
 
@@ -414,8 +416,9 @@ class BaseChannel(ABC):
                 meta_from_payload["session_webhook"] = payload[
                     "session_webhook"
                 ]
-            if hasattr(request, "channel_meta"):
-                request.channel_meta = meta_from_payload
+            # Always attach so channel _before_consume_process can use it
+            # (e.g. Feishu save receive_id for cron send).
+            setattr(request, "channel_meta", meta_from_payload)
         session_id = getattr(request, "session_id", "") or ""
         if request.input:
             contents = list(getattr(request.input[0], "content", None) or [])
@@ -696,12 +699,21 @@ class BaseChannel(ABC):
         process and on_reply_sent from self.
 
         Subclasses must implement from_config(process, config, on_reply_sent).
+
+        show_tool_details is global config (not in channel config), so we
+        preserve from self. filter_tool_messages is per-channel config, so
+        we read from new config.
         """
         return self.__class__.from_config(
             process=self._process,
             config=config,
             on_reply_sent=self._on_reply_sent,
             show_tool_details=getattr(self, "_show_tool_details", True),
+            filter_tool_messages=getattr(
+                config,
+                "filter_tool_messages",
+                False,
+            ),
         )
 
     async def start(self) -> None:

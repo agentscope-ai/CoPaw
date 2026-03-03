@@ -28,7 +28,11 @@ class _FakeToolkit:
         self.registered: list[str] = []
         self.cancel_once_names: set[str] = set()
 
-    async def register_mcp_client(self, client) -> None:
+    async def register_mcp_client(
+        self,
+        client,
+        namesake_strategy: str = "skip",  # noqa: ARG002
+    ) -> None:
         name = client.name
         self.calls[name] = self.calls.get(name, 0) + 1
 
