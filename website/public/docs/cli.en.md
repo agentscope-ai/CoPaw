@@ -364,6 +364,38 @@ A preview of changes is shown before applying.
 
 ---
 
+## Service management
+
+Register CoPaw as a system service for background execution and auto-start on
+boot, replacing `nohup copaw app &`.
+
+### copaw service
+
+| Command                   | What it does                           |
+| ------------------------- | -------------------------------------- |
+| `copaw service install`   | Register service and enable auto-start |
+| `copaw service uninstall` | Stop and remove the service            |
+| `copaw service start`     | Start the service                      |
+| `copaw service stop`      | Stop the service                       |
+| `copaw service restart`   | Restart the service                    |
+| `copaw service status`    | Show service status                    |
+| `copaw service logs`      | View service logs                      |
+
+```bash
+copaw service install                          # default 127.0.0.1:8088
+copaw service install --host 0.0.0.0 --port 9090   # custom address
+copaw service install --system                 # system-wide (Linux only, needs sudo)
+copaw service start                            # start
+copaw service restart                          # restart
+copaw service logs -f                          # follow logs
+copaw service uninstall --yes                  # skip confirmation
+```
+
+Platform backends: systemd on Linux, launchd on macOS, Task Scheduler on
+Windows. See [Service management](./service) for full details.
+
+---
+
 ## Maintenance
 
 ### copaw clean
@@ -420,6 +452,7 @@ See [Config & Working Directory](./config) for full details.
 | `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        No        |
 | `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |     **Yes**      |
 | `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                        |     **Yes**      |
+| `copaw service`  | `install` · `uninstall` · `start` · `stop` · `restart` · `status` · `logs`                                                             |        No        |
 | `copaw skills`   | `list` · `config`                                                                                                                      |        No        |
 | `copaw clean`    | —                                                                                                                                      |        No        |
 
@@ -429,6 +462,7 @@ See [Config & Working Directory](./config) for full details.
 
 - [Introduction](./intro) — What CoPaw can do
 - [Console](./console) — Web-based management UI
+- [Service management](./service) — Background execution and auto-start
 - [Channels](./channels) — DingTalk, Feishu, iMessage, Discord, QQ setup
 - [Heartbeat](./heartbeat) — Scheduled check-in / digest
 - [Skills](./skills) — Built-in and custom skills
