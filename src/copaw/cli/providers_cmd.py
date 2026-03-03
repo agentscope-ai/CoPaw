@@ -397,9 +397,6 @@ def config_cmd() -> None:
 @click.argument("provider_id", required=False, default=None)
 def config_key_cmd(provider_id: str | None) -> None:
     """Configure a provider's API key."""
-    if provider_id is not None and provider_id not in PROVIDERS:
-        click.echo(click.style(f"Unknown provider: {provider_id}", fg="red"))
-        raise SystemExit(1)
     configure_provider_api_key_interactive(provider_id)
 
 
