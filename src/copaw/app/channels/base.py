@@ -414,8 +414,9 @@ class BaseChannel(ABC):
                 meta_from_payload["session_webhook"] = payload[
                     "session_webhook"
                 ]
-            if hasattr(request, "channel_meta"):
-                request.channel_meta = meta_from_payload
+            # Always attach so channel _before_consume_process can use it
+            # (e.g. Feishu save receive_id for cron send).
+            setattr(request, "channel_meta", meta_from_payload)
         session_id = getattr(request, "session_id", "") or ""
         if request.input:
             contents = list(getattr(request.input[0], "content", None) or [])

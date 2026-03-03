@@ -223,6 +223,9 @@ class FeishuChannel(BaseChannel):
             content_parts=content_parts,
             channel_meta=meta,
         )
+        # Ensure channel_meta is on request for _before_consume_process
+        # (AgentRequest may not have the field; base also sets from payload).
+        setattr(request, "channel_meta", meta)
         return request
 
     def merge_native_items(self, items: List[Any]) -> Any:
@@ -1347,7 +1350,8 @@ class FeishuChannel(BaseChannel):
                 if len(suffix) >= 4:
                     async with self._receive_id_lock:
                         for _, v in self._receive_id_store.items():
-                            if v[0] and str(v[0]).endswith(suffix):
+                            # v is (receive_id_type, receive_id)
+                            if v[1] and str(v[1]).endswith(suffix):
                                 logger.info(
                                     "feishu _get_receive_for_send: "
                                     "fallback match by suffix %s",
