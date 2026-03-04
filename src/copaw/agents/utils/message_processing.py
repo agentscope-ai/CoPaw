@@ -120,28 +120,33 @@ def _media_type_from_path(path: str) -> str:
     }.get(ext, "audio/octet-stream")
 
 
+
+
 def _update_block_with_local_path(
     block: dict,
     block_type: str,
     local_path: str,
 ) -> dict:
     """Update block with downloaded local path."""
+    resolved = str(Path(local_path).resolve())
     if block_type == "file":
         block["source"] = local_path
         if not block.get("filename"):
             block["filename"] = os.path.basename(local_path)
+    elif block_type == "audio":
+        # Audio needs media_type for formats mimetypes doesn't know (e.g. .amr).
+        block["source"] = {
+            "type": "url",
+            "url": resolved,
+            "media_type": _media_type_from_path(local_path),
+        }
     else:
-        if block_type == "audio":
-            block["source"] = {
-                "type": "url",
-                "url": Path(local_path).as_uri(),
-                "media_type": _media_type_from_path(local_path),
-            }
-        else:
-            block["source"] = {
-                "type": "url",
-                "url": Path(local_path).as_uri(),
-            }
+        # Store bare absolute path; each provider's formatter handles
+        # the conversion (DashScope adds file://, OpenAI reads to base64, etc.)
+        block["source"] = {
+            "type": "url",
+            "url": resolved,
+        }
     return block
 
 
