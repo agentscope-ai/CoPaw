@@ -38,7 +38,7 @@ Tapez dans la zone de saisie en bas, puis appuyez sur **Entrée** ou cliquez sur
 bouton d'envoi (↑). CoPaw répond en temps réel.
 
 **Créer une nouvelle session :**
-Cliquez sur le bouton **+ Nouveau Chat** en haut de la barre latérale de chat pour démarrer une nouvelle
+Cliquez sur le bouton **+ Nouvelle conversation** en haut de la barre latérale de chat pour démarrer une nouvelle
 conversation. Chaque session conserve un historique séparé.
 
 **Changer de session :**

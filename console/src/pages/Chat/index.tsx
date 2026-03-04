@@ -119,13 +119,13 @@ export default function ChatPage() {
       ...optionsConfig,
       sender: {
         ...optionsConfig.sender,
-        disclaimer: freshDefaults.sender.disclaimer,
+        disclaimer: optionsConfig.sender?.disclaimer ?? freshDefaults.sender.disclaimer,
       },
       welcome: {
         ...optionsConfig.welcome,
-        greeting: freshDefaults.welcome.greeting,
-        description: freshDefaults.welcome.description,
-        prompts: freshDefaults.welcome.prompts,
+        greeting: optionsConfig.welcome?.greeting ?? freshDefaults.welcome.greeting,
+        description: optionsConfig.welcome?.description ?? freshDefaults.welcome.description,
+        prompts: optionsConfig.welcome?.prompts ?? freshDefaults.welcome.prompts,
       },
       session: {
         multiple: true,

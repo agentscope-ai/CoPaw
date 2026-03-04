@@ -67,7 +67,7 @@ Une page par jour, complétée avec le travail et les interactions du jour.
 
 - **Emplacement** : `{working_dir}/memory/YYYY-MM-DD.md`
 - **Objectif** : Enregistrer les notes quotidiennes et le contexte runtime
-- **Mises à jour** : Ajouté par l'Agent via les outils de fichiers `write` / `edit` ; déclenché automatiquement quand les conversations deviennent trop longues et nécessitent une synthèse
+- **Mises à jour** : Ajoutées par l'Agent via les outils de fichiers `write` / `edit` ; déclenché automatiquement quand les conversations deviennent trop longues et nécessitent une synthèse
 
 ### Quand écrire en mémoire ?
 
@@ -116,7 +116,7 @@ Configurez le service Embedding via les variables d'environnement suivantes pour
 |                          ❌                           |                    ✅                      | Recherche plein texte BM25 uniquement (mauvais résultats dans certains scénarios) |
 |                          ❌                           |                    ❌                      | ⚠️ **Non autorisé** — au moins un mode de recherche doit être activé   |
 
-> **Recommandé** : Configurez `EMBEDDING_API_KEY` et gardez `FTS_ENABLED=true` pour utiliser la recherche hybride Vectorielle + BM25 pour un rappel optimal.
+> **Recommandé** : Configurez `EMBEDDING_API_KEY` et gardez `FTS_ENABLED=true` pour utiliser la recherche hybride vectorielle + BM25 pour un rappel optimal.
 
 ### Base de données sous-jacente
 
@@ -152,7 +152,7 @@ L'Agent dispose de deux façons de récupérer les mémoires passées :
 
 ## Explication de la recherche hybride
 
-La recherche mémoire utilise par défaut la **recherche hybride Vectorielle + BM25**. Les deux méthodes de recherche se complètent mutuellement.
+La recherche mémoire utilise par défaut la **recherche hybride vectorielle + BM25**. Les deux méthodes de recherche se complètent mutuellement.
 
 ### Recherche sémantique vectorielle
 

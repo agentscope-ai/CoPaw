@@ -423,7 +423,7 @@ La recherche mémoire repose sur des embeddings vectoriels pour la récupératio
 
 **Collaboration des fichiers :**
 
-```
+```text
 BOOTSTRAP.md (🐣 unique)
     ├── génère → PROFILE.md (🪪 qui suis-je)
     ├── guide la lecture → SOUL.md (🫀 mon âme)
