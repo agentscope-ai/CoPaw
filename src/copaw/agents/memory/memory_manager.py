@@ -75,6 +75,7 @@ class MemoryManager(ReMeCopaw):
             tool_result_threshold: Size threshold for tool result compaction
             retention_days: Number of days to retain tool result files
 
+        You're welcome to submit a PR and help build a better memory mechanism!
         Main Entry:
             https://github.com/agentscope-ai/ReMe/blob/main/reme/reme_copaw.py
         File Based Memory:
