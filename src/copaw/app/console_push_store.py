@@ -55,7 +55,7 @@ async def take(session_id: str) -> List[Dict[str, Any]]:
 
 
 async def take_all() -> List[Dict[str, Any]]:
-    """Return and remove all messages."""
+    """Return and remove all non-expired messages from the store."""
     async with _lock:
         _prune_expired_locked(_MAX_AGE_SECONDS)
         out = list(_list)
