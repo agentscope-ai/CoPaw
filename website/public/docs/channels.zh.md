@@ -255,9 +255,16 @@
 
 - 确保本地 **「信息」(Messages)** 已登录 Apple ID（系统设置里打开「信息」并登录）。
 - 安装 **imsg**（用于访问 iMessage 数据库）：
-  ```bash
-  brew install steipete/tap/imsg
-  ```
+  - **Apple Silicon Mac**：直接安装
+    ```bash
+    brew install steipete/tap/imsg
+    ```
+  - **Intel 芯片的 Mac**：需要先克隆源码再编译
+    ```bash
+    git clone https://github.com/steipete/imsg.git
+    cd imsg
+    make build
+    ```
 - 系统 iMessage 数据库默认路径为 `~/Library/Messages/chat.db`，若你改过系统路径，请填实际路径。
 - 应用需要 **完全磁盘访问权限**（系统设置 → 隐私与安全性 → 完全磁盘访问权限），否则无法读取 `chat.db`。
 - 仅限本地使用，数据不离开你的电脑。
