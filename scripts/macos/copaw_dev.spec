@@ -70,6 +70,9 @@ a = Analysis(
     + _reme_hidden
     + [
         "chromadb",
+        "chromadb.config",
+        "chromadb.api",
+        "chromadb.api.client",
         "chromadb.api.rust",
         "chromadb.telemetry.product.posthog",
         "webview",

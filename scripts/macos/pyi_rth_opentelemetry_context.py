@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint:disable=unused-import
 """
 PyInstaller runtime hook: fix opentelemetry context loading in frozen apps.
 
@@ -44,3 +45,11 @@ def _install_patch() -> None:
 
 
 _install_patch()
+
+# Pre-import chromadb after the patch so reme gets a valid module (avoids
+# chromadb=None and AttributeError on chromadb.ClientAPI when reme loads).
+try:
+    import chromadb  # noqa: F401
+    from chromadb.config import Settings  # noqa: F401
+except ImportError:
+    pass
