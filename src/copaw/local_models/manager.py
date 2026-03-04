@@ -190,6 +190,7 @@ class LocalModelManager:
         filename: Optional[str],
         backend: BackendType,
     ) -> LocalModelInfo:
+        snapshot_download = None
         try:
             from modelscope.hub.file_download import model_file_download
         except ImportError as e:
@@ -197,8 +198,44 @@ class LocalModelManager:
                 "modelscope is required for ModelScope downloads. "
                 "Install it with: pip install modelscope",
             ) from e
+        try:
+            from modelscope.hub.snapshot_download import snapshot_download
+        except ImportError:
+            try:
+                # Compatibility fallback for old ModelScope versions.
+                from modelscope import snapshot_download  # type: ignore[assignment]
+            except ImportError:
+                snapshot_download = None
 
         _ensure_models_dir()
+        local_dir = MODELS_DIR / _sanitize_repo_id(repo_id)
+        local_dir.mkdir(parents=True, exist_ok=True)
+
+        # MLX models require config/tokenizer files in addition to weights.
+        # ModelScope file download pulls only one file, so use full snapshot.
+        if backend == BackendType.MLX:
+            if snapshot_download is None:
+                raise ImportError(
+                    "ModelScope snapshot download is required for MLX models. "
+                    "Please upgrade modelscope to a newer version.",
+                )
+
+            logger.info(
+                "Downloading full repo %s from ModelScope (MLX)...",
+                repo_id,
+            )
+            snapshot_dir = snapshot_download(
+                model_id=repo_id,
+                local_dir=str(local_dir),
+            )
+            LocalModelManager._validate_mlx_directory(Path(snapshot_dir))
+            return LocalModelManager._register_model(
+                repo_id,
+                filename or "(full repo)",
+                backend,
+                DownloadSource.MODELSCOPE,
+                snapshot_dir,
+            )
 
         if filename is None:
             try:
@@ -216,9 +253,6 @@ class LocalModelManager:
                     "Please specify the filename explicitly.",
                 ) from e
             filename = LocalModelManager._auto_select_file(files, backend)
-
-        local_dir = MODELS_DIR / _sanitize_repo_id(repo_id)
-        local_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
             "Downloading %s/%s from ModelScope...",
