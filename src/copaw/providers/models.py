@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ModelInfo(BaseModel):
@@ -41,14 +41,19 @@ class ProviderDefinition(BaseModel):
 class ProviderSettings(BaseModel):
     """Per-provider settings stored in providers.json (built-in only)."""
 
-    base_url: str = Field(default="")
-    api_key: str = Field(default="")
+    base_url: Optional[str] = Field(default=None)
+    api_key: Optional[str] = Field(default=None)
     extra_models: List[ModelInfo] = Field(default_factory=list)
     chat_model: str = Field(
         default="",
         description="Chat model class name (e.g., 'OpenAIChatModel'). "
         "If empty, uses ProviderDefinition default.",
     )
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def _empty_str_to_none(cls, v: object) -> object:
+        return None if v == "" else v
 
 
 class CustomProviderData(BaseModel):
@@ -63,12 +68,17 @@ class CustomProviderData(BaseModel):
     default_base_url: str = Field(default="")
     api_key_prefix: str = Field(default="")
     models: List[ModelInfo] = Field(default_factory=list)
-    base_url: str = Field(default="")
-    api_key: str = Field(default="")
+    base_url: Optional[str] = Field(default=None)
+    api_key: Optional[str] = Field(default=None)
     chat_model: str = Field(
         default="OpenAIChatModel",
         description="Chat model class name (e.g., 'OpenAIChatModel')",
     )
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def _empty_str_to_none(cls, v: object) -> object:
+        return None if v == "" else v
 
 
 class ModelSlotConfig(BaseModel):
@@ -85,13 +95,16 @@ class ProvidersData(BaseModel):
     )
     active_llm: ModelSlotConfig = Field(default_factory=ModelSlotConfig)
 
-    def get_credentials(self, provider_id: str) -> tuple[str, str]:
+    def get_credentials(
+        self,
+        provider_id: str,
+    ) -> tuple[Optional[str], Optional[str]]:
         """Return ``(base_url, api_key)`` for *provider_id*."""
         cpd = self.custom_providers.get(provider_id)
         if cpd is not None:
-            return cpd.base_url or cpd.default_base_url, cpd.api_key
+            return cpd.base_url or cpd.default_base_url or None, cpd.api_key
         s = self.providers.get(provider_id)
-        return (s.base_url, s.api_key) if s else ("", "")
+        return (s.base_url, s.api_key) if s else (None, None)
 
     def is_configured(self, defn: "ProviderDefinition") -> bool:
         """Determine if a provider is configured/available.
@@ -132,8 +145,8 @@ class ProviderInfo(BaseModel):
         description="True when the user must supply a base URL "
         "(custom providers or providers without a default URL).",
     )
-    current_api_key: str = Field(default="")
-    current_base_url: str = Field(default="")
+    current_api_key: Optional[str] = Field(default=None)
+    current_base_url: Optional[str] = Field(default=None)
 
 
 class ActiveModelsInfo(BaseModel):
@@ -142,6 +155,6 @@ class ActiveModelsInfo(BaseModel):
 
 class ResolvedModelConfig(BaseModel):
     model: str = Field(default="")
-    base_url: str = Field(default="")
-    api_key: str = Field(default="")
+    base_url: Optional[str] = Field(default=None)
+    api_key: Optional[str] = Field(default=None)
     is_local: bool = Field(default=False)

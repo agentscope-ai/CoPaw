@@ -73,10 +73,6 @@ def configure_provider_api_key_interactive(
         )
         return provider_id
 
-    # Ollama provider is local-like (no API key needed)
-    if provider_id == "ollama":
-        return provider_id
-
     current_base, current_key = data.get_credentials(provider_id)
 
     base_url: Optional[str] = None

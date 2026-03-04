@@ -97,7 +97,7 @@ def get_providers_json_path() -> Path:
 
 def _ensure_base_url(settings: ProviderSettings, defn) -> None:
     if not settings.base_url and defn.default_base_url:
-        settings.base_url = defn.default_base_url
+        settings.base_url = defn.default_base_url or None
 
 
 def _normalize_ollama_base_url(base_url: str) -> str:
@@ -250,7 +250,9 @@ def _ensure_all_providers(providers: dict[str, ProviderSettings]) -> None:
             providers.pop(pid, None)
             continue
         if pid not in providers:
-            providers[pid] = ProviderSettings(base_url=defn.default_base_url)
+            providers[pid] = ProviderSettings(
+                base_url=defn.default_base_url or None,
+            )
         else:
             _ensure_base_url(providers[pid], defn)
         _normalize_special_provider_settings(pid, providers[pid])
@@ -335,37 +337,52 @@ def save_providers_json(
 # -- Mutators --
 
 
+_UNSET: object = object()
+
+
 def update_provider_settings(
     provider_id: str,
     *,
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
+    api_key: Optional[str] = _UNSET,  # type: ignore[assignment]
+    base_url: Optional[str] = _UNSET,  # type: ignore[assignment]
 ) -> ProvidersData:
-    """Partially update a provider's settings. Returns updated state."""
+    """Partially update a provider's settings. Returns updated state.
+
+    Pass ``api_key=None`` to clear the key. Omit the argument entirely to
+    leave the existing value unchanged. Same rule applies to ``base_url``.
+    """
+    api_key_provided = api_key is not _UNSET
+    base_url_provided = base_url is not _UNSET
+
     data = load_providers_json()
     cpd = data.custom_providers.get(provider_id)
 
     if cpd is not None:
-        if api_key is not None:
-            cpd.api_key = api_key
-        if base_url is not None:
-            cpd.base_url = base_url
+        if api_key_provided:
+            cpd.api_key = api_key or None  # type: ignore[assignment]
+        if base_url_provided:
+            cpd.base_url = base_url or None  # type: ignore[assignment]
         if not cpd.base_url:
-            cpd.base_url = cpd.default_base_url
+            cpd.base_url = cpd.default_base_url or None
         register_custom_provider(cpd)
     else:
         settings = data.providers.setdefault(provider_id, ProviderSettings())
-        if api_key is not None:
-            settings.api_key = api_key
-        if base_url is not None:
-            settings.base_url = base_url
+        if api_key_provided:
+            settings.api_key = api_key or None  # type: ignore[assignment]
+        if base_url_provided:
+            settings.base_url = base_url or None  # type: ignore[assignment]
         if not settings.base_url:
             defn = PROVIDERS.get(provider_id)
             if defn:
-                settings.base_url = defn.default_base_url
+                settings.base_url = defn.default_base_url or None
         _normalize_special_provider_settings(provider_id, settings)
 
-    if api_key == "" and data.active_llm.provider_id == provider_id:
+    # Clear active LLM when api_key is explicitly cleared
+    if (
+        api_key_provided
+        and not api_key
+        and data.active_llm.provider_id == provider_id
+    ):
         data.active_llm = ModelSlotConfig()
 
     save_providers_json(data)
@@ -416,9 +433,12 @@ def get_active_llm_config() -> Optional[ResolvedModelConfig]:
 # -- Utilities --
 
 
-def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
+def mask_api_key(
+    api_key: Optional[str],
+    visible_chars: int = 4,
+) -> Optional[str]:
     if not api_key:
-        return ""
+        return None
     if len(api_key) <= visible_chars:
         return "*" * len(api_key)
     prefix = api_key[:3] if len(api_key) > 3 else ""
@@ -492,7 +512,7 @@ def add_model(provider_id: str, model: ModelInfo) -> ProvidersData:
             )
         settings = data.providers.setdefault(
             provider_id,
-            ProviderSettings(base_url=defn.default_base_url),
+            ProviderSettings(base_url=defn.default_base_url or None),
         )
         all_ids = {m.id for m in defn.models} | {
             m.id for m in settings.extra_models

@@ -67,8 +67,8 @@ def _build_provider_info(
             extra_models=[],
             is_custom=False,
             is_local=True,
-            current_api_key="",
-            current_base_url="",
+            current_api_key=None,
+            current_base_url=None,
         )
 
     cur_base_url, cur_api_key = data.get_credentials(provider.id)
@@ -124,12 +124,15 @@ async def configure_provider(
         or not provider.default_base_url
         or provider.id == "ollama"
     )
-    base_url = body.base_url if allow_base_url else None
-    data = update_provider_settings(
-        provider_id,
-        api_key=body.api_key,
-        base_url=base_url,
-    )
+
+    # Use model_fields_set to distinguish "not provided" from explicit None
+    kwargs: dict = {}
+    if "api_key" in body.model_fields_set:
+        kwargs["api_key"] = body.api_key
+    if "base_url" in body.model_fields_set and allow_base_url:
+        kwargs["base_url"] = body.base_url
+
+    data = update_provider_settings(provider_id, **kwargs)
     return _build_provider_info(provider, data)
 
 

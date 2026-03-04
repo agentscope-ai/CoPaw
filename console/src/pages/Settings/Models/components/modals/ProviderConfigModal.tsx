@@ -72,19 +72,28 @@ export function ProviderConfigModal({
       const values = await form.validateFields();
       setSaving(true);
 
-      // Validate connection before saving
-      // For local providers, we might skip this or just check if models exist (which the backend does)
-      const result = await api.testProviderConnection(provider.id, {
-        api_key: values.api_key,
-        base_url: values.base_url,
-      });
+      // Only include api_key in the payload when the user actually typed a new value.
+      // Leaving the field blank means "keep existing key unchanged" — revoke is the only way to clear it.
+      const newApiKey = values.api_key?.trim() || null;
+      const hasNewApiKey = !!newApiKey;
+      const normalizedBaseUrl = values.base_url?.trim() || null;
+
+      const testPayload: { api_key?: string | null; base_url?: string | null } =
+        { base_url: normalizedBaseUrl };
+      if (hasNewApiKey) testPayload.api_key = newApiKey;
+
+      const result = await api.testProviderConnection(provider.id, testPayload);
 
       if (!result.success) {
         message.error(result.message || t("models.testConnectionFailed"));
         return;
       }
 
-      await api.configureProvider(provider.id, values);
+      const savePayload: { api_key?: string | null; base_url?: string | null } =
+        { base_url: normalizedBaseUrl };
+      if (hasNewApiKey) savePayload.api_key = newApiKey;
+
+      await api.configureProvider(provider.id, savePayload);
       await onSaved();
       setFormDirty(false);
       onClose();
@@ -103,10 +112,11 @@ export function ProviderConfigModal({
     setTesting(true);
     try {
       const values = await form.validateFields();
-      const result = await api.testProviderConnection(provider.id, {
-        api_key: values.api_key,
-        base_url: values.base_url,
-      });
+      const newApiKey = values.api_key?.trim() || null;
+      const testPayload: { api_key?: string | null; base_url?: string | null } =
+        { base_url: values.base_url?.trim() || null };
+      if (newApiKey) testPayload.api_key = newApiKey;
+      const result = await api.testProviderConnection(provider.id, testPayload);
       if (result.success) {
         message.success(result.message || t("models.testConnectionSuccess"));
       } else {
@@ -140,7 +150,7 @@ export function ProviderConfigModal({
       cancelText: t("models.cancel"),
       onOk: async () => {
         try {
-          await api.configureProvider(provider.id, { api_key: "" });
+          await api.configureProvider(provider.id, { api_key: null });
           await onSaved();
           onClose();
           if (isActiveLlmProvider) {
@@ -169,7 +179,7 @@ export function ProviderConfigModal({
       footer={
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterLeft}>
-            {provider.current_api_key && provider.id !== "ollama" && (
+            {provider.current_api_key && (
               <Button danger size="small" onClick={handleRevoke}>
                 {t("models.revokeAuthorization")}
               </Button>
@@ -221,7 +231,19 @@ export function ProviderConfigModal({
                         },
                       ]
                     : []),
-                  { type: "url", message: t("models.pleaseEnterValidURL") },
+                  {
+                    validator: (_: unknown, value: string) => {
+                      if (!value?.trim()) return Promise.resolve();
+                      try {
+                        new URL(value.trim());
+                        return Promise.resolve();
+                      } catch {
+                        return Promise.reject(
+                          new Error(t("models.pleaseEnterValidURL")),
+                        );
+                      }
+                    },
+                  },
                 ]
               : []
           }
@@ -252,10 +274,17 @@ export function ProviderConfigModal({
           rules={[
             {
               validator: (_, value) => {
+                // Reject whitespace-only input
+                if (value && !value.trim()) {
+                  return Promise.reject(
+                    new Error(t("models.apiKeyCannotBeBlank")),
+                  );
+                }
+                // Reject prefix mismatch
                 if (
-                  value &&
+                  value?.trim() &&
                   provider.api_key_prefix &&
-                  !value.startsWith(provider.api_key_prefix)
+                  !value.trim().startsWith(provider.api_key_prefix)
                 ) {
                   return Promise.reject(
                     new Error(

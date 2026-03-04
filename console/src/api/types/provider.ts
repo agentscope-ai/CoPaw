@@ -15,13 +15,13 @@ export interface ProviderInfo {
   is_local: boolean;
   /** True when the user must supply a base URL (custom or no default URL). */
   needs_base_url: boolean;
-  current_api_key: string;
-  current_base_url: string;
+  current_api_key: string | null;
+  current_base_url: string | null;
 }
 
 export interface ProviderConfigRequest {
-  api_key?: string;
-  base_url?: string;
+  api_key?: string | null;
+  base_url?: string | null;
 }
 
 export interface ModelSlotConfig {
@@ -113,8 +113,8 @@ export interface TestConnectionResponse {
 }
 
 export interface TestProviderRequest {
-  api_key?: string;
-  base_url?: string;
+  api_key?: string | null;
+  base_url?: string | null;
 }
 
 export interface TestModelRequest {

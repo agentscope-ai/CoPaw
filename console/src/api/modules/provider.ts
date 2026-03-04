@@ -61,7 +61,7 @@ export const providerApi = {
 
   testProviderConnection: (
     providerId: string,
-    body?: { api_key?: string; base_url?: string },
+    body?: { api_key?: string | null; base_url?: string | null },
   ) =>
     request<TestConnectionResponse>(
       `/models/${encodeURIComponent(providerId)}/test`,

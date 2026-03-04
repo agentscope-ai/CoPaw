@@ -251,6 +251,7 @@
     "azureEndpointHint": "Azure OpenAI 端点，例如 https://<resource>.openai.azure.com/openai/v1",
     "pleaseEnterBaseURL": "请输入 API 基础 URL",
     "pleaseEnterValidURL": "请输入有效的 URL",
+    "apiKeyCannotBeBlank": "API 密钥不能为空或仅含空格",
     "apiKeyShouldStart": "API 密钥应以 \"{{prefix}}\" 开头",
     "configurationSaved": "{{name}} 配置已保存",
     "failedToSaveConfig": "保存配置失败",

@@ -251,6 +251,7 @@
     "azureEndpointHint": "Azure OpenAI endpoint, e.g. https://<resource>.openai.azure.com/openai/v1",
     "pleaseEnterBaseURL": "Please enter the API base URL",
     "pleaseEnterValidURL": "Please enter a valid URL",
+    "apiKeyCannotBeBlank": "API Key cannot be blank or whitespace only",
     "apiKeyShouldStart": "API Key should start with \"{{prefix}}\"",
     "configurationSaved": "{{name}} configuration saved",
     "failedToSaveConfig": "Failed to save configuration",
