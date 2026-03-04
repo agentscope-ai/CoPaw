@@ -636,12 +636,17 @@ class FeishuChannel(BaseChannel):
             # {"post": {"zh_cn": {"title": "...", "content": [[...]]}}}
             elif "post" in data:
                 post_body = data["post"]
-                if post_body and isinstance(post_body, dict):
+                if (
+                    post_body
+                    and isinstance(post_body, dict)
+                    and len(post_body) > 0
+                ):
                     # Usually take "zh_cn" or the first available key
                     first_key = next(iter(post_body))
                     lang_data = post_body[first_key]
-                    content_list = lang_data.get("content", [])
-                    title = lang_data.get("title", "")
+                    if isinstance(lang_data, dict):
+                        content_list = lang_data.get("content", [])
+                        title = lang_data.get("title", "")
 
             if title:
                 text_parts.append(title)
