@@ -94,9 +94,20 @@ def configure_provider_api_key_interactive(
     current_base, current_key = data.get_credentials(provider_id)
 
     base_url: Optional[str] = None
-    if defn.is_custom:
+    # Prompt for base_url if the provider is custom or has no default URL
+    # (e.g. Azure OpenAI requires user to provide their endpoint).
+    if defn.is_custom or not defn.default_base_url:
+        azure_hint = (
+            "Azure endpoint "
+            "(e.g. https://<resource>.openai.azure.com/openai/v1)"
+        )
+        url_hint = (
+            azure_hint
+            if provider_id == "azure-openai"
+            else "Base URL (OpenAI-compatible endpoint)"
+        )
         base_url = click.prompt(
-            "Base URL (OpenAI-compatible endpoint)",
+            url_hint,
             default=current_base or "",
             show_default=bool(current_base),
         ).strip()
@@ -324,6 +335,81 @@ def models_group() -> None:
     """Manage LLM models and provider configuration."""
 
 
+def _provider_tag(defn) -> str:
+    if defn.is_custom:
+        return " [custom]"
+    if defn.is_local:
+        return " [local]"
+    return ""
+
+
+def _print_local_provider_models(defn) -> None:
+    all_models = list(defn.models)
+    if all_models:
+        click.echo(f"  {'models':16s}:")
+        for model in all_models:
+            click.echo(f"    - {model.name}")
+        return
+
+    click.echo("  No models downloaded.")
+    click.echo("  Use 'copaw models download' to add models.")
+
+
+def _print_remote_provider_models(defn, settings) -> None:
+    extra = (
+        list(settings.extra_models) if settings and not defn.is_custom else []
+    )
+    all_models = list(defn.models) + extra
+    if not all_models:
+        return
+
+    click.echo(f"  {'models':16s}:")
+    for model in all_models:
+        label = " [user-added]" if model in extra else ""
+        click.echo(f"    - {model.name} ({model.id}){label}")
+
+
+def _print_remote_provider_settings(
+    defn,
+    data,
+    cur_url: str,
+    cur_key: str,
+) -> None:
+    if defn.is_custom or not defn.default_base_url:
+        click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
+    click.echo(
+        f"  {'api_key':16s}: " f"{mask_api_key(cur_key) or '(not set)'}",
+    )
+    if defn.api_key_prefix:
+        click.echo(f"  {'api_key_prefix':16s}: {defn.api_key_prefix}")
+
+    headers, wire_api = data.get_transport_config(defn.id)
+    masked_headers = mask_headers(headers)
+    click.echo(f"  {'wire_api':16s}: {wire_api}")
+    if not masked_headers:
+        return
+
+    click.echo(f"  {'headers':16s}:")
+    for key, value in masked_headers.items():
+        click.echo(f"    - {key}: {value}")
+
+
+def _print_provider_card(defn, data) -> None:
+    cur_url, cur_key = data.get_credentials(defn.id)
+    settings = data.providers.get(defn.id)
+
+    click.echo(f"\n{'─' * 44}")
+    click.echo(f"  {defn.name} ({defn.id}){_provider_tag(defn)}")
+    click.echo(f"{'─' * 44}")
+
+    if defn.is_local:
+        _print_local_provider_models(defn)
+        return
+
+    _print_remote_provider_settings(defn, data, cur_url, cur_key)
+    _print_remote_provider_models(defn, settings)
+
+
 @models_group.command("list")
 def list_cmd() -> None:
     """Show all providers and their current configuration."""
@@ -331,70 +417,19 @@ def list_cmd() -> None:
 
     click.echo("\n=== Providers ===")
     for defn in list_providers():
-        cur_url, cur_key = data.get_credentials(defn.id)
-        settings = data.providers.get(defn.id)
-
-        tag = (
-            " [custom]"
-            if defn.is_custom
-            else " [local]"
-            if defn.is_local
-            else ""
-        )
-        click.echo(f"\n{'─' * 44}")
-        click.echo(f"  {defn.name} ({defn.id}){tag}")
-        click.echo(f"{'─' * 44}")
-
-        if defn.is_local:
-            all_models = list(defn.models)
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                for m in all_models:
-                    click.echo(f"    - {m.name}")
-            else:
-                click.echo("  No models downloaded.")
-                click.echo("  Use 'copaw models download' to add models.")
-        else:
-            if defn.is_custom:
-                click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
-            click.echo(
-                f"  {'api_key':16s}: "
-                f"{mask_api_key(cur_key) or '(not set)'}",
-            )
-            if defn.api_key_prefix:
-                click.echo(
-                    f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
-                )
-
-            headers, wire_api = data.get_transport_config(defn.id)
-            masked_headers = mask_headers(headers)
-            click.echo(f"  {'wire_api':16s}: {wire_api}")
-            if masked_headers:
-                click.echo(f"  {'headers':16s}:")
-                for key, value in masked_headers.items():
-                    click.echo(f"    - {key}: {value}")
-
-            extra = (
-                list(settings.extra_models)
-                if settings and not defn.is_custom
-                else []
-            )
-            all_models = list(defn.models) + extra
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                for m in all_models:
-                    label = " [user-added]" if m in extra else ""
-                    click.echo(f"    - {m.name} ({m.id}){label}")
+        _print_provider_card(defn, data)
 
     click.echo(f"\n{'═' * 44}")
     click.echo("  Active Model Slot")
     click.echo(f"{'═' * 44}")
 
     llm = data.active_llm
-    if llm.provider_id and llm.model:
-        click.echo(f"  {'LLM':16s}: {llm.provider_id} / {llm.model}")
-    else:
-        click.echo(f"  {'LLM':16s}: (not configured)")
+    slot = (
+        f"{llm.provider_id} / {llm.model}"
+        if llm.provider_id and llm.model
+        else "(not configured)"
+    )
+    click.echo(f"  {'LLM':16s}: {slot}")
     click.echo()
 
 
@@ -440,7 +475,9 @@ def config_key_cmd(
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc
 
-    configured_provider_id = configure_provider_api_key_interactive(provider_id)
+    configured_provider_id = configure_provider_api_key_interactive(
+        provider_id,
+    )
 
     if wire_api is None and not headers and not clear_headers:
         return
@@ -780,16 +817,7 @@ def ollama_pull_cmd(model_name: str) -> None:
       copaw models ollama-pull mistral:7b
       copaw models ollama-pull qwen2.5:3b
     """
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     click.echo(f"Downloading Ollama model: {model_name}...")
     try:
@@ -797,6 +825,14 @@ def ollama_pull_cmd(model_name: str) -> None:
         manager.pull_model(model_name)
         click.echo(f"✓ Model '{model_name}' downloaded successfully.")
         click.echo("\nTo use this model, run:\n  copaw models set-llm")
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Download failed: {exc}", fg="red"))
         raise SystemExit(1) from exc
@@ -805,20 +841,19 @@ def ollama_pull_cmd(model_name: str) -> None:
 @models_group.command("ollama-list")
 def ollama_list_cmd() -> None:
     """List all Ollama models."""
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     try:
         manager = OllamaModelManager()
         models = manager.list_models()
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc
@@ -851,16 +886,7 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
       copaw models ollama-remove mistral:7b
       copaw models ollama-remove qwen2.5:3b -y
     """
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     if not yes:
         if not click.confirm(f"Delete Ollama model '{model_name}'?"):
@@ -870,6 +896,14 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
         manager = OllamaModelManager()
         manager.delete_model(model_name)
         click.echo(f"✓ Model '{model_name}' deleted.")
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc

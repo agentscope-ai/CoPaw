@@ -127,23 +127,27 @@ class ProvidersData(BaseModel):
         return {}, "chat_completions"
 
     def is_configured(self, defn: "ProviderDefinition") -> bool:
-        """Custom providers need base_url; built-in providers need api_key.
+        """Determine if a provider is configured/available.
 
-        Local providers are always considered configured (no credentials).
-
-        The special built-in provider ``ollama`` is also considered configured
-        without an API key, since it typically runs on localhost and uses an
-        unauthenticated OpenAI-compatible endpoint.
+        - Local providers are always configured (no credentials needed).
+        - Ollama is configured if it has base_url set.
+        - Custom providers need base_url.
+        - Built-in remote providers are configured if they exist in settings.
         """
-        if defn.is_local or defn.id == "ollama":
+        if defn.is_local:
             return True
+
+        if defn.id == "ollama":
+            s = self.providers.get(defn.id)
+            return bool(s and s.base_url) if s else False
+
         cpd = self.custom_providers.get(defn.id)
         if cpd is not None:
             return bool(cpd.base_url or cpd.default_base_url)
-        s = self.providers.get(defn.id)
-        if not s:
-            return False
-        return bool(s.base_url) if defn.is_custom else bool(s.api_key)
+
+        # Built-in remote providers are configured if they exist in settings
+        # (they have default_base_url)
+        return defn.id in self.providers
 
 
 class ProviderInfo(BaseModel):
@@ -156,7 +160,11 @@ class ProviderInfo(BaseModel):
     extra_models: List[ModelInfo] = Field(default_factory=list)
     is_custom: bool = Field(default=False)
     is_local: bool = Field(default=False)
-    has_api_key: bool = Field(default=False)
+    needs_base_url: bool = Field(
+        default=False,
+        description="True when the user must supply a base URL "
+        "(custom providers or providers without a default URL).",
+    )
     current_api_key: str = Field(default="")
     current_base_url: str = Field(default="")
     current_headers: Dict[str, str] = Field(default_factory=dict)

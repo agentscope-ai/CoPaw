@@ -14,6 +14,7 @@ class BaseChannelConfig(BaseModel):
 
     enabled: bool = False
     bot_prefix: str = ""
+    filter_tool_messages: bool = False
 
 
 class IMessageChannelConfig(BaseChannelConfig):
@@ -52,6 +53,15 @@ class QQConfig(BaseChannelConfig):
     client_secret: str = ""
 
 
+class TelegramConfig(BaseChannelConfig):
+    """Telegram channel: bot_token from BotFather; optional proxy."""
+
+    bot_token: str = ""
+    http_proxy: str = ""
+    http_proxy_auth: str = ""
+    show_typing: Optional[bool] = None
+
+
 class ConsoleConfig(BaseChannelConfig):
     """Console channel: prints agent responses to stdout."""
 
@@ -68,6 +78,7 @@ class ChannelConfig(BaseModel):
     dingtalk: DingTalkConfig = DingTalkConfig()
     feishu: FeishuConfig = FeishuConfig()
     qq: QQConfig = QQConfig()
+    telegram: TelegramConfig = TelegramConfig()
     console: ConsoleConfig = ConsoleConfig()
 
 
@@ -88,6 +99,7 @@ class HeartbeatConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    enabled: bool = Field(default=False, description="Whether heartbeat is on")
     every: str = Field(default=HEARTBEAT_DEFAULT_EVERY)
     target: str = Field(default=HEARTBEAT_DEFAULT_TARGET)
     active_hours: Optional[ActiveHoursConfig] = Field(
@@ -255,5 +267,6 @@ ChannelConfigUnion = Union[
     DingTalkConfig,
     FeishuConfig,
     QQConfig,
+    TelegramConfig,
     ConsoleConfig,
 ]

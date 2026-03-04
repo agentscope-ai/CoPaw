@@ -24,6 +24,8 @@ from ...providers import (
     mask_headers,
     remove_model,
     set_active_llm,
+    test_model_connection,
+    test_provider_connection,
     update_provider_settings,
 )
 
@@ -70,7 +72,6 @@ def _build_provider_info(
             extra_models=[],
             is_custom=False,
             is_local=True,
-            has_api_key=True,  # always "configured"
             current_api_key="",
             current_base_url="",
             current_headers={},
@@ -78,7 +79,6 @@ def _build_provider_info(
         )
 
     cur_base_url, cur_api_key = data.get_credentials(provider.id)
-    configured = data.is_configured(provider)
 
     settings = data.providers.get(provider.id)
     extra = (
@@ -96,7 +96,7 @@ def _build_provider_info(
         extra_models=extra,
         is_custom=provider.is_custom,
         is_local=provider.is_local,
-        has_api_key=configured,
+        needs_base_url=provider.is_custom or not provider.default_base_url,
         current_api_key=mask_api_key(cur_api_key),
         current_base_url=cur_base_url,
         current_headers=mask_headers(headers),
@@ -127,7 +127,13 @@ async def configure_provider(
     if provider is None:
         raise HTTPException(404, detail=f"Provider '{provider_id}' not found")
 
-    allow_base_url = provider.is_custom or provider.id == "ollama"
+    # Allow base_url for custom providers, providers without a default
+    # base URL (e.g. Azure OpenAI), and Ollama (user may override).
+    allow_base_url = (
+        provider.is_custom
+        or not provider.default_base_url
+        or provider.id == "ollama"
+    )
     base_url = body.base_url if allow_base_url else None
     try:
         data = update_provider_settings(
@@ -167,6 +173,66 @@ async def create_custom_provider_endpoint(
     provider = get_provider(body.id)
     assert provider is not None
     return _build_provider_info(provider, data)
+
+
+class TestConnectionResponse(BaseModel):
+    success: bool = Field(..., description="Whether the test passed")
+    message: str = Field(..., description="Human-readable result message")
+
+
+class TestProviderRequest(BaseModel):
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Optional API key to test",
+    )
+    base_url: Optional[str] = Field(
+        default=None,
+        description="Optional Base URL to test",
+    )
+
+
+class TestModelRequest(BaseModel):
+    model_id: str = Field(..., description="Model ID to test")
+
+
+@router.post(
+    "/{provider_id}/test",
+    response_model=TestConnectionResponse,
+    summary="Test provider connection",
+)
+async def test_provider(
+    provider_id: str = Path(...),
+    body: Optional[TestProviderRequest] = Body(default=None),
+) -> TestConnectionResponse:
+    """Test if a provider's URL and API key are valid."""
+    try:
+        api_key = body.api_key if body else None
+        base_url = body.base_url if body else None
+        result = await test_provider_connection(
+            provider_id,
+            api_key=api_key,
+            base_url=base_url,
+        )
+        return TestConnectionResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{provider_id}/models/test",
+    response_model=TestConnectionResponse,
+    summary="Test a specific model",
+)
+async def test_model(
+    provider_id: str = Path(...),
+    body: TestModelRequest = Body(...),
+) -> TestConnectionResponse:
+    """Test if a specific model works with the configured provider."""
+    try:
+        result = await test_model_connection(provider_id, body.model_id)
+        return TestConnectionResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -247,18 +313,34 @@ async def set_active_model(
         )
 
     data = load_providers_json()
-    if not data.is_configured(provider):
-        if provider.is_custom:
+    base_url, api_key = data.get_credentials(provider.id)
+
+    # Validation based on provider type
+    if provider.is_custom:
+        # Custom providers need base_url
+        if not base_url:
             msg = (
                 f"Provider '{provider.name}' has no base_url configured. "
                 "Please configure the base URL first."
             )
-        else:
+            raise HTTPException(status_code=400, detail=msg)
+    elif provider.id == "ollama":
+        # Ollama needs base_url to connect to daemon
+        if not base_url:
+            msg = (
+                f"Provider '{provider.name}' has no base_url configured. "
+                "Please configure the base URL first."
+            )
+            raise HTTPException(status_code=400, detail=msg)
+    elif not provider.is_local:
+        # Built-in remote providers (modelscope, dashscope, etc.) need API key
+        if not api_key:
             msg = (
                 f"Provider '{provider.name}' has no API key configured. "
                 "Please configure the API key first."
             )
-        raise HTTPException(status_code=400, detail=msg)
+            raise HTTPException(status_code=400, detail=msg)
+    # Local providers (llama.cpp, mlx) don't need validation
 
     if not body.model:
         raise HTTPException(status_code=400, detail="Model is required.")

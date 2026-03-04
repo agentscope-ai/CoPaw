@@ -186,7 +186,8 @@ class OpenAIResponsesChatModel(ChatModelBase):
                         type="tool_use",
                         id=_to_text(_get(tool_call, "id", "tool_call"))
                         or "tool_call",
-                        name=_to_text(_get(function, "name", "tool")) or "tool",
+                        name=_to_text(_get(function, "name", "tool"))
+                        or "tool",
                         input=parsed_args,
                         raw_input=raw_args,
                     ),
@@ -200,7 +201,9 @@ class OpenAIResponsesChatModel(ChatModelBase):
         if usage_obj is not None:
             usage = ChatUsage(
                 input_tokens=int(_get(usage_obj, "prompt_tokens", 0) or 0),
-                output_tokens=int(_get(usage_obj, "completion_tokens", 0) or 0),
+                output_tokens=int(
+                    _get(usage_obj, "completion_tokens", 0) or 0,
+                ),
                 time=(datetime.now() - started).total_seconds(),
                 metadata=usage_obj,
             )
