@@ -29,9 +29,31 @@ def _is_allowed_media_path(path: str) -> bool:
     try:
         resolved = Path(path).expanduser().resolve()
         root = _ALLOWED_MEDIA_ROOT.resolve()
-        return resolved.is_file() and str(resolved).startswith(str(root))
+        return resolved.is_file() and resolved.is_relative_to(root)
     except Exception:
         return False
+
+
+def _extract_local_path_from_url(url: str) -> Optional[str]:
+    """Return local file path for file:// URL or plain local path."""
+    parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme == "file":
+        try:
+            local_path = urllib.request.url2pathname(parsed.path)
+            candidate = Path(local_path).expanduser()
+            if candidate.is_file():
+                return str(candidate)
+            return None
+        except Exception:
+            return None
+
+    if parsed.scheme == "" and parsed.netloc == "":
+        candidate = Path(url).expanduser()
+        if candidate.is_file():
+            return str(candidate)
+
+    return None
 
 
 async def _process_single_file_block(
@@ -65,17 +87,12 @@ async def _process_single_file_block(
     elif isinstance(source, dict) and source.get("type") == "url":
         url = source.get("url", "")
         if url:
-            parsed = urllib.parse.urlparse(url)
-            if parsed.scheme == "file":
-                try:
-                    local_path = urllib.request.url2pathname(parsed.path)
-                    if not _is_allowed_media_path(local_path):
-                        logger.warning(
-                            "Rejected file:// URL outside allowed media dir",
-                        )
-                        return None
-                except Exception:
-                    return None
+            local_path = _extract_local_path_from_url(url)
+            if local_path and not _is_allowed_media_path(local_path):
+                logger.warning(
+                    "Rejected local media path outside allowed media dir",
+                )
+                return None
             local_path = await download_file_from_url(
                 url,
                 filename,
@@ -131,7 +148,14 @@ def _update_block_with_local_path(
         if not block.get("filename"):
             block["filename"] = os.path.basename(local_path)
     else:
-        if block_type == "audio":
+        if block_type == "image":
+            # Keep image as local absolute path (not file://) so downstream
+            # OpenAI-compatible formatters can correctly detect local files.
+            block["source"] = {
+                "type": "url",
+                "url": str(Path(local_path).expanduser().resolve()),
+            }
+        elif block_type == "audio":
             block["source"] = {
                 "type": "url",
                 "url": Path(local_path).as_uri(),
