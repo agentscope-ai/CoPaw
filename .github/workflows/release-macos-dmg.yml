@@ -67,7 +67,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Sign app bundle: Mach-O first, then app with --deep (required on macOS 15+).
+          # Fix dirs with a period that codesign --deep treats as bundles (e.g. python3.10).
+          # Rename dir to no-dot name, then symlink original name -> it so runtime still finds it.
+          fix_dotted_dirs_for_codesign() {
+            local internal="$1"
+            [[ -d "$internal" ]] || return 0
+            local path name dir_renamed
+            for path in "$internal"/python3.* "$internal"/Python.framework; do
+              [[ -d "$path" ]] && ! [[ -L "$path" ]] || continue
+              name=$(basename "$path")
+              [[ "$name" != *.* ]] && continue
+              dir_renamed=$(dirname "$path")/${name//./}
+              [[ "$dir_renamed" != "$path" ]] && [[ ! -e "$dir_renamed" ]] || continue
+              mv "$path" "$dir_renamed"
+              ln -s "$(basename "$dir_renamed")" "$path"
+            done
+          }
+
+          # Sign app bundle: fix dotted dirs, sign all Mach-O, then app with --deep.
           sign_app_bundle() {
             local APP_DIR="$1"
             [[ -d "$APP_DIR" ]] || return 0
@@ -77,6 +94,9 @@ jobs:
             find "$APP_DIR" -type f -name "py.typed" -delete || true
             mkdir -p "$APP_DIR/Contents/Resources"
 
+            local internal="$APP_DIR/Contents/Frameworks/_internal"
+            fix_dotted_dirs_for_codesign "$internal"
+
             # 1) Sign all Mach-O binaries (dylib/so/exe) so nested code is signed
             while IFS= read -r -d '' f; do
               if /usr/bin/file -b "$f" | /usr/bin/grep -q 'Mach-O'; then
@@ -84,8 +104,7 @@ jobs:
               fi
             done < <(find "$APP_DIR" -type f -print0)
 
-            # 2) Sign the app bundle with --deep (seals nested _internal; without it,
-            #    codesign on macOS 15+ fails: "code object is not signed / In subcomponent: ... .py")
+            # 2) Sign the app bundle with --deep (seals nested _internal; required on macOS 15+)
             /usr/bin/codesign --force --sign - --timestamp=none --deep "$APP_DIR"
 
             # 3) Verify: fail the job if invalid

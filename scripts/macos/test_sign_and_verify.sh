@@ -45,6 +45,19 @@ find "$APP_DIR" -type d -name "*.dist-info" -print0 | xargs -0 rm -rf 2>/dev/nul
 find "$APP_DIR" -type f -name "py.typed" -delete 2>/dev/null || true
 mkdir -p "$APP_DIR/Contents/Resources"
 
+# Fix dirs with a period so codesign --deep does not fail (same as CI)
+internal="$APP_DIR/Contents/Frameworks/_internal"
+if [[ -d "$internal" ]]; then
+  for path in "$internal"/python3.* "$internal"/Python.framework; do
+    [[ -d "$path" ]] && ! [[ -L "$path" ]] || continue
+    name=$(basename "$path")
+    [[ "$name" != *.* ]] && continue
+    dir_renamed=$(dirname "$path")/${name//./}
+    [[ "$dir_renamed" != "$path" ]] && [[ ! -e "$dir_renamed" ]] || continue
+    mv "$path" "$dir_renamed" && ln -s "$(basename "$dir_renamed")" "$path"
+  done
+fi
+
 # 1) Sign Mach-O files only (do not exit on single failure; log and continue)
 MACHO_FAIL=0
 while IFS= read -r -d '' f; do
