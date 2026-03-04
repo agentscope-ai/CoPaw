@@ -58,16 +58,27 @@ try:
 except Exception:
     pass
 
+try:
+    _chroma_datas, _chroma_binaries, _chroma_hidden = collect_all("chromadb")
+    _chroma_datas = _chroma_datas or []
+    _chroma_binaries = _chroma_binaries or []
+    _chroma_hidden = list(_chroma_hidden or [])
+except Exception:
+    _chroma_datas = []
+    _chroma_binaries = []
+    _chroma_hidden = []
+
 a = Analysis(
     [str(_LAUNCHER)],
     pathex=[str(REPO_ROOT), str(REPO_ROOT / "src")],
-    binaries=_reme_binaries,
+    binaries=_reme_binaries + _chroma_binaries,
     datas=(
         _console_datas + _md_datas + _skills_datas + _tokenizer_datas
-        + _reme_datas + _metadata_datas
+        + _reme_datas + _metadata_datas + _chroma_datas
     ),
     hiddenimports=collect_submodules("copaw")
     + _reme_hidden
+    + _chroma_hidden
     + [
         "chromadb",
         "chromadb.config",

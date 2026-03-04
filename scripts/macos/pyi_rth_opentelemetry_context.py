@@ -48,8 +48,17 @@ _install_patch()
 
 # Pre-import chromadb after the patch so reme gets a valid module (avoids
 # chromadb=None and AttributeError on chromadb.ClientAPI when reme loads).
+# If this fails (e.g. on a different macOS than build host), surface the
+# real error so users see e.g. "Library not loaded" instead of AttributeError.
 try:
     import chromadb  # noqa: F401
     from chromadb.config import Settings  # noqa: F401
-except ImportError:
-    pass
+except Exception as _e:  # ImportError or OSError (dylib load fail)
+    import sys
+    import traceback
+
+    sys.stderr.write(
+        "CoPaw runtime hook: chromadb pre-import failed (app may crash next).\n",
+    )
+    traceback.print_exc(file=sys.stderr)
+    raise
