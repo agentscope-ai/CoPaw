@@ -57,6 +57,7 @@ def _get_token_counter():
 
 def _extract_text_from_messages(messages: list[dict]) -> str:
     """Extract text content from messages and concatenate into a string.
+    NOTE: This code is deprecated and will be removed in the future.
 
     Handles various message formats:
     - Simple string content: {"role": "user", "content": "hello"}
