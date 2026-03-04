@@ -26,7 +26,7 @@ def _local_tokenizer_root() -> Path:
             if fallback.is_dir() and (fallback / "tokenizer.json").exists():
                 return fallback
         exe_dir = Path(sys.executable).resolve().parent
-        fallback = exe_dir / "copaw" / "tokenizer"
+        fallback = exe_dir / "copaw_resources" / "tokenizer"
         if fallback.is_dir() and (fallback / "tokenizer.json").exists():
             return fallback
     return base

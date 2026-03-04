@@ -159,17 +159,17 @@ if [[ "$QUICK" != "true" ]]; then
   mkdir -p "$FRAMEWORKS"
   cp "$PYINSTALLER_OUT/$APP_NAME" "$FRAMEWORKS/$APP_NAME"
   cp -R "$PYINSTALLER_OUT/_internal" "$FRAMEWORKS/_internal"
-  # Fallback for Path(executable).parent / "copaw": exe lives in Frameworks
+  # copaw_resources avoids clash with CoPaw binary on case-insensitive FS
   SRC_COPAW="$FRAMEWORKS/_internal/copaw"
   [[ ! -d "$SRC_COPAW" ]] && SRC_COPAW="$PYINSTALLER_OUT/copaw"
   if [[ -d "$SRC_COPAW" ]]; then
-    mkdir -p "$FRAMEWORKS/copaw/agents"
+    mkdir -p "$FRAMEWORKS/copaw_resources/agents"
     [[ -d "$SRC_COPAW/agents/md_files" ]] && \
-      cp -R "$SRC_COPAW/agents/md_files" "$FRAMEWORKS/copaw/agents/"
+      cp -R "$SRC_COPAW/agents/md_files" "$FRAMEWORKS/copaw_resources/agents/"
     [[ -d "$SRC_COPAW/agents/skills" ]] && \
-      cp -R "$SRC_COPAW/agents/skills" "$FRAMEWORKS/copaw/agents/"
+      cp -R "$SRC_COPAW/agents/skills" "$FRAMEWORKS/copaw_resources/agents/"
     [[ -d "$SRC_COPAW/tokenizer" ]] && \
-      cp -R "$SRC_COPAW/tokenizer" "$FRAMEWORKS/copaw/"
+      cp -R "$SRC_COPAW/tokenizer" "$FRAMEWORKS/copaw_resources/"
   fi
   # Launcher in MacOS only: exec real binary in Frameworks
   cat > "$APP_DIR/Contents/MacOS/$APP_NAME" << 'LAUNCHER'
@@ -305,13 +305,13 @@ cp -R "$DEV_PYINSTALLER_OUT/_internal" "$FRAMEWORKS/_internal"
 SRC_COPAW="$FRAMEWORKS/_internal/copaw"
 [[ ! -d "$SRC_COPAW" ]] && SRC_COPAW="$DEV_PYINSTALLER_OUT/copaw"
 if [[ -d "$SRC_COPAW" ]]; then
-  mkdir -p "$FRAMEWORKS/copaw/agents"
+  mkdir -p "$FRAMEWORKS/copaw_resources/agents"
   [[ -d "$SRC_COPAW/agents/md_files" ]] && \
-    cp -R "$SRC_COPAW/agents/md_files" "$FRAMEWORKS/copaw/agents/"
+    cp -R "$SRC_COPAW/agents/md_files" "$FRAMEWORKS/copaw_resources/agents/"
   [[ -d "$SRC_COPAW/agents/skills" ]] && \
-    cp -R "$SRC_COPAW/agents/skills" "$FRAMEWORKS/copaw/agents/"
+    cp -R "$SRC_COPAW/agents/skills" "$FRAMEWORKS/copaw_resources/agents/"
   [[ -d "$SRC_COPAW/tokenizer" ]] && \
-    cp -R "$SRC_COPAW/tokenizer" "$FRAMEWORKS/copaw/"
+    cp -R "$SRC_COPAW/tokenizer" "$FRAMEWORKS/copaw_resources/"
 fi
 # Launcher in MacOS only: exec real binary in Frameworks
 cat > "$DEV_APP_DIR/Contents/MacOS/$DEV_APP_NAME" << 'LAUNCHER'

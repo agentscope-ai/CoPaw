@@ -61,7 +61,7 @@ def get_builtin_skills_dir() -> Path:
             if fallback.is_dir():
                 return fallback
         exe_dir = Path(sys.executable).resolve().parent
-        fallback = exe_dir / "copaw" / "agents" / "skills"
+        fallback = exe_dir / "copaw_resources" / "agents" / "skills"
         if fallback.is_dir():
             return fallback
     return base

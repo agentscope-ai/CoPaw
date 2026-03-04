@@ -29,21 +29,19 @@ def _md_files_root() -> Path:
         if fallback.is_dir():
             logger.info("md_files root: _MEIPASS path %s", fallback)
             return fallback
-    # .app layout: exe in Contents/MacOS, data in Frameworks or _internal
+    # .app layout: exe in Frameworks, data in copaw_resources or _internal
     exe_dir = Path(sys.executable).resolve().parent
-    # Contents/Frameworks/copaw/agents/md_files (build_dmg merges here)
-    frameworks = (
-        exe_dir.parent / "Frameworks" / "copaw" / "agents" / "md_files"
-    )
+    # Contents/Frameworks/copaw_resources/agents/md_files (build_dmg)
+    frameworks = exe_dir / "copaw_resources" / "agents" / "md_files"
     if frameworks.is_dir():
         logger.info("md_files root: Frameworks path %s", frameworks)
         return frameworks
-    # Contents/MacOS/_internal/copaw/agents/md_files (PyInstaller output)
+    # _internal/copaw/agents/md_files (PyInstaller output)
     internal = exe_dir / "_internal" / "copaw" / "agents" / "md_files"
     if internal.is_dir():
         logger.info("md_files root: _internal path %s", internal)
         return internal
-    fallback = exe_dir / "copaw" / "agents" / "md_files"
+    fallback = exe_dir / "copaw_resources" / "agents" / "md_files"
     if fallback.is_dir():
         logger.info("md_files root: exe_dir path %s", fallback)
         return fallback
