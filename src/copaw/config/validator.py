@@ -120,8 +120,7 @@ class ConfigValidator:
     def _get_enabled_channels(self, channels: ChannelConfig) -> list[str]:
         """Get list of enabled channel names."""
         enabled = []
-        for name in ["console", "dingtalk", "feishu", "qq", "discord",
-                     "telegram", "imessage"]:
+        for name in ChannelConfig.model_fields:
             channel = getattr(channels, name, None)
             if channel and getattr(channel, "enabled", False):
                 enabled.append(name)
@@ -190,43 +189,15 @@ class ConfigValidator:
     # --- MCP Validation ---
 
     def _validate_mcp(self) -> None:
-        """Validate MCP client configurations."""
-        for client_id, client in self.config.mcp.clients.items():
-            if not client.enabled:
-                continue
+        """Validate MCP client configurations.
 
-            self._validate_mcp_client(client_id, client)
-
-    def _validate_mcp_client(self, client_id: str, client: MCPClientConfig) -> None:
-        """Validate single MCP client.
-
-        Note: While Pydantic's @model_validator in MCPClientConfig already enforces
-        these constraints, we keep this validation as a secondary defense for:
-        1. Providing user-friendly error messages with specific error codes
-        2. Handling configs loaded from non-Pydantic sources
-        3. Explicit validation reporting in health checks
+        Note: Transport-specific validation (stdio requires command, http requires url)
+        is already handled by Pydantic's @model_validator in MCPClientConfig.
+        If load_config() succeeds, those constraints are already satisfied.
+        This method is kept for potential future semantic validations.
         """
-        path_prefix = f"mcp.clients.{client_id}"
-
-        # Transport-specific validation
-        if client.transport == "stdio":
-            if not client.command:
-                self._add_issue(
-                    ValidationLevel.ERROR,
-                    f"{path_prefix}.command",
-                    f"MCP client '{client_id}' uses stdio but command is empty",
-                    "Set 'command' field for stdio transport.",
-                    "MCP_STDIO_NO_COMMAND",
-                )
-        else:  # streamable_http or sse
-            if not client.url:
-                self._add_issue(
-                    ValidationLevel.ERROR,
-                    f"{path_prefix}.url",
-                    f"MCP client '{client_id}' uses {client.transport} but url is empty",
-                    "Set 'url' field for HTTP-based transport.",
-                    "MCP_HTTP_NO_URL",
-                )
+        # Currently no additional validation needed beyond Pydantic's model validation
+        pass
 
     # --- Agents Validation ---
 

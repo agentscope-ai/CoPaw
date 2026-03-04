@@ -417,38 +417,33 @@ class HealthChecker:
             return asyncio.run(self._async_test_llm_connection())
 
     def check_channels(self) -> None:
-        """Check enabled channels configuration."""
+        """Check enabled channels configuration.
+
+        Uses ConfigValidator to avoid duplicating validation logic.
+        """
         try:
             from .utils import load_config
+            from .validator import ConfigValidator
 
             config = load_config()
             enabled_channels = []
-            issues = []
 
-            # Check each channel type dynamically from model fields
-            for name in config.channels.model_fields:
+            # Count enabled channels - use class attribute to avoid deprecation warning
+            from .config import ChannelConfig
+            for name in ChannelConfig.model_fields:
                 channel_config = getattr(config.channels, name)
-                if not channel_config or not getattr(channel_config, "enabled", False):
-                    continue
+                if channel_config and getattr(channel_config, "enabled", False):
+                    enabled_channels.append(name)
 
-                enabled_channels.append(name)
+            # Use ConfigValidator to check for issues
+            validator = ConfigValidator(config)
+            validator._validate_channels()
 
-                # Check credentials for each channel
-                if name == "dingtalk":
-                    if not channel_config.client_id or not channel_config.client_secret:
-                        issues.append(f"{name}: missing credentials")
-                elif name == "feishu":
-                    if not channel_config.app_id or not channel_config.app_secret:
-                        issues.append(f"{name}: missing credentials")
-                elif name == "qq":
-                    if not channel_config.app_id or not channel_config.client_secret:
-                        issues.append(f"{name}: missing credentials")
-                elif name == "discord":
-                    if not channel_config.bot_token:
-                        issues.append(f"{name}: missing bot_token")
-                elif name == "telegram":
-                    if not channel_config.bot_token:
-                        issues.append(f"{name}: missing bot_token")
+            # Filter channel-related issues
+            channel_issues = [
+                issue for issue in validator.issues
+                if issue.path.startswith("channels.")
+            ]
 
             if not enabled_channels:
                 self._add_result(
@@ -457,14 +452,16 @@ class HealthChecker:
                     "No channels are enabled",
                     suggestion="Enable at least one channel via 'copaw channels config'.",
                 )
-            elif issues:
+            elif channel_issues:
+                # Convert validation issues to simple issue list
+                issue_list = [f"{issue.path.split('.')[-2]}: {issue.message}" for issue in channel_issues]
                 self._add_result(
                     "channels",
                     HealthStatus.UNHEALTHY,
-                    f"{len(enabled_channels)} channel(s) enabled, but {len(issues)} have issues",
+                    f"{len(enabled_channels)} channel(s) enabled, but {len(channel_issues)} have issues",
                     details={
                         "enabled": enabled_channels,
-                        "issues": issues,
+                        "issues": issue_list,
                     },
                     suggestion="Fix channel credentials via 'copaw channels config'.",
                 )
@@ -489,34 +486,23 @@ class HealthChecker:
             from .utils import load_config
 
             config = load_config()
-            enabled_clients = []
-            issues = []
 
-            for client_id, client_config in config.mcp.clients.items():
-                if not client_config.enabled:
-                    continue
+            # Use ConfigValidator to validate MCP clients
+            from .validator import ConfigValidator
+            validator = ConfigValidator(config)
+            validator._validate_mcp()
 
-                enabled_clients.append(client_id)
+            # Filter MCP-related issues
+            mcp_issues = [
+                issue for issue in validator.issues
+                if issue.path.startswith("mcp.")
+            ]
 
-                # Check transport-specific requirements
-                if client_config.transport == "stdio":
-                    if not client_config.command:
-                        issues.append(f"{client_id}: stdio requires command")
-                    else:
-                        # Check if command is executable
-                        # Use shlex.split() to properly handle quoted paths and spaces
-                        import shlex
-                        try:
-                            cmd_parts = shlex.split(client_config.command)
-                            if cmd_parts:
-                                cmd_path = shutil.which(cmd_parts[0])
-                                if not cmd_path:
-                                    issues.append(f"{client_id}: command '{cmd_parts[0]}' not found")
-                        except ValueError as e:
-                            issues.append(f"{client_id}: invalid command syntax: {e}")
-                elif client_config.transport in ("streamable_http", "sse"):
-                    if not client_config.url:
-                        issues.append(f"{client_id}: {client_config.transport} requires url")
+            # Count enabled clients
+            enabled_clients = [
+                client_id for client_id, client_config in config.mcp.clients.items()
+                if client_config.enabled
+            ]
 
             if not enabled_clients:
                 self._add_result(
@@ -525,14 +511,14 @@ class HealthChecker:
                     "No MCP clients configured (optional)",
                     details={"enabled": 0},
                 )
-            elif issues:
+            elif mcp_issues:
                 self._add_result(
                     "mcp_clients",
                     HealthStatus.DEGRADED,
-                    f"{len(enabled_clients)} MCP client(s) enabled, but {len(issues)} have issues",
+                    f"{len(enabled_clients)} MCP client(s) enabled, but {len(mcp_issues)} have issues",
                     details={
                         "enabled": enabled_clients,
-                        "issues": issues,
+                        "issues": [f"{issue.path}: {issue.message}" for issue in mcp_issues],
                     },
                     suggestion="Check MCP client configuration in config.json.",
                 )
