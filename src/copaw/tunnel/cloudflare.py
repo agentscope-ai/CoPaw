@@ -58,10 +58,7 @@ class CloudflareTunnelDriver:
         if self._process and self._process.returncode is None:
             await self.stop()
 
-        binary = await asyncio.get_running_loop().run_in_executor(
-            None,
-            self._binary_mgr.get_binary_path,
-        )
+        binary = await self._binary_mgr.get_binary_path()
 
         logger.info(
             "Starting cloudflared tunnel -> http://localhost:%d",

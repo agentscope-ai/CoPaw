@@ -16,7 +16,7 @@ from .feishu import FeishuChannel
 from .imessage import IMessageChannel
 from .qq import QQChannel
 from .telegram import TelegramChannel
-from .voice import VoiceChannel, VOICE_AVAILABLE
+from .voice import VoiceChannel
 
 if TYPE_CHECKING:
     pass
@@ -31,9 +31,8 @@ _BUILTIN: dict[str, type[BaseChannel]] = {
     "qq": QQChannel,
     "telegram": TelegramChannel,
     "console": ConsoleChannel,
+    "voice": VoiceChannel,
 }
-if VOICE_AVAILABLE and VoiceChannel is not None:
-    _BUILTIN["voice"] = VoiceChannel
 
 
 def _discover_custom_channels() -> dict[str, type[BaseChannel]]:

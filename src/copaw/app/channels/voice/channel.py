@@ -8,7 +8,6 @@ import secrets
 from typing import Any, Dict, Optional
 
 from ..base import BaseChannel, OnReplySent, ProcessHandler
-from ..renderer import MessageRenderer, RenderStyle
 from .session import CallSessionManager
 from .twilio_manager import TwilioManager
 
@@ -33,14 +32,6 @@ class VoiceChannel(BaseChannel):
         show_tool_details: bool = True,
     ) -> None:
         super().__init__(process, on_reply_sent, show_tool_details)
-        # Voice output should be clean speech -- no markdown, no emoji
-        self._render_style = RenderStyle(
-            show_tool_details=False,
-            supports_markdown=False,
-            supports_code_fence=False,
-            use_emoji=False,
-        )
-        self._renderer = MessageRenderer(self._render_style)
         self.session_mgr = CallSessionManager()
         self.twilio_mgr: Optional[TwilioManager] = None
         self.tunnel_mgr = None  # CloudflareTunnelDriver, set by from_config
