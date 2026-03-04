@@ -129,8 +129,8 @@ async def execute_shell_command(
 
 def smart_decode(data: bytes) -> str:
     try:
-        return data.decode("utf-8").strip("\n")
+        return data.decode("utf-8").strip("\r\n")
     except UnicodeDecodeError:
         pass
 
-    return data.decode(locale.getpreferredencoding(False), errors="replace").strip("\n")
+    return data.decode(locale.getpreferredencoding(False), errors="replace").strip("\r\n")
