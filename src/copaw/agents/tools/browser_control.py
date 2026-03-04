@@ -132,11 +132,19 @@ def _use_webkit_fallback() -> bool:
     return sys.platform == "darwin" and _chromium_executable_path() is None
 
 
+# Lazy-loaded Playwright module
+_lazy_playwright_module = None
+
 def _ensure_playwright_async():
-    """Import async_playwright; raise ImportError with hint if missing."""
+    """Import async_playwright lazily; raise ImportError with hint if missing."""
+    global _lazy_playwright_module
+    if _lazy_playwright_module is not None:
+        return _lazy_playwright_module
+    
     try:
         from playwright.async_api import async_playwright
-
+        _lazy_playwright_module = async_playwright
+        logger.debug("Playwright module loaded lazily")
         return async_playwright
     except ImportError as exc:
         raise ImportError(

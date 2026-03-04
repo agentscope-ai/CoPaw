@@ -5,6 +5,7 @@
 
 import asyncio
 import locale
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -17,7 +18,7 @@ from copaw.constant import WORKING_DIR
 # pylint: disable=too-many-branches
 async def execute_shell_command(
     command: str,
-    timeout: int = 60,
+    timeout: int = 600,
     cwd: Optional[Path] = None,
 ) -> ToolResponse:
     """Execute given command and return the return code, standard output and
@@ -27,9 +28,9 @@ async def execute_shell_command(
     Args:
         command (`str`):
             The shell command to execute.
-        timeout (`int`, defaults to `10`):
+        timeout (`int`, defaults to `600`):
             The maximum time (in seconds) allowed for the command to run.
-            Default is 60 seconds.
+            Default is 600 seconds.
         cwd (`Optional[Path]`, defaults to `None`):
             The working directory for the command execution.
             If None, defaults to WORKING_DIR.
@@ -53,6 +54,11 @@ async def execute_shell_command(
             stderr=asyncio.subprocess.PIPE,
             bufsize=0,
             cwd=str(working_dir),
+            env={
+                k: v
+                for k, v in os.environ.items()
+                if k not in {"PYTHONHOME", "PYTHONPATH"}
+            },
         )
 
         try:

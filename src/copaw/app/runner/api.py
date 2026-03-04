@@ -3,11 +3,9 @@
 from __future__ import annotations
 import json
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from agentscope.session import JSONSession
-from agentscope.memory import InMemoryMemory
 
 from .manager import ChatManager
 from .models import (
@@ -15,6 +13,9 @@ from .models import (
     ChatHistory,
 )
 from .utils import agentscope_msg_to_message
+
+if TYPE_CHECKING:
+    from agentscope.session import JSONSession
 
 
 router = APIRouter(prefix="/chats", tags=["chats"])
@@ -41,7 +42,7 @@ def get_chat_manager(request: Request) -> ChatManager:
     return mgr
 
 
-def get_session(request: Request) -> JSONSession:
+def get_session(request: Request) -> "JSONSession":
     """Get the session from app state.
 
     Args:
@@ -128,7 +129,7 @@ async def batch_delete_chats(
 async def get_chat(
     chat_id: str,
     mgr: ChatManager = Depends(get_chat_manager),
-    session: JSONSession = Depends(get_session),
+    session: "JSONSession" = Depends(get_session),
 ):
     """Get detailed information about a specific chat by UUID.
 
@@ -162,6 +163,7 @@ async def get_chat(
     except Exception:
         return ChatHistory(messages=[])
     memories = state.get("agent", {}).get("memory", [])
+    from agentscope.memory import InMemoryMemory
     memory = InMemoryMemory()
     memory.load_state_dict(memories)
 

@@ -4,8 +4,11 @@ from __future__ import annotations
 import json
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -59,6 +62,13 @@ def _discover_system_chromium_path() -> Optional[str]:
         if p.is_file():
             return str(p.resolve())
     return None
+
+
+# Config cache with TTL
+_config_cache: Optional[Config] = None
+_config_cache_time: float = 0
+_config_cache_lock = threading.Lock()
+_CONFIG_CACHE_TTL_SECONDS = 1.0  # Cache TTL: 1 second
 
 
 def get_playwright_chromium_executable_path() -> Optional[str]:
@@ -334,36 +344,117 @@ def get_heartbeat_query_path() -> Path:
     return get_config_path().parent.joinpath(HEARTBEAT_FILE)
 
 
-def load_config(config_path: Optional[Path] = None) -> Config:
-    """Load config from file. Returns default Config if file is missing."""
+def load_config(config_path: Optional[Path] = None, use_cache: bool = True) -> Config:
+    """Load config from file. Returns default Config if file is missing.
+    
+    Args:
+        config_path: Path to config file. Uses default if None.
+        use_cache: Whether to use cached config if available (default: True).
+            Set to False to force reload from disk.
+    
+    Returns:
+        Config object from cache or disk.
+    """
+    global _config_cache, _config_cache_time
+    
     if config_path is None:
         config_path = get_config_path()
+    
+    # Check cache first
+    if use_cache and config_path == get_config_path():
+        with _config_cache_lock:
+            now = time.time()
+            if _config_cache is not None and (now - _config_cache_time) < _CONFIG_CACHE_TTL_SECONDS:
+                return _config_cache
+    
+    # Load from disk
     if not config_path.is_file():
-        return Config()
-    with open(config_path, "r", encoding="utf-8") as file:
-        data = json.load(file)
-    # Backward compat: top-level last_api_host / last_api_port -> last_api
-    if "last_api_host" in data or "last_api_port" in data:
-        la = data.setdefault("last_api", {})
-        if "host" not in la and "last_api_host" in data:
-            la["host"] = data.get("last_api_host")
-        if "port" not in la and "last_api_port" in data:
-            la["port"] = data.get("last_api_port")
-    return Config.model_validate(data)
+        config = Config()
+    else:
+        with open(config_path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        # Backward compat: top-level last_api_host / last_api_port -> last_api
+        if "last_api_host" in data or "last_api_port" in data:
+            la = data.setdefault("last_api", {})
+            if "host" not in la and "last_api_host" in data:
+                la["host"] = data.get("last_api_host")
+            if "port" not in la and "last_api_port" in data:
+                la["port"] = data.get("last_api_port")
+        config = Config.model_validate(data)
+    
+    # Update cache
+    if config_path == get_config_path():
+        with _config_cache_lock:
+            _config_cache = config
+            _config_cache_time = time.time()
+    
+    return config
 
 
-def save_config(config: Config, config_path: Optional[Path] = None) -> None:
-    """Save the config to the file."""
+def invalidate_config_cache() -> None:
+    """Invalidate the config cache. Call this after modifying config."""
+    global _config_cache, _config_cache_time
+    with _config_cache_lock:
+        _config_cache = None
+        _config_cache_time = 0
+
+
+def save_config(config: Config, config_path: Optional[Path] = None, create_backup: bool = True) -> None:
+    """Save the config to the file, with optional backup of existing config.
+
+    Args:
+        config: The config object to save
+        config_path: Path to save to (defaults to WORKING_DIR/config.json)
+        create_backup: If True and config file exists, create a .bak backup first
+    """
     if config_path is None:
         config_path = get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_path, "w", encoding="utf-8") as file:
-        json.dump(
-            config.model_dump(mode="json", by_alias=True),
-            file,
-            indent=2,
-            ensure_ascii=False,
-        )
+
+    # Ensure parent directory exists
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise IOError(f"Failed to create config directory {config_path.parent}: {e}")
+
+    # Create backup of existing config if requested
+    if create_backup and config_path.is_file():
+        backup_path = config_path.with_suffix(config_path.suffix + ".bak")
+        try:
+            shutil.copy2(config_path, backup_path)
+        except OSError as e:
+            # Log warning but continue - backup is not critical
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to create config backup: {e}")
+
+    # Write config atomically (write to temp file then rename)
+    temp_path = config_path.with_suffix(config_path.suffix + ".tmp")
+    try:
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump(
+                config.model_dump(mode="json", by_alias=True),
+                file,
+                indent=2,
+                ensure_ascii=False,
+            )
+            # Ensure data is flushed to disk
+            file.flush()
+            os.fsync(file.fileno())
+
+        # Atomic rename
+        temp_path.replace(config_path)
+    except Exception as e:
+        # Clean up temp file on failure
+        if temp_path.is_file():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+        raise IOError(f"Failed to save config to {config_path}: {e}")
+    
+    # Invalidate cache after successful save
+    if config_path == get_config_path():
+        invalidate_config_cache()
 
 
 def get_heartbeat_config() -> HeartbeatConfig:

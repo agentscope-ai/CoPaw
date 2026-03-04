@@ -28,7 +28,6 @@ from .setup_utils import copy_md_files
 
 # Token counting
 from .token_counting import (
-    _get_token_counter,
     count_message_tokens,
     safe_count_message_tokens,
     safe_count_str_tokens,
@@ -55,7 +54,6 @@ __all__ = [
     # Setup utilities
     "copy_md_files",
     # Token counting
-    "_get_token_counter",
     "count_message_tokens",
     "safe_count_message_tokens",
     "safe_count_str_tokens",

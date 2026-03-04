@@ -1,11 +1,12 @@
-# -*- coding: utf-8 -*-
-"""CLI skill: list and interactively enable/disable skills."""
 from __future__ import annotations
 
 import click
+from typing import Optional, List
 
 from ..agents.skills_manager import SkillService, list_available_skills
-from .utils import prompt_checkbox, prompt_confirm
+from ..config.utils import load_config, save_config
+from ..config.config import SkillsConfig
+from .utils import prompt_checkbox, prompt_confirm, prompt_choice
 
 
 # pylint: disable=too-many-branches
@@ -98,6 +99,95 @@ def configure_skills_interactive() -> None:
     click.echo("\n✓ Skills configuration updated!")
 
 
+def configure_skills_registration() -> None:
+    """Configure skills registration filtering (which skills the agent loads at startup)."""
+    # Load current config
+    config = load_config()
+    skills_config = getattr(config, 'skills', SkillsConfig())
+    
+    click.echo("\n=== Skills Registration Configuration ===")
+    click.echo("Configure which skills are loaded when the agent starts.\n")
+    
+    # Current status
+    current_enabled = skills_config.enabled or []
+    current_strict = skills_config.strict_mode
+    
+    click.echo(f"Current configuration:")
+    click.echo(f"  Enabled skills: {current_enabled if current_enabled else 'All skills'}")
+    click.echo(f"  Strict mode: {current_strict}\n")
+    
+    # Choose action
+    action = prompt_choice(
+        "What would you like to do?",
+        [
+            ("Keep current configuration", "keep"),
+            ("Enable specific skills only", "specific"),
+            ("Enable all skills", "all"),
+            ("Toggle strict mode", "strict"),
+        ],
+    )
+    
+    if action == "keep":
+        click.echo("Configuration unchanged.")
+        return
+    
+    new_enabled: Optional[List[str]] = None
+    new_strict: bool = current_strict
+    
+    if action == "specific":
+        # Get all available skills
+        all_skills = SkillService.list_all_skills()
+        if not all_skills:
+            click.echo("No skills found.")
+            return
+            
+        skill_names = [s.name for s in all_skills]
+        current_selection = set(current_enabled) if current_enabled else set(skill_names)
+        
+        options = [(name, name) for name in sorted(skill_names)]
+        
+        selected = prompt_checkbox(
+            "Select skills to register at startup:",
+            options=options,
+            checked=current_selection,
+            select_all_option=True,
+        )
+        
+        if selected is None:
+            click.echo("Cancelled.")
+            return
+            
+        new_enabled = list(selected) if selected else None
+        
+    elif action == "all":
+        new_enabled = None  # None means "all skills"
+        
+    elif action == "strict":
+        new_strict = not current_strict
+        new_enabled = current_enabled  # Keep current enabled list
+        
+    # Preview changes
+    click.echo(f"\nNew configuration:")
+    click.echo(f"  Enabled skills: {new_enabled if new_enabled else 'All skills'}")
+    click.echo(f"  Strict mode: {new_strict}")
+    
+    if prompt_confirm("\nApply changes?", default=True):
+        # Update config
+        config.skills = SkillsConfig(enabled=new_enabled, strict_mode=new_strict)
+        save_config(config)
+        click.echo("✓ Skills registration configuration updated!")
+        
+        # Show impact
+        if new_enabled is not None and new_strict:
+            click.echo(f"Agent will load only these {len(new_enabled)} skills at startup.")
+        elif new_enabled is not None:
+            click.echo(f"Agent will prioritize these {len(new_enabled)} skills.")
+        else:
+            click.echo("Agent will load all available skills at startup.")
+    else:
+        click.echo("Cancelled. No changes made.")
+
+
 @click.group("skills")
 def skills_group() -> None:
     """Manage skills (list / configure)."""
@@ -137,3 +227,9 @@ def list_cmd() -> None:
 @skills_group.command("config")
 def configure_cmd() -> None:
     configure_skills_interactive()
+
+
+@skills_group.command("registration")
+def registration_cmd() -> None:
+    """Configure which skills are loaded at agent startup."""
+    configure_skills_registration()

@@ -53,7 +53,6 @@ def _chmod_best_effort(path: Path, mode: int) -> None:
     try:
         os.chmod(path, mode)
     except OSError:
-        # Some systems/filesystems may not support chmod semantics.
         pass
 
 
@@ -259,8 +258,51 @@ def _ensure_all_providers(providers: dict[str, ProviderSettings]) -> None:
 # -- Load / Save --
 
 
-def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
-    """Load providers.json, creating/repairing as needed."""
+def _migrate_from_package_dir() -> Optional[dict]:
+    """Migrate providers.json from package directory to working directory.
+
+    Returns the migrated data if migration happened, None otherwise.
+    """
+    new_path = get_providers_json_path()
+    if new_path.is_file():
+        return None  # Already migrated
+
+    # Check old location (package directory)
+    old_path = Path(__file__).resolve().parent / "providers.json"
+    if not old_path.is_file():
+        return None  # No old config to migrate
+
+    try:
+        with open(old_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+
+        # Migrate to new location
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(new_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+
+        # Remove old file after successful migration
+        old_path.unlink()
+
+        return data
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def load_providers_json(
+    path: Optional[Path] = None,
+    persist: bool = True,
+    sync_runtime_models: bool = True,
+) -> ProvidersData:
+    """Load providers.json.
+
+    Args:
+        path: providers.json path (defaults to WORKING_DIR/providers.json)
+        persist: If True, normalize/migrate and write back to disk.
+            If False, read-only mode with no file rewrite.
+        sync_runtime_models: If True, refresh local/ollama model lists from
+            runtime before returning. Set False for lightweight startup paths.
+    """
     if path is None:
         path = get_providers_json_path()
         _migrate_legacy_providers_json(path)
@@ -273,7 +315,14 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
     custom_providers: dict[str, CustomProviderData] = {}
     active_llm = ModelSlotConfig()
 
-    if path.is_file():
+    # Try to migrate from old package directory location (write path only).
+    migrated_data = _migrate_from_package_dir() if persist else None
+    if migrated_data is not None:
+        if "providers" in migrated_data and isinstance(migrated_data["providers"], dict):
+            providers, custom_providers, active_llm = _parse_new_format(migrated_data)
+        else:
+            providers, custom_providers, active_llm = _parse_legacy_format(migrated_data)
+    elif path.is_file():
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 raw: dict = json.load(fh)
@@ -287,10 +336,28 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
                 )
         except (json.JSONDecodeError, ValueError):
             providers = {}
+    elif not persist:
+        # Read-only fallback: if a legacy file exists, read it without migration.
+        old_path = Path(__file__).resolve().parent / "providers.json"
+        if old_path.is_file():
+            try:
+                with open(old_path, "r", encoding="utf-8") as fh:
+                    raw: dict = json.load(fh)
+                if "providers" in raw and isinstance(raw["providers"], dict):
+                    providers, custom_providers, active_llm = _parse_new_format(
+                        raw,
+                    )
+                else:
+                    providers, custom_providers, active_llm = _parse_legacy_format(
+                        raw,
+                    )
+            except (json.JSONDecodeError, ValueError):
+                providers = {}
 
     sync_custom_providers(custom_providers)
-    sync_local_models()
-    sync_ollama_models()
+    if sync_runtime_models:
+        sync_local_models()
+        sync_ollama_models()
     _ensure_all_providers(providers)
 
     data = ProvidersData(
@@ -299,14 +366,23 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
         active_llm=active_llm,
     )
     _validate_active_llm(data)
-    save_providers_json(data, path)
+    if persist:
+        save_providers_json(data, path)
     return data
 
 
 def save_providers_json(
     data: ProvidersData,
     path: Optional[Path] = None,
+    create_backup: bool = True,
 ) -> None:
+    """Save providers.json with atomic write and optional backup.
+
+    Args:
+        data: The providers data to save
+        path: Path to save to (defaults to WORKING_DIR/providers.json)
+        create_backup: If True and file exists, create a .bak backup first
+    """
     if path is None:
         path = get_providers_json_path()
         _migrate_legacy_providers_json(path)
@@ -315,6 +391,14 @@ def save_providers_json(
             f"providers.json path exists but is not a regular file: {path}",
         )
     _prepare_secret_parent(path)
+
+    # Create backup of existing config if requested
+    if create_backup and path.is_file():
+        backup_path = path.with_suffix(path.suffix + ".bak")
+        try:
+            shutil.copy2(path, backup_path)
+        except OSError as e:
+            logger.warning(f"Failed to create providers.json backup: {e}")
 
     out: dict = {
         "providers": {
@@ -327,9 +411,28 @@ def save_providers_json(
         },
         "active_llm": data.active_llm.model_dump(mode="json"),
     }
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(out, fh, indent=2, ensure_ascii=False)
-    _chmod_best_effort(path, 0o600)
+    # Write atomically (write to temp file then rename)
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with open(temp_path, "w", encoding="utf-8") as fh:
+            json.dump(out, fh, indent=2, ensure_ascii=False)
+            fh.flush()
+            os.fsync(fh.fileno())
+        temp_path.replace(path)
+        _chmod_best_effort(path, 0o600)
+        logger.info(
+            "Saved providers.json: path=%s active_provider=%s active_model=%s",
+            path,
+            data.active_llm.provider_id or "",
+            data.active_llm.model or "",
+        )
+    except Exception as e:
+        if temp_path.is_file():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+        raise IOError(f"Failed to save providers.json to {path}: {e}")
 
 
 # -- Mutators --
@@ -342,6 +445,12 @@ def update_provider_settings(
     base_url: Optional[str] = None,
 ) -> ProvidersData:
     """Partially update a provider's settings. Returns updated state."""
+    logger.info(
+        "Updating provider settings: provider=%s api_key_input=%s base_url_input=%s",
+        provider_id,
+        api_key is not None,
+        base_url is not None,
+    )
     data = load_providers_json()
     cpd = data.custom_providers.get(provider_id)
 
@@ -369,13 +478,16 @@ def update_provider_settings(
         data.active_llm = ModelSlotConfig()
 
     save_providers_json(data)
+    logger.info("Provider settings persisted: provider=%s", provider_id)
     return data
 
 
 def set_active_llm(provider_id: str, model: str) -> ProvidersData:
+    logger.info("Persisting active LLM: provider=%s model=%s", provider_id, model)
     data = load_providers_json()
     data.active_llm = ModelSlotConfig(provider_id=provider_id, model=model)
     save_providers_json(data)
+    logger.info("Active LLM persisted: provider=%s model=%s", provider_id, model)
     return data
 
 

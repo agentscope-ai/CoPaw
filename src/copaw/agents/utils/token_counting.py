@@ -3,56 +3,44 @@
 
 This module provides token counting functionality for estimating
 message token usage with Qwen tokenizer.
+
+Uses the ``tokenizers`` Rust library directly to avoid pulling in the
+heavy ``transformers`` + ``onnxruntime`` stack (~142 MB).
 """
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_token_counter = None
+_tokenizer = None
 
 
-def _get_token_counter():
-    """Get or initialize the global token counter instance.
+def _get_tokenizer():
+    """Get or initialize the global tokenizer instance.
 
-    Returns:
-        TokenCounterBase: The token counter instance for Qwen models.
-
-    Raises:
-        RuntimeError: If token counter initialization fails.
+    Returns a ``tokenizers.Tokenizer`` loaded from the bundled
+    ``tokenizer.json`` (Qwen2.5).
     """
-    global _token_counter
-    if _token_counter is None:
-        from agentscope.token import HuggingFaceTokenCounter
+    global _tokenizer
+    if _tokenizer is not None:
+        return _tokenizer
 
-        # Use Qwen tokenizer for DashScope models
-        # Qwen3 series uses the same tokenizer as Qwen2.5
+    from tokenizers import Tokenizer
 
-        # Try local tokenizer first, fall back to online if not found
-        local_tokenizer_path = (
-            Path(__file__).parent.parent.parent / "tokenizer"
+    local_tokenizer_json = (
+        Path(__file__).parent.parent.parent / "tokenizer" / "tokenizer.json"
+    )
+
+    if local_tokenizer_json.exists():
+        logger.info("Using local Qwen tokenizer from %s", local_tokenizer_json.parent)
+        _tokenizer = Tokenizer.from_file(str(local_tokenizer_json))
+    else:
+        logger.warning(
+            "Local tokenizer.json not found at %s, "
+            "falling back to character estimation",
+            local_tokenizer_json,
         )
-
-        if (
-            local_tokenizer_path.exists()
-            and (local_tokenizer_path / "tokenizer.json").exists()
-        ):
-            tokenizer_path = str(local_tokenizer_path)
-            logger.info(f"Using local Qwen tokenizer from {tokenizer_path}")
-        else:
-            tokenizer_path = "Qwen/Qwen2.5-7B-Instruct"
-            logger.info(
-                "Local tokenizer not found, downloading from HuggingFace",
-            )
-
-        _token_counter = HuggingFaceTokenCounter(
-            pretrained_model_name_or_path=tokenizer_path,
-            use_mirror=True,  # Use HF mirror for users in China
-            use_fast=True,
-            trust_remote_code=True,
-        )
-        logger.debug("Token counter initialized with Qwen tokenizer")
-    return _token_counter
+    return _tokenizer
 
 
 def _extract_text_from_messages(messages: list[dict]) -> str:
@@ -104,10 +92,12 @@ async def count_message_tokens(
     Raises:
         RuntimeError: If token counter fails to initialize.
     """
-    token_counter = _get_token_counter()
+    tokenizer = _get_tokenizer()
     text = _extract_text_from_messages(messages)
-    token_ids = token_counter.tokenizer.encode(text)
-    token_count = len(token_ids)
+    if tokenizer is None:
+        return len(text) // 4
+    encoding = tokenizer.encode(text)
+    token_count = len(encoding.ids)
     logger.debug(
         "Counted %d tokens in %d messages",
         token_count,
@@ -158,9 +148,11 @@ def safe_count_str_tokens(text: str) -> int:
         int: The estimated number of tokens in the string.
     """
     try:
-        token_counter = _get_token_counter()
-        token_ids = token_counter.tokenizer.encode(text)
-        token_count = len(token_ids)
+        tokenizer = _get_tokenizer()
+        if tokenizer is None:
+            return len(text) // 4
+        encoding = tokenizer.encode(text)
+        token_count = len(encoding.ids)
         logger.debug(
             "Counted %d tokens in string of length %d",
             token_count,

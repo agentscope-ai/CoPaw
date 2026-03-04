@@ -160,7 +160,8 @@ class ChannelManager:
         config: "Config",
         on_last_dispatch: OnLastDispatch = None,
     ) -> "ChannelManager":
-        """Create channels from config (config.json)."""
+        """Create channels from config (config.json).
+        Only creates channels with enabled=True to reduce startup time."""
         available = get_available_channels()
         ch = config.channels
         show_tool_details = getattr(config, "show_tool_details", True)
@@ -180,6 +181,14 @@ class ChannelManager:
                 )
             if ch_cfg is None:
                 continue
+            
+            # Skip disabled channels to reduce startup time
+            is_enabled = getattr(ch_cfg, "enabled", False)
+            if not is_enabled:
+                logger.debug("Skipping disabled channel: %s", key)
+                continue
+            
+            logger.info("Creating channel: %s (enabled)", key)
             if key == "console":
                 channels.append(
                     ch_cls.from_config(
@@ -205,6 +214,7 @@ class ChannelManager:
                         filter_tool_messages=filter_tool_messages,
                     ),
                 )
+        logger.info("ChannelManager created with %d enabled channels", len(channels))
         return cls(channels)
 
     def _make_enqueue_cb(self, channel_id: str) -> Callable[[Any], None]:

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Path
@@ -29,6 +31,7 @@ from ...providers import (
 )
 
 router = APIRouter(prefix="/models", tags=["models"])
+logger = logging.getLogger(__name__)
 
 
 class ProviderConfigRequest(BaseModel):
@@ -100,7 +103,17 @@ def _build_provider_info(
     summary="List all providers",
 )
 async def list_all_providers() -> List[ProviderInfo]:
-    data = load_providers_json()
+    # Keep startup health checks read-only: don't rewrite providers.json
+    # when desktop app probes /api/models for readiness.
+    is_desktop_app = os.environ.get("COPAW_DESKTOP_APP", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    data = load_providers_json(
+        persist=False,
+        sync_runtime_models=not is_desktop_app,
+    )
     return [_build_provider_info(p, data) for p in list_providers()]
 
 
@@ -115,6 +128,7 @@ async def configure_provider(
 ) -> ProviderInfo:
     provider = get_provider(provider_id)
     if provider is None:
+        logger.warning("Provider config update rejected: unknown provider '%s'", provider_id)
         raise HTTPException(404, detail=f"Provider '{provider_id}' not found")
 
     # Allow base_url for custom providers, providers without a default
@@ -124,13 +138,37 @@ async def configure_provider(
         or not provider.default_base_url
         or provider.id == "ollama"
     )
-    base_url = body.base_url if allow_base_url else None
-    data = update_provider_settings(
+    logger.info(
+        "Provider config update requested: provider=%s api_key_input=%s base_url_input=%s",
         provider_id,
-        api_key=body.api_key,
-        base_url=base_url,
+        body.api_key is not None,
+        body.base_url is not None,
     )
-    return _build_provider_info(provider, data)
+    base_url = body.base_url if allow_base_url else None
+    try:
+        data = update_provider_settings(
+            provider_id,
+            api_key=body.api_key,
+            base_url=base_url,
+        )
+    except Exception:
+        logger.exception(
+            "Provider config update failed: provider=%s",
+            provider_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save provider configuration.",
+        )
+
+    info = _build_provider_info(provider, data)
+    logger.info(
+        "Provider config updated: provider=%s configured=%s base_url_set=%s",
+        provider_id,
+        info.has_api_key,
+        bool(info.current_base_url),
+    )
+    return info
 
 
 @router.post(
@@ -288,8 +326,17 @@ async def get_active_models() -> ActiveModelsInfo:
 async def set_active_model(
     body: ModelSlotRequest = Body(...),
 ) -> ActiveModelsInfo:
+    logger.info(
+        "Active LLM update requested: provider=%s model=%s",
+        body.provider_id,
+        body.model,
+    )
     provider = get_provider(body.provider_id)
     if provider is None:
+        logger.warning(
+            "Active LLM update rejected: unknown provider '%s'",
+            body.provider_id,
+        )
         raise HTTPException(
             404,
             detail=f"Provider '{body.provider_id}' not found",
@@ -322,11 +369,33 @@ async def set_active_model(
                 f"Provider '{provider.name}' has no API key configured. "
                 "Please configure the API key first."
             )
-            raise HTTPException(status_code=400, detail=msg)
+        logger.warning(
+            "Active LLM update rejected: provider not configured: provider=%s",
+            body.provider_id,
+        )
+        raise HTTPException(status_code=400, detail=msg)
     # Local providers (llama.cpp, mlx) don't need validation
 
     if not body.model:
+        logger.warning(
+            "Active LLM update rejected: empty model for provider=%s",
+            body.provider_id,
+        )
         raise HTTPException(status_code=400, detail="Model is required.")
 
-    data = set_active_llm(body.provider_id, body.model)
+    try:
+        data = set_active_llm(body.provider_id, body.model)
+    except Exception:
+        logger.exception(
+            "Active LLM update failed during persistence: provider=%s model=%s",
+            body.provider_id,
+            body.model,
+        )
+        raise HTTPException(status_code=500, detail="Failed to save active LLM.")
+
+    logger.info(
+        "Active LLM updated: provider=%s model=%s",
+        body.provider_id,
+        body.model,
+    )
     return ActiveModelsInfo(active_llm=data.active_llm)

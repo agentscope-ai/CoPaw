@@ -60,8 +60,16 @@ def app_cmd(
     hide_access_paths: tuple[str, ...],
 ) -> None:
     """Run CoPaw FastAPI app."""
-    # Persist last used host/port for other terminals
-    write_last_api(host, port)
+    # Desktop sidecar startup should read existing config without rewriting it.
+    # Keep CLI behavior unchanged for non-desktop runs.
+    is_desktop_app = os.environ.get("COPAW_DESKTOP_APP", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if not is_desktop_app:
+        # Persist last used host/port for other terminals
+        write_last_api(host, port)
     os.environ[LOG_LEVEL_ENV] = log_level
     setup_logger(log_level)
     if log_level in ("debug", "trace"):

@@ -193,6 +193,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   private lsKey: string;
   private sessionList: IAgentScopeRuntimeWebUISession[];
   private fetchPromise: Promise<IAgentScopeRuntimeWebUISession[]> | null = null;
+  private firstSessionListReady = false;
+  private firstSessionListReadyPromise: Promise<void>;
+  private resolveFirstSessionListReady: (() => void) | null = null;
   private lastFetchTime: number = 0;
   private cacheTimeout: number = 5000;
 
@@ -209,6 +212,26 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   constructor() {
     this.lsKey = "agent-scope-runtime-webui-sessions";
     this.sessionList = [];
+    this.firstSessionListReadyPromise = new Promise<void>((resolve) => {
+      this.resolveFirstSessionListReady = resolve;
+    });
+  }
+
+  private markFirstSessionListReady(): void {
+    if (this.firstSessionListReady) return;
+    this.firstSessionListReady = true;
+    if (this.resolveFirstSessionListReady) {
+      this.resolveFirstSessionListReady();
+      this.resolveFirstSessionListReady = null;
+    }
+  }
+
+  async waitForFirstSessionList(timeoutMs: number = 15000): Promise<void> {
+    if (this.firstSessionListReady) return;
+    await Promise.race([
+      this.firstSessionListReadyPromise,
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
   }
 
   private createEmptySession(sessionId: string): ExtendedSession {
@@ -252,6 +275,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       this.sessionList.length > 0 &&
       now - this.lastFetchTime < this.cacheTimeout
     ) {
+      this.markFirstSessionListReady();
       return [...this.sessionList];
     }
 
@@ -276,9 +300,11 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       this.sessionList = validChats.map(chatSpecToSession).reverse();
       localStorage.setItem(this.lsKey, JSON.stringify(this.sessionList));
       this.lastFetchTime = Date.now();
+      this.markFirstSessionListReady();
       return [...this.sessionList];
     } catch (error) {
       this.sessionList = JSON.parse(localStorage.getItem(this.lsKey) || "[]");
+      this.markFirstSessionListReady();
       return [...this.sessionList];
     }
   }

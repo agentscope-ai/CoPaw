@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Channel registry: built-in + custom channels from working dir."""
+"""Channel registry: built-in + custom channels from working dir.
+
+Channel classes are lazily imported to avoid pulling in heavy SDKs
+(e.g. lark_oapi ~1.7s) at module load time.
+"""
 from __future__ import annotations
 
 import importlib
@@ -9,28 +13,47 @@ from typing import TYPE_CHECKING
 
 from ...constant import CUSTOM_CHANNELS_DIR
 from .base import BaseChannel
-from .console import ConsoleChannel
-from .dingtalk import DingTalkChannel
-from .discord_ import DiscordChannel
-from .feishu import FeishuChannel
-from .imessage import IMessageChannel
-from .qq import QQChannel
-from .telegram import TelegramChannel
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
 
-_BUILTIN: dict[str, type[BaseChannel]] = {
-    "imessage": IMessageChannel,
-    "discord": DiscordChannel,
-    "dingtalk": DingTalkChannel,
-    "feishu": FeishuChannel,
-    "qq": QQChannel,
-    "telegram": TelegramChannel,
-    "console": ConsoleChannel,
+# Lazy channel mapping: key -> (module_path, class_name)
+# Channels are only imported when actually needed.
+_BUILTIN_LAZY: dict[str, tuple[str, str]] = {
+    "imessage": (".imessage", "IMessageChannel"),
+    "discord": (".discord_", "DiscordChannel"),
+    "dingtalk": (".dingtalk", "DingTalkChannel"),
+    "feishu": (".feishu", "FeishuChannel"),
+    "qq": (".qq", "QQChannel"),
+    "telegram": (".telegram", "TelegramChannel"),
+    "console": (".console", "ConsoleChannel"),
 }
+
+# Cache for resolved channel classes
+_resolved_channels: dict[str, type[BaseChannel]] = {}
+
+
+def _resolve_channel(key: str) -> type[BaseChannel] | None:
+    """Lazily import and cache a built-in channel class."""
+    if key in _resolved_channels:
+        return _resolved_channels[key]
+
+    entry = _BUILTIN_LAZY.get(key)
+    if entry is None:
+        return None
+
+    module_path, class_name = entry
+    try:
+        mod = importlib.import_module(module_path, package=__package__)
+        cls = getattr(mod, class_name)
+        _resolved_channels[key] = cls
+        logger.debug("Lazily loaded channel: %s -> %s", key, class_name)
+        return cls
+    except Exception:
+        logger.exception("Failed to lazily load channel: %s", key)
+        return None
 
 
 def _discover_custom_channels() -> dict[str, type[BaseChannel]]:
@@ -61,18 +84,35 @@ def _discover_custom_channels() -> dict[str, type[BaseChannel]]:
                 and issubclass(obj, BaseChannel)
                 and obj is not BaseChannel
             ):
-                key = getattr(obj, "channel", None)
-                if key:
-                    out[key] = obj
-                    logger.debug("custom channel registered: %s", key)
+                channel_key = getattr(obj, "channel", None)
+                if channel_key:
+                    out[channel_key] = obj
+                    logger.debug("custom channel registered: %s", channel_key)
     return out
 
 
-BUILTIN_CHANNEL_KEYS = frozenset(_BUILTIN.keys())
+BUILTIN_CHANNEL_KEYS = frozenset(_BUILTIN_LAZY.keys())
 
 
 def get_channel_registry() -> dict[str, type[BaseChannel]]:
-    """Built-in channel classes + custom channels from custom_channels/."""
-    out = dict(_BUILTIN)
+    """Built-in channel classes + custom channels from custom_channels/.
+    
+    Built-in channels are resolved lazily on first access.
+    """
+    out: dict[str, type[BaseChannel]] = {}
+    for key in _BUILTIN_LAZY:
+        cls = _resolve_channel(key)
+        if cls is not None:
+            out[key] = cls
     out.update(_discover_custom_channels())
     return out
+
+
+def get_channel_class(key: str) -> type[BaseChannel] | None:
+    """Get a single channel class by key (lazy, no full registry scan)."""
+    cls = _resolve_channel(key)
+    if cls is not None:
+        return cls
+    # Fallback: check custom channels
+    custom = _discover_custom_channels()
+    return custom.get(key)

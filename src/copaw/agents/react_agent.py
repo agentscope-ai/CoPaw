@@ -205,29 +205,103 @@ class CoPawAgent(ReActAgent):
         return toolkit
 
     def _register_skills(self, toolkit: Toolkit) -> None:
-        """Load and register skills from working directory.
+        """Load and register skills from working directory based on config.
 
         Args:
             toolkit: Toolkit to register skills to
         """
+        from ..config.utils import load_config
+        
         # Check skills initialization
         ensure_skills_initialized()
 
         working_skills_dir = get_working_skills_dir()
         available_skills = list_available_skills()
+        
+        if not available_skills:
+            logger.warning("No skills found in active_skills directory")
+            return
+            
+        # Get skills configuration
+        try:
+            config = load_config()
+            skills_config = getattr(config, 'skills', None)
+        except Exception as e:
+            logger.warning(f"Failed to load skills config, registering all skills: {e}")
+            skills_config = None
+        
+        # Determine which skills to register
+        skills_to_register = []
+        
+        if skills_config and skills_config.enabled is not None:
+            # Config specifies enabled skills
+            enabled_skills = set(skills_config.enabled)
+            
+            if skills_config.strict_mode:
+                # Strict mode: only register explicitly enabled skills
+                skills_to_register = [s for s in available_skills if s in enabled_skills]
+                logger.info(
+                    "Skills filtering (strict mode): %d enabled out of %d available",
+                    len(skills_to_register), len(available_skills)
+                )
+                if skills_to_register:
+                    logger.debug("Enabled skills: %s", ", ".join(skills_to_register))
+            else:
+                # Non-strict mode: register all available skills (default behavior)
+                skills_to_register = list(available_skills)
+                logger.info(
+                    "Skills filtering (non-strict mode): registering all %d available skills",
+                    len(skills_to_register)
+                )
+        else:
+            # No skills config or no enabled list: register all skills (backward compatibility)
+            skills_to_register = list(available_skills)
+            logger.info(
+                "Skills filtering: no config found, registering all %d available skills",
+                len(skills_to_register)
+            )
 
-        for skill_name in available_skills:
+        if not skills_to_register:
+            logger.warning("No skills to register (configuration resulted in empty list)")
+            return
+
+        # Register the selected skills
+        registered_count = 0
+        failed_skills = []
+        
+        for skill_name in skills_to_register:
             skill_dir = working_skills_dir / skill_name
             if skill_dir.exists():
                 try:
                     toolkit.register_agent_skill(str(skill_dir))
                     logger.debug("Registered skill: %s", skill_name)
+                    registered_count += 1
                 except Exception as e:
                     logger.error(
                         "Failed to register skill '%s': %s",
                         skill_name,
                         e,
                     )
+                    failed_skills.append(skill_name)
+            else:
+                logger.warning(
+                    "Skill directory not found: %s (expected at %s)",
+                    skill_name,
+                    skill_dir
+                )
+        
+        # Log summary
+        success_rate = (registered_count / len(skills_to_register)) * 100 if skills_to_register else 0
+        logger.info(
+            "Skills registration completed: %d/%d successful (%.1f%%)",
+            registered_count, len(skills_to_register), success_rate
+        )
+        
+        if failed_skills:
+            logger.warning(
+                "Failed to register %d skills: %s",
+                len(failed_skills), ", ".join(failed_skills)
+            )
 
     def _build_sys_prompt(self) -> str:
         """Build system prompt from working dir files and env context.

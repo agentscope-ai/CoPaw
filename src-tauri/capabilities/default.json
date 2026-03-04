@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/capability/2",
+  "identifier": "default",
+  "description": "Default capabilities for CoPaw desktop app",
+  "windows": ["main", "splash"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        {
+          "path": "$RESOURCE/**",
+          "sidecar": true
+        }
+      ]
+    }
+  ]
+}

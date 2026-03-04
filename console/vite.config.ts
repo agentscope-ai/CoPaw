@@ -5,7 +5,8 @@ import path from "path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   // Empty = same-origin; frontend and backend served together, no hardcoded host.
-  const apiBaseUrl = env.BASE_URL ?? "";
+  // Use a dedicated var to avoid collisions with system BASE_URL.
+  const apiBaseUrl = env.VITE_API_BASE_URL ?? "";
 
   return {
     define: {

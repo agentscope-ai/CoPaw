@@ -14,8 +14,6 @@ from urllib.parse import urlencode, urlparse, unquote
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-import frontmatter
-
 from .skills_manager import SkillService
 
 logger = logging.getLogger(__name__)
@@ -475,6 +473,7 @@ def _normalize_bundle(
         name = ""
     if not name:
         try:
+            import frontmatter
             post = frontmatter.loads(content)
             name = post.get("name", "")
         except Exception:

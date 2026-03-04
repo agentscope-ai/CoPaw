@@ -6,12 +6,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, List, Optional, Type
 
-from agentscope.model import ChatModelBase
-
 from .models import CustomProviderData, ModelInfo, ProviderDefinition
 from .openai_chat_model_compat import OpenAIChatModelCompat
 
 if TYPE_CHECKING:
+    from agentscope.model import ChatModelBase, OpenAIChatModel
     from .models import ProvidersData
 
 MODELSCOPE_MODELS: List[ModelInfo] = [
@@ -306,12 +305,21 @@ def sync_ollama_models() -> None:
         pass
 
 
-_CHAT_MODEL_MAP: dict[str, Type[ChatModelBase]] = {
-    "OpenAIChatModel": OpenAIChatModelCompat,
-}
+_CHAT_MODEL_MAP: Optional[dict] = None
 
 
-def get_chat_model_class(chat_model_name: str) -> Type[ChatModelBase]:
+def _get_chat_model_map() -> dict:
+    """Lazily build the chat model map."""
+    global _CHAT_MODEL_MAP
+    if _CHAT_MODEL_MAP is None:
+        from agentscope.model import ChatModelBase, OpenAIChatModel
+        _CHAT_MODEL_MAP = {
+            "OpenAIChatModel": OpenAIChatModel,
+        }
+    return _CHAT_MODEL_MAP
+
+
+def get_chat_model_class(chat_model_name: str) -> "Type[ChatModelBase]":
     """Get chat model class by name.
 
     Args:
@@ -320,4 +328,6 @@ def get_chat_model_class(chat_model_name: str) -> Type[ChatModelBase]:
     Returns:
         Chat model class, defaults to OpenAIChatModel-compatible parser.
     """
-    return _CHAT_MODEL_MAP.get(chat_model_name, OpenAIChatModelCompat)
+    from agentscope.model import OpenAIChatModel
+    model_map = _get_chat_model_map()
+    return model_map.get(chat_model_name, OpenAIChatModel)

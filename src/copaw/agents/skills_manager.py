@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
-import frontmatter
 
 from ..constant import ACTIVE_SKILLS_DIR, CUSTOMIZED_SKILLS_DIR
 
@@ -569,6 +568,7 @@ class SkillService:
         """
         # Validate SKILL.md content has required YAML Front Matter
         try:
+            import frontmatter
             post = frontmatter.loads(content)
             skill_name = post.get("name", None)
             skill_description = post.get("description", None)

@@ -249,6 +249,15 @@ class MCPConfig(BaseModel):
     )
 
 
+class SkillsConfig(BaseModel):
+    """Skills configuration for selective enabling/disabling."""
+    
+    # List of skill names to enable. If None or empty, enables all skills.
+    enabled: Optional[List[str]] = None
+    # When True, only explicitly enabled skills are loaded (strict mode)
+    strict_mode: bool = False
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
@@ -256,6 +265,7 @@ class Config(BaseModel):
     mcp: MCPConfig = MCPConfig()
     last_api: LastApiConfig = LastApiConfig()
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
     # When False, channel output hides tool call/result details (show "...").
     show_tool_details: bool = True

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoPaw</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 12px;
+        }
+
+        .progress-wrap {
+            width: 320px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.22);
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #8be9fd 0%, #50fa7b 100%);
+            transition: width 220ms ease;
+        }
+
+        .progress-text {
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.85;
+        }
+
+        .version {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🐾 CoPaw</div>
+        <div class="spinner"></div>
+        <p class="status" id="status">Starting backend services...</p>
+        <div class="progress-wrap">
+            <div class="progress-bar" id="progress"></div>
+        </div>
+        <div class="progress-text" id="progress-text">0%</div>
+    </div>
+    <div class="version">v0.0.4</div>
+    <script>
+      (() => {
+        const statusEl = document.getElementById("status");
+        const progressEl = document.getElementById("progress");
+        const progressTextEl = document.getElementById("progress-text");
+        const spinnerEl = document.querySelector(".spinner");
+
+        window.__COPAW_SPLASH_UPDATE = (progress, status) => {
+          const value = Math.max(0, Math.min(100, Number(progress) || 0));
+          if (statusEl && status) statusEl.textContent = status;
+          if (progressEl) progressEl.style.width = `${value}%`;
+          if (progressTextEl) progressTextEl.textContent = `${Math.round(value)}%`;
+        };
+
+        window.__COPAW_SPLASH_ERROR = (message) => {
+          if (statusEl) {
+            statusEl.textContent = `Failed to start: ${message}`;
+            statusEl.style.color = "#ff6b6b";
+          }
+          if (spinnerEl) spinnerEl.style.display = "none";
+        };
+      })();
+    </script>
+</body>
+</html>

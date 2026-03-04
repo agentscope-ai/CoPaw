@@ -11,8 +11,6 @@ import asyncio
 import logging
 from typing import Any, Dict, List, TYPE_CHECKING
 
-from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
-
 if TYPE_CHECKING:
     from ...config.config import MCPClientConfig, MCPConfig
 
@@ -195,6 +193,7 @@ class MCPClientManager:
             "env": dict(client_config.env),
             "cwd": client_config.cwd or None,
         }
+        from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 
         if client_config.transport == "stdio":
             client = StdIOStatefulClient(

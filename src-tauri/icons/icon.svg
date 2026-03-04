@@ -1,0 +1,11 @@
+<!-- Placeholder icon - replace with actual icons -->
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="28" fill="url(#gradient)"/>
+  <text x="64" y="85" text-anchor="middle" font-size="60" fill="white">🐾</text>
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#667EEA"/>
+      <stop offset="1" stop-color="#764BA2"/>
+    </linearGradient>
+  </defs>
+</svg>

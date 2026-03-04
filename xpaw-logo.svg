@@ -1,0 +1,47 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+
+    <!-- 爪子渐变 -->
+    <linearGradient id="pawGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#e0e7ff"/>
+    </linearGradient>
+
+    <!-- 阴影 -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Mac App 圆角矩形背景 -->
+  <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="url(#bgGradient)"/>
+
+  <!-- X 图形 (背景装饰) -->
+  <g opacity="0.2">
+    <line x1="120" y1="120" x2="392" y2="392" stroke="white" stroke-width="40" stroke-linecap="round"/>
+    <line x1="392" y1="120" x2="120" y2="392" stroke="white" stroke-width="40" stroke-linecap="round"/>
+  </g>
+
+  <!-- 爪子主体 - 居中偏下 -->
+  <g filter="url(#shadow)" transform="translate(256, 280)">
+    <!-- 主掌心 -->
+    <ellipse cx="0" cy="40" rx="65" ry="55" fill="url(#pawGradient)"/>
+
+    <!-- 四个脚趾 -->
+    <ellipse cx="-55" cy="-35" rx="32" ry="42" fill="url(#pawGradient)"/>
+    <ellipse cx="-18" cy="-55" rx="32" ry="45" fill="url(#pawGradient)"/>
+    <ellipse cx="18" cy="-55" rx="32" ry="45" fill="url(#pawGradient)"/>
+    <ellipse cx="55" cy="-35" rx="32" ry="42" fill="url(#pawGradient)"/>
+  </g>
+
+  <!-- 小 X 装饰在爪子上方 -->
+  <g transform="translate(256, 140)">
+    <line x1="-25" y1="-25" x2="25" y2="25" stroke="white" stroke-width="18" stroke-linecap="round" opacity="0.95"/>
+    <line x1="25" y1="-25" x2="-25" y2="25" stroke="white" stroke-width="18" stroke-linecap="round" opacity="0.95"/>
+  </g>
+</svg>

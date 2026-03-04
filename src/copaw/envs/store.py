@@ -53,7 +53,6 @@ def _chmod_best_effort(path: Path, mode: int) -> None:
     try:
         os.chmod(path, mode)
     except OSError:
-        # Some systems/filesystems may not support chmod semantics.
         pass
 
 

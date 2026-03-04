@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoPaw</title>
+  <style>
+    :root {
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --bg-3: #1d4ed8;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --err: #ef4444;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      color: var(--text);
+      background: radial-gradient(1200px 700px at -20% -20%, #334155 0%, transparent 60%),
+        radial-gradient(1200px 700px at 120% 120%, var(--bg-3) 0%, transparent 58%),
+        linear-gradient(140deg, var(--bg-1), var(--bg-2));
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .blob {
+      position: fixed;
+      filter: blur(80px);
+      opacity: 0.28;
+      border-radius: 999px;
+      pointer-events: none;
+      animation: drift 8s ease-in-out infinite alternate;
+    }
+
+    .blob.a {
+      width: 320px;
+      height: 320px;
+      background: #38bdf8;
+      top: -40px;
+      left: -60px;
+    }
+
+    .blob.b {
+      width: 360px;
+      height: 360px;
+      background: #22c55e;
+      bottom: -120px;
+      right: -80px;
+      animation-delay: 1.2s;
+    }
+
+    @keyframes drift {
+      from {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+
+      to {
+        transform: translate3d(24px, -18px, 0) scale(1.08);
+      }
+    }
+
+    .card {
+      width: min(620px, 92vw);
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.58);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      box-shadow: 0 30px 90px rgba(2, 6, 23, 0.5);
+      backdrop-filter: blur(8px);
+      padding: 28px 28px 22px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      font-size: 32px;
+      font-weight: 760;
+      letter-spacing: -0.03em;
+    }
+
+    .elapsed {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status {
+      font-size: 15px;
+      margin-bottom: 12px;
+      min-height: 22px;
+    }
+
+    .progress-wrap {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.2);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #38bdf8 0%, #22c55e 75%);
+      transition: width 180ms ease-out;
+      position: relative;
+    }
+
+    .progress-bar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 45%, transparent 100%);
+      transform: translateX(-100%);
+      animation: sweep 1.3s linear infinite;
+    }
+
+    @keyframes sweep {
+      to {
+        transform: translateX(100%);
+      }
+    }
+
+    .meta {
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .stages {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stage {
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 10px;
+      padding: 8px 9px;
+      font-size: 11px;
+      color: var(--muted);
+      transition: all 180ms ease;
+    }
+
+    .stage.active {
+      border-color: rgba(56, 189, 248, 0.58);
+      color: #bae6fd;
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .stage.done {
+      border-color: rgba(34, 197, 94, 0.55);
+      color: #bbf7d0;
+      background: rgba(34, 197, 94, 0.11);
+    }
+
+    .hint {
+      margin-top: 14px;
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .error {
+      margin-top: 14px;
+      color: #fecaca;
+      font-size: 13px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    .actions {
+      margin-top: 10px;
+      display: none;
+    }
+
+    .btn {
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(15, 23, 42, 0.45);
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      background: rgba(15, 23, 42, 0.72);
+    }
+
+    .version {
+      position: fixed;
+      right: 16px;
+      bottom: 12px;
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.58);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="blob a"></div>
+  <div class="blob b"></div>
+
+  <div class="card">
+    <div class="top">
+      <div class="brand">CoPaw</div>
+      <div class="elapsed" id="elapsed">00:00</div>
+    </div>
+    <p class="status" id="status">Starting backend services...</p>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress"></div>
+    </div>
+    <div class="meta">
+      <span id="phase">Preparing runtime</span>
+      <span id="progress-text">0%</span>
+    </div>
+    <div class="stages" id="stages">
+      <div class="stage" data-step="0">Check runtime</div>
+      <div class="stage" data-step="1">Launch backend</div>
+      <div class="stage" data-step="2">Health checks</div>
+      <div class="stage" data-step="3">Open workspace</div>
+    </div>
+    <div class="hint" id="hint">Loading configuration and preparing environment...</div>
+    <div class="error" id="error"></div>
+    <div class="actions" id="actions">
+      <button class="btn" id="retry">Retry</button>
+    </div>
+  </div>
+  <div class="version">v0.0.4</div>
+  <script>
+    (() => {
+      const statusEl = document.getElementById("status");
+      const progressEl = document.getElementById("progress");
+      const progressTextEl = document.getElementById("progress-text");
+      const hintEl = document.getElementById("hint");
+      const phaseEl = document.getElementById("phase");
+      const errorEl = document.getElementById("error");
+      const elapsedEl = document.getElementById("elapsed");
+      const actionsEl = document.getElementById("actions");
+      const retryBtn = document.getElementById("retry");
+      const stageEls = Array.from(document.querySelectorAll(".stage"));
+
+      const locale = (navigator.language || "en").toLowerCase().startsWith("zh")
+        ? "zh"
+        : "en";
+      const I18N = {
+        en: {
+          statusStarting: "Starting backend services...",
+          statusFailed: "Backend startup failed",
+          phaseDefault: "Starting",
+          stageLabels: ["Check runtime", "Launch backend", "Health checks", "Open workspace"],
+          hints: [
+            "Loading configuration and preparing environment...",
+            "Starting background services...",
+            "Establishing API channels...",
+            "Final checks before entering workspace...",
+          ],
+          longWait: "Still warming up backend services. Please wait...",
+          retry: "Retry",
+          unknown: "Unknown error",
+          statusMap: {
+            "Checking backend status...": "Checking backend status...",
+            "Stopping stale backend instance...": "Stopping stale backend instance...",
+            "Clearing occupied port 8088...": "Clearing occupied port 8088...",
+            "Launching backend process...": "Launching backend process...",
+            "Backend process started. Initializing...": "Backend process started. Initializing...",
+            "Waiting for backend services...": "Waiting for backend services...",
+            "Backend core ready, verifying UI...": "Backend core ready, verifying UI...",
+            "Backend ready. Opening CoPaw...": "Backend ready. Opening CoPaw...",
+            "Preparing runtime files (first launch)...": "Preparing runtime files (first launch)...",
+            "Runtime files ready.": "Runtime files ready.",
+          },
+        },
+        zh: {
+          statusStarting: "正在启动后端服务...",
+          statusFailed: "后端启动失败",
+          phaseDefault: "正在启动",
+          stageLabels: ["检查运行环境", "启动后端进程", "健康检查", "进入工作区"],
+          hints: [
+            "正在加载配置并准备运行环境...",
+            "正在启动后台服务...",
+            "正在建立 API 通道...",
+            "正在完成最后检查...",
+          ],
+          longWait: "后端仍在预热，请稍候...",
+          retry: "重试",
+          unknown: "未知错误",
+          statusMap: {
+            "Checking backend status...": "正在检查后端状态...",
+            "Stopping stale backend instance...": "正在停止旧的后端实例...",
+            "Clearing occupied port 8088...": "正在清理被占用的 8088 端口...",
+            "Launching backend process...": "正在启动后端进程...",
+            "Backend process started. Initializing...": "后端已启动，正在初始化...",
+            "Waiting for backend services...": "正在等待后端服务就绪...",
+            "Backend core ready, verifying UI...": "后端核心服务已就绪，正在验证界面...",
+            "Backend ready. Opening CoPaw...": "后端已就绪，正在打开 CoPaw...",
+            "Preparing runtime files (first launch)...": "正在准备运行环境文件（首次启动）...",
+            "Runtime files ready.": "运行环境文件已就绪。",
+          },
+        },
+      };
+      const L = I18N[locale];
+      const hints = L.hints;
+      const localizeStatus = (text) => L.statusMap[text] || text;
+      let hintIndex = 0;
+
+      stageEls.forEach((el, idx) => {
+        el.textContent = L.stageLabels[idx] || el.textContent;
+      });
+      if (phaseEl) phaseEl.textContent = L.stageLabels[0];
+      if (statusEl) statusEl.textContent = L.statusStarting;
+      if (hintEl) hintEl.textContent = L.hints[0];
+      if (retryBtn) retryBtn.textContent = L.retry;
+
+      const startAt = Date.now();
+      let current = 0;
+      let target = 0;
+      let failed = false;
+      let lastNativeUpdate = Date.now();
+
+      const stageByProgress = (p) => {
+        if (p < 15) return 0;
+        if (p < 40) return 1;
+        if (p < 97) return 2;
+        return 3;
+      }
+
+      const renderStage = (p) => {
+        const active = stageByProgress(p);
+        stageEls.forEach((el, idx) => {
+          el.classList.remove("active", "done");
+          if (idx < active) el.classList.add("done");
+          if (idx === active) el.classList.add("active");
+        });
+        const phaseText = stageEls[active]?.textContent || L.phaseDefault;
+        if (phaseEl) phaseEl.textContent = phaseText;
+      }
+
+      const renderProgress = () => {
+        const value = Math.max(0, Math.min(100, current));
+        if (progressEl) progressEl.style.width = `${value.toFixed(1)}%`;
+        if (progressTextEl) progressTextEl.textContent = `${Math.round(value)}%`;
+        renderStage(value);
+      }
+
+      window.__COPAW_SPLASH_ERROR = (message) => {
+        failed = true;
+        if (statusEl) {
+          statusEl.textContent = L.statusFailed;
+          statusEl.style.color = "var(--err)";
+        }
+        if (errorEl) {
+          errorEl.style.display = "block";
+          errorEl.textContent = String(message || L.unknown);
+        }
+        if (actionsEl) actionsEl.style.display = "block";
+      };
+
+      window.__COPAW_SPLASH_UPDATE = (progress, status) => {
+        lastNativeUpdate = Date.now();
+        const value = Math.max(0, Math.min(100, Number(progress) || 0));
+        target = Math.max(target, value);
+        if (statusEl && status) statusEl.textContent = localizeStatus(status);
+      };
+
+      retryBtn?.addEventListener("click", () => window.location.reload());
+
+      setInterval(() => {
+        if (failed) return;
+        // Keep UI moving even if native updates are sparse.
+        if (Date.now() - lastNativeUpdate > 1200 && target < 92) {
+          target = Math.min(92, target + 0.4);
+        }
+        if (current < target) {
+          current = Math.min(target, current + Math.max(0.15, (target - current) * 0.18));
+        } else if (current > target) {
+          current = target;
+        }
+        renderProgress();
+      }, 80);
+
+      setInterval(() => {
+        if (failed) return;
+        hintIndex = (hintIndex + 1) % hints.length;
+        if (hintEl) hintEl.textContent = hints[hintIndex];
+      }, 2400);
+
+      setInterval(() => {
+        const sec = Math.floor((Date.now() - startAt) / 1000);
+        const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+        const ss = String(sec % 60).padStart(2, "0");
+        if (elapsedEl) elapsedEl.textContent = `${mm}:${ss}`;
+        if (!failed && sec >= 25 && hintEl) {
+          hintEl.textContent = L.longWait;
+        }
+      }, 300);
+
+      // initial paint
+      renderProgress();
+      renderStage(0);
+      if (statusEl) {
+        statusEl.textContent = L.statusStarting;
+      };
+    })();
+  </script>
+</body>
+
+</html>

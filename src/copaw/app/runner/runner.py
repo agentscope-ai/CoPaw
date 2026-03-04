@@ -5,19 +5,21 @@ import json
 import logging
 from pathlib import Path
 
-from agentscope.pipeline import stream_printing_messages
 from agentscope_runtime.engine.runner import Runner
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from dotenv import load_dotenv
+
+from typing import TYPE_CHECKING
 
 from .query_error_dump import write_query_error_dump
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
-from ...agents.memory import MemoryManager
-from ...agents.react_agent import CoPawAgent
 from ...config import load_config
 from ...constant import WORKING_DIR
+
+if TYPE_CHECKING:
+    from ...agents.memory import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,9 @@ class AgentRunner(Runner):
         self._chat_manager = None  # Store chat_manager reference
         self._mcp_manager = None  # MCP client manager for hot-reload
 
-        self.memory_manager: MemoryManager | None = None
+        self.memory_manager: "MemoryManager | None" = None
+        self._memory_manager_init_task: asyncio.Task | None = None
+        self._is_desktop_app = False
 
     def set_chat_manager(self, chat_manager):
         """Set chat manager for auto-registration.
@@ -97,6 +101,11 @@ class AgentRunner(Runner):
             max_iters = config.agents.running.max_iters
             max_input_length = config.agents.running.max_input_length
 
+            # Ensure MemoryManager is initialized before creating agent
+            await self._ensure_memory_manager()
+
+            from ...agents.react_agent import CoPawAgent
+
             agent = CoPawAgent(
                 env_context=env_context,
                 mcp_clients=mcp_clients,
@@ -138,6 +147,8 @@ class AgentRunner(Runner):
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
             # in the session state.
             agent.rebuild_sys_prompt()
+
+            from agentscope.pipeline import stream_printing_messages
 
             async for msg, last in stream_printing_messages(
                 agents=[agent],
@@ -199,20 +210,47 @@ class AgentRunner(Runner):
         session_dir = str(WORKING_DIR / "sessions")
         self.session = SafeJSONSession(save_dir=session_dir)
 
+        # MemoryManager is now fully deferred to first query to minimize startup time.
+        # The import and instantiation happen in _ensure_memory_manager() on first access.
+        logger.info("[startup] MemoryManager initialization deferred to first query")
+
+    async def _ensure_memory_manager(self) -> None:
+        """Lazy initialize MemoryManager on first access.
+
+        This method is called before any operation that needs memory_manager.
+        It handles both the import (which pulls in heavy deps like reme)
+        and the async start() call.
+        """
+        if self.memory_manager is not None:
+            return
+
+        from ...agents.memory import MemoryManager
+
+        logger.info("[runtime] Initializing MemoryManager on first access...")
         try:
-            if self.memory_manager is None:
-                self.memory_manager = MemoryManager(
-                    working_dir=str(WORKING_DIR),
-                )
+            self.memory_manager = MemoryManager(working_dir=str(WORKING_DIR))
             await self.memory_manager.start()
+            logger.info("[runtime] MemoryManager initialized successfully")
         except Exception as e:
-            logger.exception(f"MemoryManager start failed: {e}")
+            logger.exception(f"[runtime] MemoryManager initialization failed: {e}")
+            # Don't raise - let the caller decide if memory is critical
+            # Some operations can work without memory manager
+
+    def set_desktop_mode(self, is_desktop: bool):
+        """Set desktop mode to enable lazy initialization."""
+        self._is_desktop_app = is_desktop
 
     async def shutdown_handler(self, *args, **kwargs):
         """
         Shutdown handler.
         """
+        # MemoryManager is now initialized on-demand, so it may never have been created
+        if self.memory_manager is None:
+            logger.debug("[shutdown] MemoryManager was never initialized, skipping cleanup")
+            return
+
         try:
             await self.memory_manager.close()
+            logger.debug("[shutdown] MemoryManager closed successfully")
         except Exception as e:
-            logger.warning(f"MemoryManager stop failed: {e}")
+            logger.warning(f"[shutdown] MemoryManager stop failed: {e}")

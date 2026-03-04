@@ -1,5 +1,17 @@
 import { getApiUrl, getApiToken } from "./config";
 
+function buildDesktopFallbackUrl(path: string, isGet: boolean): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const rawUrl = `http://127.0.0.1:8088/api${normalizedPath}`;
+  if (!isGet) return rawUrl;
+  const sep = rawUrl.includes("?") ? "&" : "?";
+  return `${rawUrl}${sep}_ts=${Date.now()}`;
+}
+
+function shouldRetryDesktop(url: string): boolean {
+  return !url.startsWith("http://127.0.0.1:8088/");
+}
+
 function buildHeaders(method?: string, extra?: HeadersInit): Headers {
   // Normalize extra to a Headers instance for consistent handling
   const headers = extra instanceof Headers ? extra : new Headers(extra);
@@ -25,22 +37,56 @@ export async function request<T = unknown>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const url = getApiUrl(path);
   const method = options.method || "GET";
+  const isGet = method.toUpperCase() === "GET";
+  const rawUrl = getApiUrl(path);
+  const url = isGet
+    ? (() => {
+        const sep = rawUrl.includes("?") ? "&" : "?";
+        return `${rawUrl}${sep}_ts=${Date.now()}`;
+      })()
+    : rawUrl;
   const headers = buildHeaders(method, options.headers);
 
-  const response = await fetch(url, {
+  const fetchOptions: RequestInit = {
     ...options,
     headers,
-  });
+    cache: isGet ? "no-store" : options.cache,
+  };
+  let response: Response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (err) {
+    if (!shouldRetryDesktop(url)) {
+      throw err;
+    }
+    response = await fetch(buildDesktopFallbackUrl(path, isGet), fetchOptions);
+  }
 
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Request failed: ${response.status} ${response.statusText}${
-        text ? ` - ${text}` : ""
-      }`,
-    );
+    if (shouldRetryDesktop(url) && response.status >= 400) {
+      const fallbackRes = await fetch(
+        buildDesktopFallbackUrl(path, isGet),
+        fetchOptions,
+      );
+      if (fallbackRes.ok) {
+        response = fallbackRes;
+      } else {
+        const text = await fallbackRes.text().catch(() => "");
+        throw new Error(
+          `Request failed: ${fallbackRes.status} ${fallbackRes.statusText}${
+            text ? ` - ${text}` : ""
+          }`,
+        );
+      }
+    } else {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Request failed: ${response.status} ${response.statusText}${
+          text ? ` - ${text}` : ""
+        }`,
+      );
+    }
   }
 
   if (response.status === 204) {

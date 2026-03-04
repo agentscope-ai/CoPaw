@@ -2,8 +2,8 @@ import {
   AgentScopeRuntimeWebUI,
   IAgentScopeRuntimeWebUIOptions,
 } from "@agentscope-ai/chat";
-import { useMemo, useState } from "react";
-import { Modal, Button, Result } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Button, Result, Spin } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -29,6 +29,7 @@ export default function ChatPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [showModelPrompt, setShowModelPrompt] = useState(false);
+  const [bootLoading, setBootLoading] = useState(true);
   const [optionsConfig] = useLocalStorageState<OptionsConfig>(
     "agent-scope-runtime-webui-options",
     {
@@ -45,6 +46,31 @@ export default function ChatPage() {
   const handleSkipConfiguration = () => {
     setShowModelPrompt(false);
   };
+
+  useEffect(() => {
+    let disposed = false;
+    const startedAt = Date.now();
+
+    const preload = async () => {
+      // 主动预加载会话列表，不依赖组件库触发
+      await sessionApi.getSessionList();
+
+      const elapsed = Date.now() - startedAt;
+      const minVisible = 500;
+      const rest = Math.max(0, minVisible - elapsed);
+      if (rest > 0) {
+        await new Promise((resolve) => setTimeout(resolve, rest));
+      }
+      if (!disposed) {
+        setBootLoading(false);
+      }
+    };
+
+    preload();
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const options = useMemo(() => {
     const handleModelError = () => {
@@ -138,8 +164,30 @@ export default function ChatPage() {
     } as unknown as IAgentScopeRuntimeWebUIOptions;
   }, [optionsConfig]);
 
+  if (bootLoading) {
+    return (
+      <div
+        style={{
+          height: "100%",
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(245, 247, 250, 0.98)",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 14, color: "#3e4466", fontSize: 14 }}>
+            {t("common.loading")}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ height: "100%", width: "100%" }}>
+    <div style={{ height: "100%", width: "100%", position: "relative" }}>
       <AgentScopeRuntimeWebUI options={options} />
 
       <Modal open={showModelPrompt} closable={false} footer={null} width={480}>

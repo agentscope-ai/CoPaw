@@ -17,6 +17,7 @@ cookbook/_build
 dist/
 # Console frontend build (generated in Docker/CI, do not commit)
 src/copaw/console/dist/
+src/copaw/console/assets/
 
 # frontend (website)
 website/node_modules/
@@ -48,6 +49,8 @@ config.json
 *.sw?
 
 # Logs
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -70,11 +73,16 @@ Desktop.ini
 uv.lock
 venv/
 .venv/
-providers.json
+.venv-*/
+.build-env/
 
-# Logs
-logs/
-*.log
+# PyInstaller build artifacts
+desktop/pyinstaller/build/
+desktop/pyinstaller/dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/binaries/
 
 # vibe coding
 .claude
