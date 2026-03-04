@@ -50,11 +50,7 @@ export function ProviderConfigModal({
       return provider.chat_model;
     }
     return selectedChatModel || provider.chat_model || "OpenAIChatModel";
-  }, [
-    provider.chat_model,
-    provider.is_custom,
-    selectedChatModel,
-  ]);
+  }, [provider.chat_model, provider.is_custom, selectedChatModel]);
 
   const apiKeyExtra = useMemo(() => {
     if (provider.current_api_key) {
@@ -355,10 +351,7 @@ export function ProviderConfigModal({
           }
           extra={baseUrlExtra}
         >
-          <Input
-            placeholder={baseUrlPlaceholder}
-            disabled={!canEditBaseUrl}
-          />
+          <Input placeholder={baseUrlPlaceholder} disabled={!canEditBaseUrl} />
         </Form.Item>
 
         {/* API Key */}

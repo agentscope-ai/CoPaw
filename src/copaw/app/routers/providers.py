@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Path
 from pydantic import BaseModel, Field
@@ -31,11 +31,13 @@ from ...providers import (
 
 router = APIRouter(prefix="/models", tags=["models"])
 
+ChatModelName = Literal["OpenAIChatModel", "AnthropicChatModel"]
+
 
 class ProviderConfigRequest(BaseModel):
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
-    chat_model: Optional[str] = Field(
+    chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Chat model class name for protocol selection",
     )
@@ -51,7 +53,7 @@ class CreateCustomProviderRequest(BaseModel):
     name: str = Field(...)
     default_base_url: str = Field(default="")
     api_key_prefix: str = Field(default="")
-    chat_model: str = Field(default="OpenAIChatModel")
+    chat_model: ChatModelName = Field(default="OpenAIChatModel")
     models: List[ModelInfo] = Field(default_factory=list)
 
 
@@ -187,7 +189,7 @@ class TestProviderRequest(BaseModel):
         default=None,
         description="Optional Base URL to test",
     )
-    chat_model: Optional[str] = Field(
+    chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Optional chat model class to test protocol behavior",
     )
@@ -206,7 +208,7 @@ class DiscoverModelsRequest(BaseModel):
         default=None,
         description="Optional Base URL to use for discovery",
     )
-    chat_model: Optional[str] = Field(
+    chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Optional chat model class to use for discovery",
     )

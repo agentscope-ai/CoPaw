@@ -61,10 +61,7 @@ export const providerApi = {
 
   /* ---- Test Connection ---- */
 
-  testProviderConnection: (
-    providerId: string,
-    body?: TestProviderRequest,
-  ) =>
+  testProviderConnection: (providerId: string, body?: TestProviderRequest) =>
     request<TestConnectionResponse>(
       `/models/${encodeURIComponent(providerId)}/test`,
       {
@@ -82,10 +79,7 @@ export const providerApi = {
       },
     ),
 
-  discoverModels: (
-    providerId: string,
-    body?: TestProviderRequest,
-  ) =>
+  discoverModels: (providerId: string, body?: TestProviderRequest) =>
     request<DiscoverModelsResponse>(
       `/models/${encodeURIComponent(providerId)}/discover`,
       {

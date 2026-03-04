@@ -62,10 +62,10 @@ export function RemoteProviderCard({
     provider.id === "ollama"
       ? !!provider.current_base_url
       : provider.is_local
-        ? true
-        : provider.is_custom
-          ? !!provider.current_base_url
-          : !!provider.current_api_key;
+      ? true
+      : provider.is_custom
+      ? !!provider.current_base_url
+      : !!provider.current_api_key;
   const hasModels = totalCount > 0;
   const isAvailable = isConfigured && hasModels;
 
@@ -82,19 +82,23 @@ export function RemoteProviderCard({
   const statusLabel = isAvailable
     ? t("models.providerAvailable")
     : isConfigured
-      ? t("models.providerNoModels")
-      : t("models.providerNotConfigured");
-  const statusType = isAvailable ? "enabled" : isConfigured ? "partial" : "disabled";
+    ? t("models.providerNoModels")
+    : t("models.providerNotConfigured");
+  const statusType = isAvailable
+    ? "enabled"
+    : isConfigured
+    ? "partial"
+    : "disabled";
   const statusDotColor = isAvailable
     ? "#52c41a"
     : isConfigured
-      ? "#faad14"
-      : "#d9d9d9";
+    ? "#faad14"
+    : "#d9d9d9";
   const statusDotShadow = isAvailable
     ? "0 0 0 2px rgba(82, 196, 26, 0.2)"
     : isConfigured
-      ? "0 0 0 2px rgba(250, 173, 20, 0.2)"
-      : "none";
+    ? "0 0 0 2px rgba(250, 173, 20, 0.2)"
+    : "none";
 
   return (
     <Card
@@ -126,8 +130,8 @@ export function RemoteProviderCard({
                 statusType === "enabled"
                   ? styles.enabled
                   : statusType === "partial"
-                    ? styles.partial
-                    : styles.disabled
+                  ? styles.partial
+                  : styles.disabled
               }`}
             >
               {statusLabel}

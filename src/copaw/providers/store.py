@@ -89,6 +89,7 @@ def _migrate_legacy_providers_json(path: Path) -> None:
             )
             continue
 
+
 _SUPPORTED_CHAT_MODELS: frozenset[str] = frozenset(
     ["OpenAIChatModel", "AnthropicChatModel"],
 )
@@ -120,7 +121,9 @@ def _resolve_chat_model_name(
 ) -> str:
     if chat_model is not None:
         return _normalize_chat_model_name(chat_model)
-    return _normalize_chat_model_name(get_provider_chat_model(provider_id, data))
+    return _normalize_chat_model_name(
+        get_provider_chat_model(provider_id, data),
+    )
 
 
 def _uses_anthropic_protocol(
@@ -188,10 +191,7 @@ def _build_remote_provider_headers(
     if json_body:
         headers["Content-Type"] = "application/json"
 
-    if (
-        provider_id == "anthropic"
-        or chat_model_name == "AnthropicChatModel"
-    ):
+    if provider_id == "anthropic" or chat_model_name == "AnthropicChatModel":
         headers["anthropic-version"] = "2023-06-01"
         if api_key:
             headers["x-api-key"] = api_key
@@ -711,6 +711,7 @@ def _merge_discovered_models(
     return added_count
 
 
+# pylint: disable=R0911,R0912,R0915
 async def discover_provider_models(
     provider_id: str,
     api_key: Optional[str] = None,
@@ -893,9 +894,7 @@ async def discover_provider_models(
             continue
         model_name = (
             str(
-                row.get("name")
-                or row.get("display_name")
-                or model_id,
+                row.get("name") or row.get("display_name") or model_id,
             ).strip()
             or model_id
         )
