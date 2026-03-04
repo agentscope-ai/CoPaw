@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
+
+WireApi = Literal["chat_completions", "responses"]
 
 
 class ModelInfo(BaseModel):
@@ -49,6 +51,14 @@ class ProviderSettings(BaseModel):
         description="Chat model class name (e.g., 'OpenAIChatModel'). "
         "If empty, uses ProviderDefinition default.",
     )
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional HTTP headers to attach to model requests.",
+    )
+    wire_api: WireApi = Field(
+        default="chat_completions",
+        description="Wire API style for OpenAI-compatible providers.",
+    )
 
 
 class CustomProviderData(BaseModel):
@@ -68,6 +78,14 @@ class CustomProviderData(BaseModel):
     chat_model: str = Field(
         default="OpenAIChatModel",
         description="Chat model class name (e.g., 'OpenAIChatModel')",
+    )
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional HTTP headers to attach to model requests.",
+    )
+    wire_api: WireApi = Field(
+        default="chat_completions",
+        description="Wire API style for OpenAI-compatible providers.",
     )
 
 
@@ -92,6 +110,21 @@ class ProvidersData(BaseModel):
             return cpd.base_url or cpd.default_base_url, cpd.api_key
         s = self.providers.get(provider_id)
         return (s.base_url, s.api_key) if s else ("", "")
+
+    def get_transport_config(
+        self,
+        provider_id: str,
+    ) -> tuple[Dict[str, str], WireApi]:
+        """Return ``(headers, wire_api)`` for *provider_id*."""
+        cpd = self.custom_providers.get(provider_id)
+        if cpd is not None:
+            return dict(cpd.headers or {}), cpd.wire_api
+
+        settings = self.providers.get(provider_id)
+        if settings is not None:
+            return dict(settings.headers or {}), settings.wire_api
+
+        return {}, "chat_completions"
 
     def is_configured(self, defn: "ProviderDefinition") -> bool:
         """Determine if a provider is configured/available.
@@ -134,6 +167,8 @@ class ProviderInfo(BaseModel):
     )
     current_api_key: str = Field(default="")
     current_base_url: str = Field(default="")
+    current_headers: Dict[str, str] = Field(default_factory=dict)
+    wire_api: str = Field(default="chat_completions")
 
 
 class ActiveModelsInfo(BaseModel):
@@ -144,4 +179,6 @@ class ResolvedModelConfig(BaseModel):
     model: str = Field(default="")
     base_url: str = Field(default="")
     api_key: str = Field(default="")
+    headers: Dict[str, str] = Field(default_factory=dict)
+    wire_api: str = Field(default="chat_completions")
     is_local: bool = Field(default=False)

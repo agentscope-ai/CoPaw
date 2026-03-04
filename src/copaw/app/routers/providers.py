@@ -21,6 +21,7 @@ from ...providers import (
     list_providers,
     load_providers_json,
     mask_api_key,
+    mask_headers,
     remove_model,
     set_active_llm,
     test_model_connection,
@@ -34,6 +35,8 @@ router = APIRouter(prefix="/models", tags=["models"])
 class ProviderConfigRequest(BaseModel):
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
+    headers: Optional[dict[str, str]] = Field(default=None)
+    wire_api: Optional[str] = Field(default=None)
 
 
 class ModelSlotRequest(BaseModel):
@@ -47,6 +50,8 @@ class CreateCustomProviderRequest(BaseModel):
     default_base_url: str = Field(default="")
     api_key_prefix: str = Field(default="")
     models: List[ModelInfo] = Field(default_factory=list)
+    headers: dict[str, str] = Field(default_factory=dict)
+    wire_api: str = Field(default="chat_completions")
 
 
 class AddModelRequest(BaseModel):
@@ -69,6 +74,8 @@ def _build_provider_info(
             is_local=True,
             current_api_key="",
             current_base_url="",
+            current_headers={},
+            wire_api="chat_completions",
         )
 
     cur_base_url, cur_api_key = data.get_credentials(provider.id)
@@ -79,6 +86,7 @@ def _build_provider_info(
         if settings and not provider.is_custom
         else []
     )
+    headers, wire_api = data.get_transport_config(provider.id)
 
     return ProviderInfo(
         id=provider.id,
@@ -91,6 +99,8 @@ def _build_provider_info(
         needs_base_url=provider.is_custom or not provider.default_base_url,
         current_api_key=mask_api_key(cur_api_key),
         current_base_url=cur_base_url,
+        current_headers=mask_headers(headers),
+        wire_api=wire_api,
     )
 
 
@@ -125,11 +135,16 @@ async def configure_provider(
         or provider.id == "ollama"
     )
     base_url = body.base_url if allow_base_url else None
-    data = update_provider_settings(
-        provider_id,
-        api_key=body.api_key,
-        base_url=base_url,
-    )
+    try:
+        data = update_provider_settings(
+            provider_id,
+            api_key=body.api_key,
+            base_url=base_url,
+            headers=body.headers,
+            wire_api=body.wire_api,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _build_provider_info(provider, data)
 
 
@@ -149,6 +164,8 @@ async def create_custom_provider_endpoint(
             default_base_url=body.default_base_url,
             api_key_prefix=body.api_key_prefix,
             models=body.models,
+            headers=body.headers,
+            wire_api=body.wire_api,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

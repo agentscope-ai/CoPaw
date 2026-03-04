@@ -16,11 +16,25 @@ from ..providers import (
     list_providers,
     load_providers_json,
     mask_api_key,
+    mask_headers,
     remove_model,
     set_active_llm,
     update_provider_settings,
 )
 from .utils import prompt_choice
+
+
+def _parse_header_pairs(values: tuple[str, ...]) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for value in values:
+        key, sep, header_value = value.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            raise ValueError(
+                f"Invalid header '{value}'. Use KEY=VALUE format.",
+            )
+        headers[key] = header_value.strip()
+    return headers
 
 
 def _select_provider_interactive(
@@ -321,6 +335,81 @@ def models_group() -> None:
     """Manage LLM models and provider configuration."""
 
 
+def _provider_tag(defn) -> str:
+    if defn.is_custom:
+        return " [custom]"
+    if defn.is_local:
+        return " [local]"
+    return ""
+
+
+def _print_local_provider_models(defn) -> None:
+    all_models = list(defn.models)
+    if all_models:
+        click.echo(f"  {'models':16s}:")
+        for model in all_models:
+            click.echo(f"    - {model.name}")
+        return
+
+    click.echo("  No models downloaded.")
+    click.echo("  Use 'copaw models download' to add models.")
+
+
+def _print_remote_provider_models(defn, settings) -> None:
+    extra = (
+        list(settings.extra_models) if settings and not defn.is_custom else []
+    )
+    all_models = list(defn.models) + extra
+    if not all_models:
+        return
+
+    click.echo(f"  {'models':16s}:")
+    for model in all_models:
+        label = " [user-added]" if model in extra else ""
+        click.echo(f"    - {model.name} ({model.id}){label}")
+
+
+def _print_remote_provider_settings(
+    defn,
+    data,
+    cur_url: str,
+    cur_key: str,
+) -> None:
+    if defn.is_custom or not defn.default_base_url:
+        click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
+    click.echo(
+        f"  {'api_key':16s}: " f"{mask_api_key(cur_key) or '(not set)'}",
+    )
+    if defn.api_key_prefix:
+        click.echo(f"  {'api_key_prefix':16s}: {defn.api_key_prefix}")
+
+    headers, wire_api = data.get_transport_config(defn.id)
+    masked_headers = mask_headers(headers)
+    click.echo(f"  {'wire_api':16s}: {wire_api}")
+    if not masked_headers:
+        return
+
+    click.echo(f"  {'headers':16s}:")
+    for key, value in masked_headers.items():
+        click.echo(f"    - {key}: {value}")
+
+
+def _print_provider_card(defn, data) -> None:
+    cur_url, cur_key = data.get_credentials(defn.id)
+    settings = data.providers.get(defn.id)
+
+    click.echo(f"\n{'─' * 44}")
+    click.echo(f"  {defn.name} ({defn.id}){_provider_tag(defn)}")
+    click.echo(f"{'─' * 44}")
+
+    if defn.is_local:
+        _print_local_provider_models(defn)
+        return
+
+    _print_remote_provider_settings(defn, data, cur_url, cur_key)
+    _print_remote_provider_models(defn, settings)
+
+
 @models_group.command("list")
 def list_cmd() -> None:
     """Show all providers and their current configuration."""
@@ -328,62 +417,19 @@ def list_cmd() -> None:
 
     click.echo("\n=== Providers ===")
     for defn in list_providers():
-        cur_url, cur_key = data.get_credentials(defn.id)
-        settings = data.providers.get(defn.id)
-
-        tag = (
-            " [custom]"
-            if defn.is_custom
-            else " [local]"
-            if defn.is_local
-            else ""
-        )
-        click.echo(f"\n{'─' * 44}")
-        click.echo(f"  {defn.name} ({defn.id}){tag}")
-        click.echo(f"{'─' * 44}")
-
-        if defn.is_local:
-            all_models = list(defn.models)
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                for m in all_models:
-                    click.echo(f"    - {m.name}")
-            else:
-                click.echo("  No models downloaded.")
-                click.echo("  Use 'copaw models download' to add models.")
-        else:
-            if defn.is_custom or not defn.default_base_url:
-                click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
-            click.echo(
-                f"  {'api_key':16s}: "
-                f"{mask_api_key(cur_key) or '(not set)'}",
-            )
-            if defn.api_key_prefix:
-                click.echo(
-                    f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
-                )
-
-            extra = (
-                list(settings.extra_models)
-                if settings and not defn.is_custom
-                else []
-            )
-            all_models = list(defn.models) + extra
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                for m in all_models:
-                    label = " [user-added]" if m in extra else ""
-                    click.echo(f"    - {m.name} ({m.id}){label}")
+        _print_provider_card(defn, data)
 
     click.echo(f"\n{'═' * 44}")
     click.echo("  Active Model Slot")
     click.echo(f"{'═' * 44}")
 
     llm = data.active_llm
-    if llm.provider_id and llm.model:
-        click.echo(f"  {'LLM':16s}: {llm.provider_id} / {llm.model}")
-    else:
-        click.echo(f"  {'LLM':16s}: (not configured)")
+    slot = (
+        f"{llm.provider_id} / {llm.model}"
+        if llm.provider_id and llm.model
+        else "(not configured)"
+    )
+    click.echo(f"  {'LLM':16s}: {slot}")
     click.echo()
 
 
@@ -395,9 +441,64 @@ def config_cmd() -> None:
 
 @models_group.command("config-key")
 @click.argument("provider_id", required=False, default=None)
-def config_key_cmd(provider_id: str | None) -> None:
-    """Configure a provider's API key."""
-    configure_provider_api_key_interactive(provider_id)
+@click.option(
+    "--wire-api",
+    type=click.Choice(["chat_completions", "responses"]),
+    default=None,
+    help="OpenAI-compatible wire API style.",
+)
+@click.option(
+    "--header",
+    "headers",
+    multiple=True,
+    help="Custom request header in KEY=VALUE format. Repeatable.",
+)
+@click.option(
+    "--clear-headers",
+    is_flag=True,
+    help="Clear existing custom headers before applying --header values.",
+)
+def config_key_cmd(
+    provider_id: str | None,
+    wire_api: str | None,
+    headers: tuple[str, ...],
+    clear_headers: bool,
+) -> None:
+    """Configure a provider's API key and transport options."""
+    if provider_id is not None and provider_id not in PROVIDERS:
+        click.echo(click.style(f"Unknown provider: {provider_id}", fg="red"))
+        raise SystemExit(1)
+
+    try:
+        parsed_headers = _parse_header_pairs(headers)
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
+    configured_provider_id = configure_provider_api_key_interactive(
+        provider_id,
+    )
+
+    if wire_api is None and not headers and not clear_headers:
+        return
+
+    data = load_providers_json()
+    current_headers, _ = data.get_transport_config(configured_provider_id)
+
+    next_headers = {} if clear_headers else current_headers
+    next_headers.update(parsed_headers)
+
+    try:
+        update_provider_settings(
+            configured_provider_id,
+            headers=next_headers,
+            wire_api=wire_api,
+        )
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
+    click.echo("✓ Provider transport options updated.")
 
 
 @models_group.command("set-llm")
@@ -411,19 +512,42 @@ def set_llm_cmd() -> None:
 @click.option("--name", "-n", required=True, help="Human-readable name")
 @click.option("--base-url", "-u", default="", help="Default API base URL")
 @click.option("--api-key-prefix", default="", help="Expected API key prefix")
+@click.option(
+    "--wire-api",
+    type=click.Choice(["chat_completions", "responses"]),
+    default="chat_completions",
+    show_default=True,
+    help="OpenAI-compatible wire API style.",
+)
+@click.option(
+    "--header",
+    "headers",
+    multiple=True,
+    help="Custom request header in KEY=VALUE format. Repeatable.",
+)
 def add_provider_cmd(
     provider_id: str,
     name: str,
     base_url: str,
     api_key_prefix: str,
+    wire_api: str,
+    headers: tuple[str, ...],
 ) -> None:
     """Add a new custom provider."""
+    try:
+        parsed_headers = _parse_header_pairs(headers)
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
     try:
         create_custom_provider(
             provider_id,
             name,
             default_base_url=base_url,
             api_key_prefix=api_key_prefix,
+            wire_api=wire_api,
+            headers=parsed_headers,
         )
     except ValueError as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
@@ -431,6 +555,11 @@ def add_provider_cmd(
     click.echo(f"✓ Custom provider '{name}' ({provider_id}) created.")
     if base_url:
         click.echo(f"  base_url: {base_url}")
+    click.echo(f"  wire_api: {wire_api}")
+    if parsed_headers:
+        click.echo("  headers:")
+        for key, value in mask_headers(parsed_headers).items():
+            click.echo(f"    - {key}: {value}")
     click.echo(
         "  Run 'copaw models add-model' to add models, "
         "then 'copaw models config-key' to set the API key.",
