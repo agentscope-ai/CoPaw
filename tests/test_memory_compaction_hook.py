@@ -109,6 +109,10 @@ async def _fake_safe_count_message_tokens(
     return sum(int(msg.get("_test_token_count", 0)) for msg in messages)
 
 
+def _fake_safe_count_str_tokens(text: str) -> int:
+    return len(text) // 4 if text else 0
+
+
 async def test_compaction_triggers_on_total_context_budget(
     monkeypatch,
 ) -> None:
@@ -116,22 +120,25 @@ async def test_compaction_triggers_on_total_context_budget(
         "copaw.agents.hooks.memory_compaction.safe_count_message_tokens",
         _fake_safe_count_message_tokens,
     )
+    monkeypatch.setattr(
+        "copaw.agents.hooks.memory_compaction.safe_count_str_tokens",
+        _fake_safe_count_str_tokens,
+    )
 
     memory_manager = FakeMemoryManager()
     hook = MemoryCompactionHook(
         memory_manager=memory_manager,
-        memory_compact_threshold=1000,
+        memory_compact_threshold=950,
         keep_recent=1,
     )
 
-    # compactable = 600 (old logic wouldn't trigger)
-    # preserved = 600 (system + recent)
-    # summary = 100
-    # total = 1300 > threshold => should compact.
+    # message_tokens = 950 (at threshold, so no compaction by message-only count)
+    # summary_tokens > 0 for non-empty wrapped summary
+    # total = message_tokens + summary_tokens > threshold => should compact.
     messages = [
-        FakeMsg(id="sys", role="system", token_count=400),
-        FakeMsg(id="old-1", role="user", token_count=300),
-        FakeMsg(id="old-2", role="assistant", token_count=300),
+        FakeMsg(id="sys", role="system", token_count=250),
+        FakeMsg(id="old-1", role="user", token_count=250),
+        FakeMsg(id="old-2", role="assistant", token_count=250),
         FakeMsg(id="recent", role="user", token_count=200),
     ]
     agent = _make_agent(messages=messages, summary="existing-summary")
@@ -152,6 +159,10 @@ async def test_compaction_not_triggered_when_total_under_threshold(
         "copaw.agents.hooks.memory_compaction.safe_count_message_tokens",
         _fake_safe_count_message_tokens,
     )
+    monkeypatch.setattr(
+        "copaw.agents.hooks.memory_compaction.safe_count_str_tokens",
+        _fake_safe_count_str_tokens,
+    )
 
     memory_manager = FakeMemoryManager()
     hook = MemoryCompactionHook(
@@ -160,15 +171,14 @@ async def test_compaction_not_triggered_when_total_under_threshold(
         keep_recent=1,
     )
 
-    # compactable = 500
-    # preserved = 300
-    # summary = 100
-    # total = 900 <= threshold => should not compact.
+    # message_tokens = 800
+    # summary_tokens ~= wrapped-summary-length//4
+    # total stays below threshold => should not compact.
     messages = [
         FakeMsg(id="sys", role="system", token_count=200),
-        FakeMsg(id="old-1", role="user", token_count=250),
-        FakeMsg(id="old-2", role="assistant", token_count=250),
-        FakeMsg(id="recent", role="user", token_count=100),
+        FakeMsg(id="old-1", role="user", token_count=200),
+        FakeMsg(id="old-2", role="assistant", token_count=200),
+        FakeMsg(id="recent", role="user", token_count=200),
     ]
     agent = _make_agent(messages=messages, summary="existing-summary")
 
