@@ -47,20 +47,20 @@ export const createColumns = (
 
   return [
     {
-      title: "ID",
+      title: handlers.t("cronJobs.id"),
       dataIndex: "id",
       key: "id",
       width: 250,
       fixed: "left",
     },
     {
-      title: "Name",
+      title: handlers.t("cronJobs.name"),
       dataIndex: "name",
       key: "name",
       width: 250,
     },
     {
-      title: "Enabled",
+      title: handlers.t("cronJobs.enabled"),
       dataIndex: "enabled",
       key: "enabled",
       width: 100,
@@ -88,21 +88,21 @@ export const createColumns = (
       ),
     },
     {
-      title: "ScheduleType",
+      title: handlers.t("cronJobs.scheduleType"),
       dataIndex: ["schedule", "type"],
       key: "schedule_type",
       width: 140,
       render: () => "cron",
     },
     {
-      title: "ScheduleCron",
+      title: handlers.t("cronJobs.scheduleCron"),
       dataIndex: ["schedule", "cron"],
       key: "cron",
       width: 150,
       render: (cron: string) => <code style={{ fontSize: 12 }}>{cron}</code>,
     },
     {
-      title: "ScheduleTimezone",
+      title: handlers.t("cronJobs.scheduleTimezone"),
       dataIndex: ["schedule", "timezone"],
       key: "timezone",
       width: 170,
