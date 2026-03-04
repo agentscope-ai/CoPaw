@@ -49,7 +49,7 @@ def _monkey_patch(func):
                             block["source"]["url"] = url.removeprefix(
                                 "file://",
                             )
-        return func(msgs, **kwargs)
+        return await func(msgs, **kwargs)
 
     return wrapper
 
