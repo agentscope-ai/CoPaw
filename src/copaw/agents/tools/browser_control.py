@@ -10,15 +10,23 @@ wait_for, pdf, close. Uses refs from snapshot for ref-based actions.
 """
 
 import asyncio
+import atexit
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, Optional
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
+
+from ...config import (
+    get_playwright_chromium_executable_path,
+    get_system_default_browser,
+    is_running_in_container,
+)
 
 from .browser_snapshot import build_role_snapshot_from_aria
 
@@ -39,7 +47,62 @@ _state: dict[str, Any] = {
     "headless": True,
     "current_page_id": None,
     "page_counter": 0,  # monotonic counter for page_N ids, avoids reuse after close
+    "last_activity_time": 0.0,  # monotonic timestamp of last browser activity
+    "_idle_task": None,  # background asyncio.Task for idle watchdog
+    "_last_browser_error": None,  # message when launch failed (for user-facing error)
 }
+
+# Stop the browser after this many seconds of inactivity (default 30 minutes).
+_BROWSER_IDLE_TIMEOUT = 1800.0
+
+
+def _touch_activity() -> None:
+    """Record the current time as the last browser activity timestamp."""
+    _state["last_activity_time"] = time.monotonic()
+
+
+async def _idle_watchdog(idle_seconds: float = _BROWSER_IDLE_TIMEOUT) -> None:
+    """Background task: stop the browser after it has been idle for *idle_seconds*.
+
+    This reclaims Chrome renderer processes that accumulate when pages are
+    opened during agent tasks but never explicitly closed.
+    """
+    try:
+        while True:
+            await asyncio.sleep(60)  # check every minute
+            if _state["browser"] is None:
+                return
+            idle = time.monotonic() - _state.get("last_activity_time", 0.0)
+            if idle >= idle_seconds:
+                logger.info(
+                    "Browser idle for %.0fs (limit %.0fs), stopping to release resources",
+                    idle,
+                    idle_seconds,
+                )
+                await _action_stop()
+                return
+    except asyncio.CancelledError:
+        pass
+
+
+def _atexit_cleanup() -> None:
+    """Best-effort browser cleanup registered with :func:`atexit`.
+
+    Playwright child processes are cleaned up by the OS when the parent
+    exits, but this gives Playwright a chance to flush any pending I/O and
+    close Chrome gracefully before the process disappears.
+    """
+    if _state.get("browser") is None:
+        return
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_running() and not loop.is_closed():
+            loop.run_until_complete(_action_stop())
+    except Exception:
+        pass
+
+
+atexit.register(_atexit_cleanup)
 
 
 def _tool_response(text: str) -> ToolResponse:
@@ -47,6 +110,26 @@ def _tool_response(text: str) -> ToolResponse:
     return ToolResponse(
         content=[TextBlock(type="text", text=text)],
     )
+
+
+def _chromium_launch_args() -> list[str]:
+    """Extra args for Chromium when running in container."""
+    if is_running_in_container():
+        return ["--no-sandbox", "--disable-dev-shm-usage"]
+    return []
+
+
+def _chromium_executable_path() -> str | None:
+    """Chromium executable path when set (e.g. container); else None."""
+    return get_playwright_chromium_executable_path()
+
+
+def _use_webkit_fallback() -> bool:
+    """True only on macOS when no system Chrome/Edge/Chromium found.
+    Use WebKit (Safari) to avoid downloading Chromium. Windows has no system
+    WebKit, so we never use webkit there.
+    """
+    return sys.platform == "darwin" and _chromium_executable_path() is None
 
 
 def _ensure_playwright_async():
@@ -57,8 +140,10 @@ def _ensure_playwright_async():
         return async_playwright
     except ImportError as exc:
         raise ImportError(
-            "Playwright not installed. Install with: pip install playwright "
-            "&& python -m playwright install",
+            "Playwright not installed. Use the same Python that runs CoPaw (e.g. "
+            "activate your venv or use 'uv run'): "
+            f"'{sys.executable}' -m pip install playwright && "
+            f"'{sys.executable}' -m playwright install",
         ) from exc
 
 
@@ -504,26 +589,81 @@ def _attach_context_listeners(context) -> None:
 async def _ensure_browser() -> bool:
     """Start browser if not running. Return True if ready, False on failure."""
     if _state["browser"] is not None and _state["context"] is not None:
+        _touch_activity()
         return True
     try:
         async_playwright = _ensure_playwright_async()
         pw = await async_playwright().start()
-        pw_browser = await pw.chromium.launch(headless=_state["headless"])
+        # Prefer OS default browser when available (e.g. user's default Chrome/Safari).
+        use_default = not is_running_in_container() and os.environ.get(
+            "COPAW_BROWSER_USE_DEFAULT",
+            "1",
+        ).strip().lower() in ("1", "true", "yes")
+        default_kind, default_path = (
+            get_system_default_browser() if use_default else (None, None)
+        )
+        exe: Optional[str] = None
+        if default_kind == "chromium" and default_path:
+            exe = default_path
+        elif default_kind != "webkit":
+            exe = _chromium_executable_path()
+        if exe:
+            # System Chrome/Edge/Chromium (default or discovered)
+            launch_kwargs: dict[str, Any] = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            launch_kwargs["executable_path"] = exe
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
+        elif default_kind == "webkit" or sys.platform == "darwin":
+            # macOS: default Safari or no Chromium → use WebKit (Safari)
+            pw_browser = await pw.webkit.launch(headless=_state["headless"])
+        else:
+            # Windows/Linux without system Chromium → Playwright's Chromium
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
         context = await pw_browser.new_context()
         _attach_context_listeners(context)
         _state["playwright"] = pw
         _state["browser"] = pw_browser
         _state["context"] = context
+        _state["_last_browser_error"] = None
+        _touch_activity()
+        _start_idle_watchdog()
         return True
-    except Exception:
+    except Exception as e:
+        _state["_last_browser_error"] = str(e)
         return False
 
 
-async def _action_start(headed: bool = False) -> ToolResponse:
+def _start_idle_watchdog() -> None:
+    """Cancel any existing idle watchdog and start a fresh one."""
+    old_task = _state.get("_idle_task")
+    if old_task and not old_task.done():
+        old_task.cancel()
+    _state["_idle_task"] = asyncio.ensure_future(_idle_watchdog())
+
+
+def _cancel_idle_watchdog() -> None:
+    """Cancel the idle watchdog, if running."""
+    task = _state.get("_idle_task")
+    if task and not task.done():
+        task.cancel()
+    _state["_idle_task"] = None
+
+
+# pylint: disable=R0912,R0915
+async def _action_start(
+    headed: bool = False,
+) -> ToolResponse:
     # If user asks for visible window (headed=True)
     # but browser is already running headless, restart with headed
     if _state["browser"] is not None:
         if headed and _state["headless"]:
+            _cancel_idle_watchdog()
             try:
                 await _state["browser"].close()
                 if _state["playwright"] is not None:
@@ -543,6 +683,7 @@ async def _action_start(headed: bool = False) -> ToolResponse:
                 _state["pending_file_choosers"].clear()
                 _state["current_page_id"] = None
                 _state["page_counter"] = 0
+                _state["last_activity_time"] = 0.0
         else:
             return _tool_response(
                 json.dumps(
@@ -565,17 +706,47 @@ async def _action_start(headed: bool = False) -> ToolResponse:
         )
     try:
         pw = await async_playwright().start()
-        pw_browser = await pw.chromium.launch(headless=_state["headless"])
+        use_default = not is_running_in_container() and os.environ.get(
+            "COPAW_BROWSER_USE_DEFAULT",
+            "1",
+        ).strip().lower() in ("1", "true", "yes")
+        default_kind, default_path = (
+            get_system_default_browser() if use_default else (None, None)
+        )
+        exe: Optional[str] = None
+        if default_kind == "chromium" and default_path:
+            exe = default_path
+        elif default_kind != "webkit":
+            exe = _chromium_executable_path()
+        if exe:
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            launch_kwargs["executable_path"] = exe
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
+        elif default_kind == "webkit" or sys.platform == "darwin":
+            pw_browser = await pw.webkit.launch(headless=_state["headless"])
+        else:
+            launch_kwargs = {"headless": _state["headless"]}
+            extra_args = _chromium_launch_args()
+            if extra_args:
+                launch_kwargs["args"] = extra_args
+            pw_browser = await pw.chromium.launch(**launch_kwargs)
         context = await pw_browser.new_context()
         _attach_context_listeners(context)
         _state["playwright"] = pw
         _state["browser"] = pw_browser
         _state["context"] = context
+        _touch_activity()
+        _start_idle_watchdog()
         msg = (
             "Browser started (visible window)"
             if _state["headless"] is False
             else "Browser started"
         )
+        if not exe and (default_kind == "webkit" or sys.platform == "darwin"):
+            msg += " (Safari/WebKit)"
         return _tool_response(
             json.dumps(
                 {"ok": True, "message": msg},
@@ -594,6 +765,7 @@ async def _action_start(headed: bool = False) -> ToolResponse:
 
 
 async def _action_stop() -> ToolResponse:
+    _cancel_idle_watchdog()
     if _state["browser"] is None:
         return _tool_response(
             json.dumps(
@@ -627,6 +799,7 @@ async def _action_stop() -> ToolResponse:
         _state["pending_file_choosers"].clear()
         _state["current_page_id"] = None
         _state["page_counter"] = 0
+        _state["last_activity_time"] = 0.0
         _state["headless"] = True  # next start defaults to background
     return _tool_response(
         json.dumps(
@@ -648,9 +821,10 @@ async def _action_open(url: str, page_id: str) -> ToolResponse:
             ),
         )
     if not await _ensure_browser():
+        err = _state.get("_last_browser_error") or "Browser not started"
         return _tool_response(
             json.dumps(
-                {"ok": False, "error": "Browser not started"},
+                {"ok": False, "error": err},
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -1499,15 +1673,47 @@ async def _action_fill_form(page_id: str, fields_json: str) -> ToolResponse:
         )
 
 
+def _run_playwright_install() -> None:
+    """Run playwright install in a blocking way (for use in thread)."""
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=600,  # 10 minutes max
+    )
+
+
 async def _action_install() -> ToolResponse:
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120000,
+    """Install Playwright browsers. If a system Chrome/Chromium/Edge is found,
+    use it and skip download. On macOS with no Chromium, use Safari (WebKit)
+    so no download is needed. Only run playwright install when necessary.
+    """
+    exe = _chromium_executable_path()
+    if exe:
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": True,
+                    "message": f"Using system browser (no download): {exe}",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
         )
+    if _use_webkit_fallback():
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": True,
+                    "message": "On macOS using Safari (WebKit); no browser download needed.",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+    try:
+        await asyncio.to_thread(_run_playwright_install)
         return _tool_response(
             json.dumps(
                 {"ok": True, "message": "Browser installed"},
@@ -1515,10 +1721,27 @@ async def _action_install() -> ToolResponse:
                 indent=2,
             ),
         )
+    except subprocess.TimeoutExpired:
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "Browser install timed out (10 min). Run manually in terminal: "
+                    f"{sys.executable!s} -m playwright install",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
     except Exception as e:
         return _tool_response(
             json.dumps(
-                {"ok": False, "error": f"Install failed: {e!s}"},
+                {
+                    "ok": False,
+                    "error": f"Install failed: {e!s}. Install manually: "
+                    f"{sys.executable!s} -m pip install playwright && "
+                    f"{sys.executable!s} -m playwright install",
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -1895,9 +2118,12 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
         if not _state["context"]:
             ok = await _ensure_browser()
             if not ok:
+                err = (
+                    _state.get("_last_browser_error") or "Browser not started"
+                )
                 return _tool_response(
                     json.dumps(
-                        {"ok": False, "error": "Browser not started"},
+                        {"ok": False, "error": err},
                         ensure_ascii=False,
                         indent=2,
                     ),

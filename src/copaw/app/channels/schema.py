@@ -35,6 +35,7 @@ BUILTIN_CHANNEL_TYPES = (
     "dingtalk",
     "feishu",
     "qq",
+    "telegram",
     "console",
 )
 

@@ -44,6 +44,7 @@ class RenderStyle:
     supports_code_fence: bool = True
     use_emoji: bool = True
     truncate_tools: tuple = ("tavily_search", "browser_use")
+    filter_tool_messages: bool = False
 
 
 def _fmt_tool_call(
@@ -262,6 +263,8 @@ class MessageRenderer:
             MessageType.PLUGIN_CALL,
             MessageType.MCP_TOOL_CALL,
         ):
+            if s.filter_tool_messages:
+                return []
             parts = _parts_for_tool_call(content)
             if not parts:
                 parts = [TextContent(text=f"[{msg_type}]")]
@@ -272,6 +275,8 @@ class MessageRenderer:
             MessageType.PLUGIN_CALL_OUTPUT,
             MessageType.MCP_TOOL_CALL_OUTPUT,
         ):
+            if s.filter_tool_messages:
+                return []
             parts = _parts_for_tool_output(content)
             if not parts:
                 parts = [TextContent(text=f"[{msg_type}]")]

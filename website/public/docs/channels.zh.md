@@ -7,10 +7,11 @@
 - **控制台**（推荐）— 在 [控制台](./console) 的 **Control → Channels** 页面，点击频道卡片，在抽屉里启用并填写鉴权信息，保存即生效。
 - **手动编辑 `config.json`** — 默认在 `~/.copaw/config.json` （由 `copaw init` 生成），将需要的频道设 `enabled: true` 并填好鉴权信息；保存后自动重载，无需重启。
 
-所有频道都有两个通用字段：
+所有频道都有两个通用字段:
 
 - **enabled** — 是否启用
 - **bot_prefix** — 机器人回复前缀（如 `[BOT]`），方便区分
+- **filter_tool_messages** — （可选，默认 `false`）过滤工具调用和输出消息，不发送给用户。设为 `true` 可隐藏工具执行详情。
 
 下面按频道说明如何获取凭证并填写配置。
 
@@ -77,8 +78,11 @@
   "bot_prefix": "[BOT]",
   "client_id": "你的 Client ID",
   "client_secret": "你的 Client Secret"
+  "filter_tool_messages": false
 }
 ```
+
+- 若希望隐藏工具执行详情，可设置 `filter_tool_messages: true`。
 
 保存后若服务已运行会自动重载；未运行则执行 `copaw app` 启动。
 
@@ -398,6 +402,61 @@
 
 ---
 
+## Telegram
+
+### 获取 Telegram 机器人凭证
+
+1. 打开 Telegram 并搜索 `@BotFather` 添加 Bot（注意需要是官方 @BotFather，有蓝色认证标识）。
+2. 打开与 @BotFather 的聊天，根据对话中的指引创建新机器人
+
+   ![创建机器人](https://img.alicdn.com/imgextra/i1/O1CN01wVVmbY1qkcxBn8Oc0_!!6000000005534-0-tps-817-1279.jpg)
+
+3. 在对话框中创建 bot_name，复制 bot_token
+
+   ![复制token](https://img.alicdn.com/imgextra/i3/O1CN01KUMvBW1UnuF599tNX_!!6000000002563-0-tps-1209-1237.jpg)
+
+### 绑定 Bot
+
+可以在console前端配置，或者修改`~/.copaw/config.json`。
+
+**方法1**: 在console前端配置
+
+从"控制→频道"找到**Telegram**，点击后填入刚刚获取的**Bot Token**
+
+![console](https://img.alicdn.com/imgextra/i4/O1CN01utJvvg1dmNSiFOOJi_!!6000000003778-0-tps-1920-993.jpg)
+
+**方法2**: 修改`~/.copaw/config.json`
+
+在 `config.json` 里找到 `channels.telegram`，填入对应信息，例如：
+
+```json
+"telegram": {
+    "enabled": true,
+    "bot_prefix": "[BOT]",
+    "bot_token": "你的 Bot Token",
+    "http_proxy": "",
+    "http_proxy_auth": ""
+}
+```
+
+国内网络访问 Telegram API 可能需代理。如需代理：
+
+- **http_proxy** — 例如 `http://127.0.0.1:7890`
+- **http_proxy_auth** — 若代理需鉴权，填 `用户名:密码`，否则留空
+
+### 备注
+
+目前telegram白名单机制仍在施工中，推荐个人场景部署，不暴露username到公共环境中。
+
+建议在 `@BotFather` 设置：
+
+```
+/setprivacy -> ENABLED # 设置bot回复权限
+/setjoingroups -> DISABLED # 拦截Group邀请
+```
+
+---
+
 ## 附录
 
 ### 配置总览
@@ -409,6 +468,7 @@
 | iMessage | imessage | db_path, poll_sec（仅 macOS）                                       |
 | Discord  | discord  | bot_token；可选 http_proxy, http_proxy_auth                         |
 | QQ       | qq       | app_id, client_secret                                               |
+| Telegram | telegram | bot_token；可选 http_proxy, http_proxy_auth                         |
 
 各频道字段与完整结构见上文表格及 [配置与工作目录](./config)。
 
@@ -424,6 +484,7 @@
 | Discord  | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
 | iMessage | ✓        | ✗        | ✗        | ✗        | ✗        | ✓        | ✗        | ✗        | ✗        | ✗        |
 | QQ       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
+| Telegram | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
 
 说明：
 
@@ -432,6 +493,7 @@
 - **Discord**：接收时附件会解析为图片 / 视频 / 音频 / 文件并传入 Agent；回复时真实附件发送为 🚧 施工中，当前仅以链接形式附在文本中。
 - **iMessage**：基于本地 imsg + 数据库轮询，仅支持文本收发；平台/实现限制，无法支持附件（✗）。
 - **QQ**：接收侧附件解析为多模态、发送侧真实媒体均为 🚧 施工中，当前仅文本 + 链接形式。
+- **Telegram**：接收时附件会解析为文件并传入，可在telegram对话界面以对应格式打开（图片 / 语音 / 视频 / 文件）
 
 ### 通过 HTTP 修改配置
 

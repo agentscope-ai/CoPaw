@@ -1,6 +1,7 @@
 export interface BaseChannelConfig {
   enabled: boolean;
   bot_prefix: string;
+  filter_tool_messages?: boolean;
 }
 
 export interface IMessageChannelConfig extends BaseChannelConfig {
@@ -32,6 +33,13 @@ export interface QQConfig extends BaseChannelConfig {
   client_secret: string;
 }
 
+export interface TelegramConfig extends BaseChannelConfig {
+  bot_token: string;
+  http_proxy: string;
+  http_proxy_auth: string;
+  show_typing?: boolean;
+}
+
 export type ConsoleConfig = BaseChannelConfig;
 
 export interface ChannelConfig {
@@ -40,6 +48,7 @@ export interface ChannelConfig {
   dingtalk: DingTalkConfig;
   feishu: FeishuConfig;
   qq: QQConfig;
+  telegram: TelegramConfig;
   console: ConsoleConfig;
 }
 
@@ -49,4 +58,5 @@ export type SingleChannelConfig =
   | DingTalkConfig
   | FeishuConfig
   | QQConfig
+  | TelegramConfig
   | ConsoleConfig;

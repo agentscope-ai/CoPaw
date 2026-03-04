@@ -81,9 +81,20 @@ def configure_provider_api_key_interactive(
     current_base, current_key = data.get_credentials(provider_id)
 
     base_url: Optional[str] = None
-    if defn.is_custom:
+    # Prompt for base_url if the provider is custom or has no default URL
+    # (e.g. Azure OpenAI requires user to provide their endpoint).
+    if defn.is_custom or not defn.default_base_url:
+        azure_hint = (
+            "Azure endpoint "
+            "(e.g. https://<resource>.openai.azure.com/openai/v1)"
+        )
+        url_hint = (
+            azure_hint
+            if provider_id == "azure-openai"
+            else "Base URL (OpenAI-compatible endpoint)"
+        )
         base_url = click.prompt(
-            "Base URL (OpenAI-compatible endpoint)",
+            url_hint,
             default=current_base or "",
             show_default=bool(current_base),
         ).strip()
@@ -340,7 +351,7 @@ def list_cmd() -> None:
                 click.echo("  No models downloaded.")
                 click.echo("  Use 'copaw models download' to add models.")
         else:
-            if defn.is_custom:
+            if defn.is_custom or not defn.default_base_url:
                 click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
             click.echo(
                 f"  {'api_key':16s}: "
@@ -385,9 +396,6 @@ def config_cmd() -> None:
 @click.argument("provider_id", required=False, default=None)
 def config_key_cmd(provider_id: str | None) -> None:
     """Configure a provider's API key."""
-    if provider_id is not None and provider_id not in PROVIDERS:
-        click.echo(click.style(f"Unknown provider: {provider_id}", fg="red"))
-        raise SystemExit(1)
     configure_provider_api_key_interactive(provider_id)
 
 
@@ -679,16 +687,7 @@ def ollama_pull_cmd(model_name: str) -> None:
       copaw models ollama-pull mistral:7b
       copaw models ollama-pull qwen2.5:3b
     """
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     click.echo(f"Downloading Ollama model: {model_name}...")
     try:
@@ -696,6 +695,14 @@ def ollama_pull_cmd(model_name: str) -> None:
         manager.pull_model(model_name)
         click.echo(f"✓ Model '{model_name}' downloaded successfully.")
         click.echo("\nTo use this model, run:\n  copaw models set-llm")
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Download failed: {exc}", fg="red"))
         raise SystemExit(1) from exc
@@ -704,20 +711,19 @@ def ollama_pull_cmd(model_name: str) -> None:
 @models_group.command("ollama-list")
 def ollama_list_cmd() -> None:
     """List all Ollama models."""
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     try:
         manager = OllamaModelManager()
         models = manager.list_models()
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc
@@ -750,16 +756,7 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
       copaw models ollama-remove mistral:7b
       copaw models ollama-remove qwen2.5:3b -y
     """
-    try:
-        from ..providers.ollama_manager import OllamaModelManager
-    except ImportError as exc:
-        click.echo(
-            click.style(
-                "Ollama SDK not installed. Install with: pip install ollama",
-                fg="red",
-            ),
-        )
-        raise SystemExit(1) from exc
+    from ..providers.ollama_manager import OllamaModelManager
 
     if not yes:
         if not click.confirm(f"Delete Ollama model '{model_name}'?"):
@@ -769,6 +766,14 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
         manager = OllamaModelManager()
         manager.delete_model(model_name)
         click.echo(f"✓ Model '{model_name}' deleted.")
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                str(exc),
+                fg="red",
+            ),
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc

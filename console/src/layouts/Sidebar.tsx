@@ -1,4 +1,4 @@
-import { Layout, Menu, type MenuProps } from "antd";
+import { Layout, Menu, Button, type MenuProps } from "antd";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -11,6 +11,7 @@ import {
   Wifi,
   UsersRound,
   CalendarClock,
+  Activity,
   Sparkles,
   Briefcase,
   Cpu,
@@ -18,6 +19,8 @@ import {
   Globe,
   Settings,
   Plug,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 const { Sider } = Layout;
@@ -27,6 +30,7 @@ const keyToPath: Record<string, string> = {
   channels: "/channels",
   sessions: "/sessions",
   "cron-jobs": "/cron-jobs",
+  heartbeat: "/heartbeat",
   skills: "/skills",
   mcp: "/mcp",
   workspace: "/workspace",
@@ -42,6 +46,7 @@ interface SidebarProps {
 export default function Sidebar({ selectedKey }: SidebarProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState<string[]>([
     "chat-group",
     "control-group",
@@ -89,6 +94,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           key: "cron-jobs",
           label: t("nav.cronJobs"),
           icon: <CalendarClock size={16} />,
+        },
+        {
+          key: "heartbeat",
+          label: t("nav.heartbeat"),
+          icon: <Activity size={16} />,
         },
       ],
     },
@@ -140,39 +150,61 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
 
   return (
     <Sider
+      collapsed={collapsed}
+      onCollapse={(value) => setCollapsed(value)}
       width={260}
       style={{
         background: "#fff",
         borderRight: "1px solid #f0f0f0",
+        overflow: "auto",
+        height: "100vh",
       }}
     >
       <div
         style={{
           height: 64,
           display: "flex",
-          alignItems: "flex-end",
-          padding: "0 24px 10px",
-          fontWeight: 600,
-          gap: 8,
+          alignItems: "center",
+          padding: "0 16px",
+          gap: 12,
         }}
       >
-        <img
-          src="/logo.png"
-          alt="CoPaw"
-          style={{ height: 32, width: "auto" }}
-        />
-        {version && (
-          <span
-            style={{
-              fontSize: 11,
-              color: "#bbb",
-              fontWeight: 400,
-              lineHeight: 1,
-            }}
-          >
-            v{version}
-          </span>
+        {!collapsed && (
+          <>
+            <img
+              src="/logo.png"
+              alt="CoPaw"
+              style={{ height: 32, width: "auto" }}
+            />
+            {version && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#bbb",
+                  fontWeight: 400,
+                  lineHeight: 1,
+                }}
+              >
+                v{version}
+              </span>
+            )}
+          </>
         )}
+        <Button
+          type="text"
+          icon={
+            collapsed ? (
+              <PanelLeftOpen size={20} />
+            ) : (
+              <PanelLeftClose size={20} />
+            )
+          }
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            margin: "auto",
+            color: "#615ced",
+          }}
+        />
       </div>
       <Menu
         mode="inline"

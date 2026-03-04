@@ -79,7 +79,8 @@ def _create_file_block_support_formatter(
             tool messages.
             """
             msgs = _sanitize_tool_messages(msgs)
-            return await super()._format(msgs)
+            messages = await super()._format(msgs)
+            return _strip_top_level_message_name(messages)
 
         @staticmethod
         def convert_tool_result_to_string(
@@ -157,6 +158,20 @@ def _create_file_block_support_formatter(
     return FileBlockSupportFormatter
 
 
+def _strip_top_level_message_name(
+    messages: list[dict],
+) -> list[dict]:
+    """Strip top-level `name` from OpenAI chat messages.
+
+    Some strict OpenAI-compatible backends reject `messages[*].name`
+    (especially for assistant/tool roles) and may return 500/400 on
+    follow-up turns. Keep function/tool names unchanged.
+    """
+    for message in messages:
+        message.pop("name", None)
+    return messages
+
+
 def create_model_and_formatter(
     llm_cfg: Optional["ResolvedModelConfig"] = None,
 ) -> Tuple[ChatModelBase, FormatterBase]:
@@ -226,9 +241,9 @@ def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
     """Get the chat model class from provider configuration.
 
     Returns:
-        Chat model class, defaults to OpenAIChatModel if not found
+        Chat model class, defaults to OpenAI-compatible chat model if not found
     """
-    chat_model_class = OpenAIChatModel  # default
+    chat_model_class = get_chat_model_class("OpenAIChatModel")
     try:
         providers_data = load_providers_json()
         provider_id = providers_data.active_llm.provider_id
@@ -241,7 +256,7 @@ def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
     except Exception as e:
         logger.debug(
             "Failed to determine chat model from provider: %s, "
-            "using OpenAIChatModel",
+            "using OpenAI-compatible default chat model",
             e,
         )
     return chat_model_class
@@ -261,7 +276,7 @@ def _create_remote_model_instance(
         Configured chat model instance
     """
     # Get configuration from llm_cfg or fall back to environment
-    if llm_cfg and llm_cfg.api_key:
+    if llm_cfg and (llm_cfg.api_key or llm_cfg.base_url):
         model_name = llm_cfg.model or "qwen3-max"
         api_key = llm_cfg.api_key
         base_url = llm_cfg.base_url

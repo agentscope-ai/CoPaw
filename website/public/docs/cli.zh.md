@@ -57,10 +57,10 @@ copaw app --log-level debug           # 详细日志
 `copaw app` 启动后，在浏览器打开 `http://127.0.0.1:8088/` 即可进入 **控制台** ——
 一个用于对话、频道、定时任务、技能、模型等的 Web 管理界面。详见 [控制台](./console)。
 
-若未构建前端，根路径返回 `{"message": "Hello World"}`，API 仍可正常使用。
+若未构建前端，根路径会返回类似 `{"message": "CoPaw Web Console is not available."}` 的提示信息（实际文案可能调整），API 仍可正常使用。
 
 **构建方式：** 在项目 `console/` 目录下执行 `npm ci && npm run build`，产物在
-`console/dist/`。Docker 镜像或 pip 安装包已内置控制台，无需单独构建。
+`src/copaw/console/`。Docker 镜像或 pip 安装包已内置控制台，无需单独构建。
 
 ---
 
@@ -128,7 +128,7 @@ copaw models remove-local <model_id> --yes   # 跳过确认
 
 CoPaw 集成 Ollama 以在本地运行模型。模型从 Ollama 守护进程动态加载——请先从 [ollama.com](https://ollama.com) 安装 Ollama。
 
-安装 Ollama SDK：`pip install ollama`
+安装 Ollama SDK：`pip install 'copaw[ollama]'`（或使用 `--extras ollama` 重新运行安装脚本）
 
 ```bash
 # 下载 Ollama 模型
