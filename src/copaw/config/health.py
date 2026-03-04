@@ -58,16 +58,12 @@ class HealthChecker:
     def __init__(self):
         self.results: list[HealthCheckResult] = []
 
-    def check_all(self, test_connection: bool = False) -> SystemHealth:
-        """Run all health checks.
-
-        Args:
-            test_connection: If True, test LLM API connection (slower).
-        """
+    def check_all(self) -> SystemHealth:
+        """Run all health checks (including LLM connection test)."""
         self.results = []
 
         self.check_config_files()
-        self.check_providers(test_connection=test_connection)
+        self.check_providers(test_connection=True)  # Always test connection
         self.check_skills()
         self.check_dependencies()
         self.check_environment()

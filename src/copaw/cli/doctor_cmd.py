@@ -25,33 +25,23 @@ def doctor_group() -> None:
     is_flag=True,
     help="Show detailed information.",
 )
-@click.option(
-    "--test-connection",
-    "-t",
-    is_flag=True,
-    help="Test LLM API connection (slower but more thorough).",
-)
-def check_cmd(output_json: bool, verbose: bool, test_connection: bool) -> None:
-    """Run comprehensive health check.
+def check_cmd(output_json: bool, verbose: bool) -> None:
+    """Run comprehensive health check (includes LLM connection test).
 
     Checks:
     - Configuration files (config.json)
-    - LLM providers and models
+    - LLM providers and models (with connection test)
     - Skills availability
     - Python dependencies
     - Environment and system tools
     - Disk space
-
-    Use --test-connection to actually ping the LLM API (slower).
     """
     if not output_json:
         click.echo("\n🐾 CoPaw System Health Check\n")
-        if test_connection:
-            click.echo("Testing LLM connection (this may take a few seconds)...\n")
 
-    # Run health checks
+    # Run health checks (always test connection)
     checker = HealthChecker()
-    health = checker.check_all(test_connection=test_connection)
+    health = checker.check_all()
 
     # JSON output
     if output_json:
