@@ -527,44 +527,7 @@ class FeishuChannel(BaseChannel):
                 if text:
                     text_parts.append(text)
             elif msg_type == "post":
-                try:
-                    data = json.loads(content_raw)
-                    content_list = []
-                    title = ""
-
-                    # Case 1: Direct structure {"title": "...", "content": [[...]]}
-                    if "content" in data and isinstance(data["content"], list):
-                        content_list = data["content"]
-                        title = data.get("title", "")
-                    # Case 2: Nested structure {"post": {"zh_cn": {"title": "...", "content": [[...]]}}}
-                    elif "post" in data:
-                        post_body = data["post"]
-                        if post_body and isinstance(post_body, dict):
-                            # Usually take "zh_cn" or the first available key
-                            first_key = next(iter(post_body))
-                            lang_data = post_body[first_key]
-                            content_list = lang_data.get("content", [])
-                            title = lang_data.get("title", "")
-
-                    if title:
-                        text_parts.append(title)
-
-                    for line_items in content_list:
-                        line_str = ""
-                        for item in line_items:
-                            tag = item.get("tag")
-                            if tag == "text":
-                                line_str += item.get("text", "")
-                            elif tag == "a":
-                                line_str += f"[{item.get('text', '')}]({item.get('href', '')})"
-                            elif tag == "at":
-                                line_str += f"@{item.get('user_id', '')}"
-                            elif tag == "img":
-                                line_str += "[image]"
-                        if line_str:
-                            text_parts.append(line_str)
-                except Exception as e:
-                    logger.warning("Failed to parse post message content: %s", e)
+                text_parts.extend(self._parse_post_content(content_raw))
             elif msg_type == "image":
                 image_key = extract_json_key(
                     content_raw,
@@ -655,6 +618,56 @@ class FeishuChannel(BaseChannel):
                 self._enqueue(native)
         except Exception:
             logger.exception("feishu _on_message failed")
+
+    def _parse_post_content(self, content_raw: str) -> List[str]:
+        """Parse Feishu 'post' (rich text) content to markdown lines."""
+        text_parts: List[str] = []
+        try:
+            data = json.loads(content_raw)
+            content_list = []
+            title = ""
+
+            # Case 1: Direct structure
+            # {"title": "...", "content": [[...]]}
+            if "content" in data and isinstance(data["content"], list):
+                content_list = data["content"]
+                title = data.get("title", "")
+            # Case 2: Nested structure
+            # {"post": {"zh_cn": {"title": "...", "content": [[...]]}}}
+            elif "post" in data:
+                post_body = data["post"]
+                if post_body and isinstance(post_body, dict):
+                    # Usually take "zh_cn" or the first available key
+                    first_key = next(iter(post_body))
+                    lang_data = post_body[first_key]
+                    content_list = lang_data.get("content", [])
+                    title = lang_data.get("title", "")
+
+            if title:
+                text_parts.append(title)
+
+            for line_items in content_list:
+                line_str = ""
+                for item in line_items:
+                    tag = item.get("tag")
+                    if tag == "text":
+                        line_str += item.get("text", "")
+                    elif tag == "a":
+                        text_val = item.get("text", "")
+                        href_val = item.get("href", "")
+                        line_str += f"[{text_val}]({href_val})"
+                    elif tag == "at":
+                        line_str += f"@{item.get('user_id', '')}"
+                    elif tag == "img":
+                        line_str += "[image]"
+                if line_str:
+                    text_parts.append(line_str)
+        except Exception as e:
+            logger.warning(
+                "Failed to parse post message content: %s",
+                e,
+            )
+        return text_parts
 
     async def _add_reaction(
         self,
