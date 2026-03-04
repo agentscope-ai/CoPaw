@@ -59,7 +59,6 @@ def _monkey_patch(func):
 
 
 if agentscope.__version__ == "1.0.16dev":
-    # pylint: disable=protected-access
     OpenAIChatFormatter.format = _monkey_patch(OpenAIChatFormatter.format)
 
 if TYPE_CHECKING:
