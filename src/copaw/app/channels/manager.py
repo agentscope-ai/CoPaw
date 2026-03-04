@@ -206,38 +206,16 @@ class ChannelManager:
                     "filter_thinking",
                     False,
                 )
-                try:
-                    channels.append(
-                        ch_cls.from_config(
-                            process,
-                            ch_cfg,
-                            on_reply_sent=on_last_dispatch,
-                            show_tool_details=show_tool_details,
-                            filter_tool_messages=filter_tool_messages,
-                            filter_thinking=filter_thinking,
-                        ),
-                    )
-                except TypeError as exc:
-                    msg = str(exc)
-                    if (
-                        "unexpected keyword argument" not in msg
-                        or "filter_thinking" not in msg
-                    ):
-                        raise
-                    logger.warning(
-                        "channel %s.from_config does not accept "
-                        "filter_thinking; falling back without it",
-                        key,
-                    )
-                    channels.append(
-                        ch_cls.from_config(
-                            process,
-                            ch_cfg,
-                            on_reply_sent=on_last_dispatch,
-                            show_tool_details=show_tool_details,
-                            filter_tool_messages=filter_tool_messages,
-                        ),
-                    )
+                channels.append(
+                    ch_cls.from_config(
+                        process,
+                        ch_cfg,
+                        on_reply_sent=on_last_dispatch,
+                        show_tool_details=show_tool_details,
+                        filter_tool_messages=filter_tool_messages,
+                        filter_thinking=filter_thinking,
+                    ),
+                )
         return cls(channels)
 
     def _make_enqueue_cb(self, channel_id: str) -> Callable[[Any], None]:
