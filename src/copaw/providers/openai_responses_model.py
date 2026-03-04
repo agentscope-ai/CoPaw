@@ -102,6 +102,8 @@ class OpenAIResponsesChatModel(ChatModelBase):
                 **kwargs,
             )
         except self._responses_fallback_errors:
+            if structured_model:
+                raise
             response = await self._call_chat_completions(
                 messages,
                 tools,
