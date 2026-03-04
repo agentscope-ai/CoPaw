@@ -14,13 +14,13 @@ def build_previous_summary(summary: str) -> str:
     if not summary:
         return ""
 
-    return f"""
-<previous-summary>
-{summary}
-</previous-summary>
-The above is a summary of our previous conversation.
-Use it as context to maintain continuity.
-                """.strip()
+    return (
+        "<previous-summary>\n"
+        f"{summary}\n"
+        "</previous-summary>\n"
+        "The above is a summary of our previous conversation.\n"
+        "Use it as context to maintain continuity."
+    )
 
 
 class CoPawInMemoryMemory(InMemoryMemory):
