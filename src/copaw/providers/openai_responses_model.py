@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, AsyncGenerator, Literal, Type
 
@@ -28,6 +29,19 @@ def _to_text(value: Any) -> str:
     if isinstance(value, (int, float, bool)):
         return str(value)
     return ""
+
+
+_MODULE_LOGGER = logging.getLogger(__name__)
+_INVALID_MESSAGES_TYPE_MSG = (
+    "Responses `messages` field expected type `list`, got `{}` instead."
+)
+
+
+class InvalidMessagesTypeError(TypeError):
+    """Raised when messages argument is not a list."""
+
+    def __init__(self, actual_type: type[Any]) -> None:
+        super().__init__(_INVALID_MESSAGES_TYPE_MSG.format(actual_type))
 
 
 class OpenAIResponsesChatModel(ChatModelBase):
@@ -56,7 +70,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
                 **(client_kwargs or {}),
             )
         else:
-            self.client = openai.AsyncClient(
+            self.client = openai.AsyncOpenAI(
                 api_key=api_key,
                 organization=organization,
                 **(client_kwargs or {}),
@@ -77,10 +91,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
         if not isinstance(messages, list):
-            raise TypeError(
-                "Responses `messages` field expected type `list`, "
-                f"got `{type(messages)}` instead.",
-            )
+            raise InvalidMessagesTypeError(type(messages))
 
         try:
             response = await self._call_responses(
@@ -135,7 +146,19 @@ class OpenAIResponsesChatModel(ChatModelBase):
             )
 
         if structured_model:
-            req["text"] = {"format": structured_model.model_json_schema()}
+            schema_name = (
+                structured_model.__name__
+                if hasattr(structured_model, "__name__")
+                else "response"
+            )
+            req["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema_name,
+                    "schema": structured_model.model_json_schema(),
+                    "strict": True,
+                },
+            }
 
         started = datetime.now()
         raw = await self.client.responses.create(**req)
@@ -210,12 +233,39 @@ class OpenAIResponsesChatModel(ChatModelBase):
 
         return ChatResponse(content=blocks, usage=usage)
 
+    def _log_role_coercion(
+        self,
+        source: str,
+        index: int,
+        original_role: str,
+    ) -> None:
+        logger = getattr(self, "_logger", None) or getattr(
+            self,
+            "logger",
+            None,
+        )
+        if not hasattr(logger, "debug"):
+            logger = _MODULE_LOGGER
+        logger.debug(
+            "Coerced invalid role to 'user' in %s at index=%d "
+            "(original_role=%r)",
+            source,
+            index,
+            original_role,
+        )
+
     def _messages_to_input(self, messages: list[dict]) -> list[dict]:
         out: list[dict] = []
-        for msg in messages:
-            role = _to_text(_get(msg, "role", "user")) or "user"
+        for index, msg in enumerate(messages):
+            original_role = _to_text(_get(msg, "role", "user")) or "user"
+            role = original_role
             if role not in {"system", "user", "assistant", "developer"}:
                 role = "user"
+                self._log_role_coercion(
+                    "_messages_to_input",
+                    index,
+                    original_role,
+                )
             out.append(
                 {
                     "role": role,
@@ -226,10 +276,16 @@ class OpenAIResponsesChatModel(ChatModelBase):
 
     def _messages_to_chat(self, messages: list[dict]) -> list[dict]:
         out: list[dict] = []
-        for msg in messages:
-            role = _to_text(_get(msg, "role", "user")) or "user"
+        for index, msg in enumerate(messages):
+            original_role = _to_text(_get(msg, "role", "user")) or "user"
+            role = original_role
             if role not in {"system", "user", "assistant", "tool"}:
                 role = "user"
+                self._log_role_coercion(
+                    "_messages_to_chat",
+                    index,
+                    original_role,
+                )
             out.append(
                 {
                     "role": role,
