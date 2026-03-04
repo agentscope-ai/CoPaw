@@ -36,6 +36,7 @@ LOG_LEVEL_ENV = "COPAW_LOG_LEVEL"
 RUNNING_IN_CONTAINER = os.environ.get("COPAW_RUNNING_IN_CONTAINER", "false")
 
 # Timeout in seconds for checking if a provider is reachable.
+# TODO: add a module to parse and validate env vars
 try:
     MODEL_PROVIDER_CHECK_TIMEOUT = float(
         os.environ.get("COPAW_MODEL_PROVIDER_CHECK_TIMEOUT", "5.0"),
