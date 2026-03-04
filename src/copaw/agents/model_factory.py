@@ -34,7 +34,11 @@ def _monkey_patch(func):
     """A monkey patch wrapper for agentscope <= 1.0.16dev"""
 
     @wraps(func)
-    async def wrapper(self, msgs: list[Msg], **kwargs: Any) -> list[dict[str, Any]]:
+    async def wrapper(
+        self,
+        msgs: list[Msg],
+        **kwargs: Any,
+    ) -> list[dict[str, Any]]:
         for msg in msgs:
             if isinstance(msg.content, str):
                 continue
