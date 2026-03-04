@@ -1,6 +1,6 @@
 # CoPaw Installer for Windows (self-contained: includes uv download via GitHub)
-# Usage: irm <url>/install-w-uv.ps1 | iex
-#    or: .\install-w-uv.ps1 [-Version X.Y.Z] [-FromSource] [-SourceDir DIR]
+# Usage: irm <url>/install.ps1 | iex
+#    or: .\install.ps1 [-Version X.Y.Z] [-FromSource] [-SourceDir DIR]
 #                            [-Extras "llamacpp,mlx"] [-UvPath PATH]
 #
 # Installs CoPaw into ~/.copaw with a uv-managed Python environment.
@@ -44,7 +44,7 @@ if ($Help) {
     @"
 CoPaw Installer for Windows
 
-Usage: .\install-w-uv.ps1 [OPTIONS]
+Usage: .\install.ps1 [OPTIONS]
 
 Options:
   -Version <VER>        Install a specific version (e.g. 0.0.2)
@@ -293,7 +293,7 @@ if ($FromSource) {
         Cleanup-Console $SourceDir
     } else {
         if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            Stop-WithError "git is required for -FromSource without a local directory. Please install Git from https://git-scm.com/ or pass a local path: .\install-w-uv.ps1 -FromSource -SourceDir C:\path\to\CoPaw"
+            Stop-WithError "git is required for -FromSource without a local directory. Please install Git from https://git-scm.com/ or pass a local path: .\install.ps1 -FromSource -SourceDir C:\path\to\CoPaw"
         }
         Write-Info "Installing CoPaw from source (GitHub)..."
         $cloneDir = Join-Path $env:TEMP "copaw-install-$(Get-Random)"
@@ -375,9 +375,28 @@ Write-Info "CMD wrapper created at $cmdWrapperPath"
 # ──Step 5: Update PATH via User Environment Variable ────────────────────────
 $currentUserPath = $env:Path
 if ($currentUserPath -notlike "*$CopawBin*") {
-    $env:Path = "$CopawBin;$currentUserPath"
-    $env:PATH = "$CopawBin;$env:PATH"
-    Write-Info "Added $CopawBin to user PATH"
+    $fullPath = "$CopawBin;$currentUserPath"
+    try {
+        # 尝试使用安全方法更新PATH
+        [Environment]::SetEnvironmentVariable("Path", $fullPath, "User")
+        $env:Path = $fullPath
+        Write-Info "Added $CopawBin to user PATH"
+    } catch {
+        # ⚠️ 关键修复：受限语言模式下无法使用SetEnvironmentVariable
+        Write-Host "[WARNING] Constrained Language Mode detected - cannot update PATH automatically"
+        Write-Host "Please manually add the following paths to your system PATH:"
+        Write-Host "  - $CopawBin"
+        Write-Host ""
+        Write-Host "To do this:"
+        Write-Host "  1. Press Win+R, type 'sysdm.cpl' and press Enter"
+        Write-Host "  2. Go to Advanced > Environment Variables"
+        Write-Host "  3. Under 'System variables', select 'Path' and click 'Edit'"
+        Write-Host "  4. Click 'New' and add: $CopawBin"
+        Write-Host "  5. Click OK to save changes"
+        Write-Host "  6. Restart your terminal to apply changes"
+        Write-Host ""
+        Write-Host "After restarting, run 'copaw --version' to verify installation"
+    }
 } else {
     Write-Info "$CopawBin already in PATH"
 }
