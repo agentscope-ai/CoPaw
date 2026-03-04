@@ -69,6 +69,12 @@ class HealthChecker:
         self.check_environment()
         self.check_disk_space()
 
+        # New checks
+        self.check_channels()
+        self.check_mcp_clients()
+        self.check_required_files()
+        self.check_permissions()
+
         # Determine overall status
         if any(r.status == HealthStatus.UNHEALTHY for r in self.results):
             overall = HealthStatus.UNHEALTHY
@@ -363,3 +369,226 @@ class HealthChecker:
         except Exception as e:
             logger.debug(f"LLM connection test failed: {e}")
             return False
+
+    def check_channels(self) -> None:
+        """Check enabled channels configuration."""
+        try:
+            from .utils import load_config
+
+            config = load_config()
+            enabled_channels = []
+            issues = []
+
+            # Check each channel type
+            channel_configs = {
+                "console": config.channels.console,
+                "dingtalk": config.channels.dingtalk,
+                "feishu": config.channels.feishu,
+                "qq": config.channels.qq,
+                "discord": config.channels.discord,
+                "telegram": config.channels.telegram,
+                "imessage": config.channels.imessage,
+            }
+
+            for name, channel_config in channel_configs.items():
+                if not channel_config or not getattr(channel_config, "enabled", False):
+                    continue
+
+                enabled_channels.append(name)
+
+                # Check credentials for each channel
+                if name == "dingtalk":
+                    if not channel_config.client_id or not channel_config.client_secret:
+                        issues.append(f"{name}: missing credentials")
+                elif name == "feishu":
+                    if not channel_config.app_id or not channel_config.app_secret:
+                        issues.append(f"{name}: missing credentials")
+                elif name == "qq":
+                    if not channel_config.app_id or not channel_config.client_secret:
+                        issues.append(f"{name}: missing credentials")
+                elif name == "discord":
+                    if not channel_config.bot_token:
+                        issues.append(f"{name}: missing bot_token")
+                elif name == "telegram":
+                    if not channel_config.bot_token:
+                        issues.append(f"{name}: missing bot_token")
+
+            if not enabled_channels:
+                self._add_result(
+                    "channels",
+                    HealthStatus.DEGRADED,
+                    "No channels are enabled",
+                    suggestion="Enable at least one channel via 'copaw channels config'.",
+                )
+            elif issues:
+                self._add_result(
+                    "channels",
+                    HealthStatus.UNHEALTHY,
+                    f"{len(enabled_channels)} channel(s) enabled, but {len(issues)} have issues",
+                    details={
+                        "enabled": enabled_channels,
+                        "issues": issues,
+                    },
+                    suggestion="Fix channel credentials via 'copaw channels config'.",
+                )
+            else:
+                self._add_result(
+                    "channels",
+                    HealthStatus.HEALTHY,
+                    f"{len(enabled_channels)} channel(s) properly configured",
+                    details={"enabled": enabled_channels},
+                )
+
+        except Exception as e:
+            self._add_result(
+                "channels",
+                HealthStatus.DEGRADED,
+                f"Failed to check channels: {e}",
+            )
+
+    def check_mcp_clients(self) -> None:
+        """Check MCP client configurations."""
+        try:
+            from .utils import load_config
+
+            config = load_config()
+            enabled_clients = []
+            issues = []
+
+            for client_id, client_config in config.mcp.clients.items():
+                if not client_config.enabled:
+                    continue
+
+                enabled_clients.append(client_id)
+
+                # Check transport-specific requirements
+                if client_config.transport == "stdio":
+                    if not client_config.command:
+                        issues.append(f"{client_id}: stdio requires command")
+                    else:
+                        # Check if command is executable
+                        cmd_parts = client_config.command.split()
+                        if cmd_parts:
+                            cmd_path = shutil.which(cmd_parts[0])
+                            if not cmd_path:
+                                issues.append(f"{client_id}: command '{cmd_parts[0]}' not found")
+                elif client_config.transport in ("streamable_http", "sse"):
+                    if not client_config.url:
+                        issues.append(f"{client_id}: {client_config.transport} requires url")
+
+            if not enabled_clients:
+                self._add_result(
+                    "mcp_clients",
+                    HealthStatus.HEALTHY,
+                    "No MCP clients configured (optional)",
+                    details={"enabled": 0},
+                )
+            elif issues:
+                self._add_result(
+                    "mcp_clients",
+                    HealthStatus.DEGRADED,
+                    f"{len(enabled_clients)} MCP client(s) enabled, but {len(issues)} have issues",
+                    details={
+                        "enabled": enabled_clients,
+                        "issues": issues,
+                    },
+                    suggestion="Check MCP client configuration in config.json.",
+                )
+            else:
+                self._add_result(
+                    "mcp_clients",
+                    HealthStatus.HEALTHY,
+                    f"{len(enabled_clients)} MCP client(s) properly configured",
+                    details={"enabled": enabled_clients},
+                )
+
+        except Exception as e:
+            self._add_result(
+                "mcp_clients",
+                HealthStatus.DEGRADED,
+                f"Failed to check MCP clients: {e}",
+            )
+
+    def check_required_files(self) -> None:
+        """Check if required Markdown files exist."""
+        required_files = {
+            "AGENTS.md": "Agent behavior configuration",
+            "HEARTBEAT.md": "Heartbeat query template",
+            "MEMORY.md": "Memory management instructions",
+            "SOUL.md": "Agent personality and values",
+        }
+
+        missing = []
+        empty = []
+
+        for filename, description in required_files.items():
+            file_path = WORKING_DIR / filename
+            if not file_path.exists():
+                missing.append(f"{filename} ({description})")
+            elif file_path.stat().st_size == 0:
+                empty.append(f"{filename} ({description})")
+
+        if missing:
+            self._add_result(
+                "required_files",
+                HealthStatus.UNHEALTHY,
+                f"Missing {len(missing)} required file(s): {', '.join([f.split(' ')[0] for f in missing])}",
+                details={"missing": missing},
+                suggestion="Run 'copaw init' to create missing files.",
+            )
+        elif empty:
+            self._add_result(
+                "required_files",
+                HealthStatus.DEGRADED,
+                f"{len(empty)} required file(s) are empty: {', '.join([f.split(' ')[0] for f in empty])}",
+                details={"empty": empty},
+                suggestion="Edit these files to configure agent behavior.",
+            )
+        else:
+            self._add_result(
+                "required_files",
+                HealthStatus.HEALTHY,
+                "All required files are present",
+                details={"files": list(required_files.keys())},
+            )
+
+    def check_permissions(self) -> None:
+        """Check working directory permissions."""
+        import os
+
+        critical_dirs = {
+            "working_dir": WORKING_DIR,
+            "active_skills": ACTIVE_SKILLS_DIR,
+            "memory": WORKING_DIR / "memory",
+            "file_store": WORKING_DIR / "file_store",
+        }
+
+        issues = []
+
+        for name, dir_path in critical_dirs.items():
+            if not dir_path.exists():
+                # Directory doesn't exist, will be created on demand
+                continue
+
+            # Check read permission
+            if not os.access(dir_path, os.R_OK):
+                issues.append(f"{name}: not readable")
+
+            # Check write permission
+            if not os.access(dir_path, os.W_OK):
+                issues.append(f"{name}: not writable")
+
+        if issues:
+            self._add_result(
+                "permissions",
+                HealthStatus.UNHEALTHY,
+                f"Permission issues in {len(issues)} location(s)",
+                details={"issues": issues},
+                suggestion="Fix directory permissions with 'chmod' or check file ownership.",
+            )
+        else:
+            self._add_result(
+                "permissions",
+                HealthStatus.HEALTHY,
+                "All directories have proper permissions",
+            )
