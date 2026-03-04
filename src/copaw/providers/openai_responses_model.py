@@ -195,7 +195,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
         choices = _get(raw, "choices", []) or []
         if choices:
             message = _get(choices[0], "message", {})
-            text = _to_text(_get(message, "content", ""))
+            text = self._extract_text(_get(message, "content", ""))
             if text:
                 blocks.append(TextBlock(type="text", text=text))
 
@@ -281,19 +281,29 @@ class OpenAIResponsesChatModel(ChatModelBase):
         for index, msg in enumerate(messages):
             original_role = _to_text(_get(msg, "role", "user")) or "user"
             role = original_role
-            if role not in {"system", "user", "assistant", "tool"}:
+            if role not in {
+                "system",
+                "user",
+                "assistant",
+                "tool",
+                "developer",
+            }:
                 role = "user"
                 self._log_role_coercion(
                     "_messages_to_chat",
                     index,
                     original_role,
                 )
-            out.append(
-                {
-                    "role": role,
-                    "content": self._extract_text(_get(msg, "content", "")),
-                },
-            )
+
+            mapped: dict[str, Any] = {
+                "role": role,
+                "content": self._extract_text(_get(msg, "content", "")),
+            }
+            if role == "tool":
+                tool_call_id = _to_text(_get(msg, "tool_call_id", ""))
+                if tool_call_id:
+                    mapped["tool_call_id"] = tool_call_id
+            out.append(mapped)
         return out
 
     def _extract_text(self, content: Any) -> str:
