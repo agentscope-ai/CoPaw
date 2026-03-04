@@ -217,7 +217,8 @@ class LocalModelManager:
             if snapshot_download_fn is None:
                 raise ImportError(
                     "ModelScope snapshot download is required for MLX models. "
-                    "Please upgrade modelscope to a newer version.",
+                    "Install it with: pip install modelscope, or upgrade "
+                    "modelscope to a newer version if it is already installed.",
                 )
 
             logger.info(
