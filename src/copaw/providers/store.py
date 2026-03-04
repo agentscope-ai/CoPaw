@@ -454,7 +454,7 @@ def create_custom_provider(
     provider_id: str,
     name: str,
     *,
-    default_base_url: str = "",
+    default_base_url: Optional[str] = None,
     api_key_prefix: str = "",
     models: Optional[list[ModelInfo]] = None,
 ) -> ProvidersData:
@@ -472,7 +472,7 @@ def create_custom_provider(
         default_base_url=default_base_url,
         api_key_prefix=api_key_prefix,
         models=models or [],
-        base_url=default_base_url,
+        base_url=default_base_url or None,
     )
     data.custom_providers[provider_id] = cpd
     register_custom_provider(cpd)

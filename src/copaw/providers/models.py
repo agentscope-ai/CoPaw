@@ -18,8 +18,8 @@ class ProviderDefinition(BaseModel):
 
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Human-readable provider name")
-    default_base_url: str = Field(
-        default="",
+    default_base_url: Optional[str] = Field(
+        default=None,
         description="Default API base URL",
     )
     api_key_prefix: str = Field(
@@ -36,6 +36,11 @@ class ProviderDefinition(BaseModel):
         default="OpenAIChatModel",
         description="Chat model class name (e.g., 'OpenAIChatModel')",
     )
+
+    @field_validator("default_base_url", mode="before")
+    @classmethod
+    def _empty_default_base_url_to_none(cls, v: object) -> object:
+        return None if v == "" else v
 
 
 class ProviderSettings(BaseModel):
@@ -65,7 +70,7 @@ class CustomProviderData(BaseModel):
 
     id: str = Field(..., description="Provider identifier (unique)")
     name: str = Field(..., description="Human-readable provider name")
-    default_base_url: str = Field(default="")
+    default_base_url: Optional[str] = Field(default=None)
     api_key_prefix: str = Field(default="")
     models: List[ModelInfo] = Field(default_factory=list)
     base_url: Optional[str] = Field(default=None)
@@ -75,7 +80,7 @@ class CustomProviderData(BaseModel):
         description="Chat model class name (e.g., 'OpenAIChatModel')",
     )
 
-    @field_validator("base_url", "api_key", mode="before")
+    @field_validator("default_base_url", "base_url", "api_key", mode="before")
     @classmethod
     def _empty_str_to_none(cls, v: object) -> object:
         return None if v == "" else v
