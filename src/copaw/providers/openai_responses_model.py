@@ -77,7 +77,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
         if not isinstance(messages, list):
-            raise ValueError(
+            raise TypeError(
                 "Responses `messages` field expected type `list`, "
                 f"got `{type(messages)}` instead.",
             )

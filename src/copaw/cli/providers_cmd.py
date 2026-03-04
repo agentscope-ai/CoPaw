@@ -33,7 +33,7 @@ def _parse_header_pairs(values: tuple[str, ...]) -> dict[str, str]:
             raise ValueError(
                 f"Invalid header '{value}'. Use KEY=VALUE format.",
             )
-        headers[key] = header_value
+        headers[key] = header_value.strip()
     return headers
 
 
