@@ -267,6 +267,16 @@ class ConfigValidator:
 
     @staticmethod
     def _is_valid_interval(interval: str) -> bool:
-        """Check if interval string is valid (e.g., '30m', '1h')."""
-        pattern = r"^\d+[smhd](\d+[smhd])*$"
-        return bool(re.match(pattern, interval))
+        """Check if interval string is valid with proper unit ordering.
+
+        Valid formats: '30m', '1h', '2h30m', '1d12h30m', etc.
+        Units must be in descending order: d (days) -> h (hours) -> m (minutes) -> s (seconds)
+        """
+        # Pattern enforces descending unit order: optional days, hours, minutes, seconds
+        # At least one unit must be present
+        pattern = r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$"
+        match = re.match(pattern, interval)
+        if not match:
+            return False
+        # Ensure at least one unit is present (not all None)
+        return any(match.groups())
