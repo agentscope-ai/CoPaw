@@ -21,6 +21,11 @@ from ...config import load_config
 RestartCallback = Callable[[], Awaitable[None]]
 logger = logging.getLogger(__name__)
 
+
+class RestartInProgressError(Exception):
+    """Raised when /daemon restart is invoked while another restart runs."""
+
+
 DAEMON_PREFIX = "/daemon"
 DAEMON_SUBCOMMANDS = frozenset(
     {"status", "restart", "reload-config", "version", "logs"},
@@ -114,6 +119,12 @@ async def run_daemon_restart(context: DaemonContext) -> str:
             return (
                 "**Restart completed**\n\n"
                 "- Channels, cron and MCP reloaded in-process (no exit)."
+            )
+        except RestartInProgressError:
+            return (
+                "**Restart skipped**\n\n"
+                "- A restart is already in progress. Please wait for it to "
+                "finish."
             )
         except Exception as e:
             return f"**Restart failed**\n\n- {e}"
@@ -221,7 +232,7 @@ class DaemonCommandHandlerMixin:
             n = 100
             for a in args:
                 if a.isdigit():
-                    n = min(int(a), 2000)
+                    n = max(1, min(int(a), 2000))
                     break
             text = run_daemon_logs(context, lines=n)
         else:

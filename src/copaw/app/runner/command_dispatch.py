@@ -114,14 +114,15 @@ async def run_command_path(
         formatter=formatter,
     )
     light = _LightweightSessionAgent(memory=memory)
-    try:
-        await runner.session.load_session_state(
-            session_id=session_id,
-            user_id=user_id,
-            agent=light,
-        )
-    except ValueError:
-        pass  # No session file yet
+    if session_id and user_id:
+        try:
+            await runner.session.load_session_state(
+                session_id=session_id,
+                user_id=user_id,
+                agent=light,
+            )
+        except ValueError:
+            pass  # No session file yet
 
     conv_handler = CommandHandler(
         agent_name="Friday",
@@ -141,8 +142,9 @@ async def run_command_path(
         )
     yield (response_msg, True)
 
-    await runner.session.save_session_state(
-        session_id=session_id,
-        user_id=user_id,
-        agent=light,
-    )
+    if session_id and user_id:
+        await runner.session.save_session_state(
+            session_id=session_id,
+            user_id=user_id,
+            agent=light,
+        )

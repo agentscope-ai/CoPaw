@@ -28,7 +28,6 @@ def test_conversation_commands_set() -> None:
     )
     assert CommandHandler.SYSTEM_COMMANDS == frozenset(
         {
-            "start",
             "compact",
             "new",
             "clear",
