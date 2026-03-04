@@ -6,7 +6,7 @@ import importlib
 import logging
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -29,7 +29,7 @@ class HealthCheckResult:
     name: str
     status: HealthStatus
     message: str
-    details: dict = None
+    details: dict = field(default_factory=dict)
     suggestion: str = ""
 
 
@@ -366,8 +366,17 @@ class HealthChecker:
             # If we got here without exception, connection works
             return True
 
+        except ImportError as e:
+            logger.error(f"Failed to import model factory: {e}")
+            return False
+        except ValueError as e:
+            logger.error(f"Invalid model configuration: {e}")
+            return False
+        except ConnectionError as e:
+            logger.warning(f"Network connection failed: {e}")
+            return False
         except Exception as e:
-            logger.debug(f"LLM connection test failed: {e}")
+            logger.warning(f"LLM connection test failed: {e}")
             return False
 
     def check_channels(self) -> None:
