@@ -93,9 +93,7 @@ function normalizeUserContent(content: unknown): RequestContent[] {
 
   if (!Array.isArray(content)) {
     const text = String(content || "");
-    return text
-      ? [{ type: "text", text, status: "created" }]
-      : [];
+    return text ? [{ type: "text", text, status: "created" }] : [];
   }
 
   const blocks = content as ContentItem[];
@@ -103,66 +101,63 @@ function normalizeUserContent(content: unknown): RequestContent[] {
     (block) => block?.type === "image" || block?.type === "file",
   );
 
-  const normalized = blocks.reduce<RequestContent[]>(
-    (items, block) => {
-      if (!block || typeof block !== "object") {
+  const normalized = blocks.reduce<RequestContent[]>((items, block) => {
+    if (!block || typeof block !== "object") {
+      return items;
+    }
+
+    if (block.type === "text") {
+      const text = typeof block.text === "string" ? block.text : "";
+      if (
+        hasRenderableAttachment &&
+        text.startsWith(GENERATED_UPLOAD_TEXT_PREFIX)
+      ) {
         return items;
       }
-
-      if (block.type === "text") {
-        const text = typeof block.text === "string" ? block.text : "";
-        if (
-          hasRenderableAttachment &&
-          text.startsWith(GENERATED_UPLOAD_TEXT_PREFIX)
-        ) {
-          return items;
-        }
-        if (text) {
-          items.push({ type: "text", text, status: "created" });
-        }
-        return items;
+      if (text) {
+        items.push({ type: "text", text, status: "created" });
       }
+      return items;
+    }
 
-      if (block.type === "image") {
-        const imageUrl = getBlockUrl(block);
-        if (imageUrl) {
-          items.push({
-            type: "image",
-            image_url: imageUrl,
-            status: "created",
-          });
-        }
-        return items;
-      }
-
-      if (block.type === "file") {
-        const fileUrl = getBlockUrl(block);
-        if (!fileUrl) {
-          return items;
-        }
-
-        const fileName =
-          typeof block.file_name === "string"
-            ? block.file_name
-            : typeof block.filename === "string"
-              ? block.filename
-              : undefined;
-        const fileSize =
-          typeof block.file_size === "number" ? block.file_size : undefined;
-
+    if (block.type === "image") {
+      const imageUrl = getBlockUrl(block);
+      if (imageUrl) {
         items.push({
-          type: "file",
-          file_url: fileUrl,
-          file_name: fileName,
-          file_size: fileSize,
+          type: "image",
+          image_url: imageUrl,
           status: "created",
         });
       }
-
       return items;
-    },
-    [],
-  );
+    }
+
+    if (block.type === "file") {
+      const fileUrl = getBlockUrl(block);
+      if (!fileUrl) {
+        return items;
+      }
+
+      const fileName =
+        typeof block.file_name === "string"
+          ? block.file_name
+          : typeof block.filename === "string"
+            ? block.filename
+            : undefined;
+      const fileSize =
+        typeof block.file_size === "number" ? block.file_size : undefined;
+
+      items.push({
+        type: "file",
+        file_url: fileUrl,
+        file_name: fileName,
+        file_size: fileSize,
+        status: "created",
+      });
+    }
+
+    return items;
+  }, []);
 
   return normalized;
 }
