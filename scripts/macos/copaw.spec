@@ -87,7 +87,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(_SPEC_DIR / "pyi_rth_opentelemetry_context.py")],
     excludes=[],
     noarchive=False,
 )
