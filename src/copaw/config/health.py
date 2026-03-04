@@ -425,18 +425,9 @@ class HealthChecker:
             enabled_channels = []
             issues = []
 
-            # Check each channel type
-            channel_configs = {
-                "console": config.channels.console,
-                "dingtalk": config.channels.dingtalk,
-                "feishu": config.channels.feishu,
-                "qq": config.channels.qq,
-                "discord": config.channels.discord,
-                "telegram": config.channels.telegram,
-                "imessage": config.channels.imessage,
-            }
-
-            for name, channel_config in channel_configs.items():
+            # Check each channel type dynamically from model fields
+            for name in config.channels.model_fields:
+                channel_config = getattr(config.channels, name)
                 if not channel_config or not getattr(channel_config, "enabled", False):
                     continue
 

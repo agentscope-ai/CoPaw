@@ -153,7 +153,7 @@ def health_cmd(output_json: bool, verbose: bool) -> None:
     if has_critical:
         click.secho("✗ System has critical issues", fg="red", bold=True)
         click.echo(f"  Health: {health.unhealthy_count} critical, {health.degraded_count} warnings")
-        if not validation.valid:
+        if not validation.valid or validation.warnings:
             click.echo(f"  Config: {len(validation.errors)} errors, {len(validation.warnings)} warnings")
     elif has_warnings:
         click.secho("⚠ System is operational with warnings", fg="yellow", bold=True)

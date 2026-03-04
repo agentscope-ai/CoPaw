@@ -198,7 +198,14 @@ class ConfigValidator:
             self._validate_mcp_client(client_id, client)
 
     def _validate_mcp_client(self, client_id: str, client: MCPClientConfig) -> None:
-        """Validate single MCP client."""
+        """Validate single MCP client.
+
+        Note: While Pydantic's @model_validator in MCPClientConfig already enforces
+        these constraints, we keep this validation as a secondary defense for:
+        1. Providing user-friendly error messages with specific error codes
+        2. Handling configs loaded from non-Pydantic sources
+        3. Explicit validation reporting in health checks
+        """
         path_prefix = f"mcp.clients.{client_id}"
 
         # Transport-specific validation
