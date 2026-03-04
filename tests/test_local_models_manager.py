@@ -182,6 +182,39 @@ def test_modelscope_mlx_missing_config_raises(
     assert not local_dir.exists()
 
 
+def test_modelscope_mlx_hidden_safetensors_does_not_pass_validation(
+    monkeypatch,
+) -> None:
+    repo_id = "mlx-community/hidden-only-safetensors"
+    local_dir = manager.MODELS_DIR / repo_id.replace("/", "--")
+
+    def _snapshot_download_hidden_only(
+        model_id: str,
+        local_dir: str,
+    ) -> str:
+        _ = model_id
+        target_dir = Path(local_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "config.json").write_text("{}", encoding="utf-8")
+        (target_dir / ".partial.safetensors").write_bytes(b"ST")
+        return str(target_dir)
+
+    _install_fake_modelscope(
+        monkeypatch,
+        snapshot_download_impl=_snapshot_download_hidden_only,
+    )
+
+    with pytest.raises(RuntimeError, match="no \\.safetensors files found"):
+        manager.LocalModelManager.download_model_sync(
+            repo_id=repo_id,
+            filename=None,
+            backend=BackendType.MLX,
+            source=DownloadSource.MODELSCOPE,
+        )
+
+    assert not local_dir.exists()
+
+
 def test_modelscope_llamacpp_still_uses_single_file_download(
     monkeypatch,
 ) -> None:

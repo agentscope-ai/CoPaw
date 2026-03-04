@@ -345,6 +345,7 @@ class LocalModelManager:
             f
             for f in model_dir.rglob("*.safetensors")
             if f.is_file()
+            and not f.name.startswith(".")
             and not any(
                 p.name.startswith(".")
                 for p in f.relative_to(model_dir).parents
