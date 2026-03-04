@@ -129,7 +129,7 @@ class WeChatPublisher:
                 import socket
                 ip = socket.gethostbyname(socket.gethostname())
                 error_detail += f"\n  4. 当前IP可能是: {ip}"
-            except:
+            except OSError:
                 pass
 
         elif errcode in [40001, 40125, 40013]:
@@ -314,7 +314,6 @@ class WeChatPublisher:
             替换后的HTML内容
         """
         import re
-        from pathlib import Path
 
         # 正则匹配所有 <img src="本地路径"> 标签
         img_pattern = r'<img([^>]*?)src=["\']([^"\']+)["\']([^>]*?)>'
@@ -414,7 +413,6 @@ class WeChatPublisher:
 
         def convert_bg_div_to_table(match):
             """将带背景色的 div/section 转换为 table 结构"""
-            tag = match.group(1)  # div 或 section
             style = match.group(2)  # style 属性内容
             content = match.group(3)  # 内部内容
 

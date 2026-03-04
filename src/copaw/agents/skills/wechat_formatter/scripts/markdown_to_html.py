@@ -149,7 +149,7 @@ class WeChatHTMLConverter:
 
         def convert_pre_block(match):
             pre_tag = match.group(0)
-            pre_styles = re.search(r'<pre\s+style="([^"]+)"', pre_tag)
+            pre_styles = re.search(r'<pre[^>]*\sstyle="([^"]+)"', pre_tag)
             code_content = match.group(1)
 
             result = []
@@ -185,7 +185,7 @@ class WeChatHTMLConverter:
                 return f'<div>{converted_content}</div>'
 
         html = re.sub(
-            r'<pre[^>]*><code>(.*?)</code></pre>',
+            r'<pre[^>]*><code[^>]*>(.*?)</code></pre>',
             convert_pre_block,
             html,
             flags=re.DOTALL

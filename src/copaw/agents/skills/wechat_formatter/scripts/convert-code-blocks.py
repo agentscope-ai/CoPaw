@@ -13,7 +13,7 @@ def convert_code_blocks(html_content):
     def convert_pre_block(match):
         # 提取 pre 标签的样式
         pre_tag = match.group(0)
-        pre_styles = re.search(r'<pre\s+style="([^"]+)"', pre_tag)
+        pre_styles = re.search(r'<pre[^>]*\sstyle="([^"]+)"', pre_tag)
 
         # 提取 code 内容
         code_content = match.group(1)
@@ -59,9 +59,9 @@ def convert_code_blocks(html_content):
         else:
             return f'<div>{converted_content}</div>'
 
-    # 转换所有 <pre><code>...</code></pre>
+    # 转换所有 <pre><code>...</code></pre>（支持带属性的 code 标签）
     html_content = re.sub(
-        r'<pre[^>]*><code>(.*?)</code></pre>',
+        r'<pre[^>]*><code[^>]*>(.*?)</code></pre>',
         convert_pre_block,
         html_content,
         flags=re.DOTALL

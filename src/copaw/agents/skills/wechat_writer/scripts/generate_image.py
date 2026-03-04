@@ -162,32 +162,12 @@ class DALLEImageGenerator(ImageGenerator):
             raise RuntimeError(f"DALL-E API调用失败: {str(e)}")
 
 
-class AnthropicImageGenerator(ImageGenerator):
-    """Anthropic原生图片生成（通过Claude调用）"""
-    
-    def _get_api_key(self) -> str:
-        # Claude环境下不需要单独的API key
-        return "not_required"
-    
-    def generate(self, prompt: str, output_path: str, **kwargs) -> str:
-        """
-        使用Claude的原生图片生成能力
-        
-        注: 这个方法在claude.ai环境中可用
-        """
-        # 在claude.ai环境中，可以直接生成图片
-        # 这里返回提示信息，实际生成由调用方处理
-        return f"请使用Claude原生能力生成图片: {prompt}"
-
-
 # API映射
 API_GENERATORS = {
     "gemini": GeminiImageGenerator,
     "imagen": GeminiImageGenerator,  # 别名
     "dalle": DALLEImageGenerator,
     "openai": DALLEImageGenerator,  # 别名
-    "anthropic": AnthropicImageGenerator,
-    "claude": AnthropicImageGenerator,  # 别名
 }
 
 
@@ -253,9 +233,7 @@ def main():
         generator = generator_class()
         
         # 准备参数
-        kwargs = {
-            "aspect_ratio": args.aspect_ratio,
-        }
+        kwargs = {}
 
         # 添加代理配置
         if args.proxy:
@@ -265,21 +243,23 @@ def main():
             if args.size:
                 kwargs["size"] = args.size
             kwargs["quality"] = args.quality
-        
+        else:
+            # 提示用户这些选项对当前后端不生效
+            if args.aspect_ratio != "16:9":
+                print(f"⚠️  --aspect-ratio 对 {args.api} 后端不生效")
+            if args.proxy:
+                print(f"⚠️  --proxy 对 {args.api} 后端不生效（请使用环境变量配置代理）")
+
         # 生成图片
         print(f"🎨 使用 {args.api.upper()} API生成图片...")
         print(f"📝 提示词: {args.prompt}")
-        
+
         result_path = generator.generate(
             prompt=args.prompt,
             output_path=str(output_path),
             **kwargs
         )
-        
-        if args.api in ["anthropic", "claude"]:
-            print(f"ℹ️  {result_path}")
-            return 1
-        
+
         print(f"✅ 图片已生成: {result_path}")
         return 0
         

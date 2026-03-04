@@ -85,6 +85,8 @@ ls -lh {skill_dir}/examples/
    ```
 7. 生成精美的 HTML 文件
 
+**注意**：`examples/` 中的模板为手动参考模板，需要 AI 根据模板结构手动映射内容。`scripts/markdown_to_html.py` 脚本仅支持 `tech|minimal|business` 三个 CSS 主题的自动转换。
+
 **如果没有合适的模板**，才使用步骤3的基础 CSS 主题转换。
 
 ---
@@ -182,7 +184,7 @@ python {skill_dir}/scripts/markdown_to_html.py \
 **识别标志**：用户刚说过"写一篇关于XXX的文章"，当前目录有新生成的 .md 文件
 
 **无缝衔接话术**：
-```
+```text
 检测到你刚用 wechat_writer 生成了文章：{文件名}
 现在为你美化格式，使用 tech 主题...
 ```

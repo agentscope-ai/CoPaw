@@ -28,8 +28,12 @@ def optimize_html_spacing(html_content):
     html_content = html_content.replace('margin: 24px auto', 'margin: 8px auto')
     html_content = html_content.replace('margin: 12px auto', 'margin: 6px auto')
 
-    # 首行缩进设置为2em（2个字符）
-    html_content = html_content.replace('text-indent: 0;', 'text-indent: 2em;')
+    # 首行缩进设置为2em（仅作用于段落标签）
+    html_content = re.sub(
+        r'(<p[^>]*style="[^"]*?)text-indent:\s*0;',
+        r'\1text-indent: 2em;',
+        html_content
+    )
 
     # 删除段落之间的多余换行（压缩HTML）
     html_content = re.sub(r'</p>\s+<p', '</p><p', html_content)

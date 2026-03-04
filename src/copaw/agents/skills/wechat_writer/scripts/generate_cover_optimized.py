@@ -36,9 +36,9 @@ Design specifications:
 - Cubes are connected by luminous blue energy lines, creating a network effect
 - Depth and dimension: strong 3D perspective with light reflections
 
-Text layout (CRITICAL - all text in simplified Chinese):
-- Top center: Large bold title "Claude Skills" in white, modern sans-serif font
-- Below title: Chinese subtitle "让AI秒变领域专家" in elegant, clean font
+Text layout (CRITICAL - text in simplified Chinese, brand names may use English):
+- Top center: Large bold title "Claude Skills 技能系统" in white, modern sans-serif font
+- Below title: Subtitle "让AI秒变领域专家" in elegant, clean font
 - Bottom left corner: Small text "告别重复劳动 | 10倍提效" as a tagline
 
 Visual effects:
