@@ -106,8 +106,8 @@ python {skill_dir}/publisher.py \
 **格式**：
 ```json
 {
-  "appid": "wx1234567890abcdef",
-  "appsecret": "your_secret_here"
+  "appid": "your_appid_here",
+  "appsecret": "your_appsecret_here"
 }
 ```
 
