@@ -184,7 +184,10 @@
     "httpProxyPlaceholder": "http://127.0.0.1:18118",
     "httpProxyAuthPlaceholder": "user:password",
     "dbPathPlaceholder": "~/Library/Messages/chat.db",
-    "botPrefixPlaceholder": "@bot"
+    "botPrefixPlaceholder": "@bot",
+    "filterAll": "All",
+    "builtin": "Built-in",
+    "custom": "Custom"
   },
   "sessions": {
     "title": "Sessions",
