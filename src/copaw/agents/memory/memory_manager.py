@@ -74,14 +74,18 @@ class MemoryManager(ReMeCopaw):
             candidate_multiplier: Multiplier for candidate retrieval in search
             tool_result_threshold: Size threshold for tool result compaction
             retention_days: Number of days to retain tool result files
+
+        Main Entry:
+            https://github.com/agentscope-ai/ReMe/blob/main/reme/reme_copaw.py
+        File Based Memory:
+            https://github.com/agentscope-ai/ReMe/tree/main/reme/memory/file_based_copaw
         """
         if not _REME_AVAILABLE:
             raise RuntimeError("reme package not installed.")
 
         # Get language from config if not provided
         global_config = load_config()
-        config_language = global_config.agents.language
-        language = "zh" if config_language == "zh" else ""
+        language = "zh" if global_config.agents.language == "zh" else ""
 
         # Initialize parent ReMeCopaw class
         super().__init__(
@@ -101,13 +105,11 @@ class MemoryManager(ReMeCopaw):
 
     def update_config_params(self):
         global_config = load_config()
-        config_language = global_config.agents.language
-        max_input_length = global_config.agents.running.max_input_length
 
         super().update_params(
-            max_input_length=max_input_length,
+            max_input_length=global_config.agents.running.max_input_length,
             memory_compact_ratio=MEMORY_COMPACT_RATIO,
-            language=config_language,
+            language=global_config.agents.language,
         )
 
     async def compact_memory(
