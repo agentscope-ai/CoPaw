@@ -59,7 +59,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     api
       .getVersion()
       .then((res) => setVersion(res?.version ?? ""))
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   const menuItems: MenuProps["items"] = [
@@ -169,7 +169,6 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           gap: 12,
         }}
       >
-
         {!collapsed && (
           <>
             <img
@@ -193,10 +192,16 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         )}
         <Button
           type="text"
-          icon={collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          icon={
+            collapsed ? (
+              <PanelLeftOpen size={20} />
+            ) : (
+              <PanelLeftClose size={20} />
+            )
+          }
           onClick={() => setCollapsed(!collapsed)}
           style={{
-            margin: 'auto',
+            margin: "auto",
             color: "#615ced",
           }}
         />
