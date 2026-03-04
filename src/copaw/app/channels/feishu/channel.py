@@ -527,7 +527,11 @@ class FeishuChannel(BaseChannel):
                 if text:
                     text_parts.append(text)
             elif msg_type == "post":
-                text_parts.extend(self._parse_post_content(content_raw))
+                parsed_post = self._parse_post_content(content_raw)
+                if parsed_post:
+                    text_parts.extend(parsed_post)
+                else:
+                    text_parts.append("[post]")
             elif msg_type == "image":
                 image_key = extract_json_key(
                     content_raw,
