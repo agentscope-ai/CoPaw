@@ -77,6 +77,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 - [Local Models](#local-models)
 - [Documentation](#documentation)
 - [Roadmap](#roadmap)
+- [FAQ](#faq)
 - [Contributing](#get-involved)
 - [Install from source](#install-from-source)
 - [Why CoPaw?](#why-copaw)
@@ -263,6 +264,12 @@ You can also download and manage local models from the Console UI.
 | [Config](https://copaw.agentscope.io/docs/config)             | Working directory and config file                 |
 
 Full docs in this repo: [website/public/docs/](website/public/docs/).
+
+---
+
+## FAQ
+
+For common questions, troubleshooting tips, and known issues, please visit the **[FAQ page](https://copaw.agentscope.io/docs/faq)**.
 
 ---
 
