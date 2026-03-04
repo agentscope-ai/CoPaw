@@ -159,8 +159,8 @@ In chat, send `/daemon <subcommand>` or use short names (e.g. `/status`). From t
 | Command                             | Description                                                                |
 | ----------------------------------- | -------------------------------------------------------------------------- |
 | `/daemon status` or `/status`       | Show status (config, working dir, memory manager)                          |
-| `/daemon restart` or `/restart`     | Request restart (process exits; use systemd/supervisor to relaunch)        |
-| `/daemon reload-config`             | Reload config without restarting the process                               |
+| `/daemon restart` or `/restart`     | In-process restart (channels, cron, MCP) when in chat; from CLI prints instructions |
+| `/daemon reload-config`             | Re-read and validate config (channel/MCP changes require /daemon restart or process restart) |
 | `/daemon version`                   | Version and paths (working dir, log file)                                  |
 | `/daemon logs` or `/daemon logs 50` | Last N lines of console log (default 100; from `copaw.log` in working dir) |
 

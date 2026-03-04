@@ -69,8 +69,8 @@ copaw app --log-level debug           # 详细日志
 | 命令                         | 说明                                                |
 | ---------------------------- | --------------------------------------------------- |
 | `copaw daemon status`        | 状态（配置、工作目录、记忆服务）                    |
-| `copaw daemon restart`       | 打印重启说明（CLI 无法重启本机进程）                |
-| `copaw daemon reload-config` | 重新读取配置                                        |
+| `copaw daemon restart`       | 打印说明（在对话中用 /daemon restart 可进程内重载） |
+| `copaw daemon reload-config` | 重新读取并校验配置（频道/MCP 变更需在对话中 /daemon restart 或重启进程后生效） |
 | `copaw daemon version`       | 版本与路径                                          |
 | `copaw daemon logs [-n N]`   | 最近 N 行日志（默认 100，来自工作目录 `copaw.log`） |
 
