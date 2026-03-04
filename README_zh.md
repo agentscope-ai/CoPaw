@@ -390,5 +390,5 @@ CoPaw 采用 [Apache License 2.0](LICENSE) 开源协议。
 感谢所有为 CoPaw 做出贡献的朋友们：
 
 <a href="https://github.com/agentscope-ai/CoPaw/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=agentscope-ai/CoPaw&max=999&columns=12&anon=1" />
+  <img src="https://contrib.rocks/image?repo=agentscope-ai/CoPaw" alt="贡献者" />
 </a>

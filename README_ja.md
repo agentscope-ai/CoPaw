@@ -327,5 +327,5 @@ CoPawは[Apache License 2.0](LICENSE)の下でリリースされています。
 CoPawをより良くするために貢献してくださったすべての方々に感謝します：
 
 <a href="https://github.com/agentscope-ai/CoPaw/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=agentscope-ai/CoPaw&max=999&columns=12&anon=1" />
+  <img src="https://contrib.rocks/image?repo=agentscope-ai/CoPaw" alt="コントリビューター" />
 </a>
