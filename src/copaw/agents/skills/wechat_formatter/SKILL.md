@@ -1,6 +1,7 @@
 ---
 name: wechat_formatter
 description: "将 Markdown 文章转换为美化的 HTML 格式，适配微信公众号发布。应用专业 CSS 样式、代码高亮、优化排版。当用户说'美化这篇文章'、'转换为HTML'、'优化公众号格式'、'生成公众号HTML'时使用。"
+author: 智语观潮
 homepage: https://github.com/BND-1/wechat_article_skills
 metadata:
   {
