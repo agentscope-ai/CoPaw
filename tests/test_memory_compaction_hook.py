@@ -109,22 +109,12 @@ async def _fake_safe_count_message_tokens(
     return sum(int(msg.get("_test_token_count", 0)) for msg in messages)
 
 
-def _fake_safe_count_str_tokens(text: str) -> int:
-    # Keep tests explicit and deterministic.
-    return 100 if text else 0
-
-
 async def test_compaction_triggers_on_total_context_budget(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
         "copaw.agents.hooks.memory_compaction.safe_count_message_tokens",
         _fake_safe_count_message_tokens,
-    )
-    monkeypatch.setattr(
-        "copaw.agents.hooks.memory_compaction.safe_count_str_tokens",
-        _fake_safe_count_str_tokens,
-        raising=False,
     )
 
     memory_manager = FakeMemoryManager()
@@ -161,11 +151,6 @@ async def test_compaction_not_triggered_when_total_under_threshold(
     monkeypatch.setattr(
         "copaw.agents.hooks.memory_compaction.safe_count_message_tokens",
         _fake_safe_count_message_tokens,
-    )
-    monkeypatch.setattr(
-        "copaw.agents.hooks.memory_compaction.safe_count_str_tokens",
-        _fake_safe_count_str_tokens,
-        raising=False,
     )
 
     memory_manager = FakeMemoryManager()
