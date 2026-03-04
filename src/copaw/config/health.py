@@ -513,11 +513,16 @@ class HealthChecker:
                         issues.append(f"{client_id}: stdio requires command")
                     else:
                         # Check if command is executable
-                        cmd_parts = client_config.command.split()
-                        if cmd_parts:
-                            cmd_path = shutil.which(cmd_parts[0])
-                            if not cmd_path:
-                                issues.append(f"{client_id}: command '{cmd_parts[0]}' not found")
+                        # Use shlex.split() to properly handle quoted paths and spaces
+                        import shlex
+                        try:
+                            cmd_parts = shlex.split(client_config.command)
+                            if cmd_parts:
+                                cmd_path = shutil.which(cmd_parts[0])
+                                if not cmd_path:
+                                    issues.append(f"{client_id}: command '{cmd_parts[0]}' not found")
+                        except ValueError as e:
+                            issues.append(f"{client_id}: invalid command syntax: {e}")
                 elif client_config.transport in ("streamable_http", "sse"):
                     if not client_config.url:
                         issues.append(f"{client_id}: {client_config.transport} requires url")
@@ -557,9 +562,11 @@ class HealthChecker:
 
     def check_required_files(self) -> None:
         """Check if required Markdown files exist."""
+        from ..constant import HEARTBEAT_FILE
+
         required_files = {
             "AGENTS.md": "Agent behavior configuration",
-            "HEARTBEAT.md": "Heartbeat query template",
+            HEARTBEAT_FILE: "Heartbeat query template",
             "MEMORY.md": "Memory management instructions",
             "SOUL.md": "Agent personality and values",
         }
