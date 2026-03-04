@@ -16,11 +16,14 @@ import sys
 
 
 def _make_version_patch(orig_version, not_found_exc):
+    # pydantic requires email-validator >= 2.0; return 2.x when metadata missing.
+    _MIN_VERSIONS = {"email-validator": "2.0.0"}
+
     def _patched(name: str) -> str:
         try:
             return orig_version(name)
         except not_found_exc:
-            return "1.0.0"
+            return _MIN_VERSIONS.get(name, "1.0.0")
 
     return _patched
 

@@ -52,9 +52,9 @@ try:
     _reme_hidden = _reme_hidden + list(_fm_hidden or [])
 except Exception:
     pass
-# chromadb telemetry needs opentelemetry-sdk metadata in frozen app.
+# chromadb telemetry needs opentelemetry-sdk metadata; pydantic needs email-validator.
 _metadata_datas = []
-for _pkg in ("fastmcp", "opentelemetry-sdk", "opentelemetry-api"):
+for _pkg in ("fastmcp", "opentelemetry-sdk", "opentelemetry-api", "email-validator"):
     try:
         _metadata_datas += copy_metadata(_pkg)
     except Exception:
@@ -100,6 +100,7 @@ a = Analysis(
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
+        "email_validator",
     ],
     hookspath=[],
     hooksconfig={},

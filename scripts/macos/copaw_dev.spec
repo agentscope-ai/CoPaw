@@ -53,8 +53,9 @@ except Exception:
 
 # reme/flowllm need fastmcp at import time; include metadata so it is found.
 # chromadb telemetry imports opentelemetry.sdk which needs opentelemetry-sdk metadata.
+# pydantic/FastAPI need email-validator (and its metadata for version >= 2.0 check).
 _metadata_datas = []
-for _pkg in ("fastmcp", "opentelemetry-sdk", "opentelemetry-api"):
+for _pkg in ("fastmcp", "opentelemetry-sdk", "opentelemetry-api", "email-validator"):
     try:
         _metadata_datas += copy_metadata(_pkg)
     except Exception:
@@ -101,6 +102,7 @@ a = Analysis(
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
+        "email_validator",
     ],
     hookspath=[],
     hooksconfig={},
