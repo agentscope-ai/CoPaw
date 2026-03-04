@@ -267,7 +267,7 @@ class OpenAIResponsesChatModel(ChatModelBase):
     ) -> ChatResponse:
         blocks: list[TextBlock | ToolUseBlock] = []
 
-        text = _to_text(_get(response, "output_text", ""))
+        text = ""
         for item in _get(response, "output", []) or []:
             item_type = _to_text(_get(item, "type", ""))
             if item_type == "message":
@@ -293,6 +293,9 @@ class OpenAIResponsesChatModel(ChatModelBase):
                         raw_input=raw_args,
                     ),
                 )
+
+        if not text:
+            text = _to_text(_get(response, "output_text", ""))
 
         if text:
             blocks.insert(0, TextBlock(type="text", text=text))
