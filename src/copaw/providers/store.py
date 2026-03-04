@@ -396,6 +396,7 @@ def _resolve_slot(
         return ResolvedModelConfig(
             model=slot.model,
             is_local=True,
+            vision_supported=slot.vision_supported,
         )
 
     if pid not in data.custom_providers and pid not in data.providers:
@@ -405,6 +406,7 @@ def _resolve_slot(
         model=slot.model,
         base_url=base_url,
         api_key=api_key,
+        vision_supported=slot.vision_supported,
     )
 
 

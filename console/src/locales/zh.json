@@ -234,6 +234,8 @@
   },
   "models": {
     "llmConfiguration": "LLM 配置",
+    "visionSupport": "视觉支持",
+    "visionSupportTooltip": "启用后，图片和视频将转换为 base64 发送给 LLM，支持视觉模型分析图像。如果模型不支持视觉，请关闭。",
     "providersTitle": "提供商",
     "providersDescription": "为每个提供商配置 API 密钥和端点。",
     "llmTitle": "LLM",

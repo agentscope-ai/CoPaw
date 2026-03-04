@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { SaveOutlined } from "@ant-design/icons";
-import { Select, Button, message } from "@agentscope-ai/design";
+import { Select, Button, Switch, message } from "@agentscope-ai/design";
 import type { ModelSlotRequest } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -21,6 +21,7 @@ interface ModelsSectionProps {
     active_llm?: {
       provider_id?: string;
       model?: string;
+      vision_supported?: boolean;
     };
   } | null;
   onSaved: () => void;
@@ -42,6 +43,8 @@ export function ModelsSection({
   const [dirty, setDirty] = useState(false);
 
   const currentSlot = activeModels?.active_llm;
+
+  const [selectedVision, setSelectedVision] = useState<boolean>(true);
 
   const eligible = useMemo(
     () =>
@@ -68,9 +71,14 @@ export function ModelsSection({
     if (currentSlot) {
       setSelectedProviderId(currentSlot.provider_id || undefined);
       setSelectedModel(currentSlot.model || undefined);
+      setSelectedVision(currentSlot.vision_supported ?? true);
     }
     setDirty(false);
-  }, [currentSlot?.provider_id, currentSlot?.model]);
+  }, [
+    currentSlot?.provider_id,
+    currentSlot?.model,
+    currentSlot?.vision_supported,
+  ]);
 
   const chosenProvider = providers.find((p) => p.id === selectedProviderId);
   const modelOptions = chosenProvider?.models ?? [];
@@ -87,12 +95,18 @@ export function ModelsSection({
     setDirty(true);
   };
 
+  const handleVisionChange = (checked: boolean) => {
+    setSelectedVision(checked);
+    setDirty(true);
+  };
+
   const handleSave = async () => {
     if (!selectedProviderId || !selectedModel) return;
 
     const body: ModelSlotRequest = {
       provider_id: selectedProviderId,
       model: selectedModel,
+      vision_supported: selectedVision,
     };
 
     setSaving(true);
@@ -162,6 +176,13 @@ export function ModelsSection({
               label: `${m.name} (${m.id})`,
             }))}
           />
+        </div>
+
+        <div className={styles.slotField}>
+          <label className={styles.slotLabel}>
+            {t("models.visionSupport")}
+          </label>
+          <Switch checked={selectedVision} onChange={handleVisionChange} />
         </div>
 
         <div
