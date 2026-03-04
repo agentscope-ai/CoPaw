@@ -56,11 +56,11 @@ la prochaine exécution du heartbeat utilisera le nouveau contenu.
 **L'intervalle, la cible et les heures actives** sont dans `config.json` (généralement
 `~/.copaw/config.json`), sous `agents.defaults.heartbeat` :
 
-| Champ       | Signification                                  | Exemple                                             |
-| ----------- | ---------------------------------------------- | --------------------------------------------------- |
-| every       | Fréquence d'exécution                          | `"30m"`, `"1h"`, `"2h30m"`, `"90s"`                |
-| target      | Où envoyer la réponse                          | `"main"` = ne pas envoyer ; `"last"` = dernier canal |
-| activeHours | Optionnel ; ne s'exécute que dans cette fenêtre chaque jour | `{ "start": "08:00", "end": "22:00" }` |
+| Champ       | Signification                                               | Exemple                                              |
+| ----------- | ----------------------------------------------------------- | ---------------------------------------------------- |
+| every       | Fréquence d'exécution                                       | `"30m"`, `"1h"`, `"2h30m"`, `"90s"`                  |
+| target      | Où envoyer la réponse                                       | `"main"` = ne pas envoyer ; `"last"` = dernier canal |
+| activeHours | Optionnel ; ne s'exécute que dans cette fenêtre chaque jour | `{ "start": "08:00", "end": "22:00" }`               |
 
 Exemple (toutes les 30 min, pas de canal) :
 
@@ -96,12 +96,12 @@ configurations peuvent nécessiter un redémarrage).
 
 ## Heartbeat vs tâches cron
 
-|                | Heartbeat                                        | Tâches cron                                                    |
-| -------------- | ------------------------------------------------ | -------------------------------------------------------------- |
-| **Nombre**     | Un fichier de prompt (HEARTBEAT.md)              | Autant que nécessaire                                          |
-| **Planification** | Un intervalle global                          | Chaque tâche a sa propre planification                         |
-| **Livraison**  | Optionnel : envoyer au dernier canal ou non      | Chaque tâche spécifie son propre canal et utilisateur          |
-| **Idéal pour** | Un bilan / digest fixe                           | Plusieurs tâches à différentes heures avec différents contenus |
+|                   | Heartbeat                                   | Tâches cron                                                    |
+| ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
+| **Nombre**        | Un fichier de prompt (HEARTBEAT.md)         | Autant que nécessaire                                          |
+| **Planification** | Un intervalle global                        | Chaque tâche a sa propre planification                         |
+| **Livraison**     | Optionnel : envoyer au dernier canal ou non | Chaque tâche spécifie son propre canal et utilisateur          |
+| **Idéal pour**    | Un bilan / digest fixe                      | Plusieurs tâches à différentes heures avec différents contenus |
 
 > Besoin d'« envoyer Bonjour à 9h » ou d'« interroger les tâches toutes les 2h et envoyer à DingTalk » ? Utilisez [CLI](./cli) `copaw cron create` (tâches cron), pas le heartbeat.
 

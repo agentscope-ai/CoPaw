@@ -18,13 +18,13 @@ Cinq commandes sont actuellement supportées :
 
 ## Comparaison des commandes
 
-| Commande       | Nécessite d'attendre | Résumé compressé      | Mémoire à long terme    | Historique des messages  | Utilisation du contexte         |
-| -------------- | -------------------- | --------------------- | ----------------------- | ------------------------ | ------------------------------- |
-| `/compact`     | Oui                  | Génère un nouveau     | Sauvegardé en arrière-plan | Marqué comme compacté | -                               |
-| `/new`         | Non                  | Effacé                | Sauvegardé en arrière-plan | Marqué comme compacté | -                               |
-| `/clear`       | Non                  | Effacé                | Non sauvegardé          | Complètement effacé      | -                               |
-| `/history`     | Non                  | -                     | -                       | Vue en lecture seule     | 📊 Détails tokens + Utilisation |
-| `/compact_str` | Non                  | -                     | -                       | -                        | 📖 Voir le contenu du résumé    |
+| Commande       | Nécessite d'attendre | Résumé compressé  | Mémoire à long terme       | Historique des messages | Utilisation du contexte         |
+| -------------- | -------------------- | ----------------- | -------------------------- | ----------------------- | ------------------------------- |
+| `/compact`     | Oui                  | Génère un nouveau | Sauvegardé en arrière-plan | Marqué comme compacté   | -                               |
+| `/new`         | Non                  | Effacé            | Sauvegardé en arrière-plan | Marqué comme compacté   | -                               |
+| `/clear`       | Non                  | Effacé            | Non sauvegardé             | Complètement effacé     | -                               |
+| `/history`     | Non                  | -                 | -                          | Vue en lecture seule    | 📊 Détails tokens + Utilisation |
+| `/compact_str` | Non                  | -                 | -                          | -                       | 📖 Voir le contenu du résumé    |
 
 ---
 

@@ -65,11 +65,11 @@ Le résumé compacté est persisté, vous n'avez donc pas à craindre de le perd
 
 ### Variables d'environnement
 
-| Variable d'environnement               | Défaut   | Description                                                                      |
-| -------------------------------------- | -------- | -------------------------------------------------------------------------------- |
-| `COPAW_MEMORY_COMPACT_THRESHOLD`       | `100000` | Seuil de tokens qui déclenche la compaction automatique (ligne d'avertissement)  |
-| `COPAW_MEMORY_COMPACT_KEEP_RECENT`     | `3`      | Nombre de messages récents à conserver après compaction                          |
-| `COPAW_MEMORY_COMPACT_RATIO`           | `0.7`    | Ratio de seuil pour déclencher la compaction (relatif à la fenêtre de contexte)  |
+| Variable d'environnement           | Défaut   | Description                                                                     |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| `COPAW_MEMORY_COMPACT_THRESHOLD`   | `100000` | Seuil de tokens qui déclenche la compaction automatique (ligne d'avertissement) |
+| `COPAW_MEMORY_COMPACT_KEEP_RECENT` | `3`      | Nombre de messages récents à conserver après compaction                         |
+| `COPAW_MEMORY_COMPACT_RATIO`       | `0.7`    | Ratio de seuil pour déclencher la compaction (relatif à la fenêtre de contexte) |
 
 ## Quand la compaction se déclenche-t-elle ?
 
@@ -93,11 +93,11 @@ graph LR
     D -->|Non| F[Continuer la conversation]
 ```
 
-| Zone                          | Description                    | Traitement                                                                                |
-| ----------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| 🔒 **Prompt système**         | Le « guide de persona » de l'IA | Toujours conservé, jamais compacté                                                       |
-| 📚 **Messages compactables**  | Journal de conversation historique | Nombre de tokens calculé ; compacté en résumé quand le seuil est dépassé             |
-| 💬 **Messages récents**       | Derniers N messages             | Conservés tels quels (N configuré par `KEEP_RECENT`)                                     |
+| Zone                         | Description                        | Traitement                                                               |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| 🔒 **Prompt système**        | Le « guide de persona » de l'IA    | Toujours conservé, jamais compacté                                       |
+| 📚 **Messages compactables** | Journal de conversation historique | Nombre de tokens calculé ; compacté en résumé quand le seuil est dépassé |
+| 💬 **Messages récents**      | Derniers N messages                | Conservés tels quels (N configuré par `KEEP_RECENT`)                     |
 
 ### 2. 🎮 Compaction manuelle (commande /compact)
 
@@ -138,13 +138,13 @@ graph TB
     A --> G[📌 Contexte clé]
 ```
 
-| Section                          | Contenu                                   | Exemple                                                  |
-| -------------------------------- | ----------------------------------------- | -------------------------------------------------------- |
-| 🎯 **Objectifs**                 | Ce que l'utilisateur veut accomplir       | « Construire un système de connexion utilisateur »       |
-| ⚙️ **Contraintes & Préférences** | Exigences mentionnées par l'utilisateur   | « Utiliser TypeScript, sans framework »                  |
-| 📈 **Avancement**                | Tâches terminées / en cours / bloquées    | « API de connexion terminée, API d'inscription en cours » |
-| 🔑 **Décisions clés**            | Décisions prises et leur raisonnement     | « Choix de JWT plutôt que Sessions pour la sans-état »   |
-| ➡️ **Prochaines étapes**         | Quoi faire ensuite                        | « Implémenter la fonctionnalité de réinitialisation du mot de passe » |
-| 📌 **Contexte clé**              | Données nécessaires pour continuer        | « Le fichier principal est à src/auth.ts »               |
+| Section                          | Contenu                                 | Exemple                                                               |
+| -------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| 🎯 **Objectifs**                 | Ce que l'utilisateur veut accomplir     | « Construire un système de connexion utilisateur »                    |
+| ⚙️ **Contraintes & Préférences** | Exigences mentionnées par l'utilisateur | « Utiliser TypeScript, sans framework »                               |
+| 📈 **Avancement**                | Tâches terminées / en cours / bloquées  | « API de connexion terminée, API d'inscription en cours »             |
+| 🔑 **Décisions clés**            | Décisions prises et leur raisonnement   | « Choix de JWT plutôt que Sessions pour la sans-état »                |
+| ➡️ **Prochaines étapes**         | Quoi faire ensuite                      | « Implémenter la fonctionnalité de réinitialisation du mot de passe » |
+| 📌 **Contexte clé**              | Données nécessaires pour continuer      | « Le fichier principal est à src/auth.ts »                            |
 
 > 💡 **Conseil** : La compaction préserve les chemins de fichiers exacts, les noms de fonctions et les messages d'erreur, garantissant que l'IA ne « perd pas la mémoire » et que les transitions de contexte se font en douceur !

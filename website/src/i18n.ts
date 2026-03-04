@@ -251,9 +251,9 @@ export const i18n: Record<Lang, Record<string, string>> = {
     "hero.cta": "Lire la documentation",
     "brandstory.title": "Pourquoi CoPaw ?",
     "brandstory.para1":
-      'CoPaw représente à la fois un Co Personal Agent Workstation et une « co-patte » — un partenaire toujours à vos côtés.',
+      "CoPaw représente à la fois un Co Personal Agent Workstation et une « co-patte » — un partenaire toujours à vos côtés.",
     "brandstory.para2":
-      'Plus qu\'un simple outil froid, CoPaw est une « petite patte » chaleureuse toujours prête à donner un coup de main. C\'est le coéquipier ultime pour votre vie numérique.',
+      "Plus qu'un simple outil froid, CoPaw est une « petite patte » chaleureuse toujours prête à donner un coup de main. C'est le coéquipier ultime pour votre vie numérique.",
     "features.title": "Capacités clés",
     "features.channels.title": "Tous les canaux",
     "features.channels.desc":
@@ -359,7 +359,8 @@ export const i18n: Record<Lang, Record<string, string>> = {
     "docs.searchNoResults": "Aucun résultat",
     "docs.searchResultsTitle": "Résultats de recherche",
     "docs.searchResultsTitleEmpty": "Rechercher dans la doc",
-    "docs.searchHint": "Entrez un mot-clé et appuyez sur Entrée pour rechercher.",
+    "docs.searchHint":
+      "Entrez un mot-clé et appuyez sur Entrée pour rechercher.",
   },
 };
 

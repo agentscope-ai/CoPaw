@@ -46,13 +46,13 @@ copaw app --workers 4                 # Mode multi-worker
 copaw app --log-level debug           # Journalisation détaillée
 ```
 
-| Option        | Défaut      | Description                                                    |
-| ------------- | ----------- | -------------------------------------------------------------- |
-| `--host`      | `127.0.0.1` | Hôte de liaison                                                |
-| `--port`      | `8088`      | Port de liaison                                                |
+| Option        | Défaut      | Description                                                               |
+| ------------- | ----------- | ------------------------------------------------------------------------- |
+| `--host`      | `127.0.0.1` | Hôte de liaison                                                           |
+| `--port`      | `8088`      | Port de liaison                                                           |
 | `--reload`    | désactivé   | Rechargement automatique lors de changements de fichiers (dev uniquement) |
-| `--workers`   | `1`         | Nombre de processus worker                                     |
-| `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
+| `--workers`   | `1`         | Nombre de processus worker                                                |
+| `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace`             |
 
 ### Console
 
@@ -78,18 +78,18 @@ alimentent de nombreux outils intégrés (ex. recherche web).
 
 Gérer les fournisseurs LLM et le modèle actif.
 
-| Commande                               | Ce qu'elle fait                                              |
-| -------------------------------------- | ------------------------------------------------------------ |
+| Commande                               | Ce qu'elle fait                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------- |
 | `copaw models list`                    | Afficher tous les fournisseurs, le statut de la clé API et le modèle actif |
-| `copaw models config`                  | Configuration interactive complète : clés API → modèle actif |
-| `copaw models config-key [provider]`   | Configurer la clé API d'un seul fournisseur                  |
-| `copaw models set-llm`                 | Changer le modèle actif (clés API inchangées)               |
-| `copaw models download <repo_id>`      | Télécharger un modèle local (llama.cpp / MLX)               |
-| `copaw models local`                   | Lister les modèles locaux téléchargés                        |
-| `copaw models remove-local <model_id>` | Supprimer un modèle local téléchargé                         |
-| `copaw models ollama-pull <model>`     | Télécharger un modèle Ollama                                 |
-| `copaw models ollama-list`             | Lister les modèles Ollama                                    |
-| `copaw models ollama-remove <model>`   | Supprimer un modèle Ollama                                   |
+| `copaw models config`                  | Configuration interactive complète : clés API → modèle actif               |
+| `copaw models config-key [provider]`   | Configurer la clé API d'un seul fournisseur                                |
+| `copaw models set-llm`                 | Changer le modèle actif (clés API inchangées)                              |
+| `copaw models download <repo_id>`      | Télécharger un modèle local (llama.cpp / MLX)                              |
+| `copaw models local`                   | Lister les modèles locaux téléchargés                                      |
+| `copaw models remove-local <model_id>` | Supprimer un modèle local téléchargé                                       |
+| `copaw models ollama-pull <model>`     | Télécharger un modèle Ollama                                               |
+| `copaw models ollama-list`             | Lister les modèles Ollama                                                  |
+| `copaw models ollama-remove <model>`   | Supprimer un modèle Ollama                                                 |
 
 ```bash
 copaw models list                    # Voir ce qui est configuré
@@ -125,10 +125,10 @@ copaw models remove-local <model_id>
 copaw models remove-local <model_id> --yes   # sans confirmation
 ```
 
-| Option      | Court | Défaut        | Description                                                                |
-| ----------- | ----- | ------------- | -------------------------------------------------------------------------- |
-| `--backend` | `-b`  | `llamacpp`    | Backend cible (`llamacpp` ou `mlx`)                                        |
-| `--source`  | `-s`  | `huggingface` | Source de téléchargement (`huggingface` ou `modelscope`)                   |
+| Option      | Court | Défaut        | Description                                                                                |
+| ----------- | ----- | ------------- | ------------------------------------------------------------------------------------------ |
+| `--backend` | `-b`  | `llamacpp`    | Backend cible (`llamacpp` ou `mlx`)                                                        |
+| `--source`  | `-s`  | `huggingface` | Source de téléchargement (`huggingface` ou `modelscope`)                                   |
 | `--file`    | `-f`  | _(auto)_      | Nom de fichier spécifique. Si omis, sélectionné automatiquement (préfère Q4_K_M pour GGUF) |
 
 #### Modèles Ollama
@@ -167,11 +167,11 @@ copaw models set-llm          # Basculer vers un autre modèle Ollama
 
 Gérer les variables d'environnement utilisées par les outils et Skills au runtime.
 
-| Commande                  | Ce qu'elle fait                       |
-| ------------------------- | ------------------------------------- |
+| Commande                  | Ce qu'elle fait                         |
+| ------------------------- | --------------------------------------- |
 | `copaw env list`          | Lister toutes les variables configurées |
-| `copaw env set KEY VALUE` | Définir ou mettre à jour une variable |
-| `copaw env delete KEY`    | Supprimer une variable                |
+| `copaw env set KEY VALUE` | Définir ou mettre à jour une variable   |
+| `copaw env delete KEY`    | Supprimer une variable                  |
 
 ```bash
 copaw env list
@@ -196,13 +196,13 @@ Gérer la configuration des canaux (iMessage, Discord, DingTalk, Feishu, QQ,
 Console, etc.). **Note :** Utilisez `config` pour la configuration interactive (pas de sous-commande `configure`) ;
 utilisez `remove` pour désinstaller les canaux personnalisés (pas d'`uninstall`).
 
-| Commande                       | Ce qu'elle fait                                                                                                                   |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `copaw channels list`          | Afficher tous les canaux et leur statut (secrets masqués)                                                                        |
-| `copaw channels install <key>` | Installer un canal dans `custom_channels/` : créer un stub ou utiliser `--path`/`--url`                                          |
-| `copaw channels add <key>`     | Installer et ajouter à la config ; les canaux intégrés obtiennent uniquement une entrée de config ; supporte `--path`/`--url`     |
+| Commande                       | Ce qu'elle fait                                                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `copaw channels list`          | Afficher tous les canaux et leur statut (secrets masqués)                                                                                     |
+| `copaw channels install <key>` | Installer un canal dans `custom_channels/` : créer un stub ou utiliser `--path`/`--url`                                                       |
+| `copaw channels add <key>`     | Installer et ajouter à la config ; les canaux intégrés obtiennent uniquement une entrée de config ; supporte `--path`/`--url`                 |
 | `copaw channels remove <key>`  | Supprimer un canal personnalisé de `custom_channels/` (les intégrés ne peuvent pas être supprimés) ; `--keep-config` garde l'entrée de config |
-| `copaw channels config`        | Activer/désactiver les canaux et renseigner les identifiants de manière interactive                                               |
+| `copaw channels config`        | Activer/désactiver les canaux et renseigner les identifiants de manière interactive                                                           |
 
 ```bash
 copaw channels list                    # Voir le statut actuel
@@ -216,14 +216,14 @@ copaw channels config                 # Configuration interactive
 
 Le flux `config` interactif vous permet de choisir un canal, de l'activer/désactiver et de saisir les identifiants. Il boucle jusqu'à ce que vous choisissiez « Sauvegarder et quitter ».
 
-| Canal        | Champs à renseigner                                  |
-| ------------ | ---------------------------------------------------- |
+| Canal        | Champs à renseigner                                           |
+| ------------ | ------------------------------------------------------------- |
 | **iMessage** | Préfixe bot, chemin de base de données, intervalle de sondage |
-| **Discord**  | Préfixe bot, Token du Bot, proxy HTTP, auth proxy    |
-| **DingTalk** | Préfixe bot, Client ID, Client Secret                |
-| **Feishu**   | Préfixe bot, App ID, App Secret                      |
-| **QQ**       | Préfixe bot, App ID, Client Secret                   |
-| **Console**  | Préfixe bot                                          |
+| **Discord**  | Préfixe bot, Token du Bot, proxy HTTP, auth proxy             |
+| **DingTalk** | Préfixe bot, Client ID, Client Secret                         |
+| **Feishu**   | Préfixe bot, App ID, App Secret                               |
+| **QQ**       | Préfixe bot, App ID, Client Secret                            |
+| **Console**  | Préfixe bot                                                   |
 
 > Pour la configuration des identifiants spécifiques à chaque plateforme, voir [Canaux](./channels).
 
@@ -236,16 +236,16 @@ interroger CoPaw et envoyer la réponse ». **Nécessite que `copaw app` soit en
 
 ### copaw cron
 
-| Commande                     | Ce qu'elle fait                                    |
-| ---------------------------- | -------------------------------------------------- |
-| `copaw cron list`            | Lister toutes les tâches                           |
-| `copaw cron get <job_id>`    | Afficher les spécifications d'une tâche            |
+| Commande                     | Ce qu'elle fait                                                         |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `copaw cron list`            | Lister toutes les tâches                                                |
+| `copaw cron get <job_id>`    | Afficher les spécifications d'une tâche                                 |
 | `copaw cron state <job_id>`  | Afficher l'état runtime (prochaine exécution, dernière exécution, etc.) |
-| `copaw cron create ...`      | Créer une tâche                                    |
-| `copaw cron delete <job_id>` | Supprimer une tâche                                |
-| `copaw cron pause <job_id>`  | Mettre en pause une tâche                          |
-| `copaw cron resume <job_id>` | Reprendre une tâche en pause                       |
-| `copaw cron run <job_id>`    | Exécuter une fois immédiatement                    |
+| `copaw cron create ...`      | Créer une tâche                                                         |
+| `copaw cron delete <job_id>` | Supprimer une tâche                                                     |
+| `copaw cron pause <job_id>`  | Mettre en pause une tâche                                               |
+| `copaw cron resume <job_id>` | Reprendre une tâche en pause                                            |
+| `copaw cron run <job_id>`    | Exécuter une fois immédiatement                                         |
 
 ### Créer des tâches
 
@@ -291,24 +291,24 @@ La structure JSON correspond à la sortie de `copaw cron get <job_id>`.
 
 ### Options supplémentaires
 
-| Option                       | Défaut  | Description                                                       |
-| ---------------------------- | ------- | ----------------------------------------------------------------- |
-| `--timezone`                 | `UTC`   | Fuseau horaire pour le planning cron                              |
-| `--enabled` / `--no-enabled` | activé  | Créer activé ou désactivé                                         |
-| `--mode`                     | `final` | `stream` (incrémental) ou `final` (réponse complète)              |
-| `--base-url`                 | auto    | Remplacer l'URL de base de l'API                                  |
+| Option                       | Défaut  | Description                                          |
+| ---------------------------- | ------- | ---------------------------------------------------- |
+| `--timezone`                 | `UTC`   | Fuseau horaire pour le planning cron                 |
+| `--enabled` / `--no-enabled` | activé  | Créer activé ou désactivé                            |
+| `--mode`                     | `final` | `stream` (incrémental) ou `final` (réponse complète) |
+| `--base-url`                 | auto    | Remplacer l'URL de base de l'API                     |
 
 ### Aide-mémoire des expressions cron
 
 Cinq champs : **minute heure jour mois jour_semaine** (pas de secondes).
 
-| Expression     | Signification               |
-| -------------- | --------------------------- |
-| `0 9 * * *`    | Tous les jours à 9:00       |
-| `0 */2 * * *`  | Toutes les 2 heures pile    |
-| `30 8 * * 1-5` | En semaine à 8:30           |
-| `0 0 * * 0`    | Dimanche à minuit           |
-| `*/15 * * * *` | Toutes les 15 minutes       |
+| Expression     | Signification            |
+| -------------- | ------------------------ |
+| `0 9 * * *`    | Tous les jours à 9:00    |
+| `0 */2 * * *`  | Toutes les 2 heures pile |
+| `30 8 * * 1-5` | En semaine à 8:30        |
+| `0 0 * * 0`    | Dimanche à minuit        |
+| `*/15 * * * *` | Toutes les 15 minutes    |
 
 ---
 
@@ -318,13 +318,13 @@ Gérer les sessions de chat via l'API. **Nécessite que `copaw app` soit en cour
 
 ### copaw chats
 
-| Commande                               | Ce qu'elle fait                                               |
-| -------------------------------------- | ------------------------------------------------------------- |
+| Commande                               | Ce qu'elle fait                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------- |
 | `copaw chats list`                     | Lister toutes les sessions (supporte les filtres `--user-id`, `--channel`) |
-| `copaw chats get <id>`                 | Voir les détails d'une session et l'historique des messages   |
-| `copaw chats create ...`               | Créer une nouvelle session                                    |
-| `copaw chats update <id> --name "..."` | Renommer une session                                          |
-| `copaw chats delete <id>`              | Supprimer une session                                         |
+| `copaw chats get <id>`                 | Voir les détails d'une session et l'historique des messages                |
+| `copaw chats create ...`               | Créer une nouvelle session                                                 |
+| `copaw chats update <id> --name "..."` | Renommer une session                                                       |
+| `copaw chats delete <id>`              | Supprimer une session                                                      |
 
 ```bash
 copaw chats list
@@ -344,9 +344,9 @@ copaw chats delete <chat_id>
 
 ### copaw skills
 
-| Commande              | Ce qu'elle fait                                          |
-| --------------------- | -------------------------------------------------------- |
-| `copaw skills list`   | Afficher toutes les Skills et leur statut activé/désactivé |
+| Commande              | Ce qu'elle fait                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `copaw skills list`   | Afficher toutes les Skills et leur statut activé/désactivé                          |
 | `copaw skills config` | Activer/désactiver les Skills de manière interactive (interface par cases à cocher) |
 
 ```bash
@@ -379,11 +379,11 @@ copaw clean --dry-run   # Lister uniquement ce qui serait supprimé
 
 Chaque sous-commande `copaw` hérite de :
 
-| Option          | Défaut      | Description                                              |
-| --------------- | ----------- | -------------------------------------------------------- |
+| Option          | Défaut      | Description                                                      |
+| --------------- | ----------- | ---------------------------------------------------------------- |
 | `--host`        | `127.0.0.1` | Hôte API (détecté automatiquement depuis le dernier `copaw app`) |
 | `--port`        | `8088`      | Port API (détecté automatiquement depuis le dernier `copaw app`) |
-| `-h` / `--help` |             | Afficher le message d'aide                               |
+| `-h` / `--help` |             | Afficher le message d'aide                                       |
 
 Si le serveur tourne sur une adresse non standard, passez ces options globalement :
 
@@ -396,10 +396,10 @@ copaw --host 0.0.0.0 --port 9090 cron list
 Toute la config et les données se trouvent dans `~/.copaw` par défaut : `config.json`,
 `HEARTBEAT.md`, `jobs.json`, `chats.json`, Skills, mémoire et fichiers de persona de l'agent.
 
-| Variable            | Description                                      |
-| ------------------- | ------------------------------------------------ |
-| `COPAW_WORKING_DIR` | Remplacer le chemin du répertoire de travail     |
-| `COPAW_CONFIG_FILE` | Remplacer le chemin du fichier de configuration  |
+| Variable            | Description                                     |
+| ------------------- | ----------------------------------------------- |
+| `COPAW_WORKING_DIR` | Remplacer le chemin du répertoire de travail    |
+| `COPAW_CONFIG_FILE` | Remplacer le chemin du fichier de configuration |
 
 Voir [Config & Répertoire de travail](./config) pour tous les détails.
 
@@ -407,17 +407,17 @@ Voir [Config & Répertoire de travail](./config) pour tous les détails.
 
 ## Vue d'ensemble des commandes
 
-| Commande         | Sous-commandes                                                                                                                                | Serveur requis ?  |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | :---------------: |
-| `copaw init`     | —                                                                                                                                             |        Non        |
-| `copaw app`      | —                                                                                                                                             |  — (le démarre)   |
-| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove`        |        Non        |
-| `copaw env`      | `list` · `set` · `delete`                                                                                                                     |        Non        |
-| `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                              |        Non        |
-| `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                                   |     **Oui**       |
-| `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                               |     **Oui**       |
-| `copaw skills`   | `list` · `config`                                                                                                                             |        Non        |
-| `copaw clean`    | —                                                                                                                                             |        Non        |
+| Commande         | Sous-commandes                                                                                                                         | Serveur requis ? |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :--------------: |
+| `copaw init`     | —                                                                                                                                      |       Non        |
+| `copaw app`      | —                                                                                                                                      |  — (le démarre)  |
+| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |       Non        |
+| `copaw env`      | `list` · `set` · `delete`                                                                                                              |       Non        |
+| `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |       Non        |
+| `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |     **Oui**      |
+| `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                        |     **Oui**      |
+| `copaw skills`   | `list` · `config`                                                                                                                      |       Non        |
+| `copaw clean`    | —                                                                                                                                      |       Non        |
 
 ---
 

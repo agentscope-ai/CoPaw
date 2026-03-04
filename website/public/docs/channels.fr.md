@@ -214,20 +214,20 @@ Les autres champs (encrypt_key, verification_token, media_dir) sont optionnels ;
 
 Le JSON de l'étape 6 accorde les permissions suivantes (identité application) pour la messagerie et les fichiers :
 
-| Nom de la permission                      | ID de permission               | Type        | Notes            |
-| ----------------------------------------- | ------------------------------ | ----------- | ---------------- |
-| Obtenir un fichier                        | aily:file:read                 | Application | -                |
-| Téléverser un fichier                     | aily:file:write                | Application | -                |
-| Obtenir un message                        | aily:message:read              | Application | -                |
-| Envoyer un message                        | aily:message:write             | Application | -                |
-| Télécharger un fichier                    | corehr:file:download           | Application | -                |
-| Obtenir/mettre à jour les infos du groupe | im:chat                        | Application | -                |
-| Obtenir/envoyer des messages chat et groupe | im:message                   | Application | -                |
-| Obtenir tous les messages de groupe (sensible) | im:message.group_msg        | Application | -                |
-| Lire les DM utilisateur-bot               | im:message.p2p_msg:readonly    | Application | -                |
-| Voir les réactions aux messages           | im:message.reactions:read      | Application | -                |
-| Obtenir/téléverser des ressources image et fichier | im:resource              | Application | -                |
-| **Lire les contacts en tant qu'application** | **contact:user.base:readonly** | **Application** | **Voir ci-dessous** |
+| Nom de la permission                               | ID de permission               | Type            | Notes               |
+| -------------------------------------------------- | ------------------------------ | --------------- | ------------------- |
+| Obtenir un fichier                                 | aily:file:read                 | Application     | -                   |
+| Téléverser un fichier                              | aily:file:write                | Application     | -                   |
+| Obtenir un message                                 | aily:message:read              | Application     | -                   |
+| Envoyer un message                                 | aily:message:write             | Application     | -                   |
+| Télécharger un fichier                             | corehr:file:download           | Application     | -                   |
+| Obtenir/mettre à jour les infos du groupe          | im:chat                        | Application     | -                   |
+| Obtenir/envoyer des messages chat et groupe        | im:message                     | Application     | -                   |
+| Obtenir tous les messages de groupe (sensible)     | im:message.group_msg           | Application     | -                   |
+| Lire les DM utilisateur-bot                        | im:message.p2p_msg:readonly    | Application     | -                   |
+| Voir les réactions aux messages                    | im:message.reactions:read      | Application     | -                   |
+| Obtenir/téléverser des ressources image et fichier | im:resource                    | Application     | -                   |
+| **Lire les contacts en tant qu'application**       | **contact:user.base:readonly** | **Application** | **Voir ci-dessous** |
 
 > **Nom d'affichage de l'utilisateur (recommandé) :** Pour afficher les **pseudonymes des utilisateurs** dans les sessions et les journaux (ex. "张三#1d1a" au lieu de "unknown#1d1a"), activez la permission de lecture des contacts **Lire les contacts en tant qu'application** (`contact:user.base:readonly`). Sans celle-ci, Feishu ne renvoie que les champs d'identité (ex. open_id) et pas le nom de l'utilisateur, donc CoPAW ne peut pas résoudre les pseudonymes. Après activation, publiez ou mettez à jour la version de l'application pour que la permission prenne effet.
 
@@ -413,13 +413,13 @@ Vous pouvez également les renseigner dans l'interface Console.
 
 ### Vue d'ensemble de la configuration
 
-| Canal    | Clé config | Champs principaux                                                        |
-| -------- | ---------- | ------------------------------------------------------------------------ |
-| DingTalk | dingtalk   | client_id, client_secret                                                 |
+| Canal    | Clé config | Champs principaux                                                         |
+| -------- | ---------- | ------------------------------------------------------------------------- |
+| DingTalk | dingtalk   | client_id, client_secret                                                  |
 | Feishu   | feishu     | app_id, app_secret ; optionnel encrypt_key, verification_token, media_dir |
-| iMessage | imessage   | db_path, poll_sec (macOS uniquement)                                     |
-| Discord  | discord    | bot_token ; optionnel http_proxy, http_proxy_auth                        |
-| QQ       | qq         | app_id, client_secret                                                    |
+| iMessage | imessage   | db_path, poll_sec (macOS uniquement)                                      |
+| Discord  | discord    | bot_token ; optionnel http_proxy, http_proxy_auth                         |
+| QQ       | qq         | app_id, client_secret                                                     |
 
 Les détails des champs et la structure se trouvent dans les tableaux ci-dessus et dans [Config & répertoire de travail](./config).
 
@@ -474,12 +474,12 @@ Pour ajouter une nouvelle plateforme (ex. WeCom, Slack), implémentez une sous-c
 
 ### La sous-classe doit implémenter
 
-| Méthode                                                 | Objectif                                                                                                                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Méthode                                                 | Objectif                                                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build_agent_request_from_native(self, native_payload)` | Convertir le message natif du canal en `AgentRequest` (en utilisant le runtime `Message` / `TextContent` / `ImageContent` etc.) et définir `request.channel_meta` pour l'envoi. |
-| `from_env` / `from_config`                              | Construire l'instance depuis l'environnement ou la config.                                                                                                          |
-| `async start()` / `async stop()`                        | Cycle de vie (connexion, abonnement, nettoyage).                                                                                                                    |
-| `async send(self, to_handle, text, meta=None)`          | Envoyer un texte (et des pièces jointes optionnelles).                                                                                                              |
+| `from_env` / `from_config`                              | Construire l'instance depuis l'environnement ou la config.                                                                                                                      |
+| `async start()` / `async stop()`                        | Cycle de vie (connexion, abonnement, nettoyage).                                                                                                                                |
+| `async send(self, to_handle, text, meta=None)`          | Envoyer un texte (et des pièces jointes optionnelles).                                                                                                                          |
 
 ### Ce que la classe de base fournit
 

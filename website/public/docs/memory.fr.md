@@ -31,12 +31,12 @@ graph TB
 
 La gestion de la mémoire à long terme comprend les capacités suivantes :
 
-| Capacité                  | Description                                                                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Persistance mémoire**   | Écrit les informations clés dans des fichiers Markdown via des outils de fichiers (`read` / `write` / `edit`) ; les fichiers sont la source de vérité |
+| Capacité                     | Description                                                                                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Persistance mémoire**      | Écrit les informations clés dans des fichiers Markdown via des outils de fichiers (`read` / `write` / `edit`) ; les fichiers sont la source de vérité    |
 | **Surveillance de fichiers** | Surveille les changements de fichiers via `watchfile`, mettant à jour de façon asynchrone la base de données locale (index sémantique & index vectoriel) |
-| **Recherche sémantique**  | Rappelle les mémoires pertinentes par sémantique en utilisant des embeddings vectoriels + recherche hybride BM25                   |
-| **Lecture de fichiers**   | Lit directement les fichiers Markdown de mémoire correspondants via des outils de fichiers, chargement à la demande pour garder le contexte léger |
+| **Recherche sémantique**     | Rappelle les mémoires pertinentes par sémantique en utilisant des embeddings vectoriels + recherche hybride BM25                                         |
+| **Lecture de fichiers**      | Lit directement les fichiers Markdown de mémoire correspondants via des outils de fichiers, chargement à la demande pour garder le contexte léger        |
 
 ---
 
@@ -71,12 +71,12 @@ Une page par jour, complétée avec le travail et les interactions du jour.
 
 ### Quand écrire en mémoire ?
 
-| Type d'information                          | Cible d'écriture           | Méthode                          | Exemple                                                                                               |
-| ------------------------------------------- | -------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Décisions, préférences, faits persistants   | `MEMORY.md`                | Outils `write` / `edit`          | « Le projet utilise Python 3.12 », « Préfère le framework pytest »                                    |
-| Notes quotidiennes, contexte runtime        | `memory/YYYY-MM-DD.md`     | Outils `write` / `edit`          | « Bug de connexion corrigé aujourd'hui », « Déployé v2.1 »                                            |
-| Résumé automatique lors du débordement de contexte | `memory/YYYY-MM-DD.md` | Déclenché automatiquement (`summary_memory`) | Quand les tokens de contexte dépassent le seuil, le système écrit automatiquement un résumé de conversation dans le journal |
-| L'utilisateur dit « souviens-toi de ça »   | Écrire dans le fichier immédiatement | Outil `write`            | Ne sauvegardez pas uniquement en mémoire !                                                            |
+| Type d'information                                 | Cible d'écriture                     | Méthode                                      | Exemple                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Décisions, préférences, faits persistants          | `MEMORY.md`                          | Outils `write` / `edit`                      | « Le projet utilise Python 3.12 », « Préfère le framework pytest »                                                          |
+| Notes quotidiennes, contexte runtime               | `memory/YYYY-MM-DD.md`               | Outils `write` / `edit`                      | « Bug de connexion corrigé aujourd'hui », « Déployé v2.1 »                                                                  |
+| Résumé automatique lors du débordement de contexte | `memory/YYYY-MM-DD.md`               | Déclenché automatiquement (`summary_memory`) | Quand les tokens de contexte dépassent le seuil, le système écrit automatiquement un résumé de conversation dans le journal |
+| L'utilisateur dit « souviens-toi de ça »           | Écrire dans le fichier immédiatement | Outil `write`                                | Ne sauvegardez pas uniquement en mémoire !                                                                                  |
 
 ---
 
@@ -90,31 +90,31 @@ Les paramètres LLM du gestionnaire de mémoire sont cohérents avec la configur
 
 Configurez le service Embedding via les variables d'environnement suivantes pour la recherche sémantique vectorielle :
 
-| Variable d'environnement      | Description                                                    | Défaut                                               |
-| ----------------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
-| `EMBEDDING_API_KEY`           | Clé API pour le service Embedding                              | (vide ; la recherche vectorielle est désactivée si non configurée) |
-| `EMBEDDING_BASE_URL`          | URL du service Embedding                                       | `https://dashscope.aliyuncs.com/compatible-mode/v1`  |
-| `EMBEDDING_MODEL_NAME`        | Nom du modèle d'embedding                                      | `text-embedding-v4`                                  |
-| `EMBEDDING_DIMENSIONS`        | Dimensions vectorielles pour l'initialisation de la base vectorielle | `1024`                                          |
-| `EMBEDDING_CACHE_ENABLED`     | Activer le cache d'embedding                                   | `true`                                               |
-| `EMBEDDING_MAX_CACHE_SIZE`    | Nombre maximum d'entrées dans le cache d'embedding             | `2000`                                               |
-| `EMBEDDING_MAX_INPUT_LENGTH`  | Longueur maximale d'entrée par requête d'embedding             | `8192`                                               |
-| `EMBEDDING_MAX_BATCH_SIZE`    | Taille maximale de lot pour les requêtes d'embedding           | `10`                                                 |
+| Variable d'environnement     | Description                                                          | Défaut                                                             |
+| ---------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `EMBEDDING_API_KEY`          | Clé API pour le service Embedding                                    | (vide ; la recherche vectorielle est désactivée si non configurée) |
+| `EMBEDDING_BASE_URL`         | URL du service Embedding                                             | `https://dashscope.aliyuncs.com/compatible-mode/v1`                |
+| `EMBEDDING_MODEL_NAME`       | Nom du modèle d'embedding                                            | `text-embedding-v4`                                                |
+| `EMBEDDING_DIMENSIONS`       | Dimensions vectorielles pour l'initialisation de la base vectorielle | `1024`                                                             |
+| `EMBEDDING_CACHE_ENABLED`    | Activer le cache d'embedding                                         | `true`                                                             |
+| `EMBEDDING_MAX_CACHE_SIZE`   | Nombre maximum d'entrées dans le cache d'embedding                   | `2000`                                                             |
+| `EMBEDDING_MAX_INPUT_LENGTH` | Longueur maximale d'entrée par requête d'embedding                   | `8192`                                                             |
+| `EMBEDDING_MAX_BATCH_SIZE`   | Taille maximale de lot pour les requêtes d'embedding                 | `10`                                                               |
 
 ### Configuration du mode de recherche
 
-| Variable d'environnement | Description                                    | Défaut |
-| ------------------------ | ---------------------------------------------- | ------ |
-| `FTS_ENABLED`            | Activer la recherche plein texte BM25          | `true` |
+| Variable d'environnement | Description                           | Défaut |
+| ------------------------ | ------------------------------------- | ------ |
+| `FTS_ENABLED`            | Activer la recherche plein texte BM25 | `true` |
 
 **Comportement du mode de recherche :**
 
-| Recherche vectorielle (`EMBEDDING_API_KEY` configuré) | Recherche plein texte (`FTS_ENABLED=true`) | Mode de recherche effectif                                              |
-| :---------------------------------------------------: | :----------------------------------------: | :---------------------------------------------------------------------: |
-|                          ✅                           |                    ✅                      | Recherche hybride vectorielle + BM25 (recommandé, meilleurs résultats)  |
-|                          ✅                           |                    ❌                      | Recherche sémantique vectorielle uniquement                             |
-|                          ❌                           |                    ✅                      | Recherche plein texte BM25 uniquement (mauvais résultats dans certains scénarios) |
-|                          ❌                           |                    ❌                      | ⚠️ **Non autorisé** — au moins un mode de recherche doit être activé   |
+| Recherche vectorielle (`EMBEDDING_API_KEY` configuré) | Recherche plein texte (`FTS_ENABLED=true`) |                            Mode de recherche effectif                             |
+| :---------------------------------------------------: | :----------------------------------------: | :-------------------------------------------------------------------------------: |
+|                          ✅                           |                     ✅                     |      Recherche hybride vectorielle + BM25 (recommandé, meilleurs résultats)       |
+|                          ✅                           |                     ❌                     |                    Recherche sémantique vectorielle uniquement                    |
+|                          ❌                           |                     ✅                     | Recherche plein texte BM25 uniquement (mauvais résultats dans certains scénarios) |
+|                          ❌                           |                     ❌                     |       ⚠️ **Non autorisé** — au moins un mode de recherche doit être activé        |
 
 > **Recommandé** : Configurez `EMBEDDING_API_KEY` et gardez `FTS_ENABLED=true` pour utiliser la recherche hybride vectorielle + BM25 pour un rappel optimal.
 
@@ -122,18 +122,18 @@ Configurez le service Embedding via les variables d'environnement suivantes pour
 
 Configurez le backend de stockage mémoire via la variable d'environnement `MEMORY_STORE_BACKEND` :
 
-| Variable d'environnement | Description                                                    | Défaut |
-| ------------------------ | -------------------------------------------------------------- | ------ |
+| Variable d'environnement | Description                                                         | Défaut |
+| ------------------------ | ------------------------------------------------------------------- | ------ |
 | `MEMORY_STORE_BACKEND`   | Backend de stockage mémoire : `auto`, `local`, `chroma` ou `sqlite` | `auto` |
 
 **Options de backend de stockage :**
 
-| Backend  | Description                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------ |
-| `auto`   | Sélection automatique : utilise `local` sur Windows, `chroma` sur les autres systèmes           |
-| `local`  | Stockage local de fichiers, pas de dépendances supplémentaires, meilleure compatibilité          |
+| Backend  | Description                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `auto`   | Sélection automatique : utilise `local` sur Windows, `chroma` sur les autres systèmes                                                |
+| `local`  | Stockage local de fichiers, pas de dépendances supplémentaires, meilleure compatibilité                                              |
 | `chroma` | Base de données vectorielle Chroma, supporte la récupération vectorielle efficace ; peut planter sur certains environnements Windows |
-| `sqlite` | Base de données SQLite + extension vectorielle ; peut se bloquer ou planter sur macOS 14 et inférieur |
+| `sqlite` | Base de données SQLite + extension vectorielle ; peut se bloquer ou planter sur macOS 14 et inférieur                                |
 
 > **Recommandé** : Utilisez le mode `auto` par défaut, qui sélectionne automatiquement le backend le plus stable pour votre plateforme.
 
@@ -143,10 +143,10 @@ Configurez le backend de stockage mémoire via la variable d'environnement `MEMO
 
 L'Agent dispose de deux façons de récupérer les mémoires passées :
 
-| Méthode           | Outil           | Cas d'usage                                                         | Exemple                                          |
-| ----------------- | --------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| Méthode              | Outil           | Cas d'usage                                                       | Exemple                                                   |
+| -------------------- | --------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
 | Recherche sémantique | `memory_search` | Incertain du fichier contenant l'info ; rappel flou par intention | « Discussion précédente sur le processus de déploiement » |
-| Lecture directe   | `read_file`     | Date ou chemin de fichier spécifique connus ; recherche précise    | Lire `memory/2025-02-13.md`                      |
+| Lecture directe      | `read_file`     | Date ou chemin de fichier spécifique connus ; recherche précise   | Lire `memory/2025-02-13.md`                               |
 
 ---
 
@@ -158,11 +158,11 @@ La recherche mémoire utilise par défaut la **recherche hybride vectorielle + B
 
 Projette le texte dans un espace vectoriel de haute dimension et mesure la distance sémantique via la similarité cosinus, capturant le contenu ayant une signification similaire mais une formulation différente :
 
-| Requête                                     | Mémoire rappelée                                        | Pourquoi ça correspond                                                     |
-| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- |
-| « Choix de base de données pour le projet » | « Finalement décidé de remplacer MySQL par PostgreSQL » | Lié sémantiquement : tous deux discutent des choix de technologie de BDD   |
-| « Comment réduire les reconstructions inutiles » | « Configuré la compilation incrémentale pour éviter les builds complets » | Équivalence sémantique : réduire les reconstructions ≈ compilation incrémentale |
-| « Problème de performance discuté la dernière fois » | « Optimisé la latence P99 de 800ms à 200ms » | Association sémantique : problème de performance ≈ optimisation de latence |
+| Requête                                              | Mémoire rappelée                                                          | Pourquoi ça correspond                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| « Choix de base de données pour le projet »          | « Finalement décidé de remplacer MySQL par PostgreSQL »                   | Lié sémantiquement : tous deux discutent des choix de technologie de BDD        |
+| « Comment réduire les reconstructions inutiles »     | « Configuré la compilation incrémentale pour éviter les builds complets » | Équivalence sémantique : réduire les reconstructions ≈ compilation incrémentale |
+| « Problème de performance discuté la dernière fois » | « Optimisé la latence P99 de 800ms à 200ms »                              | Association sémantique : problème de performance ≈ optimisation de latence      |
 
 Cependant, la recherche vectorielle est plus faible sur les **tokens précis à fort signal**, car les modèles d'embedding tendent à capturer la sémantique globale plutôt que les correspondances exactes de tokens individuels.
 
@@ -170,10 +170,10 @@ Cependant, la recherche vectorielle est plus faible sur les **tokens précis à 
 
 Basée sur les statistiques de fréquence des termes pour la correspondance de sous-chaînes, excellente pour les hits de tokens précis, mais plus faible en compréhension sémantique (synonymes, reformulation).
 
-| Requête                    | Hits BM25                                          | Ratés BM25                                            |
-| -------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| `handleWebSocketReconnect` | Fragments de mémoire contenant ce nom de fonction  | « Logique de gestion de la reconnexion WebSocket » |
-| `ECONNREFUSED`             | Entrées de log contenant ce code d'erreur          | « Connexion à la base de données refusée »            |
+| Requête                    | Hits BM25                                         | Ratés BM25                                         |
+| -------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `handleWebSocketReconnect` | Fragments de mémoire contenant ce nom de fonction | « Logique de gestion de la reconnexion WebSocket » |
+| `ECONNREFUSED`             | Entrées de log contenant ce code d'erreur         | « Connexion à la base de données refusée »         |
 
 **Logique de scoring** : Divise la requête en termes, compte le ratio de hits de chaque terme dans le texte cible, et accorde un bonus pour les correspondances de phrase complète :
 
@@ -201,11 +201,11 @@ Utilise simultanément les signaux de rappel vectoriel et BM25, effectuant une *
 
 **Exemple** : Requête `"handleWebSocketReconnect déconnexion reconnexion"`
 
-| Fragment de mémoire                                                           | Score vectoriel | Score BM25 | Score fusionné                      | Rang |
-| ----------------------------------------------------------------------------- | --------------- | ---------- | ----------------------------------- | ---- |
-| « handleWebSocketReconnect gère la déconnexion et reconnexion WebSocket »     | 0,85            | 1,0        | 0,85×0,7 + 1,0×0,3 = **0,895**     | 1    |
-| « Logique de nouvelle tentative automatique après déconnexion réseau »        | 0,78            | 0,0        | 0,78×0,7 = **0,546**               | 2    |
-| « Exception de pointeur nul corrigée dans handleWebSocketReconnect »          | 0,40            | 0,5        | 0,40×0,7 + 0,5×0,3 = **0,430**     | 3    |
+| Fragment de mémoire                                                       | Score vectoriel | Score BM25 | Score fusionné                 | Rang |
+| ------------------------------------------------------------------------- | --------------- | ---------- | ------------------------------ | ---- |
+| « handleWebSocketReconnect gère la déconnexion et reconnexion WebSocket » | 0,85            | 1,0        | 0,85×0,7 + 1,0×0,3 = **0,895** | 1    |
+| « Logique de nouvelle tentative automatique après déconnexion réseau »    | 0,78            | 0,0        | 0,78×0,7 = **0,546**           | 2    |
+| « Exception de pointeur nul corrigée dans handleWebSocketReconnect »      | 0,40            | 0,5        | 0,40×0,7 + 0,5×0,3 = **0,430** | 3    |
 
 ```mermaid
 graph LR

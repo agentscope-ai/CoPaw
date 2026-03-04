@@ -654,7 +654,8 @@ export function Docs({ config, lang, onLangClick }: DocsProps) {
                             );
                           },
                           a: ({ href, children }) => {
-                            const trimmed = href?.replace(/(\.(?:zh|en|fr))?\.md$/, "") ?? "";
+                            const trimmed =
+                              href?.replace(/(\.(?:zh|en|fr))?\.md$/, "") ?? "";
                             const isRelative =
                               trimmed.startsWith("./") ||
                               trimmed.startsWith("/docs/");
