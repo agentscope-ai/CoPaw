@@ -113,8 +113,8 @@ class MessageRenderer:
                                 args if args is not None else {},
                                 ensure_ascii=False,
                             )
-                        except TypeError:
-                            args_str = str(args)
+                        except (TypeError, ValueError):
+                            args_str = str(args if args is not None else {})
                     # Prevent code fence breakout in markdown renderers.
                     args_str = args_str.replace("```", "``\\`")
                     args_preview = (
