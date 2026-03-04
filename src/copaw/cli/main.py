@@ -62,6 +62,11 @@ from .cron_cmd import cron_group  # noqa: E402
 _record(".cron_cmd", time.perf_counter() - _t)
 
 _t = time.perf_counter()
+from .doctor_cmd import doctor_group  # noqa: E402
+
+_record(".doctor_cmd", time.perf_counter() - _t)
+
+_t = time.perf_counter()
 from .env_cmd import env_group  # noqa: E402
 
 _record(".env_cmd", time.perf_counter() - _t)
@@ -129,6 +134,7 @@ cli.add_command(channels_group)
 cli.add_command(chats_group)
 cli.add_command(clean_cmd)
 cli.add_command(cron_group)
+cli.add_command(doctor_group)
 cli.add_command(env_group)
 cli.add_command(init_cmd)
 cli.add_command(models_group)
