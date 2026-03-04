@@ -112,9 +112,18 @@ jobs:
         run: |
           gh release upload "${{ github.event.release.tag_name }}" dist/*.dmg --clobber
 
-      - name: Upload DMG (manual run)
+      - name: Upload DMG(s) separately (manual run)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: CoPaw-macOS-DMG
-          path: dist/*.dmg
+          name: CoPaw-macOS-DMG-release
+          path: dist/CoPaw-*.dmg
+          if-no-files-found: ignore
+
+      - name: Upload Dev DMG separately (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoPaw-macOS-DMG-dev
+          path: dist/CoPaw-Dev-*.dmg
+          if-no-files-found: ignore
