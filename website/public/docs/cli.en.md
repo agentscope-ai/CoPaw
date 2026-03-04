@@ -76,13 +76,13 @@ Inspect status, version, and recent logs without starting a conversation. Same
 behavior as sending `/daemon status` etc. in chat (CLI can show local info when
 the app is not running).
 
-| Command | Description |
-|---------|-------------|
-| `copaw daemon status` | Status (config, working dir, memory manager) |
-| `copaw daemon restart` | Print restart instructions (CLI cannot restart the process) |
-| `copaw daemon reload-config` | Reload config from disk |
-| `copaw daemon version` | Version and paths |
-| `copaw daemon logs [-n N]` | Last N lines of log (default 100; from `copaw.log` in working dir) |
+| Command                      | Description                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `copaw daemon status`        | Status (config, working dir, memory manager)                       |
+| `copaw daemon restart`       | Print restart instructions (CLI cannot restart the process)        |
+| `copaw daemon reload-config` | Reload config from disk                                            |
+| `copaw daemon version`       | Version and paths                                                  |
+| `copaw daemon logs [-n N]`   | Last N lines of log (default 100; from `copaw.log` in working dir) |
 
 ```bash
 copaw daemon status

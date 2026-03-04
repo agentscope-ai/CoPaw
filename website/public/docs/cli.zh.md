@@ -66,13 +66,13 @@ copaw app --log-level debug           # 详细日志
 
 查看运行状态、版本、最近日志等，无需启动对话。与在对话中发送 `/daemon status` 等效果一致（CLI 无进程时可查看本地信息）。
 
-| 命令 | 说明 |
-|------|------|
-| `copaw daemon status` | 状态（配置、工作目录、记忆服务） |
-| `copaw daemon restart` | 打印重启说明（CLI 无法重启本机进程） |
-| `copaw daemon reload-config` | 重新读取配置 |
-| `copaw daemon version` | 版本与路径 |
-| `copaw daemon logs [-n N]` | 最近 N 行日志（默认 100，来自工作目录 `copaw.log`） |
+| 命令                         | 说明                                                |
+| ---------------------------- | --------------------------------------------------- |
+| `copaw daemon status`        | 状态（配置、工作目录、记忆服务）                    |
+| `copaw daemon restart`       | 打印重启说明（CLI 无法重启本机进程）                |
+| `copaw daemon reload-config` | 重新读取配置                                        |
+| `copaw daemon version`       | 版本与路径                                          |
+| `copaw daemon logs [-n N]`   | 最近 N 行日志（默认 100，来自工作目录 `copaw.log`） |
 
 ```bash
 copaw daemon status

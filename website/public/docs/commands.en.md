@@ -156,12 +156,12 @@ Example response (when no summary):
 
 In chat, send `/daemon <subcommand>` or use short names (e.g. `/status`). From the terminal, run `copaw daemon <subcommand>`. These run without the Agent.
 
-| Command | Description |
-|---------|-------------|
-| `/daemon status` or `/status` | Show status (config, working dir, memory manager) |
-| `/daemon restart` or `/restart` | Request restart (process exits; use systemd/supervisor to relaunch) |
-| `/daemon reload-config` | Reload config without restarting the process |
-| `/daemon version` | Version and paths (working dir, log file) |
+| Command                             | Description                                                                |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `/daemon status` or `/status`       | Show status (config, working dir, memory manager)                          |
+| `/daemon restart` or `/restart`     | Request restart (process exits; use systemd/supervisor to relaunch)        |
+| `/daemon reload-config`             | Reload config without restarting the process                               |
+| `/daemon version`                   | Version and paths (working dir, log file)                                  |
 | `/daemon logs` or `/daemon logs 50` | Last N lines of console log (default 100; from `copaw.log` in working dir) |
 
 From the terminal:
