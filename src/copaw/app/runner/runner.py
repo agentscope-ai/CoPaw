@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from agentscope.pipeline import stream_printing_messages
@@ -57,6 +58,83 @@ class AgentRunner(Runner):
             mcp_manager: MCPClientManager instance
         """
         self._mcp_manager = mcp_manager
+
+    # -- Session overflow protection ----------------------------------------
+
+    # Maximum session file size in bytes before emergency truncation.
+    _SESSION_FILE_SIZE_LIMIT: int = 2 * 1024 * 1024  # 2 MB
+
+    # Number of recent messages to keep when truncating.
+    _SESSION_KEEP_RECENT: int = 5
+
+    async def _guard_session_overflow(
+        self,
+        agent: CoPawAgent,
+        session_id: str,
+        user_id: str,
+    ) -> None:
+        """Truncate agent memory if the session file is dangerously large.
+
+        This is a hard guard that does NOT require an LLM call – it simply
+        drops old messages and keeps only the most recent ones.  It fires
+        *before* the model is called, so that we never send a prompt that
+        exceeds the model's context window.
+
+        Args:
+            agent: The CoPawAgent whose memory may be truncated.
+            session_id: Current session id (for logging / file lookup).
+            user_id: Current user id (for file lookup).
+        """
+        try:
+            session_path = self.session._get_save_path(session_id, user_id)
+            if not os.path.exists(session_path):
+                return
+
+            file_size = os.path.getsize(session_path)
+            if file_size < self._SESSION_FILE_SIZE_LIMIT:
+                return
+
+            # --- Emergency truncation ---
+            total_msgs = len(agent.memory.content)
+            keep = self._SESSION_KEEP_RECENT
+
+            if total_msgs <= keep:
+                logger.warning(
+                    "Session file is large (%d bytes, %d messages) but "
+                    "too few messages to truncate – skipping.",
+                    file_size,
+                    total_msgs,
+                )
+                return
+
+            removed = total_msgs - keep
+            agent.memory.content = agent.memory.content[-keep:]
+            # Clear the compressed summary (it refers to now-deleted msgs)
+            agent.memory._compressed_summary = ""
+
+            logger.warning(
+                "Session overflow protection: truncated %d messages "
+                "(kept last %d). File was %d bytes (%s).",
+                removed,
+                keep,
+                file_size,
+                session_path,
+            )
+        except Exception as exc:
+            logger.error(
+                "Session overflow guard failed: %s",
+                exc,
+                exc_info=True,
+            )
+
+    @staticmethod
+    def _is_prompt_too_long(exc: Exception) -> bool:
+        """Return True if *exc* indicates the prompt exceeded the model
+        context limit."""
+        msg = str(exc).lower()
+        return "prompt is too long" in msg or "prompt_too_long" in msg
+
+    # -----------------------------------------------------------------------
 
     async def query_handler(
         self,
@@ -158,6 +236,9 @@ class AgentRunner(Runner):
                 )
             session_state_loaded = True
 
+            # --- Layer 1: proactive session overflow guard ---
+            await self._guard_session_overflow(agent, session_id, user_id)
+
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
             # in the session state.
@@ -175,6 +256,33 @@ class AgentRunner(Runner):
                 await agent.interrupt()
             raise RuntimeError("Task has been cancelled!") from exc
         except Exception as e:
+            # --- Layer 2: catch prompt-too-long and retry once ---
+            if self._is_prompt_too_long(e) and agent is not None:
+                logger.warning(
+                    "Prompt too long detected – clearing session and "
+                    "retrying once. Original error: %s",
+                    e,
+                )
+                try:
+                    # Wipe all memory and retry
+                    agent.memory.content = []
+                    agent.memory._compressed_summary = ""
+                    agent.rebuild_sys_prompt()
+
+                    async for msg, last in stream_printing_messages(
+                        agents=[agent],
+                        coroutine_task=agent(msgs),
+                    ):
+                        yield msg, last
+                    # Retry succeeded – skip the original raise
+                    return
+                except Exception as retry_exc:
+                    logger.exception(
+                        "Retry after session clear also failed: %s",
+                        retry_exc,
+                    )
+                    e = retry_exc  # fall through to normal error path
+
             debug_dump_path = write_query_error_dump(
                 request=request,
                 exc=e,
