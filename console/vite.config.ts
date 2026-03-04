@@ -37,5 +37,11 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: ["diff"],
     },
+    build: {
+      // Output to CoPaw's console directory,
+      // so we don't need to copy files manually after build.
+      outDir: '../src/copaw/console',
+      emptyOutDir: true,
+    },
   };
 });
