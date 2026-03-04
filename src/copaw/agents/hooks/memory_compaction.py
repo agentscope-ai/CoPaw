@@ -10,12 +10,13 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from agentscope.agent._react_agent import _MemoryMark
+from agentscope.message import Msg
 
 from ..utils import (
     check_valid_messages,
     safe_count_message_tokens,
-    safe_count_str_tokens,
 )
+from ..memory.copaw_memory import build_previous_summary
 from ..utils.tool_message_utils import _truncate_text
 
 if TYPE_CHECKING:
@@ -108,8 +109,8 @@ class MemoryCompactionHook:
         """Pre-reasoning hook to check and compact memory if needed.
 
         This hook extracts system prompt messages and recent messages,
-        then counts tokens for the middle compactable messages only.
-        If the token count exceeds the threshold, it triggers compaction.
+        builds an estimated full context prompt, and triggers compaction
+        when the total estimated token count exceeds the threshold.
 
         Memory structure:
             [System Prompt (preserved)] + [Compactable (counted)] +
@@ -159,39 +160,39 @@ class MemoryCompactionHook:
             if self.enable_truncate_tool_result_texts and messages_to_keep:
                 _truncate_tool_result_texts(messages_to_keep)
 
-            compactable_prompt = await agent.formatter.format(
-                msgs=messages_to_compact,
-            )
-            compactable_tokens = await safe_count_message_tokens(
-                compactable_prompt,
-            )
-
-            preserved_tokens = 0
-            preserved_messages = [
+            messages_for_estimate = [
                 *system_prompt_messages,
+                *messages_to_compact,
                 *messages_to_keep,
             ]
-            if preserved_messages:
-                preserved_prompt = await agent.formatter.format(
-                    msgs=preserved_messages,
-                )
-                preserved_tokens = await safe_count_message_tokens(
-                    preserved_prompt,
-                )
-
-            summary_tokens = safe_count_str_tokens(
+            previous_summary = build_previous_summary(
                 agent.memory.get_compressed_summary() or "",
             )
-            estimated_total_tokens = (
-                compactable_tokens + preserved_tokens + summary_tokens
+            if previous_summary:
+                messages_for_estimate.insert(
+                    0,
+                    Msg(
+                        name="user",
+                        content=previous_summary,
+                        role="user",
+                    ),
+                )
+
+            full_prompt = await agent.formatter.format(
+                msgs=messages_for_estimate,
+            )
+            estimated_total_tokens = await safe_count_message_tokens(
+                full_prompt,
             )
             logger.debug(
                 "Estimated context tokens total=%d "
-                "(compactable=%d, preserved=%d, summary=%d) vs threshold=%d",
+                "(summary_prepended=%s, system_prompt_msgs=%d, "
+                "compactable_msgs=%d, keep_recent_msgs=%d) vs threshold=%d",
                 estimated_total_tokens,
-                compactable_tokens,
-                preserved_tokens,
-                summary_tokens,
+                bool(previous_summary),
+                len(system_prompt_messages),
+                len(messages_to_compact),
+                len(messages_to_keep),
                 self.memory_compact_threshold,
             )
 

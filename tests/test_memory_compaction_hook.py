@@ -31,7 +31,9 @@ class FakeMemory:
         self,
         exclude_mark: str | None = None,
         prepend_summary: bool = False,
+        **_kwargs,
     ) -> list[FakeMsg]:
+        del exclude_mark, prepend_summary
         return self._messages
 
     def get_compressed_summary(self) -> str:
@@ -74,12 +76,19 @@ class FakeMemoryManager:
 
 
 class FakeFormatter:
+    def __init__(self) -> None:
+        self.calls = 0
+
     async def format(self, msgs: list[FakeMsg]) -> list[dict[str, Any]]:
+        self.calls += 1
         return [
             {
                 "role": msg.role,
-                "content": str(msg.content),
-                "_test_token_count": msg.token_count,
+                "content": str(getattr(msg, "content", "")),
+                "_test_token_count": int(
+                    getattr(msg, "token_count", 0)
+                    or max(len(str(getattr(msg, "content", ""))) // 4, 1)
+                ),
             }
             for msg in msgs
         ]
@@ -87,9 +96,10 @@ class FakeFormatter:
 
 def _make_agent(messages: list[FakeMsg], summary: str = "") -> Any:
     memory = FakeMemory(messages=messages, compressed_summary=summary)
+    formatter = FakeFormatter()
     return SimpleNamespace(
         memory=memory,
-        formatter=FakeFormatter(),
+        formatter=formatter,
     )
 
 
@@ -142,6 +152,7 @@ async def test_compaction_triggers_on_total_context_budget(
     assert memory_manager.summary_task_messages
     assert agent.memory.updated_summary == "compacted-summary"
     assert agent.memory.marked_ids == ["old-1", "old-2"]
+    assert agent.formatter.calls == 1
 
 
 async def test_compaction_not_triggered_when_total_under_threshold(
@@ -182,3 +193,4 @@ async def test_compaction_not_triggered_when_total_under_threshold(
     assert not memory_manager.summary_task_messages
     assert agent.memory.updated_summary is None
     assert agent.memory.marked_ids == []
+    assert agent.formatter.calls == 1
