@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI commands for environment variable management."""
+
 from __future__ import annotations
 
 import click

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI skill: list and interactively enable/disable skills."""
+
 from __future__ import annotations
 
 import click

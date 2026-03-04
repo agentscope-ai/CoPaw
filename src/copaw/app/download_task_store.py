@@ -4,6 +4,7 @@
 Multiple downloads can run concurrently. Completed/failed results are retained
 until explicitly cleared so the frontend can poll for the final state.
 """
+
 from __future__ import annotations
 
 import asyncio

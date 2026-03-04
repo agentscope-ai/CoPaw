@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Custom memory implementation with bugfixes and extensions."""
+
 import logging
 
 from agentscope.agent._react_agent import _MemoryMark

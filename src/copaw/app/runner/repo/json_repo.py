@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """JSON-based chat repository."""
+
 from __future__ import annotations
 
 import json

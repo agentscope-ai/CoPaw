@@ -4,6 +4,7 @@
 Pluggable message renderer: Message -> sendable parts (runtime Content).
 Style/capabilities control markdown, emoji, code fence.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,9 +62,9 @@ def _fmt_tool_call(
 
 def _fmt_tool_output_label(name: str, style: RenderStyle) -> str:
     if style.use_emoji:
-        return f"✅ **{name}**:"
+        return f"✅ **{name}**:\n"
     if style.supports_markdown:
-        return f"**{name}**:"
+        return f"**{name}**:\n"
     return f"{name}:"
 
 
@@ -159,6 +160,28 @@ class MessageRenderer:
 
         def _parts_for_tool_output(content_list: list) -> List[_OutgoingPart]:
             out: List[_OutgoingPart] = []
+
+            def _append_truncated_texts(
+                parts: List[_OutgoingPart],
+                max_len: int,
+                output: List[_OutgoingPart],
+            ) -> None:
+                total_len = 0
+                for bp in parts:
+                    if getattr(bp, "type", None) != ContentType.TEXT:
+                        continue
+                    text = getattr(bp, "text", "") or ""
+                    if total_len >= max_len:
+                        break
+                    remaining = max_len - total_len
+                    if len(text) > remaining:
+                        output.append(
+                            TextContent(text=text[:remaining] + "..."),
+                        )
+                        break
+                    output.append(bp)
+                    total_len += len(text)
+
             for c in content_list:
                 if getattr(c, "type", None) != ContentType.DATA:
                     continue
@@ -180,30 +203,7 @@ class MessageRenderer:
                             ),
                         )
                         if any(tool in name for tool in s.truncate_tools):
-                            total_len = 0
-                            max_len = 500
-                            for bp in block_parts:
-                                bp_type = getattr(bp, "type", None)
-                                if bp_type == ContentType.TEXT:
-                                    text = getattr(bp, "text", "") or ""
-                                    remaining = max_len - total_len
-                                    if remaining <= 0:
-                                        break
-                                    if len(text) > remaining:
-                                        out.append(
-                                            TextContent(text=text[:remaining] + "...")
-                                        )
-                                        total_len = max_len
-                                        break
-                                    out.append(bp)
-                                    total_len += len(text)
-                                elif bp_type in (
-                                    ContentType.IMAGE,
-                                    ContentType.AUDIO,
-                                    ContentType.VIDEO,
-                                    ContentType.FILE,
-                                ):
-                                    out.append(bp)
+                            _append_truncated_texts(block_parts, 500, out)
                         else:
                             out.extend(block_parts)
                     else:

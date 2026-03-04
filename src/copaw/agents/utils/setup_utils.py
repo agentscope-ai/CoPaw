@@ -4,6 +4,7 @@
 This module handles copying markdown configuration files to
 the working directory.
 """
+
 import logging
 import shutil
 from pathlib import Path

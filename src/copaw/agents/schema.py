@@ -2,6 +2,7 @@
 """
 Agent tools schema: type definitions for agent tool responses.
 """
+
 from typing import Literal, Optional
 from typing_extensions import TypedDict, Required
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Memory search tool for semantic search in memory files."""
+
 from agentscope.tool import ToolResponse
 from agentscope.message import TextBlock
 

@@ -6,11 +6,11 @@ Windows filenames cannot contain: \\ / : * ? " < > |
 This module wraps agentscope's JSONSession so that session_id and user_id
 are sanitized before being used as filenames.
 """
+
 import os
 import re
 
 from agentscope.session import JSONSession
-
 
 # Characters forbidden in Windows filenames
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')

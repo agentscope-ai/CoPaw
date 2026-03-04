@@ -4,6 +4,7 @@ Heartbeat: run agent with HEARTBEAT.md as query at interval.
 Uses config functions (get_heartbeat_config, get_heartbeat_query_path,
 load_config) for paths and settings.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Write query-handler error log and agent/memory state to a temp JSON file."""
+
 from __future__ import annotations
 
 import json

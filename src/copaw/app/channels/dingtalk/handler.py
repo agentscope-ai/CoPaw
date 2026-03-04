@@ -156,6 +156,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             logger.exception("failed to fetch richText download url(s)")
         return content
 
+    # pylint: disable=too-many-branches,too-many-statements
     async def process(self, callback: CallbackMessage) -> tuple[int, str]:
         try:
             incoming_message = ChatbotMessage.from_dict(callback.data)
@@ -199,10 +200,9 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             conversation_id = conversation_id_from_chatbot_message(
                 incoming_message,
             )
-            # Extract senderStaffId and conversationType from raw callback data
-            # These are needed for OpenAPI media sending (image/video via DingTalk OpenAPI)
+            # Extract senderStaffId and conversationType for OpenAPI
             callback_data = callback.data or {}
-            sender_staff_id = callback_data.get("senderStaffId") or callback_data.get("senderStaffID")
+            sender_staff_id = callback_data.get("senderStaffId")
             conversation_type = callback_data.get("conversationType")
             loop = asyncio.get_running_loop()
             reply_future: asyncio.Future[str] = loop.create_future()
@@ -244,7 +244,12 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 )
 
             if sw:
-                preview = (text[:20] + ("…" if len(text) > 20 else "")).strip() if text else "[消息]"
+                txt = text[:20]
+                preview = (
+                    (txt + "…" if len(text) > 20 else txt).strip()
+                    if text
+                    else "[消息]"
+                )
                 ack_msg = f'✅ 收到\n"{preview}"\n🌀正在处理中……'
                 self.reply_text(ack_msg, incoming_message)
 

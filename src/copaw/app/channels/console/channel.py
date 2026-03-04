@@ -9,6 +9,7 @@ endpoint.  This channel only handles the **output** side: whenever a
 completed message event or a proactive send arrives, it is pretty-printed
 to the terminal.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,7 +29,6 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
-
 
 logger = logging.getLogger(__name__)
 

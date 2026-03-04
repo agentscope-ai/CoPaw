@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI commands for managing LLM providers."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -323,9 +324,7 @@ def list_cmd() -> None:
         tag = (
             " [custom]"
             if defn.is_custom
-            else " [local]"
-            if defn.is_local
-            else ""
+            else " [local]" if defn.is_local else ""
         )
         click.echo(f"\n{'─' * 44}")
         click.echo(f"  {defn.name} ({defn.id}){tag}")

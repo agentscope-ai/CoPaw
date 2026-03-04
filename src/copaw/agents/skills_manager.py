@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Skills management: sync skills from code to working_dir."""
+
 import filecmp
 import logging
 import shutil

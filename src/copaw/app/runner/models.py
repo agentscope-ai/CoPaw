@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Chat models for runner with UUID management."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

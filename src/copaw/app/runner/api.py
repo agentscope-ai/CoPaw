@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Chat management API."""
+
 from __future__ import annotations
 import json
 
@@ -15,7 +16,6 @@ from .models import (
     ChatHistory,
 )
 from .utils import agentscope_msg_to_message
-
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 

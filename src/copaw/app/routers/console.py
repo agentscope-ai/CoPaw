@@ -3,7 +3,6 @@
 
 from fastapi import APIRouter, Query
 
-
 router = APIRouter(prefix="/console", tags=["console"])
 
 

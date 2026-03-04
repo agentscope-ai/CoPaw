@@ -4,6 +4,7 @@
 This module ensures tool_use and tool_result messages are properly
 paired and ordered to prevent API errors.
 """
+
 import json
 import logging
 

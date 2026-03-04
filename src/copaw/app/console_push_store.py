@@ -4,6 +4,7 @@
 Bounded: at most _MAX_MESSAGES kept; messages older than _MAX_AGE_SECONDS
 are dropped when reading. Frontend dedupes by id and caps its seen set.
 """
+
 from __future__ import annotations
 
 import asyncio

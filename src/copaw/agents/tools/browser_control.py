@@ -779,17 +779,17 @@ async def _action_screenshot(
                 locator = root.locator("body").first
                 await locator.screenshot(
                     path=path,
-                    type=screenshot_type
-                    if screenshot_type == "jpeg"
-                    else "png",
+                    type=(
+                        screenshot_type if screenshot_type == "jpeg" else "png"
+                    ),
                 )
             else:
                 await page.screenshot(
                     path=path,
                     full_page=full_page,
-                    type=screenshot_type
-                    if screenshot_type == "jpeg"
-                    else "png",
+                    type=(
+                        screenshot_type if screenshot_type == "jpeg" else "png"
+                    ),
                 )
         return _tool_response(
             json.dumps(
@@ -849,9 +849,9 @@ async def _action_click(  # pylint: disable=too-many-branches
         if not isinstance(mods, list):
             mods = []
         kwargs = {
-            "button": button
-            if button in ("left", "right", "middle")
-            else "left",
+            "button": (
+                button if button in ("left", "right", "middle") else "left"
+            ),
         }
         if mods:
             kwargs["modifiers"] = [

@@ -4,6 +4,7 @@
 All terminal interaction with *questionary* is centralised here so that
 the rest of the CLI code never imports questionary directly.
 """
+
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional

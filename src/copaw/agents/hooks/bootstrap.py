@@ -4,6 +4,7 @@
 This hook checks for BOOTSTRAP.md on the first user interaction and
 prepends guidance to help set up the agent's identity and preferences.
 """
+
 import logging
 from pathlib import Path
 from typing import Any

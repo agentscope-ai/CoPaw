@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI commands for managing chats via HTTP API (/chats)."""
+
 from __future__ import annotations
 
 import json

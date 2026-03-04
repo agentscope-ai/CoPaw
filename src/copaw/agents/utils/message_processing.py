@@ -6,6 +6,7 @@ This module handles:
 - Message content manipulation
 - Message validation
 """
+
 import logging
 import os
 import urllib.parse

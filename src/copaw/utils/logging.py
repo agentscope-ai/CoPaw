@@ -4,7 +4,6 @@ import os
 import platform
 import sys
 
-
 _LEVEL_MAP = {
     "critical": logging.CRITICAL,
     "error": logging.ERROR,

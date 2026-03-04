@@ -4,6 +4,7 @@
 This module provides token counting functionality for estimating
 message token usage with Qwen tokenizer.
 """
+
 import logging
 from pathlib import Path
 

@@ -24,7 +24,6 @@ from .constants import (
     DINGTALK_TYPE_MAPPING,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -176,7 +175,7 @@ def get_chat_type_from_meta(
     conv_type = meta.get("conversation_type")
     if conv_type is not None:
         logger.debug(
-            "dingtalk get_chat_type_from_meta: using conversation_type from meta",
+            "dingtalk: using conversation_type from meta",
         )
         if str(conv_type) == "2":
             return "group"

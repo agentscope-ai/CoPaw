@@ -788,7 +788,7 @@ class DingTalkChannel(BaseChannel):
                     payload,
                 )
 
-            # Video: try OpenAPI first for better preview support, fallback to sessionWebhook
+            # Video: try OpenAPI first, fallback to sessionWebhook
             if upload_type == "video":
                 pic_media_id = (
                     getattr(part, "pic_media_id", None)
@@ -942,10 +942,11 @@ class DingTalkChannel(BaseChannel):
                 payload,
             )
 
-        # Video (after upload): try OpenAPI first for better preview support, fallback to sessionWebhook
+        # Video (after upload): try OpenAPI first, fallback to sessionWebhook
         if upload_type == "video":
             pic_media_id = (
-                getattr(part, "pic_media_id", None) or getattr(part, "picMediaId", None) or ""
+                getattr(part, "pic_media_id", None) or getattr(
+                    part, "picMediaId", None) or ""
             )
             duration = getattr(part, "duration", None)
             if duration is None:
@@ -961,8 +962,8 @@ class DingTalkChannel(BaseChannel):
                 )
                 if ok:
                     logger.info(
-                        "dingtalk video sent via OpenAPI: media_id=%s",
-                        media_id[:32] + "..." if len(media_id) > 32 else media_id,
+                        "dingtalk video sent: media_id=%s",
+                        media_id[:32],
                     )
                     return True
 
@@ -1815,12 +1816,12 @@ class DingTalkChannel(BaseChannel):
         duration_ms = str(int((duration or 1) * 1000))
         if media_type == "image":
             return json.dumps({
-                "photoURL": media_id
+                "photoURL": media_id,
             })
-        elif media_type == "voice":            
+        elif media_type == "voice":
             return json.dumps({
-                "mediaId": media_id, 
-                "duration": duration_ms
+                "mediaId": media_id,
+                "duration": duration_ms,
             })
         elif media_type == "video":
             return json.dumps({
@@ -1858,11 +1859,16 @@ class DingTalkChannel(BaseChannel):
         )
         token = await self._get_access_token()
         msg_key = get_msg_key_for_media_type(media_type)
-        msg_param = self._build_media_msg_param(media_id, media_type, filename, duration)
+        msg_param = self._build_media_msg_param(
+            media_id, 
+            media_type, 
+            filename, 
+            duration
+        )
 
         if chat_type == "group":
             url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
-            payload = {
+            payload: Dict[str, Any] = {
                 "robotCode": self.client_id,
                 "openConversationId": conversation_id,
                 "msgKey": msg_key,
@@ -1870,9 +1876,10 @@ class DingTalkChannel(BaseChannel):
             }
         else:
             url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
-            payload = {
+            user_ids = [user_id]
+            payload: Dict[str, Any] = {
                 "robotCode": self.client_id,
-                "userIds": [user_id],
+                "userIds": user_ids,
                 "msgKey": msg_key,
                 "msgParam": msg_param,
             }
@@ -1890,7 +1897,7 @@ class DingTalkChannel(BaseChannel):
                 body_text = await resp.text()
                 if resp.status >= 400:
                     logger.warning(
-                        "dingtalk openapi media send failed: type=%s status=%s body=%s",
+                        "dingtalk openapi send failed: type=%s status=%s body=%s",
                         media_type,
                         resp.status,
                         body_text[:500],
@@ -1901,19 +1908,19 @@ class DingTalkChannel(BaseChannel):
                     invalid_users = result.get("invalidStaffIdList") or []
                     if invalid_users:
                         logger.warning(
-                            "dingtalk openapi media send: invalid user IDs: %s",
+                            "dingtalk openapi send: invalid user IDs: %s",
                             [u[:20] for u in invalid_users],
                         )
                         return False
                 logger.info(
-                    "dingtalk openapi media send ok: type=%s status=%s",
+                    "dingtalk openapi send ok: type=%s status=%s",
                     media_type,
                     resp.status,
                 )
                 return True
         except Exception:
             logger.exception(
-                "dingtalk openapi media send failed: type=%s",
+                "dingtalk openapi send failed: type=%s",
                 media_type,
             )
             return False
@@ -1973,6 +1980,10 @@ class DingTalkChannel(BaseChannel):
                 ", ".join(missing),
             )
             return False
+
+        assert user_id is not None
+        assert conversation_id is not None
+        assert chat_type is not None
 
         ok = await self._send_media_via_openapi(
             user_id=user_id,

@@ -5,6 +5,7 @@ This hook monitors token usage and automatically compacts older messages
 when the context window approaches its limit, preserving recent messages
 and the system prompt.
 """
+
 import logging
 import os
 from typing import TYPE_CHECKING, Any
