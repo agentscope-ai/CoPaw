@@ -128,7 +128,7 @@ PROVIDER_AZURE_OPENAI = ProviderDefinition(
 PROVIDER_OLLAMA = ProviderDefinition(
     id="ollama",
     name="Ollama",
-    # Ollama use `OLLAMA_HOST` env var as its BASE URL
+    # Ollama uses `OLLAMA_HOST` env var as its BASE URL
     # TODO: auto detect ollama base url and display in UI
     # TODO: override `OLLAMA_HOST` with the detected/configured URL
     default_base_url="http://localhost:11434/v1",
