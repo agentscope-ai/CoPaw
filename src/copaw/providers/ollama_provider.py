@@ -96,7 +96,7 @@ class OllamaProvider(Provider):
         except (ImportError, ConnectionError, OSError, RuntimeError):
             return False
 
-    async def update_config(self, config: Dict) -> None:
+    def update_config(self, config: Dict) -> None:
         """Update provider configuration fields from dict."""
         if "name" in config and config["name"] is not None:
             self.name = str(config["name"])

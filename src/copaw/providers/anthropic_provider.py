@@ -112,7 +112,7 @@ class AnthropicProvider(Provider):
         except anthropic.APIError:
             return False
 
-    async def update_config(self, config: Dict) -> None:
+    def update_config(self, config: Dict) -> None:
         """Update provider configuration with the given dictionary."""
         if "name" in config and config["name"] is not None:
             self.name = str(config["name"])

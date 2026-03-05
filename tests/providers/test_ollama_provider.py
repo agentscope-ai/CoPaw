@@ -147,7 +147,7 @@ async def test_check_model_connection_error_returns_false(monkeypatch) -> None:
 async def test_update_config_updates_only_non_none_values() -> None:
     provider = _make_provider()
 
-    await provider.update_config(
+    provider.update_config(
         {
             "name": "Ollama Local",
             "base_url": "http://127.0.0.1:11434",

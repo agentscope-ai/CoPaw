@@ -65,7 +65,7 @@ class Provider(BaseModel, ABC):
         """Check if a specific model is reachable/usable."""
 
     @abstractmethod
-    async def update_config(self, config: Dict) -> None:
+    def update_config(self, config: Dict) -> None:
         """Update provider configuration with the given dictionary."""
 
     async def add_model(
@@ -117,5 +117,5 @@ class DefaultProvider(Provider):
     ) -> bool:
         return model_id in {model.id for model in self.models}
 
-    async def update_config(self, config: Dict) -> None:
+    def update_config(self, config: Dict) -> None:
         pass

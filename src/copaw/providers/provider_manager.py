@@ -207,13 +207,6 @@ class ProviderManager:
     def _add_builtin(self, provider: Provider):
         self.builtin_providers[provider.id] = provider
 
-    def list_providers(self) -> List[Provider]:
-        # Return a list of available providers, including both built-in and
-        # custom ones. This can be used to populate the UI dropdown.
-        return list(self.builtin_providers.values()) + list(
-            self.custom_providers.values(),
-        )
-
     def get_provider(self, provider_id: str) -> Provider | None:
         # Return a provider instance by its ID. This will be used to create
         # chat model instances for the agent.
@@ -231,9 +224,11 @@ class ProviderManager:
         provider = self.get_provider(provider_id)
         if not provider:
             return False
-        for key, value in config.items():
-            if hasattr(provider, key):
-                setattr(provider, key, value)
+        provider.update_config(config)
+        self.save_provider(
+            provider,
+            is_builtin=provider_id in self.builtin_providers,
+        )
         return True
 
     def add_custom_provider(self, provider_data: Provider):
@@ -245,12 +240,16 @@ class ProviderManager:
             )
         provider_data.is_custom = True
         self.custom_providers[provider_data.id] = provider_data
+        self.save_provider(provider_data, is_builtin=False)
 
     def remove_custom_provider(self, provider_id: str):
         # Remove a custom provider by its ID. This will update the
         # providers.json file and remove the provider from the UI.
         if provider_id in self.custom_providers:
             del self.custom_providers[provider_id]
+            provider_path = self.custom_path / f"{provider_id}.json"
+            if provider_path.exists():
+                os.remove(provider_path)
 
     def activate_provider(self, provider_id: str, model_id: str):
         # Set the active provider and model for the agent. This will update
@@ -263,7 +262,11 @@ class ProviderManager:
             raise ValueError(
                 f"Model '{model_id}' not found in provider '{provider_id}'.",
             )
-        # Here we would persist the active provider/model to providers.json.
+        self.active_model = ModelSlotConfig(
+            provider_id=provider_id,
+            model=model_id,
+        )
+        self.save_active_model(self.active_model)
 
     def save_provider(
         self,
@@ -289,9 +292,31 @@ class ProviderManager:
         provider_path = provider_dir / f"{provider_id}.json"
         if not provider_path.exists():
             return None
-        with open(provider_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return Provider.model_validate(data)
+        try:
+            with open(provider_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return self._provider_from_data(data)
+        except Exception as e:
+            logger.warning(
+                "Failed to load provider '%s' from %s: %s",
+                provider_id,
+                provider_path,
+                e,
+            )
+            return None
+
+    def _provider_from_data(self, data: Dict) -> Provider:
+        """Deserialize provider data to a concrete provider type."""
+        provider_id = str(data.get("id", ""))
+        chat_model = str(data.get("chat_model", ""))
+
+        if provider_id == "anthropic" or chat_model == "AnthropicChatModel":
+            return AnthropicProvider.model_validate(data)
+        if provider_id == "ollama" or chat_model == "OllamaChatModel":
+            return OllamaProvider.model_validate(data)
+        if data.get("is_local", False):
+            return DefaultProvider.model_validate(data)
+        return OpenAIProvider.model_validate(data)
 
     def save_active_model(self, active_model: ModelSlotConfig):
         """Save the active provider/model configuration to disk."""
@@ -355,6 +380,7 @@ class ProviderManager:
                     self.active_model = ModelSlotConfig.model_validate(
                         active_model,
                     )
+                    self.save_active_model(self.active_model)
                 except Exception:
                     logger.warning(
                         "Failed to migrate active model, using default.",

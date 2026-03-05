@@ -139,7 +139,7 @@ async def test_check_model_connection_api_error_returns_false(
 async def test_update_config_updates_only_non_none_values() -> None:
     provider = _make_provider()
 
-    await provider.update_config(
+    provider.update_config(
         {
             "name": "Anthropic Custom",
             "base_url": "https://new.example",

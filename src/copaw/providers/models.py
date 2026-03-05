@@ -134,10 +134,6 @@ class ProviderInfo(BaseModel):
     )
     current_api_key: str = Field(default="")
     current_base_url: str = Field(default="")
-    chat_model: str = Field(
-        default="OpenAIChatModel",
-        description="Chat model class name used by this provider",
-    )
 
 
 class ActiveModelsInfo(BaseModel):
