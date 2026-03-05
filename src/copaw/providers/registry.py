@@ -142,6 +142,7 @@ PROVIDER_ANTHROPIC = ProviderDefinition(
     chat_model="AnthropicChatModel",
 )
 
+
 def _default_ollama_base_url() -> str:
     """Derive the default Ollama base URL from ``OLLAMA_HOST`` env var.
 

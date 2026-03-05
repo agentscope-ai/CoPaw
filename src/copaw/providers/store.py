@@ -315,9 +315,7 @@ def _validate_active_llm(data: ProvidersData) -> None:
                 if s and s.base_url
                 else None
             )
-            names = {
-                m.name for m in OllamaModelManager.list_models(host=host)
-            }
+            names = {m.name for m in OllamaModelManager.list_models(host=host)}
             if data.active_llm.model not in names:
                 data.active_llm = ModelSlotConfig()
         except Exception:

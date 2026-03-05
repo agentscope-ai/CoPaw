@@ -111,7 +111,8 @@ class OllamaModelManager:
 
     @staticmethod
     def pull_model(
-        name: str, host: Optional[str] = None,
+        name: str,
+        host: Optional[str] = None,
     ) -> OllamaModelInfo:
         """Pull/download a model via ``ollama.pull``.
 
