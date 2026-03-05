@@ -12,6 +12,7 @@ Example:
 
 import logging
 import os
+import json
 from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type, Any
 from functools import wraps
 
@@ -383,12 +384,27 @@ def _create_remote_model_instance(
         if base_url.endswith("/v1"):
             base_url = base_url[:-3]
 
+    agentapp = {
+        "agentType": "CoPaw",
+        "deployType": "UnKnown",
+        "moduleCode": "model",
+        "agentCode": "UnKnown",
+    }
+
     # Instantiate model
     model = chat_model_class(
         model_name,
         api_key=api_key,
         stream=True,
-        client_kwargs={"base_url": base_url},
+        client_kwargs={
+            "base_url": base_url,
+            "default_headers": {
+                "x-dashscope-agentapp": json.dumps(
+                    agentapp,
+                    ensure_ascii=False,
+                ),
+            },
+        },
     )
 
     return model
