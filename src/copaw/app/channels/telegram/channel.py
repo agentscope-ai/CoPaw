@@ -142,8 +142,8 @@ async def _build_content_parts_from_message(
                 has_bot_command = True
                 break
 
-    # 注意: 引用消息已通过对话历史(session)传递给 Agent
-    # 不再内联到消息文本中，避免重复和上下文污染
+    # Note: Quoted messages have been passed to the Agent via conversation history (session)
+    # No longer inlined into message text to avoid duplication and context pollution
 
     if text:
         content_parts.append(TextContent(type=ContentType.TEXT, text=text))
@@ -509,14 +509,14 @@ class TelegramChannel(BaseChannel):
             return
         message_thread_id = meta.get("message_thread_id")
 
-        # 停止之前的 typing 指示器
+        # Stop previous typing indicator
         self._stop_typing(chat_id)
 
-        # 先对原始 Markdown 文本分块，再分别转换为 HTML
-        # 避免分割 HTML 标签导致解析错误
+        # Chunk the raw Markdown text first, then convert each chunk to HTML
+        # Avoid splitting HTML tags which causes parsing errors
         chunks = self._chunk_text(text)
         for chunk in chunks:
-            # 将每个 chunk 转换为 HTML
+            # Convert each chunk to HTML
             html_chunk = convert_markdown_to_telegram_html(chunk)
             try:
                 if message_thread_id:
@@ -533,7 +533,7 @@ class TelegramChannel(BaseChannel):
                         parse_mode="HTML",
                     )
             except telegram.error.BadRequest as e:
-                # HTML 解析失败，回退到纯文本
+                # HTML parse failed, fallback to plain text
                 logger.warning(
                     f"HTML parse failed, sending as plain text: {e}",
                 )
@@ -572,7 +572,7 @@ class TelegramChannel(BaseChannel):
         # Get message_thread_id from meta for replying to specific topic
         message_thread_id = meta.get("message_thread_id")
 
-        # 停止 typing 指示器
+        # Stop typing indicator
         self._stop_typing(chat_id)
 
         part_type = getattr(part, "type", None)

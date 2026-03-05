@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Telegram 格式转换器 V2
-将标准 Markdown 格式转换为 Telegram HTML 格式
+Telegram Format Converter V2
+Converts standard Markdown to Telegram HTML format
 
-转换规则：
-- 标题 (# ## ### ####) → <b>标题</b>
-- 粗体 **text** → <b>text</b>
-- 斜体 *text* → <i>text</i>
-- 删除线 ~~text~~ → <s>text</s>
-- 行内代码 `code` → <code>code</code>
-- 代码块 ```code``` → <pre>code</pre>
-- 引用 > text → <blockquote>text</blockquote>（多行合并）
-- 表格 |col1|col2| → col1\tcol2（表头加粗）
-- 列表 - item → • item
-- 分隔线 --- → ──────────
-- 链接 [text](url) → <a href="url">text</a>
+Conversion rules:
+- Headings (# ## ### ####) → <b>heading</b>
+- Bold **text** → <b>text</b>
+- Italic *text* → <i>text</i>
+- Strikethrough ~~text~~ → <s>text</s>
+- Inline code `code` → <code>code</code>
+- Code blocks ```code``` → <pre>code</pre>
+- Blockquotes > text → <blockquote>text</blockquote> (multi-line merged)
+- Tables |col1|col2| → col1\tcol2 (header bolded)
+- Lists - item → • item
+- Separators --- → ──────────
+- Links [text](url) → <a href="url">text</a>
 """
 
 import re
@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 def convert_markdown_to_telegram_html(text: str) -> str:
     """
-    将 Markdown 格式转换为 Telegram HTML 格式
+    Convert Markdown format to Telegram HTML format
 
     Args:
-        text: Markdown 格式的文本
+        text: Text in Markdown format
 
     Returns:
-        Telegram HTML 格式的文本
+        Text in Telegram HTML format
     """
     if not text:
         return text
@@ -41,7 +41,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
     lines = text.split("\n")
     converted_lines = []
 
-    # 状态跟踪
+    # State tracking
     in_code_block = False
     code_block_content = []
     in_blockquote = False
@@ -49,7 +49,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
     table_header_pending = False
 
     def flush_blockquote():
-        """刷新引用块"""
+        """Flush blockquote content"""
         nonlocal in_blockquote, blockquote_lines
         if in_blockquote and blockquote_lines:
             joined = "\n".join(blockquote_lines)
@@ -58,7 +58,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
             in_blockquote = False
 
     def flush_code_block():
-        """刷新代码块"""
+        """Flush code block content"""
         nonlocal in_code_block, code_block_content
         if code_block_content:
             code_text = "\n".join(code_block_content)
@@ -69,69 +69,67 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         in_code_block = False
 
     def process_table_header():
-        """处理待处理的表头（加粗）"""
+        """Process pending table header (bold)"""
         nonlocal table_header_pending
         if table_header_pending and converted_lines:
             prev = converted_lines[-1]
             if not prev.startswith("<"):
-                # 支持单列表格（无制表符）
+                # Support single-column tables (no tabs)
                 if "\t" in prev:
                     cells = prev.split("\t")
-                    converted_lines[-1] = "\t".join(
-                        f"<b>{cell}</b>" for cell in cells
-                    )
+                    converted_lines[-1] = "\t".join(f"<b>{cell}</b>" for cell in cells)
                 else:
-                    # 单列情况
+                    # Single column case
                     converted_lines[-1] = f"<b>{prev}</b>"
         table_header_pending = False
 
     for line in lines:
-        # 1. 代码块检测（检测行中任意位置的 ```）
+        # 1. Code block detection (detect ``` anywhere in line)
         if "```" in line:
             if in_code_block:
-                # 在代码块内，遇到 ``` 表示结束
+                # Inside code block, ``` indicates end
                 code_line = line.split("```")[0]
                 if code_line:
                     code_block_content.append(code_line)
                 flush_code_block()
-                # 处理 ``` 之后的内容（如果有）
+                # Process content after ``` (if any)
                 parts = line.split("```", 1)
                 if len(parts) > 1 and parts[1].strip():
-                    # 同一行有结束后的内容，继续处理但不重新进入代码块
+                    # Content after end on same line, continue processing without re-entering code block
                     line = parts[1]
                     # Fall through to process the remaining content
                 else:
                     continue
             else:
-                # 不在代码块内，遇到 ``` 表示开始
+                # Not in code block, ``` indicates start
                 flush_blockquote()
                 process_table_header()
-                # ``` 之前的内容正常处理（添加为已处理行）
+                # Process content before ``` normally (add as processed line)
                 before = line.split("```")[0]
                 if before.strip():
-                    # 处理 ``` 之前的内容中的行内样式
+                    # Process inline styles in content before ```
                     processed_before = before
-                    # 删除线
+                    # Strikethrough
                     if "~~" in processed_before:
                         processed_before = re.sub(
                             r"~~(.+?)~~",
                             r"<s>\1</s>",
                             processed_before,
                         )
-                    # 粗体
+                    # Bold
                     if "**" in processed_before:
                         processed_before = re.sub(
                             r"\*\*(.+?)\*\*",
                             r"<b>\1</b>",
                             processed_before,
                         )
-                    # 斜体
+                    # Italic
                     processed_before = re.sub(
                         r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
                         r"<i>\1</i>",
                         processed_before,
                     )
-                    # 行内代码
+                    # Inline code
                     if "`" in processed_before:
                         processed_before = re.sub(
                             r"`(.+?)`",
@@ -139,7 +137,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                             processed_before,
                         )
 
-                    # 链接
+                    # Link
                     def _replace_link_v1(match):
                         text = escape_html(match.group(1))
                         href = escape_html(match.group(2), quote=True)
@@ -153,22 +151,22 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                         )
                     converted_lines.append(processed_before)
 
-                # 检查是否有 ``` 之后的内容（同一行，单行代码块）
+                # Check if there is content after ``` (same line, single-line code block)
                 after_parts = line.split("```")[1:]
                 if len(after_parts) >= 2 and after_parts[0].strip():
-                    # 单行有开始和结束（```code``` 格式）
+                    # Single line has start and end (```code``` format)
                     code_content = after_parts[0]
                     if code_content.strip():
-                        # 直接处理单行代码块，不设置状态
+                        # Process single-line code block directly, do not set state
                         code_text = escape_html(code_content)
                         converted_lines.append(f"<pre>{code_text}</pre>")
-                    # 处理最后一个 ``` 之后的内容
+                    # Process content after the last ```
                     if len(after_parts) > 2 and after_parts[2].strip():
                         line = after_parts[2]
                     else:
                         continue
                 else:
-                    # 标准的代码块开始
+                    # Standard code block start
                     in_code_block = True
                     continue
 
@@ -176,7 +174,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
             code_block_content.append(line)
             continue
 
-        # 2. 标题处理（支持行中任意位置，如 "[TG_bot]  ## 标题"）
+        # 2. Title processing (support anywhere in line, e.g., "[TG_bot]  ## Title")
         title_match = re.search(r"(######?|#####|####|###|##|#)\s+(.+)", line)
         if title_match:
             flush_blockquote()
@@ -189,37 +187,37 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                 converted_lines.append(f"<b>{title}</b>")
             continue
 
-        # 3. 水平分割线
+        # 3. Horizontal separator
         if re.match(r"^(-{3,}|\*{3,}|_{3,})$", line.strip()):
             flush_blockquote()
             process_table_header()
             converted_lines.append("──────────")
             continue
 
-        # 4. 表格检测
+        # 4. Table detection
         if re.match(r"^\|.*\|$", line.strip()):
             flush_blockquote()
-            # 检测是否是分隔行（|---|---|）
+            # Check if it is a separator row (|---|---|)
             if re.match(r"^\|[\s\-:|]+\|$", line.strip()):
                 table_header_pending = True
                 continue
 
-            # 数据行
+            # Data row
             cells = [cell.strip() for cell in line.split("|")[1:-1]]
             if cells:
                 process_table_header()
-                # 对每个单元格处理行内样式
+                # Process inline styles for each cell
                 processed_cells = []
                 for cell in cells:
                     cell_line = cell
-                    # 删除线
+                    # Strikethrough
                     if "~~" in cell_line:
                         cell_line = re.sub(
                             r"~~(.+?)~~",
                             r"<s>\1</s>",
                             cell_line,
                         )
-                    # 粗体
+                    # Bold
                     if "**" in cell_line:
                         cell_line = re.sub(
                             r"\*\*(.+?)\*\*",
@@ -232,7 +230,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                             r"<b>\1</b>",
                             cell_line,
                         )
-                    # 斜体
+                    # Italic
                     cell_line = re.sub(
                         r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
                         r"<i>\1</i>",
@@ -243,7 +241,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                         r"<i>\1</i>",
                         cell_line,
                     )
-                    # 行内代码
+                    # Inline code
                     if "`" in cell_line:
                         cell_line = re.sub(
                             r"`(.+?)`",
@@ -251,7 +249,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                             cell_line,
                         )
 
-                    # 链接
+                    # Link
                     def _replace_link_v2(match):
                         text = escape_html(match.group(1))
                         href = escape_html(match.group(2), quote=True)
@@ -267,7 +265,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                 converted_lines.append("\t".join(processed_cells))
             continue
 
-        # 5. 引用处理（支持多行合并）
+        # 5. Blockquote processing (supports multi-line merge)
         if line.startswith("> "):
             if not in_blockquote:
                 in_blockquote = True
@@ -278,22 +276,22 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         else:
             flush_blockquote()
 
-        # 6. 列表前缀替换
+        # 6. List prefix replacement
         if re.match(r"^[-*+]\s+", line):
             line = re.sub(r"^[-*+]\s+", "• ", line)
 
-        # 7. 行内样式处理（顺序很重要！）
-        # 7.1 删除线
+        # 7. Inline style processing (order matters!)
+        # 7.1 Strikethrough
         if "~~" in line:
             line = re.sub(r"~~(.+?)~~", r"<s>\1</s>", line)
 
-        # 7.2 粗体
+        # 7.2 Bold
         if "**" in line:
             line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
         if "__" in line:
             line = re.sub(r"__(.+?)__", r"<b>\1</b>", line)
 
-        # 7.3 斜体（在粗体之后，避免冲突）
+        # 7.3 Italic (after Bold to avoid conflicts)
         line = re.sub(
             r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
             r"<i>\1</i>",
@@ -305,11 +303,11 @@ def convert_markdown_to_telegram_html(text: str) -> str:
             line,
         )
 
-        # 7.4 行内代码
+        # 7.4 Inline code
         if "`" in line:
             line = re.sub(r"`(.+?)`", r"<code>\1</code>", line)
 
-        # 7.5 链接
+        # 7.5 Link
         def _replace_link_v3(match):
             text = escape_html(match.group(1))
             href = escape_html(match.group(2), quote=True)
@@ -320,7 +318,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
 
         converted_lines.append(line)
 
-    # 刷新剩余内容
+    # Flush remaining content
     flush_blockquote()
     flush_code_block()
     process_table_header()
@@ -332,14 +330,14 @@ def convert_markdown_to_telegram_html(text: str) -> str:
 
 def escape_html(text: str, quote: bool = False) -> str:
     """
-    HTML 转义
+    HTML escape
 
     Args:
-        text: 原始文本
-        quote: 是否转义引号（用于属性值）
+        text: Original text
+        quote: Whether to escape quotes (for attribute values)
 
     Returns:
-        转义后的文本
+        Escaped text
     """
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;")
@@ -352,14 +350,14 @@ def escape_html(text: str, quote: bool = False) -> str:
 
 def mask_text(text: str, max_length: int = 50) -> str:
     """
-    脱敏文本，用于日志记录
+    Mask text for logging
 
     Args:
-        text: 原始文本
-        max_length: 最大显示长度
+        text: Original text
+        max_length: Maximum display length
 
     Returns:
-        脱敏后的文本
+        Masked text
     """
     if not text:
         return "<empty>"
@@ -371,58 +369,58 @@ def mask_text(text: str, max_length: int = 50) -> str:
 
 
 if __name__ == "__main__":
-    test_text = """# 大标题
+    test_text = """# Main Heading
 
-## 中标题
+## Secondary Heading
 
-### 小标题
+### Sub Heading
 
-这是 **粗体** 和 *斜体* 的测试
+This is a test for **bold** and *italic*
 
-- 列表项一
-- 列表项二
-- 列表项三
+- List item one
+- List item two
+- List item three
 
-1. 有序列表一
-2. 有序列表二
+1. Ordered list one
+2. Ordered list two
 
-> 这是引用内容
-> 第二行引用
-> 第三行引用
+> This is blockquote content
+> Second line quote
+> Third line quote
 
 ```python
 def hello():
     print("Hello")
 ```
 
-| 列 1 | 列 2 |
+| Col 1 | Col 2 |
 |------|------|
-| 值 1 | 值 2 |
-| 值 3 | 值 4 |
+| Val 1 | Val 2 |
+| Val 3 | Val 4 |
 
-[链接文本](https://example.com)
+[Link Text](https://example.com)
 
-~~删除线~~
+~~Strikethrough~~
 
 ---
 
-普通文本
+Plain text
 """
 
     result = convert_markdown_to_telegram_html(test_text)
-    print("转换结果:")
+    print("Conversion Result:")
     print("=" * 60)
     print(result)
     print("=" * 60)
-    print("\n验证:")
-    print("✓ 粗体:", "<b>" in result)
-    print("✓ 斜体:", "<i>" in result)
-    print("✓ 标题:", "<b>大标题</b>" in result)
-    print("✓ 列表:", "• " in result)
-    print("✓ 引用：", "<blockquote>" in result and "\n" in result)
-    print("✓ 表格制表符:", "\t" in result)
-    print("✓ 表格表头加粗:", "<b>列 1</b>" in result)
-    print("✓ 代码块:", "<pre>" in result)
-    print("✓ 链接:", "<a href=" in result)
-    print("✓ 删除线:", "<s>" in result)
-    print("✓ 分隔线:", "──────────" in result)
+    print("\nVerification:")
+    print("✓ Bold:", "<b>" in result)
+    print("✓ Italic:", "<i>" in result)
+    print("✓ Heading:", "<b>Main Heading</b>" in result)
+    print("✓ List:", "• " in result)
+    print("✓ Blockquote:", "<blockquote>" in result and "\n" in result)
+    print("✓ Table tabs:", "\t" in result)
+    print("✓ Table header bold:", "<b>Col 1</b>" in result)
+    print("✓ Code block:", "<pre>" in result)
+    print("✓ Link:", "<a href=" in result)
+    print("✓ Strikethrough:", "<s>" in result)
+    print("✓ Separator:", "──────────" in result)
