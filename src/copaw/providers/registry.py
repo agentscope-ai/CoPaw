@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import TYPE_CHECKING, List, Optional, Type
 
@@ -141,13 +142,25 @@ PROVIDER_ANTHROPIC = ProviderDefinition(
     chat_model="AnthropicChatModel",
 )
 
+def _default_ollama_base_url() -> str:
+    """Derive the default Ollama base URL from ``OLLAMA_HOST`` env var.
+
+    Falls back to ``http://localhost:11434/v1`` when the variable is unset.
+    The ``/v1`` suffix is appended later by the normalization step in
+    ``store._normalize_ollama_base_url`` if missing.
+    """
+    host = os.environ.get("OLLAMA_HOST", "").strip()
+    if not host:
+        return "http://localhost:11434/v1"
+    if not host.startswith(("http://", "https://")):
+        host = f"http://{host}"
+    return host
+
+
 PROVIDER_OLLAMA = ProviderDefinition(
     id="ollama",
     name="Ollama",
-    # Ollama uses `OLLAMA_HOST` env var as its BASE URL
-    # TODO: auto detect ollama base url and display in UI
-    # TODO: override `OLLAMA_HOST` with the detected/configured URL
-    default_base_url="http://localhost:11434/v1",
+    default_base_url=_default_ollama_base_url(),
     api_key_prefix="",
     models=[],
 )
