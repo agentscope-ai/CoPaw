@@ -72,11 +72,10 @@ def _load_builtin_channels() -> dict[str, type[BaseChannel]]:
 def _get_cached_builtin_channels() -> dict[str, type[BaseChannel]]:
     """Return cached built-in channels (loaded once per process)."""
     global _BUILTIN_CHANNEL_CACHE
-    if _BUILTIN_CHANNEL_CACHE is None:
-        with _BUILTIN_CHANNEL_CACHE_LOCK:
-            if _BUILTIN_CHANNEL_CACHE is None:
-                _BUILTIN_CHANNEL_CACHE = _load_builtin_channels()
-    return dict(_BUILTIN_CHANNEL_CACHE)
+    with _BUILTIN_CHANNEL_CACHE_LOCK:
+        if _BUILTIN_CHANNEL_CACHE is None:
+            _BUILTIN_CHANNEL_CACHE = _load_builtin_channels()
+        return dict(_BUILTIN_CHANNEL_CACHE)
 
 
 def clear_builtin_channel_cache() -> None:
