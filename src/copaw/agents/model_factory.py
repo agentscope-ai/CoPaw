@@ -140,9 +140,7 @@ def _create_file_block_support_formatter(
             messages = await super()._format(msgs)
 
             if reasoning_contents:
-                in_assistant = [
-                    m for m in msgs if m.role == "assistant"
-                ]
+                in_assistant = [m for m in msgs if m.role == "assistant"]
                 out_assistant = [
                     m for m in messages if m.get("role") == "assistant"
                 ]
