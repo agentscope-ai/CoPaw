@@ -118,8 +118,12 @@ async def execute_shell_command(
             )
 
             try:
-                await asyncio.wait_for(proc.wait(), timeout=timeout)
-                stdout, stderr = await proc.communicate()
+                # Apply timeout to communicate directly; wait()+communicate()
+                # can hang if descendants keep stdout/stderr pipes open.
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=timeout,
+                )
                 encoding = locale.getpreferredencoding(False) or "utf-8"
                 stdout_str = stdout.decode(encoding, errors="replace").strip(
                     "\n",
@@ -148,7 +152,14 @@ async def execute_shell_command(
                         proc.kill()
                         await proc.wait()
 
-                    stdout, stderr = await proc.communicate()
+                    # Avoid hanging forever while draining pipes after timeout.
+                    try:
+                        stdout, stderr = await asyncio.wait_for(
+                            proc.communicate(),
+                            timeout=1,
+                        )
+                    except asyncio.TimeoutError:
+                        stdout, stderr = b"", b""
                     encoding = locale.getpreferredencoding(False) or "utf-8"
                     stdout_str = stdout.decode(
                         encoding,
