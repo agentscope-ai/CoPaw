@@ -29,7 +29,12 @@ const { Sider } = Layout;
 
 const PYPI_URL = "https://pypi.org/pypi/copaw/json";
 
-const DEFAULT_OPEN_KEYS = ["chat-group", "control-group", "agent-group", "settings-group"];
+const DEFAULT_OPEN_KEYS = [
+  "chat-group",
+  "control-group",
+  "agent-group",
+  "settings-group",
+];
 
 const KEY_TO_PATH: Record<string, string> = {
   chat: "/chat",
@@ -139,7 +144,8 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       .then((data) => {
         const releases = data?.releases ?? {};
         const versions = Object.keys(releases);
-        const latest = versions[versions.length - 1] ?? data?.info?.version ?? "";
+        const latest =
+          versions[versions.length - 1] ?? data?.info?.version ?? "";
         setAllVersions(versions);
         setLatestVersion(latest);
       })
@@ -147,7 +153,10 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   }, []);
 
   const hasUpdate =
-    version && allVersions.length > 0 && allVersions.includes(version) && version !== latestVersion;
+    version &&
+    allVersions.length > 0 &&
+    allVersions.includes(version) &&
+    version !== latestVersion;
 
   const handleOpenUpdateModal = () => {
     setUpdateMarkdown("");
@@ -160,7 +169,9 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         const zhPattern = /###\s*CoPaw如何更新[\s\S]*?(?=\n###|$)/;
         const enPattern = /###\s*How to update CoPaw[\s\S]*?(?=\n###|$)/;
         const match = text.match(lang === "zh" ? zhPattern : enPattern);
-        setUpdateMarkdown(match ? match[0].trim() : UPDATE_MD[lang] ?? UPDATE_MD.en);
+        setUpdateMarkdown(
+          match ? match[0].trim() : UPDATE_MD[lang] ?? UPDATE_MD.en,
+        );
       })
       .catch(() => {
         setUpdateMarkdown(UPDATE_MD[lang] ?? UPDATE_MD.en);
@@ -173,7 +184,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       label: t("nav.chat"),
       icon: <MessageSquare size={16} />,
       children: [
-        { key: "chat", label: t("nav.chat"), icon: <MessageCircle size={16} /> },
+        {
+          key: "chat",
+          label: t("nav.chat"),
+          icon: <MessageCircle size={16} />,
+        },
       ],
     },
     {
@@ -182,9 +197,21 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       icon: <Radio size={16} />,
       children: [
         { key: "channels", label: t("nav.channels"), icon: <Wifi size={16} /> },
-        { key: "sessions", label: t("nav.sessions"), icon: <UsersRound size={16} /> },
-        { key: "cron-jobs", label: t("nav.cronJobs"), icon: <CalendarClock size={16} /> },
-        { key: "heartbeat", label: t("nav.heartbeat"), icon: <Activity size={16} /> },
+        {
+          key: "sessions",
+          label: t("nav.sessions"),
+          icon: <UsersRound size={16} />,
+        },
+        {
+          key: "cron-jobs",
+          label: t("nav.cronJobs"),
+          icon: <CalendarClock size={16} />,
+        },
+        {
+          key: "heartbeat",
+          label: t("nav.heartbeat"),
+          icon: <Activity size={16} />,
+        },
       ],
     },
     {
@@ -192,10 +219,18 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       label: t("nav.agent"),
       icon: <Zap size={16} />,
       children: [
-        { key: "workspace", label: t("nav.workspace"), icon: <Briefcase size={16} /> },
+        {
+          key: "workspace",
+          label: t("nav.workspace"),
+          icon: <Briefcase size={16} />,
+        },
         { key: "skills", label: t("nav.skills"), icon: <Sparkles size={16} /> },
         { key: "mcp", label: t("nav.mcp"), icon: <Plug size={16} /> },
-        { key: "agent-config", label: t("nav.agentConfig"), icon: <Settings size={16} /> },
+        {
+          key: "agent-config",
+          label: t("nav.agentConfig"),
+          icon: <Settings size={16} />,
+        },
       ],
     },
     {
@@ -204,7 +239,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       icon: <Cpu size={16} />,
       children: [
         { key: "models", label: t("nav.models"), icon: <Box size={16} /> },
-        { key: "environments", label: t("nav.environments"), icon: <Globe size={16} /> },
+        {
+          key: "environments",
+          label: t("nav.environments"),
+          icon: <Globe size={16} />,
+        },
       ],
     },
   ];
@@ -232,7 +271,11 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       >
         {!collapsed && (
           <>
-            <img src="/logo.png" alt="CoPaw" style={{ height: 32, width: "auto" }} />
+            <img
+              src="/logo.png"
+              alt="CoPaw"
+              style={{ height: 32, width: "auto" }}
+            />
             {version && (
               <Badge dot={!!hasUpdate} color="red" offset={[2, 4]}>
                 <span
@@ -253,7 +296,13 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         )}
         <Button
           type="text"
-          icon={collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          icon={
+            collapsed ? (
+              <PanelLeftOpen size={20} />
+            ) : (
+              <PanelLeftClose size={20} />
+            )
+          }
           onClick={() => setCollapsed(!collapsed)}
           style={{ margin: "auto", color: "#615ced" }}
         />
@@ -280,7 +329,12 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           <Button
             key="releases"
             type="primary"
-            onClick={() => window.open("https://github.com/agentscope-ai/CoPaw/releases", "_blank")}
+            onClick={() =>
+              window.open(
+                "https://github.com/agentscope-ai/CoPaw/releases",
+                "_blank",
+              )
+            }
             style={{ background: "#615ced", borderColor: "#615ced" }}
           >
             {t("sidebar.updateModal.viewReleases")}
@@ -290,9 +344,23 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           </Button>,
         ]}
       >
-        <div style={{ maxHeight: 480, overflowY: "auto", padding: "8px 4px", minHeight: 120 }}>
+        <div
+          style={{
+            maxHeight: 480,
+            overflowY: "auto",
+            padding: "8px 4px",
+            minHeight: 120,
+          }}
+        >
           {!updateMarkdown ? (
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: 120 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: 120,
+              }}
+            >
               <Spin />
             </div>
           ) : (
@@ -300,7 +368,9 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
               remarkPlugins={[remarkGfm]}
               components={{
                 code({ className, children, ...props }) {
-                  const isBlock = className?.startsWith("language-") || String(children).includes("\n");
+                  const isBlock =
+                    className?.startsWith("language-") ||
+                    String(children).includes("\n");
                   if (isBlock) {
                     return (
                       <pre
@@ -313,7 +383,10 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                           margin: "8px 0",
                         }}
                       >
-                        <code style={{ fontFamily: "monospace", fontSize: 13 }} {...props}>
+                        <code
+                          style={{ fontFamily: "monospace", fontSize: 13 }}
+                          {...props}
+                        >
                           {children}
                         </code>
                       </pre>
