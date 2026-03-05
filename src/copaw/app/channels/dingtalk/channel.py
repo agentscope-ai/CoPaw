@@ -1175,8 +1175,9 @@ class DingTalkChannel(BaseChannel):
             conversation_type: "dm" for direct message, "group" for group chat
 
         Returns:
-            (allowed, error_message): allowed=True if message should be processed,
-            error_message contains the rejection message if not allowed
+            (allowed, error_message): allowed=True if message should be
+            processed, error_message contains the rejection message if not
+            allowed
         """
         # Determine which policy to apply
         is_group = conversation_type == "group"
@@ -1193,18 +1194,19 @@ class DingTalkChannel(BaseChannel):
         # Not allowed - return rejection message
         if is_group:
             msg = (
-                f"抱歉，此机器人仅对授权用户开放。请联系管理员配置访问权限。\n"
+                "抱歉，此机器人仅对授权用户开放。请联系管理员配置访问权限。\n"
                 f"您的 ID：{sender_id}\n"
-                f"Sorry, this bot is only available to authorized users. "
-                f"Please contact the administrator. Your ID: {sender_id}"
+                "Sorry, this bot is only available to authorized users. "
+                "Please contact the administrator. Your ID: "
+                f"{sender_id}"
             )
         else:
             msg = (
-                f"抱歉，您没有权限使用此机器人。请联系管理员添加您的 ID 到白名单。\n"
+                "抱歉，您没有权限使用此机器人。请联系管理员添加您的 ID 到白名单。\n"
                 f"您的 ID：{sender_id}\n"
-                f"Sorry, you are not authorized to use this bot. "
-                f"Please contact the administrator to add your ID to the allowlist. "
-                f"Your ID: {sender_id}"
+                "Sorry, you are not authorized to use this bot. "
+                "Please contact the administrator to add your ID to "
+                f"the allowlist. Your ID: {sender_id}"
             )
         return False, msg
 
@@ -1220,7 +1222,10 @@ class DingTalkChannel(BaseChannel):
         # Check allowlist before processing
         sender_id = getattr(request, "user_id", "") or ""
         conversation_type = (send_meta or {}).get("conversation_type", "dm")
-        allowed, error_msg = self._check_allowlist(sender_id, conversation_type)
+        allowed, error_msg = self._check_allowlist(
+            sender_id,
+            conversation_type,
+        )
         if not allowed:
             logger.info(
                 "dingtalk allowlist blocked: sender=%s conversation_type=%s",
@@ -1229,14 +1234,19 @@ class DingTalkChannel(BaseChannel):
             )
             # Send rejection message
             session_webhook = self._get_session_webhook(send_meta)
+            # error_msg is always str when allowed is False
+            rejection_msg = error_msg or ""
             if session_webhook:
                 await self._send_via_session_webhook(
                     session_webhook,
-                    self.bot_prefix + error_msg,
+                    self.bot_prefix + rejection_msg,
                     bot_prefix="",
                 )
             else:
-                self._reply_sync_batch(send_meta, self.bot_prefix + error_msg)
+                self._reply_sync_batch(
+                    send_meta,
+                    self.bot_prefix + rejection_msg,
+                )
             return
 
         logger.info(
