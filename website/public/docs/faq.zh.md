@@ -36,7 +36,7 @@ pip install copaw
 
 ```
 docker pull agentscope/copaw:latest
-docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
 > **⚠️ Windows 企业版 LTSC 用户特别提示**
@@ -90,7 +90,7 @@ pip install -e .
 
 ```
 docker pull agentscope/copaw:latest
-docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
 升级后重启服务 copaw app。
