@@ -5,6 +5,7 @@
 
 import asyncio
 import locale
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -15,11 +16,55 @@ from agentscope.message import TextBlock
 
 from copaw.constant import WORKING_DIR
 
+logger = logging.getLogger(__name__)
+
+
+def _get_shell_config() -> tuple[str, bool]:
+    """Get shell configuration from config file.
+
+    Returns:
+        tuple[str, bool]: (shell_path, use_login_shell)
+    """
+    try:
+        from copaw.config import load_config
+
+        config = load_config()
+        shell_config = config.agents.shell
+        return shell_config.default_shell, shell_config.use_login_shell
+    except Exception as e:
+        logger.debug("Failed to load shell config, using defaults: %s", e)
+        return "/bin/sh", False
+
+
+def _build_shell_command(
+    cmd: str,
+    shell_path: str,
+    use_login_shell: bool,
+) -> list[str]:
+    """Build the command array for subprocess execution.
+
+    Args:
+        cmd: The shell command to execute.
+        shell_path: Path to the shell executable.
+        use_login_shell: Whether to run as login shell.
+
+    Returns:
+        list[str]: Command array for subprocess.
+    """
+    if use_login_shell:
+        # Login shell: use -l flag (e.g., /bin/zsh -l -c 'command')
+        return [shell_path, "-l", "-c", cmd]
+    else:
+        # Non-login shell: use -c flag (e.g., /bin/sh -c 'command')
+        return [shell_path, "-c", cmd]
+
 
 def _execute_subprocess_sync(
     cmd: str,
     cwd: str,
     timeout: int,
+    shell_path: str,
+    use_login_shell: bool,
 ) -> tuple[int, str, str]:
     """Execute subprocess synchronously in a thread.
 
@@ -33,6 +78,10 @@ def _execute_subprocess_sync(
             The working directory for the command execution.
         timeout (`int`):
             The maximum time (in seconds) allowed for the command to run.
+        shell_path (`str`):
+            Path to the shell executable.
+        use_login_shell (`bool`):
+            Whether to run as login shell.
 
     Returns:
         `tuple[int, str, str]`:
@@ -41,16 +90,17 @@ def _execute_subprocess_sync(
             return code will be -1 and stderr will contain timeout information.
     """
     try:
+        # Build command array with configured shell
+        shell_cmd = _build_shell_command(cmd, shell_path, use_login_shell)
+
         result = subprocess.run(
-            cmd,
-            shell=True,
+            shell_cmd,
             capture_output=True,
             text=True,
             cwd=cwd,
             timeout=timeout,
             encoding=locale.getpreferredencoding(False) or "utf-8",
             errors="replace",
-            check=True,
         )
         return (
             result.returncode,
@@ -80,7 +130,7 @@ async def execute_shell_command(
     Args:
         command (`str`):
             The shell command to execute.
-        timeout (`int`, defaults to `10`):
+        timeout (`int`, defaults to `60`):
             The maximum time (in seconds) allowed for the command to run.
             Default is 60 seconds.
         cwd (`Optional[Path]`, defaults to `None`):
@@ -99,6 +149,9 @@ async def execute_shell_command(
     # Set working directory
     working_dir = cwd if cwd is not None else WORKING_DIR
 
+    # Get shell configuration
+    shell_path, use_login_shell = _get_shell_config()
+
     try:
         if sys.platform == "win32":
             # Windows: use thread pool to avoid asyncio subprocess limitations
@@ -107,13 +160,17 @@ async def execute_shell_command(
                 cmd,
                 str(working_dir),
                 timeout,
+                shell_path,
+                use_login_shell,
             )
         else:
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
+            # Build command array with configured shell
+            shell_cmd = _build_shell_command(cmd, shell_path, use_login_shell)
+
+            proc = await asyncio.create_subprocess_exec(
+                *shell_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                bufsize=0,
                 cwd=str(working_dir),
             )
 

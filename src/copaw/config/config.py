@@ -150,6 +150,33 @@ class AgentsRunningConfig(BaseModel):
     )
 
 
+class ShellConfig(BaseModel):
+    """Shell command execution configuration.
+
+    Allows configuring the default shell and whether to use login shell mode.
+    This ensures user-installed tools (via brew, cargo, etc.) are accessible
+    in the PATH environment variable.
+    """
+
+    default_shell: str = Field(
+        default="/bin/sh",
+        description=(
+            "Path to the shell executable to use for command execution. "
+            "Default is /bin/sh for compatibility. "
+            "Common alternatives: /bin/zsh, /bin/bash"
+        ),
+    )
+    use_login_shell: bool = Field(
+        default=False,
+        description=(
+            "Whether to run the shell as a login shell (e.g., 'zsh -l'). "
+            "Login shells load user profiles (~/.zprofile, ~/.bash_profile, etc.), "
+            "which typically set up PATH and other environment variables. "
+            "Enable this if you use tools installed via brew, cargo, etc."
+        ),
+    )
+
+
 class AgentsConfig(BaseModel):
     defaults: AgentsDefaultsConfig = Field(
         default_factory=AgentsDefaultsConfig,
@@ -164,6 +191,10 @@ class AgentsConfig(BaseModel):
     installed_md_files_language: Optional[str] = Field(
         default=None,
         description="Language of currently installed md files",
+    )
+    shell: ShellConfig = Field(
+        default_factory=ShellConfig,
+        description="Shell command execution configuration",
     )
 
 
