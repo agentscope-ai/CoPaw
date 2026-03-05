@@ -149,15 +149,9 @@ def _build_spec_from_cli(
             "schedule": schedule,
             "task_type": "agent",
             "request": {
-                "input": [
-                    {
-                        "role": "user",
-                        "type": "message",
-                        "content": [{"type": "text", "text": text.strip()}],
-                    },
-                ],
+                "input": text.strip(),
                 "session_id": target_session,
-                "user_id": "cron",
+                "user_id": target_user,
             },
             "dispatch": dispatch,
             "runtime": runtime,
