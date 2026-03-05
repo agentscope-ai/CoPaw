@@ -230,6 +230,24 @@ Also available on Alibaba Cloud Container Registry (ACR) for users in China: `ag
 
 Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
 
+> **Connecting to Ollama or other services on the host machine**
+>
+> Inside a Docker container, `localhost` refers to the container itself, not your host machine. If you run Ollama (or other model services) on the host and want CoPaw in Docker to reach them, use one of these approaches:
+>
+> **Option A** — Explicit host binding (all platforms):
+> ```bash
+> docker run -p 127.0.0.1:8088:8088 \
+>   --add-host=host.docker.internal:host-gateway \
+>   -v copaw-data:/app/working agentscope/copaw:latest
+> ```
+> Then in CoPaw **Settings → Models → Ollama**, change the Base URL to `http://host.docker.internal:11434/v1` or your corresponding port.
+>
+> **Option B** — Host networking (Linux only):
+> ```bash
+> docker run --network=host -v copaw-data:/app/working agentscope/copaw:latest
+> ```
+> No port mapping (`-p`) is needed; the container shares the host network directly. Note that all container ports are exposed on the host, which may cause conflicts if the port is already in use.
+
 The image is built from scratch. To build the image yourself, please refer to the [Build Docker image](scripts/README.md#build-docker-image) section in `scripts/README.md`, and then push to your registry.
 
 ### Using ModelScope
