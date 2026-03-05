@@ -1,5 +1,14 @@
-import { Layout, Menu, Button, Badge, Modal, Spin, type MenuProps } from "antd";
-import { useState, useEffect } from "react";
+import {
+  Layout,
+  Menu,
+  Button,
+  Badge,
+  Modal,
+  Spin,
+  Tooltip,
+  type MenuProps,
+} from "antd";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
@@ -22,6 +31,8 @@ import {
   Plug,
   PanelLeftClose,
   PanelLeftOpen,
+  Copy,
+  Check,
 } from "lucide-react";
 import api from "../api";
 
@@ -112,6 +123,38 @@ After upgrading, restart the service with \`copaw app\`.`,
 
 interface SidebarProps {
   selectedKey: string;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
+  return (
+    <Tooltip
+      title={copied ? t("common.copied", "Copied!") : t("common.copy", "Copy")}
+    >
+      <Button
+        type="text"
+        size="small"
+        icon={copied ? <Check size={13} /> : <Copy size={13} />}
+        onClick={handleCopy}
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          color: copied ? "#52c41a" : "#999",
+          transition: "color 0.2s",
+        }}
+      />
+    </Tooltip>
+  );
 }
 
 export default function Sidebar({ selectedKey }: SidebarProps) {
@@ -375,14 +418,16 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                     return (
                       <pre
                         style={{
+                          position: "relative",
                           background: "#f5f5f5",
                           border: "1px solid #e8e8e8",
                           borderRadius: 6,
-                          padding: "12px 16px",
+                          padding: "12px 40px 12px 16px",
                           overflowX: "auto",
                           margin: "8px 0",
                         }}
                       >
+                        <CopyButton text={String(children)} />
                         <code
                           style={{ fontFamily: "monospace", fontSize: 13 }}
                           {...props}
