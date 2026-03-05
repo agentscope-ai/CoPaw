@@ -53,6 +53,14 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 
 ## News
 
+[2026-03-05] We released v0.0.5! See the [v0.0.5 Release Notes](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.5) for the full changelog.
+
+- **[v0.0.5]** **FEAT:** Mac app support with both arm64 and x86_64 architectures.
+- **[v0.0.5]** **FEAT:** Added build-x86.sh script for building x86_64 version of CoPaw desktop app.
+- **[v0.0.5]** **FEAT:** Updated .gitignore file to support Mac app build artifacts.
+- **[v0.0.5]** **RELS:** Enhanced build system with better isolation for different architectures.
+- **[v0.0.5]** **COMM:** Special thanks to [@zhaobomin](https://github.com/zhaobomin) for contributing Mac app support.
+
 [2026-03-02] We released v0.0.4! See the [v0.0.4 Release Notes](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.4) for the full changelog.
 
 - **[v0.0.4]** **FEAT:** Telegram channel; OpenAI & Azure OpenAI providers; Ollama SDK; coding-plan provider; model connection testing; heartbeat monitoring panel; CORS configuration; audio file support for DingTalk & Feishu.
