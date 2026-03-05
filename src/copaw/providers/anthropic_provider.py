@@ -37,28 +37,12 @@ class AnthropicProvider(Provider):
 
         models: List[ModelInfo] = []
         for row in rows or []:
-            if isinstance(row, dict):
-                model_id = str(
-                    row.get("id") or row.get("name") or "",
-                ).strip()
-                model_name = (
-                    str(
-                        row.get("display_name") or row.get("name") or model_id,
-                    ).strip()
-                    or model_id
-                )
-            else:
-                model_id = str(
-                    getattr(row, "id", "") or getattr(row, "name", "") or "",
-                ).strip()
-                model_name = (
-                    str(
-                        getattr(row, "display_name", "")
-                        or getattr(row, "name", "")
-                        or model_id,
-                    ).strip()
-                    or model_id
-                )
+            model_id = str(
+                getattr(row, "id", "") or "",
+            ).strip()
+            model_name = str(
+                getattr(row, "display_name", "") or model_id,
+            ).strip()
 
             if not model_id:
                 continue

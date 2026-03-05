@@ -113,7 +113,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH_ENV = "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
 
 # When True, expose /docs, /redoc, /openapi.json
 # (dev only; keep False in prod).
-DOCS_ENABLED = EnvVarLoader.get_bool("COPAW_DOCS_ENABLED", False)
+DOCS_ENABLED = EnvVarLoader.get_bool("COPAW_OPENAPI_DOCS", False)
 
 # Skills directories
 # Active skills directory (activated skills that agents use)
