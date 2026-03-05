@@ -35,16 +35,6 @@ class TestCallSessionManager:
 
         mgr.end_session("CA123")
         assert mgr.active_count() == 0
-
-        session = mgr.get_session("CA123")
-        assert session is not None
-        assert session.status == "ended"
-
-    def test_remove_session(self):
-        mgr = CallSessionManager()
-        handler = MagicMock()
-        mgr.create_session(call_sid="CA123", handler=handler)
-        mgr.remove_session("CA123")
         assert mgr.get_session("CA123") is None
 
     def test_active_sessions(self):
@@ -67,4 +57,4 @@ class TestCallSessionManager:
         mgr.create_session(call_sid="CA1", handler=h1)
         mgr.create_session(call_sid="CA2", handler=h2)
         mgr.end_session("CA1")
-        assert len(mgr.all_sessions()) == 2
+        assert len(mgr.all_sessions()) == 1

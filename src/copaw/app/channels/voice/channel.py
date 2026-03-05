@@ -30,8 +30,14 @@ class VoiceChannel(BaseChannel):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
     ) -> None:
-        super().__init__(process, on_reply_sent, show_tool_details)
+        super().__init__(
+            process,
+            on_reply_sent,
+            show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+        )
         self.session_mgr = CallSessionManager()
         self.twilio_mgr: Optional[TwilioManager] = None
         self.tunnel_mgr = None  # CloudflareTunnelDriver, set by from_config
@@ -51,7 +57,12 @@ class VoiceChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
     ) -> "VoiceChannel":
-        instance = cls(process, on_reply_sent, show_tool_details)
+        instance = cls(
+            process,
+            on_reply_sent,
+            show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+        )
         instance._config = config
         instance._enabled = getattr(config, "enabled", False)
 
