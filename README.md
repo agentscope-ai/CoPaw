@@ -342,3 +342,4 @@ CoPaw represents both a **Co Personal Agent Workstation** and a "co-paw"—a par
 ## License
 
 CoPaw is released under the [Apache License 2.0](LICENSE).
+# copaw-macapp
