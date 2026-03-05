@@ -111,7 +111,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     content.append(
                         TextContent(
                             type=ContentType.TEXT,
-                            text=(item_text or "").strip(),
+                            text=str(item_text or "").strip(),
                         ),
                     )
                 # Picture items may use pictureDownloadCode or downloadCode.
