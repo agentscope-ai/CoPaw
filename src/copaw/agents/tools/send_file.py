@@ -83,21 +83,18 @@ async def send_file_to_user(
             return ToolResponse(
                 content=[
                     ImageBlock(type="image", source=source),
-                    TextBlock(type="text", text="已成功发送文件"),
                 ],
             )
         if as_type == "audio":
             return ToolResponse(
                 content=[
                     AudioBlock(type="audio", source=source),
-                    TextBlock(type="text", text="已成功发送文件"),
                 ],
             )
         if as_type == "video":
             return ToolResponse(
                 content=[
                     VideoBlock(type="video", source=source),
-                    TextBlock(type="text", text="已成功发送文件"),
                 ],
             )
 
@@ -108,7 +105,6 @@ async def send_file_to_user(
                     source=source,
                     filename=os.path.basename(file_path),
                 ),
-                TextBlock(type="text", text="已成功发送文件"),
             ],
         )
 

@@ -14,14 +14,19 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import ipaddress
 import json
 import logging
 import mimetypes
+import os
+import socket
 import threading
 import time
+import uuid
 from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import aiohttp
 
@@ -85,6 +90,19 @@ class FeishuChannel(BaseChannel):
     """
 
     channel = "feishu"
+    REASON_FILE_FETCH_FAILED = "file_fetch_failed"
+    REASON_FILE_NOT_FOUND = "file_not_found"
+    REASON_FILE_NOT_ALLOWED = "file_not_allowed"
+    REASON_FILE_TOO_LARGE = "file_too_large"
+    REASON_TOKEN_FETCH_FAILED = "token_fetch_failed"
+    REASON_FILE_UPLOAD_HTTP_ERROR = "file_upload_http_error"
+    REASON_FILE_UPLOAD_API_ERROR = "file_upload_api_error"
+    REASON_FILE_UPLOAD_EXCEPTION = "file_upload_exception"
+    REASON_FILE_DECODE_FAILED = "file_decode_failed"
+    REASON_FILE_WRITE_FAILED = "file_write_failed"
+    REASON_FILE_NO_SOURCE = "file_no_source"
+    REASON_FILE_UPLOAD_FAILED = "file_upload_failed"
+    REASON_FILE_MESSAGE_FAILED = "file_message_failed"
 
     def __init__(
         self,
@@ -113,6 +131,10 @@ class FeishuChannel(BaseChannel):
         self.encrypt_key = encrypt_key or ""
         self.verification_token = verification_token or ""
         self._media_dir = Path(media_dir).expanduser()
+        allowed_dirs = os.getenv("FEISHU_ALLOWED_FILE_DIRS", "")
+        self._allowed_local_file_roots = self._build_allowed_local_file_roots(
+            allowed_dirs,
+        )
 
         self._client: Any = None
         self._ws_client: Any = None
@@ -140,8 +162,6 @@ class FeishuChannel(BaseChannel):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
     ) -> "FeishuChannel":
-        import os
-
         return cls(
             process=process,
             enabled=os.getenv("FEISHU_CHANNEL_ENABLED", "0") == "1",
@@ -193,6 +213,80 @@ class FeishuChannel(BaseChannel):
         if chat_id:
             return short_session_id_from_full_id(chat_id)
         return f"{self.channel}:{sender_id}"
+
+    def _build_allowed_local_file_roots(
+        self,
+        allowed_dirs: str,
+    ) -> Tuple[Path, ...]:
+        roots: List[Path] = [Path.cwd(), self._media_dir]
+        if allowed_dirs:
+            for raw_dir in allowed_dirs.split(os.pathsep):
+                if raw_dir.strip():
+                    roots.append(Path(raw_dir.strip()).expanduser())
+        unique_roots: List[Path] = []
+        seen: set[str] = set()
+        for root in roots:
+            try:
+                resolved = root.resolve(strict=False)
+            except OSError:
+                continue
+            marker = str(resolved)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            unique_roots.append(resolved)
+        return tuple(unique_roots)
+
+    def _is_local_file_allowed(
+        self,
+        path: Path,
+    ) -> bool:
+        try:
+            resolved = path.expanduser().resolve(strict=False)
+        except OSError:
+            return False
+        for root in self._allowed_local_file_roots:
+            if resolved == root:
+                return True
+            try:
+                if resolved.is_relative_to(root):
+                    return True
+            except AttributeError:
+                if str(resolved).startswith(str(root) + os.sep):
+                    return True
+        return False
+
+    def _is_remote_url_allowed(
+        self,
+        url: str,
+    ) -> bool:
+        parsed = urlparse((url or "").strip())
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = (parsed.hostname or "").strip().lower()
+        if not host or host == "localhost" or host.endswith(".local"):
+            return False
+        try:
+            addresses = socket.getaddrinfo(host, None)
+        except socket.gaierror:
+            return False
+        for item in addresses:
+            ip_text = item[4][0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_text)
+            except ValueError:
+                continue
+            blocked = (
+                ip_obj.is_private,
+                ip_obj.is_loopback,
+                ip_obj.is_link_local,
+                ip_obj.is_reserved,
+                ip_obj.is_multicast,
+                ip_obj.is_unspecified,
+            )
+            if any(blocked):
+                return False
+        return True
 
     def build_agent_request_from_native(
         self,
@@ -494,7 +588,10 @@ class FeishuChannel(BaseChannel):
                 self._processed_message_ids.popitem(last=False)
 
             sender_type = getattr(sender, "sender_type", "") or ""
-            if sender_type == "bot":
+            sender_type = str(sender_type).strip().lower()
+            # Feishu may mark bot-originated events as "app" instead of "bot".
+            # Skip both to avoid reply-to-self loops.
+            if sender_type in ("bot", "app"):
                 return
 
             sender_id_obj = getattr(sender, "sender_id", None)
@@ -961,24 +1058,40 @@ class FeishuChannel(BaseChannel):
             logger.exception("feishu _upload_image_sync failed")
             return None
 
-    async def _upload_file(self, path_or_url: str) -> Optional[str]:
-        """Upload file to Feishu; return file_key. path_or_url can be path."""
-        token = await self._get_tenant_access_token()
+    async def _upload_file(
+        self,
+        path_or_url: str,
+    ) -> Tuple[Optional[str], str]:
+        """Upload file to Feishu and return (file_key, reason)."""
+        token: Optional[str] = None
+        temp_download_path: Optional[Path] = None
         path = Path(path_or_url)
         if not path.exists():
             if path_or_url.startswith(("http://", "https://")):
                 data = await self._fetch_bytes_from_url(path_or_url)
                 if not data:
-                    return None
-                path = self._media_dir / "upload_temp"
+                    return (None, self.REASON_FILE_FETCH_FAILED)
+                ext = Path(path_or_url).suffix
+                safe_ext = (
+                    ext if (ext and "/" not in ext and "\\" not in ext) else ""
+                )
+                path = (
+                    self._media_dir
+                    / f"upload_temp_{uuid.uuid4().hex}{safe_ext}"
+                )
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
+                temp_download_path = path
             else:
-                return None
+                return (None, self.REASON_FILE_NOT_FOUND)
+        if not self._is_local_file_allowed(path):
+            return (None, self.REASON_FILE_NOT_ALLOWED)
+        if not path.is_file():
+            return (None, self.REASON_FILE_NOT_FOUND)
         size = path.stat().st_size
         if size > FEISHU_FILE_MAX_BYTES:
             logger.warning("feishu file too large size=%s", size)
-            return None
+            return (None, self.REASON_FILE_TOO_LARGE)
         ext = path.suffix.lower().lstrip(".")
         file_type = "stream"
         if ext in (
@@ -1006,6 +1119,9 @@ class FeishuChannel(BaseChannel):
             content_type=mime,
         )
         try:
+            token = await self._get_tenant_access_token()
+            if not token:
+                return (None, self.REASON_TOKEN_FETCH_FAILED)
             async with self._http.post(
                 url,
                 headers={"Authorization": f"Bearer {token}"},
@@ -1018,31 +1134,52 @@ class FeishuChannel(BaseChannel):
                         resp.status,
                         data,
                     )
-                    return None
+                    return (None, self.REASON_FILE_UPLOAD_HTTP_ERROR)
                 if data.get("code") != 0:
                     logger.info(
                         "feishu _upload_file api code=%s msg=%s",
                         data.get("code"),
                         data.get("msg"),
                     )
-                    return None
+                    return (None, self.REASON_FILE_UPLOAD_API_ERROR)
                 fk = (data.get("data") or {}).get("file_key")
                 logger.info(
                     "feishu _upload_file ok: file_key=%s",
                     fk[:24] if fk else "None",
                 )
-                return fk
+                return (fk, "")
         except Exception:
             logger.exception("feishu _upload_file failed")
-            return None
+            if not token:
+                return (None, self.REASON_TOKEN_FETCH_FAILED)
+            return (None, self.REASON_FILE_UPLOAD_EXCEPTION)
+        finally:
+            if temp_download_path and temp_download_path.exists():
+                try:
+                    temp_download_path.unlink()
+                except Exception:
+                    logger.debug(
+                        "feishu _upload_file cleanup temp file failed: %s",
+                        temp_download_path,
+                        exc_info=True,
+                    )
 
     async def _fetch_bytes_from_url(self, url: str) -> Optional[bytes]:
-        """Download binary from URL. Supports http(s):// and file://."""
+        """Download binary from HTTP(S) URL with SSRF guard."""
         try:
-            path = file_url_to_local_path(url)
-            if path is not None:
-                return await asyncio.to_thread(Path(path).read_bytes)
-            if url.strip().lower().startswith("file:"):
+            url = (url or "").strip()
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                return None
+            allowed = await asyncio.to_thread(
+                self._is_remote_url_allowed,
+                url,
+            )
+            if not allowed:
+                logger.warning(
+                    "feishu _fetch_bytes_from_url blocked unsafe url: %s",
+                    url[:120],
+                )
                 return None
             async with self._http.get(url) as resp:
                 if resp.status >= 400:
@@ -1156,11 +1293,30 @@ class FeishuChannel(BaseChannel):
                 "feishu _send_image: part has no image_url/base64",
             )
             return (None, filename)
-        if url.startswith(("http://", "https://", "file://")):
+        if url.startswith(("http://", "https://")):
             data = await self._fetch_bytes_from_url(url)
             return (data, filename)
+        if url.startswith("file://"):
+            local_path = file_url_to_local_path(url)
+            if local_path:
+                path = Path(local_path)
+                if (
+                    path.exists()
+                    and path.is_file()
+                    and self._is_local_file_allowed(path)
+                ):
+                    return (path.read_bytes(), filename)
+                logger.info(
+                    "feishu _send_image: blocked local file url=%s",
+                    url[:120],
+                )
+            return (None, filename)
         path = Path(url)
-        if path.exists():
+        if (
+            path.exists()
+            and path.is_file()
+            and self._is_local_file_allowed(path)
+        ):
             return (path.read_bytes(), filename)
         logger.info(
             "feishu _send_image: path not found url=%s",
@@ -1213,7 +1369,7 @@ class FeishuChannel(BaseChannel):
     async def _part_to_file_path_or_url(
         self,
         part: OutgoingContentPart,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], str]:
         """Resolve part to local path or URL for file upload."""
         url = (
             getattr(part, "file_url", None)
@@ -1222,7 +1378,19 @@ class FeishuChannel(BaseChannel):
             or ""
         )
         url = (url or "").strip() if isinstance(url, str) else ""
-        filename = getattr(part, "filename", None) or "file.bin"
+        filename = (
+            Path(
+                str(getattr(part, "filename", None) or "file.bin"),
+            )
+            .name.replace("\x00", "")
+            .strip()
+        )
+        if not filename:
+            filename = "file.bin"
+        if len(filename) > 120:
+            suffix = Path(filename).suffix
+            stem = Path(filename).stem[:100]
+            filename = f"{stem}{suffix}" if suffix else stem
         b64 = None
         if (
             isinstance(url, str)
@@ -1244,59 +1412,72 @@ class FeishuChannel(BaseChannel):
                     "feishu _part_to_file_path_or_url base64 decode: %s",
                     e,
                 )
-                return None
+                return (None, self.REASON_FILE_DECODE_FAILED)
             self._media_dir.mkdir(parents=True, exist_ok=True)
-            path = self._media_dir / f"upload_{id(part)}_{filename}"
-            path.write_bytes(data)
-            return str(path)
+            path = self._media_dir / f"upload_{uuid.uuid4().hex}_{filename}"
+            try:
+                path.write_bytes(data)
+            except OSError:
+                logger.exception(
+                    "feishu _part_to_file_path_or_url temp write failed",
+                )
+                return (None, self.REASON_FILE_WRITE_FAILED)
+            return (str(path), "")
         if url:
             if url.startswith("file://"):
                 local_path = file_url_to_local_path(url)
                 if local_path:
                     path = Path(local_path)
-                    if path.exists():
-                        return str(path)
+                    if path.exists() and path.is_file():
+                        if not self._is_local_file_allowed(path):
+                            return (None, self.REASON_FILE_NOT_ALLOWED)
+                        return (str(path), "")
+                    return (None, self.REASON_FILE_NOT_FOUND)
             else:
                 path = Path(url)
-                if path.exists():
-                    return url
+                if path.exists() and path.is_file():
+                    if not self._is_local_file_allowed(path):
+                        return (None, self.REASON_FILE_NOT_ALLOWED)
+                    return (url, "")
                 if url.startswith(("http://", "https://")):
-                    return url
+                    return (url, "")
         logger.info(
             "feishu _send_file: part has no file_url/url/base64",
         )
-        return None
+        return (None, self.REASON_FILE_NO_SOURCE)
 
     async def _send_file(
         self,
         receive_id_type: str,
         receive_id: str,
         part: OutgoingContentPart,
-    ) -> bool:
-        """Upload file and send file message (msg_type=file, file_key)."""
+    ) -> Tuple[bool, str]:
+        """Upload file and send file message; return (ok, reason)."""
         logger.info(
             "feishu _send_file: part type=%s",
             getattr(part, "type", None),
         )
-        path_or_url = await self._part_to_file_path_or_url(part)
+        path_or_url, resolve_reason = await self._part_to_file_path_or_url(
+            part,
+        )
         if not path_or_url:
             logger.info(
                 "feishu _send_file: no path/url/base64, skip",
             )
-            return False
-        file_key = await self._upload_file(path_or_url)
+            return (False, resolve_reason or self.REASON_FILE_NO_SOURCE)
+        file_key, reason = await self._upload_file(path_or_url)
         if not file_key:
             logger.info(
                 "feishu _send_file: upload failed, no file_key",
             )
-            return False
+            return (False, reason or self.REASON_FILE_UPLOAD_FAILED)
         logger.info(
             "feishu _send_file: upload ok file_key=%s",
             file_key[:24] if file_key else "",
         )
         content = json.dumps({"file_key": file_key}, ensure_ascii=False)
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
+        ok = await loop.run_in_executor(
             None,
             lambda: self._send_message_sync(
                 receive_id_type,
@@ -1305,6 +1486,47 @@ class FeishuChannel(BaseChannel):
                 content,
             ),
         )
+        if not ok:
+            return (False, self.REASON_FILE_MESSAGE_FAILED)
+        return (True, "")
+
+    def _file_send_failure_hint(self, reason: str) -> str:
+        """Return user-visible hint when file upload/send fails."""
+        if reason == self.REASON_FILE_TOO_LARGE:
+            limit_mb = FEISHU_FILE_MAX_BYTES // (1024 * 1024)
+            return (
+                "文件发送失败：飞书限制单文件大小，"
+                f"当前渠道上限约 {limit_mb}MB。"
+                "请压缩后重试，或改为发送下载链接。"
+            )
+        if reason == self.REASON_FILE_NOT_FOUND:
+            return "文件发送失败：源文件不存在或已被删除。"
+        if reason == self.REASON_FILE_NOT_ALLOWED:
+            return (
+                "文件发送失败：本地文件路径不在允许目录中。"
+                "请将文件放到工作目录或 FEISHU_MEDIA_DIR，"
+                "或配置 FEISHU_ALLOWED_FILE_DIRS。"
+            )
+        if reason == self.REASON_FILE_NO_SOURCE:
+            return "文件发送失败：未找到可发送的文件地址或数据。"
+        if reason == self.REASON_FILE_DECODE_FAILED:
+            return "文件发送失败：文件内容解析失败，请检查编码或数据格式。"
+        if reason == self.REASON_FILE_FETCH_FAILED:
+            return "文件发送失败：文件下载失败，请检查文件链接是否可访问。"
+        if reason == self.REASON_TOKEN_FETCH_FAILED:
+            return "文件发送失败：飞书鉴权失败，请检查应用配置后重试。"
+        if reason == self.REASON_FILE_MESSAGE_FAILED:
+            return "文件发送失败：上传成功但消息发送失败，请稍后重试。"
+        if reason in (
+            self.REASON_FILE_UPLOAD_HTTP_ERROR,
+            self.REASON_FILE_UPLOAD_API_ERROR,
+        ):
+            return "文件发送失败：上传接口返回错误，请稍后重试。"
+        if reason == self.REASON_FILE_UPLOAD_EXCEPTION:
+            return "文件发送失败：上传过程异常，请稍后重试。"
+        if reason == self.REASON_FILE_WRITE_FAILED:
+            return "文件发送失败：临时文件写入失败，请检查磁盘权限。"
+        return "文件发送失败：请稍后重试。"
 
     async def _get_receive_for_send(
         self,
@@ -1460,16 +1682,27 @@ class FeishuChannel(BaseChannel):
                 ContentType.VIDEO,
                 ContentType.AUDIO,
             ):
-                ok = await self._send_file(
+                ok, reason = await self._send_file(
                     receive_id_type,
                     receive_id,
                     part,
                 )
                 logger.info(
-                    "feishu send_content_parts: file sent ok=%s type=%s",
+                    "feishu send_content_parts: file sent ok=%s type=%s "
+                    "reason=%s",
                     ok,
                     pt,
+                    reason or "",
                 )
+                if not ok:
+                    hint = self._file_send_failure_hint(reason)
+                    await self._send_text(
+                        receive_id_type,
+                        receive_id,
+                        hint,
+                    )
+                    # stop sending following media parts to avoid repeated spam
+                    break
 
     async def send(
         self,
