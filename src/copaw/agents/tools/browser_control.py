@@ -99,6 +99,36 @@ def _touch_activity() -> None:
     _state["last_activity_time"] = time.monotonic()
 
 
+def _is_browser_running() -> bool:
+    """Check if browser is currently running (sync or async mode)."""
+    if _USE_SYNC_PLAYWRIGHT:
+        return _state.get("_sync_browser") is not None
+    return _state.get("browser") is not None
+
+
+def _reset_browser_state() -> None:
+    """Reset all browser-related state variables."""
+    # Clear sync/async specific state
+    _state["playwright"] = None
+    _state["browser"] = None
+    _state["context"] = None
+    _state["_sync_playwright"] = None
+    _state["_sync_browser"] = None
+    _state["_sync_context"] = None
+    # Clear shared state
+    _state["pages"].clear()
+    _state["refs"].clear()
+    _state["refs_frame"].clear()
+    _state["console_logs"].clear()
+    _state["network_requests"].clear()
+    _state["pending_dialogs"].clear()
+    _state["pending_file_choosers"].clear()
+    _state["current_page_id"] = None
+    _state["page_counter"] = 0
+    _state["last_activity_time"] = 0.0
+    _state["headless"] = True
+
+
 async def _idle_watchdog(idle_seconds: float = _BROWSER_IDLE_TIMEOUT) -> None:
     """Background task: stop the browser after it has been idle for *idle_seconds*.
 
@@ -108,12 +138,8 @@ async def _idle_watchdog(idle_seconds: float = _BROWSER_IDLE_TIMEOUT) -> None:
     try:
         while True:
             await asyncio.sleep(60)  # check every minute
-            if _USE_SYNC_PLAYWRIGHT:
-                if _state["_sync_browser"] is None:
-                    return
-            else:
-                if _state["browser"] is None:
-                    return
+            if not _is_browser_running():
+                return
             idle = time.monotonic() - _state.get("last_activity_time", 0.0)
             if idle >= idle_seconds:
                 logger.info(
@@ -134,12 +160,8 @@ def _atexit_cleanup() -> None:
     exits, but this gives Playwright a chance to flush any pending I/O and
     close Chrome gracefully before the process disappears.
     """
-    if _USE_SYNC_PLAYWRIGHT:
-        if _state.get("_sync_browser") is None:
-            return
-    else:
-        if _state.get("browser") is None:
-            return
+    if not _is_browser_running():
+        return
 
     try:
         loop = asyncio.get_event_loop()
@@ -194,10 +216,24 @@ def _ensure_playwright_async():
         ) from exc
 
 
+def _ensure_playwright_sync():
+    """Import sync_playwright; raise ImportError with hint if missing."""
+    try:
+        from playwright.sync_api import sync_playwright
+
+        return sync_playwright
+    except ImportError as exc:
+        raise ImportError(
+            "Playwright not installed. Use the same Python that runs CoPaw (e.g. "
+            "activate your venv or use 'uv run'): "
+            f"'{sys.executable}' -m pip install playwright && "
+            f"'{sys.executable}' -m playwright install",
+        ) from exc
+
+
 def _sync_browser_launch(headless: bool):
     """Launch browser using sync Playwright (for hybrid mode)."""
-    from playwright.sync_api import sync_playwright
-
+    sync_playwright = _ensure_playwright_sync()
     pw = sync_playwright().start()  # Start without context manager
     use_default = not is_running_in_container() and os.environ.get(
         "COPAW_BROWSER_USE_DEFAULT",
@@ -882,15 +918,16 @@ async def _action_stop() -> ToolResponse:
     _cancel_idle_watchdog()
 
     # Check browser state based on mode
+    if not _is_browser_running():
+        return _tool_response(
+            json.dumps(
+                {"ok": True, "message": "Browser not running"},
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
     if _USE_SYNC_PLAYWRIGHT:
-        if _state["_sync_browser"] is None:
-            return _tool_response(
-                json.dumps(
-                    {"ok": True, "message": "Browser not running"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
         # Close sync browser in thread pool
         loop = asyncio.get_event_loop()
         try:
@@ -907,30 +944,9 @@ async def _action_stop() -> ToolResponse:
                 ),
             )
         finally:
-            _state["_sync_playwright"] = None
-            _state["_sync_browser"] = None
-            _state["_sync_context"] = None
-            _state["pages"].clear()
-            _state["refs"].clear()
-            _state["refs_frame"].clear()
-            _state["console_logs"].clear()
-            _state["network_requests"].clear()
-            _state["pending_dialogs"].clear()
-            _state["pending_file_choosers"].clear()
-            _state["current_page_id"] = None
-            _state["page_counter"] = 0
-            _state["last_activity_time"] = 0.0
-            _state["headless"] = True
+            _reset_browser_state()
     else:
         # Standard async mode
-        if _state["browser"] is None:
-            return _tool_response(
-                json.dumps(
-                    {"ok": True, "message": "Browser not running"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
         try:
             await _state["browser"].close()
             if _state["playwright"] is not None:
@@ -944,20 +960,7 @@ async def _action_stop() -> ToolResponse:
                 ),
             )
         finally:
-            _state["playwright"] = None
-            _state["browser"] = None
-            _state["context"] = None
-            _state["pages"].clear()
-            _state["refs"].clear()
-            _state["refs_frame"].clear()
-            _state["console_logs"].clear()
-            _state["network_requests"].clear()
-            _state["pending_dialogs"].clear()
-            _state["pending_file_choosers"].clear()
-            _state["current_page_id"] = None
-            _state["page_counter"] = 0
-            _state["last_activity_time"] = 0.0
-            _state["headless"] = True
+            _reset_browser_state()
 
     return _tool_response(
         json.dumps(
