@@ -260,9 +260,16 @@ The app polls the local iMessage database for new messages and sends replies on 
 - Ensure **Messages** is signed in on this Mac (open the Messages app and sign in
   with your Apple ID in System Settings).
 - Install **imsg** (used to access the iMessage database):
-  ```bash
-  brew install steipete/tap/imsg
-  ```
+  - **Apple Silicon Mac**: Install directly
+    ```bash
+    brew install steipete/tap/imsg
+    ```
+  - **Intel Mac**: Clone source and build
+    ```bash
+    git clone https://github.com/steipete/imsg.git
+    cd imsg
+    make build
+    ```
 - The default iMessage database path is `~/Library/Messages/chat.db`. Use this unless you've moved the database.
 - The app needs **Full Disk Access** (System Settings → Privacy & Security → Full Disk
   Access) to read `chat.db`.
