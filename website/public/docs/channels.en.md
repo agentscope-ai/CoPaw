@@ -13,6 +13,7 @@ All channels share two fields:
 - **enabled** — Turn the channel on or off.
 - **bot_prefix** — Prefix for bot replies (e.g. `[BOT]`) so they're easy to spot.
 - **filter_tool_messages** — (optional, default `false`) Filter tool call and output messages from being sent to users. Set to `true` to hide tool execution details.
+- **filter_thinking** — (optional, default `false`) Filter model thinking/reasoning content from being sent to users. Set to `true` to hide thinking blocks.
 
 Below is how to get credentials and fill config for each channel.
 

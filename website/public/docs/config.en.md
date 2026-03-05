@@ -155,6 +155,7 @@ Each channel has a common base and channel-specific fields.
 | `enabled`              | bool   | `false` | Whether the channel is active                                  |
 | `bot_prefix`           | string | `""`    | Optional command prefix (e.g. `/paw`)                          |
 | `filter_tool_messages` | bool   | `false` | Filter tool call/output messages from being sent (default off) |
+| `filter_thinking`      | bool   | `false` | Filter thinking/reasoning content from being sent (default off) |
 
 **`channels.imessage`** — macOS iMessage
 

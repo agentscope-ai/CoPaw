@@ -12,6 +12,7 @@
 - **enabled** — 是否启用
 - **bot_prefix** — 机器人回复前缀（如 `[BOT]`），方便区分
 - **filter_tool_messages** — （可选，默认 `false`）过滤工具调用和输出消息，不发送给用户。设为 `true` 可隐藏工具执行详情。
+- **filter_thinking** — （可选，默认 `false`）过滤模型的思考/推理内容，不发送给用户。设为 `true` 可隐藏 thinking 内容。
 
 下面按频道说明如何获取凭证并填写配置。
 

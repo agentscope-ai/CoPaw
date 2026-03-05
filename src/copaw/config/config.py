@@ -15,6 +15,7 @@ class BaseChannelConfig(BaseModel):
     enabled: bool = False
     bot_prefix: str = ""
     filter_tool_messages: bool = False
+    filter_thinking: bool = False
 
 
 class IMessageChannelConfig(BaseChannelConfig):

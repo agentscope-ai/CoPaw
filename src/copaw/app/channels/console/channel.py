@@ -89,6 +89,7 @@ class ConsoleChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
+        filter_thinking: bool = False,
     ) -> "ConsoleChannel":
         return cls(
             process=process,
