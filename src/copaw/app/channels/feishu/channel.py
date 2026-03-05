@@ -85,8 +85,10 @@ except ImportError:  # pragma: no cover - pkg_resources absent (setuptools>=82)
     sys.modules["pkg_resources"] = _pkg_resources_shim
 else:
     if not hasattr(_pkg_resources_module, "declare_namespace"):
-        _pkg_resources_module.declare_namespace = (  # type: ignore[attr-defined]
-            _declare_namespace_shim
+        setattr(
+            _pkg_resources_module,
+            "declare_namespace",
+            _declare_namespace_shim,
         )
         _declare_namespace_patched = True
 
