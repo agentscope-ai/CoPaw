@@ -118,13 +118,43 @@ def _create_file_block_support_formatter(
         """Formatter with file block support for tool results."""
 
         async def _format(self, msgs):
-            """Override to sanitize tool messages before formatting.
+            """Override to sanitize tool messages and handle thinking blocks.
 
             This prevents OpenAI API errors from improperly paired
-            tool messages.
+            tool messages, and preserves reasoning_content from
+            "thinking" blocks that the base formatter skips.
             """
             msgs = _sanitize_tool_messages(msgs)
+
+            reasoning_contents = {}
+            for msg in msgs:
+                if msg.role != "assistant":
+                    continue
+                thinking_texts = [
+                    block.get("thinking", "")
+                    for block in msg.get_content_blocks()
+                    if block.get("type") == "thinking"
+                ]
+                joined = "\n".join(t for t in thinking_texts if t)
+                if joined:
+                    reasoning_contents[id(msg)] = joined
+
             messages = await super()._format(msgs)
+
+            if reasoning_contents:
+                assistant_iter = (
+                    msg for msg in msgs if msg.role == "assistant"
+                )
+                for out_msg in messages:
+                    if out_msg.get("role") != "assistant":
+                        continue
+                    in_msg = next(assistant_iter, None)
+                    if in_msg is None:
+                        break
+                    reasoning = reasoning_contents.get(id(in_msg))
+                    if reasoning:
+                        out_msg["reasoning_content"] = reasoning
+
             return _strip_top_level_message_name(messages)
 
         @staticmethod
