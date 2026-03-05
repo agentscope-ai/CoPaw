@@ -27,7 +27,7 @@ _BUILTIN_SPECS: dict[str, tuple[str, str]] = {
     "voice": (".voice", "VoiceChannel"),
 }
 
-# Channels that must load successfully; failure raises instead of being skipped.
+# Required channels must load; failures are raised, not skipped.
 _REQUIRED_CHANNEL_KEYS: frozenset[str] = frozenset({"console"})
 
 _BUILTIN_CHANNEL_CACHE: dict[str, type[BaseChannel]] | None = None
