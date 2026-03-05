@@ -47,7 +47,12 @@ def _raw_mcp_hash(config_path: Path) -> int:
         if mcp is None:
             return hash("None")
         # Canonical JSON for stable hashing (sorted keys, compact separators)
-        canonical = json.dumps(mcp, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        canonical = json.dumps(
+            mcp,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
         return hash(canonical)
     except (FileNotFoundError, json.JSONDecodeError, PermissionError, OSError):
         return hash("None")
@@ -103,7 +108,7 @@ class ConfigWatcher:
     # ------------------------------------------------------------------
 
     def _snapshot(self) -> None:
-        """Load current config; record mtime, channels hash, heartbeat hash, mcp hash."""
+        """Load config; record mtime, channels, heartbeat, and mcp hashes."""
         try:
             self._last_mtime = self._config_path.stat().st_mtime
         except FileNotFoundError:
@@ -223,7 +228,7 @@ class ConfigWatcher:
             self._last_heartbeat_hash = new_hb_hash
 
     async def _apply_mcp_change(self) -> None:
-        """Check if MCP section changed in config file; warn if changed (requires restart).
+        """Check if MCP section changed; warn if changed (requires restart).
 
         Only warns on actual changes (not first-load), since MCP config
         requires server restart to apply.
@@ -235,9 +240,10 @@ class ConfigWatcher:
             return
         if new_mcp_hash != self._last_mcp_hash:
             self._last_mcp_hash = new_mcp_hash
-            logger.warning(
-                "ConfigWatcher: MCP config changed - restart required to apply changes",
+            msg = (
+                "MCP config changed - restart needed unless MCP hot-reload on"
             )
+            logger.warning("ConfigWatcher: %s", msg)
 
     async def _poll_loop(self) -> None:
         while True:
