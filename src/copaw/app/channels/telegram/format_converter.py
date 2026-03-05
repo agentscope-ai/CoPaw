@@ -52,9 +52,8 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         """刷新引用块"""
         nonlocal in_blockquote, blockquote_lines
         if in_blockquote and blockquote_lines:
-            converted_lines.append(
-                f"<blockquote>{'\n'.join(blockquote_lines)}</blockquote>",
-            )
+            joined = "\n".join(blockquote_lines)
+            converted_lines.append(f"<blockquote>{joined}</blockquote>")
             blockquote_lines = []
             in_blockquote = False
 
@@ -77,9 +76,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                 # 支持单列表格（无制表符）
                 if "\t" in prev:
                     cells = prev.split("\t")
-                    converted_lines[-1] = "\t".join(
-                        f"<b>{cell}</b>" for cell in cells
-                    )
+                    converted_lines[-1] = "\t".join(f"<b>{cell}</b>" for cell in cells)
                 else:
                     # 单列情况
                     converted_lines[-1] = f"<b>{prev}</b>"
