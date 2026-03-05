@@ -56,7 +56,11 @@ async def list_channels(request: Request) -> dict:
     if channel_manager is not None:
         for ch in channel_manager.channels:
             ch_key = getattr(ch, "channel", None)
-            if ch_key and ch_key in result and isinstance(result[ch_key], dict):
+            if (
+                ch_key
+                and ch_key in result
+                and isinstance(result[ch_key], dict)
+            ):
                 err = getattr(ch, "last_error", None)
                 if err:
                     result[ch_key]["last_error"] = err

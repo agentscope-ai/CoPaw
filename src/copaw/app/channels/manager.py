@@ -343,7 +343,7 @@ class ChannelManager:
                 err = getattr(ch, "last_error", None)
                 if err and ch.channel != "console":
                     console_ch._print_error(
-                        f"Channel '{ch.channel}' failed to start: {err}"
+                        f"Channel '{ch.channel}' failed to start: {err}",
                     )
 
     async def stop_all(self) -> None:

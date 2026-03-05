@@ -187,7 +187,9 @@ class IMessageChannel(BaseChannel):
                 "Grant Full Disk Access to your terminal app in "
                 "System Settings > Privacy & Security > Full Disk Access."
             )
-            logger.error("iMessage watcher failed to start: %s", self.last_error)
+            logger.error(
+                "iMessage watcher failed to start: %s", self.last_error
+            )
             return
 
         self.last_error = None
