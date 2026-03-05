@@ -130,14 +130,12 @@ def _create_file_block_support_formatter(
             for msg in msgs:
                 if msg.role != "assistant":
                     continue
-                thinking_texts = [
-                    block.get("thinking", "")
-                    for block in msg.get_content_blocks()
-                    if block.get("type") == "thinking"
-                ]
-                joined = "\n".join(t for t in thinking_texts if t)
-                if joined:
-                    reasoning_contents[id(msg)] = joined
+                for block in msg.get_content_blocks():
+                    if block.get("type") == "thinking":
+                        thinking = block.get("thinking", "")
+                        if thinking:
+                            reasoning_contents[id(msg)] = thinking
+                        break
 
             messages = await super()._format(msgs)
 
