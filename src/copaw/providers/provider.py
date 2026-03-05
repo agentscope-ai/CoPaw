@@ -2,8 +2,10 @@
 """Definition of Provider."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Type
 from pydantic import BaseModel, Field
+
+from agentscope.model import ChatModelBase
 
 
 class ModelInfo(BaseModel):
@@ -81,6 +83,22 @@ class Provider(BaseModel, ABC):
         raise NotImplementedError(
             "This provider does not support deleting models.",
         )
+
+    def get_chat_model_cls(self) -> Type[ChatModelBase]:
+        """Return the chat model class associated with this provider."""
+        import agentscope.model
+
+        chat_model_cls = getattr(
+            agentscope.model,
+            self.chat_model,
+            None,
+        )
+        if chat_model_cls is None:
+            raise ValueError(
+                f"Chat model class '{self.chat_model}' not found"
+                f" for provider '{self.name}'.",
+            )
+        return chat_model_cls
 
 
 class DefaultProvider(Provider):
