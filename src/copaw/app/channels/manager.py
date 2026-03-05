@@ -188,10 +188,14 @@ class ChannelManager:
                         on_reply_sent=on_last_dispatch,
                         show_tool_details=show_tool_details,
                         filter_tool_messages=getattr(
-                            ch_cfg, "filter_tool_messages", False,
+                            ch_cfg,
+                            "filter_tool_messages",
+                            False,
                         ),
                         filter_thinking=getattr(
-                            ch_cfg, "filter_thinking", False,
+                            ch_cfg,
+                            "filter_thinking",
+                            False,
                         ),
                     ),
                 )
@@ -249,9 +253,11 @@ class ChannelManager:
                 key,
                 (channel_id, key) in self._in_progress,
                 bool(payload.get("session_webhook")),
-                "pending"
-                if (channel_id, key) in self._in_progress
-                else "queue",
+                (
+                    "pending"
+                    if (channel_id, key) in self._in_progress
+                    else "queue"
+                ),
             )
         if (channel_id, key) in self._in_progress:
             self._pending.setdefault((channel_id, key), []).append(payload)
