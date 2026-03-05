@@ -26,6 +26,38 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import aiohttp
+from agentscope_runtime.engine.schemas.agent_schemas import (
+    # AudioContent,
+    FileContent,
+    ImageContent,
+    TextContent,
+)
+
+from ....config.config import FeishuConfig as FeishuChannelConfig
+from ....config.utils import get_config_path
+from ..base import (
+    BaseChannel,
+    ContentType,
+    OnReplySent,
+    OutgoingContentPart,
+    ProcessHandler,
+)
+from ..utils import file_url_to_local_path
+from .constants import (
+    FEISHU_AVAILABLE,
+    FEISHU_FILE_MAX_BYTES,
+    FEISHU_NICKNAME_CACHE_MAX,
+    FEISHU_PROCESSED_IDS_MAX,
+    FEISHU_TOKEN_REFRESH_BEFORE_SECONDS,
+    FEISHU_USER_NAME_FETCH_TIMEOUT,
+)
+from .utils import (
+    extract_json_key,
+    normalize_feishu_md,
+    sender_display_string,
+    short_session_id_from_full_id,
+)
+
 
 # Compatibility for setuptools>=82 where pkg_resources may be absent.
 # lark-oapi imports pkg_resources.declare_namespace from its vendored protobuf
@@ -57,6 +89,16 @@ else:
 
 try:
     import lark_oapi as lark
+    from lark_oapi.api.im.v1 import (
+        CreateImageRequest,
+        CreateImageRequestBody,
+        CreateMessageRequest,
+        CreateMessageRequestBody,
+        CreateMessageReactionRequest,
+        CreateMessageReactionRequestBody,
+        Emoji,
+        P2ImMessageReceiveV1,
+    )
 finally:
     if (
         _pkg_resources_shim is not None
@@ -66,48 +108,6 @@ finally:
             del sys.modules["pkg_resources"]
         else:
             sys.modules["pkg_resources"] = _original_pkg_resources
-from lark_oapi.api.im.v1 import (
-    CreateImageRequest,
-    CreateImageRequestBody,
-    CreateMessageRequest,
-    CreateMessageRequestBody,
-    CreateMessageReactionRequest,
-    CreateMessageReactionRequestBody,
-    Emoji,
-    P2ImMessageReceiveV1,
-)
-from agentscope_runtime.engine.schemas.agent_schemas import (
-    # AudioContent,
-    FileContent,
-    ImageContent,
-    TextContent,
-)
-
-from ..utils import file_url_to_local_path
-from ....config.config import FeishuConfig as FeishuChannelConfig
-from ....config.utils import get_config_path
-from ..base import (
-    BaseChannel,
-    ContentType,
-    OnReplySent,
-    OutgoingContentPart,
-    ProcessHandler,
-)
-
-from .constants import (
-    FEISHU_AVAILABLE,
-    FEISHU_FILE_MAX_BYTES,
-    FEISHU_NICKNAME_CACHE_MAX,
-    FEISHU_PROCESSED_IDS_MAX,
-    FEISHU_TOKEN_REFRESH_BEFORE_SECONDS,
-    FEISHU_USER_NAME_FETCH_TIMEOUT,
-)
-from .utils import (
-    extract_json_key,
-    normalize_feishu_md,
-    sender_display_string,
-    short_session_id_from_full_id,
-)
 
 if TYPE_CHECKING:
     from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
