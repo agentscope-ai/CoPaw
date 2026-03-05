@@ -1052,6 +1052,12 @@ class DingTalkChannel(BaseChannel):
         elif prefix and not body and not media_parts:
             body = prefix
         m = meta or {}
+        is_reply_context = (
+            m.get("reply_loop") is not None
+            or m.get("reply_future") is not None
+            or bool(m.get("conversation_id"))
+        )
+        is_proactive_send = not is_reply_context
         session_webhook = await self._get_session_webhook_for_send(
             to_handle,
             meta,
@@ -1067,11 +1073,17 @@ class DingTalkChannel(BaseChannel):
         if session_webhook and (body.strip() or media_parts):
             if body.strip():
                 logger.info("dingtalk send_content_parts: sending text body")
-                await self._send_via_session_webhook(
+                text_ok = await self._send_via_session_webhook(
                     session_webhook,
                     body.strip(),
                     bot_prefix="",
                 )
+                if is_proactive_send and not text_ok:
+                    raise RuntimeError(
+                        "DingTalk proactive send failed: "
+                        "text sendBySession failed "
+                        f"(to_handle={to_handle})",
+                    )
             for i, part in enumerate(media_parts):
                 logger.info(
                     "dingtalk send_content_parts: "
@@ -1089,9 +1101,21 @@ class DingTalkChannel(BaseChannel):
                     i + 1,
                     ok,
                 )
+                if is_proactive_send and not ok:
+                    raise RuntimeError(
+                        "DingTalk proactive send failed: "
+                        "media sendBySession failed "
+                        f"(to_handle={to_handle}, index={i + 1})",
+                    )
             if m.get("reply_loop") is not None and m.get("reply_future"):
                 self._reply_sync(m, SENT_VIA_WEBHOOK)
             return
+        if is_proactive_send and (body.strip() or media_parts):
+            raise RuntimeError(
+                "DingTalk proactive send failed: no sessionWebhook found "
+                f"(to_handle={to_handle}); user must chat first and "
+                "sessionWebhook may expire.",
+            )
         if not body and media_parts:
             for p in media_parts:
                 if getattr(p, "type", None) == ContentType.IMAGE and getattr(
