@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=too-many-branches
 """Telegram channel: Bot API with polling; receive/send via chat_id."""
+
 from __future__ import annotations
 
 import asyncio
@@ -125,9 +126,7 @@ async def _build_content_parts_from_message(
         return [TextContent(type=ContentType.TEXT, text="")], False
 
     content_parts: list[Any] = []
-    text = (
-        getattr(message, "text", None) or getattr(message, "caption") or ""
-    ).strip()
+    text = (getattr(message, "text", None) or getattr(message, "caption") or "").strip()
 
     entities = (
         getattr(message, "entities", None)
@@ -511,22 +510,24 @@ class TelegramChannel(BaseChannel):
         # 停止之前的 typing 指示器
         self._stop_typing(chat_id)
 
-        # 转换 Markdown 为 Telegram HTML
-        html_text = convert_markdown_to_telegram_html(text)
-        chunks = self._chunk_text(html_text)
+        # 先对原始 Markdown 文本分块，再分别转换为 HTML
+        # 避免分割 HTML 标签导致解析错误
+        chunks = self._chunk_text(text)
         for chunk in chunks:
+            # 将每个 chunk 转换为 HTML
+            html_chunk = convert_markdown_to_telegram_html(chunk)
             try:
                 if message_thread_id:
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=chunk,
+                        text=html_chunk,
                         message_thread_id=message_thread_id,
                         parse_mode="HTML",
                     )
                 else:
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=chunk,
+                        text=html_chunk,
                         parse_mode="HTML",
                     )
             except telegram.error.BadRequest as e:
