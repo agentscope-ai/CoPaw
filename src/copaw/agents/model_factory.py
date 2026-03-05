@@ -140,18 +140,28 @@ def _create_file_block_support_formatter(
             messages = await super()._format(msgs)
 
             if reasoning_contents:
-                assistant_iter = (
-                    msg for msg in msgs if msg.role == "assistant"
-                )
-                for out_msg in messages:
-                    if out_msg.get("role") != "assistant":
-                        continue
-                    in_msg = next(assistant_iter, None)
-                    if in_msg is None:
-                        break
-                    reasoning = reasoning_contents.get(id(in_msg))
-                    if reasoning:
-                        out_msg["reasoning_content"] = reasoning
+                in_assistant = [
+                    m for m in msgs if m.role == "assistant"
+                ]
+                out_assistant = [
+                    m for m in messages if m.get("role") == "assistant"
+                ]
+                if len(in_assistant) != len(out_assistant):
+                    logger.warning(
+                        "Assistant message count mismatch after formatting "
+                        "(%d before, %d after). "
+                        "Skipping reasoning_content injection.",
+                        len(in_assistant),
+                        len(out_assistant),
+                    )
+                else:
+                    for in_msg, out_msg in zip(
+                        in_assistant,
+                        out_assistant,
+                    ):
+                        reasoning = reasoning_contents.get(id(in_msg))
+                        if reasoning:
+                            out_msg["reasoning_content"] = reasoning
 
             return _strip_top_level_message_name(messages)
 
