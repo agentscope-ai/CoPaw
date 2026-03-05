@@ -9,19 +9,19 @@ import {
 import { LinkOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
-import type { SingleChannelConfig } from "../../../../api/types";
-import type { ChannelKey } from "./constants";
+import { getChannelLabel, type ChannelKey } from "./constants";
 import styles from "../index.module.less";
 
 interface ChannelDrawerProps {
   open: boolean;
   activeKey: ChannelKey | null;
   activeLabel: string;
-  form: FormInstance<SingleChannelConfig>;
+  form: FormInstance<Record<string, unknown>>;
   saving: boolean;
-  initialValues: SingleChannelConfig | undefined;
+  initialValues: Record<string, unknown> | undefined;
+  isBuiltin: boolean;
   onClose: () => void;
-  onSubmit: (values: SingleChannelConfig) => void;
+  onSubmit: (values: Record<string, unknown>) => void;
 }
 
 // Doc URLs per channel (anchors on https://copaw.agentscope.io/docs/channels)
@@ -43,12 +43,15 @@ export function ChannelDrawer({
   form,
   saving,
   initialValues,
+  isBuiltin,
   onClose,
   onSubmit,
 }: ChannelDrawerProps) {
   const { t } = useTranslation();
+  const label = activeKey ? getChannelLabel(activeKey) : activeLabel;
 
-  const renderExtraFields = (key: ChannelKey) => {
+  // Renders builtin channel-specific fields
+  const renderBuiltinExtraFields = (key: ChannelKey) => {
     switch (key) {
       case "imessage":
         return (
@@ -161,6 +164,49 @@ export function ChannelDrawer({
     }
   };
 
+  // Renders custom channel fields as key-value editor
+  const renderCustomExtraFields = (
+    initialValues: Record<string, unknown> | undefined,
+  ) => {
+    if (!initialValues) return null;
+
+    // Get extra fields (exclude base fields)
+    const baseFields = [
+      "enabled",
+      "bot_prefix",
+      "filter_tool_messages",
+      "isBuiltin",
+    ];
+    const extraKeys = Object.keys(initialValues).filter(
+      (k) => !baseFields.includes(k),
+    );
+
+    if (extraKeys.length === 0) return null;
+
+    return (
+      <>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>Custom Fields</div>
+        {extraKeys.map((fieldKey) => {
+          const value = initialValues[fieldKey];
+          const isBoolean = typeof value === "boolean";
+          const isNumber = typeof value === "number";
+
+          return (
+            <Form.Item key={fieldKey} name={fieldKey} label={fieldKey}>
+              {isBoolean ? (
+                <Switch />
+              ) : isNumber ? (
+                <InputNumber style={{ width: "100%" }} />
+              ) : (
+                <Input />
+              )}
+            </Form.Item>
+          );
+        })}
+      </>
+    );
+  };
+
   return (
     <Drawer
       width={420}
@@ -168,8 +214,8 @@ export function ChannelDrawer({
       title={
         <div className={styles.drawerTitle}>
           <span>
-            {activeLabel
-              ? `${activeLabel} ${t("channels.settings")}`
+            {label
+              ? `${label} ${t("channels.settings")}`
               : t("channels.channelSettings")}
           </span>
           {activeKey && CHANNEL_DOC_URLS[activeKey] && (
@@ -180,7 +226,7 @@ export function ChannelDrawer({
               onClick={() => window.open(CHANNEL_DOC_URLS[activeKey], "_blank")}
               className={styles.dingtalkDocBtn}
             >
-              {activeLabel} Doc
+              {label} Doc
             </Button>
           )}
         </div>
@@ -215,7 +261,9 @@ export function ChannelDrawer({
             </Form.Item>
           )}
 
-          {renderExtraFields(activeKey)}
+          {isBuiltin
+            ? renderBuiltinExtraFields(activeKey)
+            : renderCustomExtraFields(initialValues)}
 
           <Form.Item>
             <div className={styles.formActions}>
