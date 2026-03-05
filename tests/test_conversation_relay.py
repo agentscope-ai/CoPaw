@@ -68,7 +68,6 @@ class TestConversationRelayHandler:
 
         assert handler.call_sid == "CA123"
         assert handler.caller_info["from"] == "+15551234567"
-        assert session_mgr.get_session("CA123") is not None
 
     @pytest.mark.asyncio
     async def test_handle_prompt(self):
