@@ -90,7 +90,9 @@ export function ChannelCard({
         )}
       </div>
 
-      {lastError && <div className={styles.cardError}>{lastError}</div>}
+      {enabled && lastError && (
+        <div className={styles.cardError}>{lastError}</div>
+      )}
 
       <div className={styles.cardHint}>{t("channels.clickCardToEdit")}</div>
     </Card>
