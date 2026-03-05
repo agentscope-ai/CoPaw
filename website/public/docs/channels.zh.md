@@ -264,6 +264,7 @@
     git clone https://github.com/steipete/imsg.git
     cd imsg
     make build
+    cp ./bin/imsg /usr/local/bin/
     ```
 - 系统 iMessage 数据库默认路径为 `~/Library/Messages/chat.db`，若你改过系统路径，请填实际路径。
 - 应用需要 **完全磁盘访问权限**（系统设置 → 隐私与安全性 → 完全磁盘访问权限），否则无法读取 `chat.db`。

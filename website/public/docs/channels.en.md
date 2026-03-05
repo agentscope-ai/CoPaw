@@ -269,6 +269,7 @@ The app polls the local iMessage database for new messages and sends replies on 
     git clone https://github.com/steipete/imsg.git
     cd imsg
     make build
+    cp ./bin/imsg /usr/local/bin/
     ```
 - The default iMessage database path is `~/Library/Messages/chat.db`. Use this unless you've moved the database.
 - The app needs **Full Disk Access** (System Settings → Privacy & Security → Full Disk
