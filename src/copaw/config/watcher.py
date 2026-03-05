@@ -111,22 +111,50 @@ class ConfigWatcher:
             return ch.model_dump(mode="json")
         return None
 
+    @staticmethod
+    def _channel_keys(channels: Optional[ChannelConfig]) -> set[str]:
+        """Return built-in + dynamic channel keys."""
+        if channels is None:
+            return set()
+        keys = set(ChannelConfig.model_fields.keys())
+        extra = getattr(channels, "__pydantic_extra__", None) or {}
+        keys.update(extra.keys())
+        return keys
+
     async def _reload_one_channel(
         self,
         name: str,
         new_ch: Any,
         new_channels: ChannelConfig,
         old_ch: Any,
+        available_names: set[str],
     ) -> None:
         """Reload a single channel; on failure revert new_channels entry."""
         try:
             old_channel = await self._channel_manager.get_channel(name)
             if old_channel is None:
-                logger.warning(
-                    "ConfigWatcher: channel '%s' not found, skip",
-                    name,
-                )
-                return
+                is_builtin_channel = name in ChannelConfig.model_fields
+                if is_builtin_channel and name not in available_names:
+                    logger.info(
+                        "ConfigWatcher: channel '%s' not enabled, skip add",
+                        name,
+                    )
+                    return
+                added = await self._channel_manager.add_channel(name, new_ch)
+                if added:
+                    logger.info("ConfigWatcher: channel '%s' added", name)
+                    return
+                else:
+                    old_channel = await self._channel_manager.get_channel(
+                        name,
+                    )
+                    if old_channel is None:
+                        logger.warning(
+                            "ConfigWatcher: channel '%s' not found "
+                            "after add attempt, skip",
+                            name,
+                        )
+                        return
             new_channel = old_channel.clone(new_ch)
             await self._channel_manager.replace_channel(new_channel)
             logger.info("ConfigWatcher: channel '%s' reloaded", name)
@@ -135,7 +163,12 @@ class ConfigWatcher:
                 "ConfigWatcher: failed to reload channel '%s'",
                 name,
             )
-            setattr(new_channels, name, old_ch if old_ch else new_ch)
+            if old_ch is not None:
+                setattr(new_channels, name, old_ch)
+            else:
+                extra = getattr(new_channels, "__pydantic_extra__", None)
+                if isinstance(extra, dict):
+                    extra.pop(name, None)
 
     async def _apply_channel_changes(self, loaded_config: Any) -> None:
         """Diff channels and reload changed ones; update snapshot."""
@@ -144,20 +177,63 @@ class ConfigWatcher:
             return
         new_channels = loaded_config.channels
         old_channels = self._last_channels
-        extra_new = getattr(new_channels, "__pydantic_extra__", None) or {}
-        extra_old = (
+        extra_new_raw = getattr(new_channels, "__pydantic_extra__", None)
+        extra_new: dict[str, Any] = (
+            extra_new_raw if isinstance(extra_new_raw, dict) else {}
+        )
+        extra_old_raw = (
             getattr(old_channels, "__pydantic_extra__", None)
             if old_channels
-            else {}
+            else None
         )
-        for name in get_available_channels():
-            new_ch = getattr(new_channels, name, None) or extra_new.get(name)
+        extra_old: dict[str, Any] = (
+            extra_old_raw if isinstance(extra_old_raw, dict) else {}
+        )
+        available_names = set(get_available_channels())
+
+        candidate_names = (
+            available_names
+            | self._channel_keys(new_channels)
+            | self._channel_keys(old_channels)
+        )
+        removal_failed = False
+
+        for name in sorted(candidate_names):
+            new_ch = getattr(new_channels, name, None)
+            if new_ch is None and name in extra_new:
+                new_ch = extra_new.get(name)
             old_ch = (
-                getattr(old_channels, name, None) or extra_old.get(name)
-                if old_channels
-                else None
+                getattr(old_channels, name, None) if old_channels else None
             )
+            if old_ch is None and name in extra_old:
+                old_ch = extra_old.get(name)
             if new_ch is None:
+                if old_ch is None:
+                    continue
+                logger.info(
+                    "ConfigWatcher: channel '%s' removed from config, "
+                    "stopping",
+                    name,
+                )
+                try:
+                    removed = await self._channel_manager.remove_channel(name)
+                    if removed:
+                        logger.info(
+                            "ConfigWatcher: channel '%s' stopped and removed",
+                            name,
+                        )
+                    else:
+                        logger.warning(
+                            "ConfigWatcher: channel '%s' missing in manager, "
+                            "skip remove",
+                            name,
+                        )
+                except Exception:
+                    removal_failed = True
+                    logger.exception(
+                        "ConfigWatcher: failed to remove channel '%s'",
+                        name,
+                    )
                 continue
             new_dump = self._channel_dump(new_ch)
             old_dump = self._channel_dump(old_ch)
@@ -167,7 +243,17 @@ class ConfigWatcher:
                 "ConfigWatcher: channel '%s' config changed, reloading",
                 name,
             )
-            await self._reload_one_channel(name, new_ch, new_channels, old_ch)
+            await self._reload_one_channel(
+                name,
+                new_ch,
+                new_channels,
+                old_ch,
+                available_names,
+            )
+        if removal_failed:
+            # Keep last snapshot and force next poll to retry removal.
+            self._last_mtime = 0.0
+            return
         self._last_channels = new_channels.model_copy(deep=True)
         self._last_channels_hash = self._channels_hash(new_channels)
 
