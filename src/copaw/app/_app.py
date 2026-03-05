@@ -24,6 +24,7 @@ from ..__version__ import __version__
 from ..utils.logging import setup_logger, add_copaw_file_handler
 from .channels import ChannelManager  # pylint: disable=no-name-in-module
 from .channels.utils import make_process_from_runner
+from .media import resolve_public_media_path
 from .mcp import MCPClientManager, MCPConfigWatcher  # MCP hot-reload support
 from .runner.repo.json_repo import JsonChatRepository
 from .crons.repo.json_repo import JsonJobRepository
@@ -495,6 +496,15 @@ def read_root():
 def get_version():
     """Return the current CoPaw version."""
     return {"version": __version__}
+
+
+@app.get("/api/media/{media_path:path}")
+def get_media_file(media_path: str):
+    """Serve downloaded media files used by the web console."""
+    media_file = resolve_public_media_path(media_path)
+    if media_file is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(media_file)
 
 
 app.include_router(api_router, prefix="/api")

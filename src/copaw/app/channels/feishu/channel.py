@@ -43,6 +43,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
     TextContent,
 )
 
+from ..feishu_post import parse_feishu_post_content
 from ..utils import file_url_to_local_path
 from ....config.config import FeishuConfig as FeishuChannelConfig
 from ....config.utils import get_config_path
@@ -606,6 +607,27 @@ class FeishuChannel(BaseChannel):
                         text_parts.append("[audio: download failed]")
                 else:
                     text_parts.append("[audio: missing key]")
+            elif msg_type == "post":
+                post_texts, post_image_keys = parse_feishu_post_content(
+                    content_raw,
+                )
+                text_parts.extend(t for t in post_texts if t)
+                for image_key in post_image_keys:
+                    url_or_path = await self._download_image_resource(
+                        message_id,
+                        image_key,
+                    )
+                    if url_or_path:
+                        content_parts.append(
+                            ImageContent(
+                                type=ContentType.IMAGE,
+                                image_url=url_or_path,
+                            ),
+                        )
+                    else:
+                        text_parts.append("[image: download failed]")
+                if not post_texts and not post_image_keys:
+                    text_parts.append("[post]")
             else:
                 text_parts.append(f"[{msg_type}]")
 

@@ -20,16 +20,33 @@ from .file_handling import download_file_from_base64, download_file_from_url
 
 logger = logging.getLogger(__name__)
 
-# Only allow local paths under this dir (channels save media here).
-_ALLOWED_MEDIA_ROOT = WORKING_DIR / "media"
+
+def _build_allowed_media_roots() -> tuple[Path, ...]:
+    """Build the set of local media roots considered safe for file:// URLs."""
+    roots = [(WORKING_DIR / "media").resolve()]
+    home_root = (Path("~/.copaw").expanduser().resolve() / "media").resolve()
+    if home_root != roots[0]:
+        roots.append(home_root)
+    return tuple(roots)
+
+
+# Only allow local paths under these dirs (channels save media here).
+_ALLOWED_MEDIA_ROOTS = _build_allowed_media_roots()
 
 
 def _is_allowed_media_path(path: str) -> bool:
-    """True if path is a file under _ALLOWED_MEDIA_ROOT."""
+    """True if path is a file under one of the allowed local media dirs."""
     try:
         resolved = Path(path).expanduser().resolve()
-        root = _ALLOWED_MEDIA_ROOT.resolve()
-        return resolved.is_file() and str(resolved).startswith(str(root))
+        if not resolved.is_file():
+            return False
+        for root in _ALLOWED_MEDIA_ROOTS:
+            try:
+                resolved.relative_to(root)
+                return True
+            except ValueError:
+                continue
+        return False
     except Exception:
         return False
 
@@ -258,9 +275,11 @@ async def process_file_and_media_blocks_in_message(msg) -> None:
 
             local_path = await _process_single_block(message.content, i, block)
             if local_path:
-                downloaded_files.append((i, local_path))
+                downloaded_files.append((i, block_type, local_path))
 
-        for i, local_path in reversed(downloaded_files):
+        for i, block_type, local_path in reversed(downloaded_files):
+            if block_type == "image":
+                continue
             text_block = {
                 "type": "text",
                 "text": f"用户上传文件，已经下载到 {local_path}",

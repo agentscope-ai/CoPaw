@@ -50,17 +50,116 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-/**
- * Extract plain text from a message's content array.
- */
-function extractTextFromContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return String(content || "");
-  return (content as ContentItem[])
-    .filter((c) => c.type === "text")
-    .map((c) => c.text || "")
-    .filter(Boolean)
-    .join("\n");
+type RequestContent = {
+  type: string;
+  status: "created";
+  text?: string;
+  image_url?: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
+};
+
+const GENERATED_UPLOAD_TEXT_PREFIX = "用户上传文件，已经下载到 ";
+
+function getBlockUrl(block: ContentItem): string | undefined {
+  const url = block.image_url || block.file_url;
+  if (typeof url === "string" && url.trim()) {
+    return url.trim();
+  }
+
+  const source = block.source;
+  if (source && typeof source === "object" && !Array.isArray(source)) {
+    const urlSource = source as {
+      type?: unknown;
+      url?: unknown;
+    };
+    if (
+      urlSource.type === "url" &&
+      typeof urlSource.url === "string" &&
+      urlSource.url.trim()
+    ) {
+      return urlSource.url.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeUserContent(content: unknown): RequestContent[] {
+  if (typeof content === "string") {
+    return [{ type: "text", text: content, status: "created" }];
+  }
+
+  if (!Array.isArray(content)) {
+    const text = String(content || "");
+    return text ? [{ type: "text", text, status: "created" }] : [];
+  }
+
+  const blocks = content as ContentItem[];
+  const hasRenderableAttachment = blocks.some(
+    (block) => block?.type === "image" || block?.type === "file",
+  );
+
+  const normalized = blocks.reduce<RequestContent[]>((items, block) => {
+    if (!block || typeof block !== "object") {
+      return items;
+    }
+
+    if (block.type === "text") {
+      const text = typeof block.text === "string" ? block.text : "";
+      if (
+        hasRenderableAttachment &&
+        text.startsWith(GENERATED_UPLOAD_TEXT_PREFIX)
+      ) {
+        return items;
+      }
+      if (text) {
+        items.push({ type: "text", text, status: "created" });
+      }
+      return items;
+    }
+
+    if (block.type === "image") {
+      const imageUrl = getBlockUrl(block);
+      if (imageUrl) {
+        items.push({
+          type: "image",
+          image_url: imageUrl,
+          status: "created",
+        });
+      }
+      return items;
+    }
+
+    if (block.type === "file") {
+      const fileUrl = getBlockUrl(block);
+      if (!fileUrl) {
+        return items;
+      }
+
+      const fileName =
+        typeof block.file_name === "string"
+          ? block.file_name
+          : typeof block.filename === "string"
+            ? block.filename
+            : undefined;
+      const fileSize =
+        typeof block.file_size === "number" ? block.file_size : undefined;
+
+      items.push({
+        type: "file",
+        file_url: fileUrl,
+        file_name: fileName,
+        file_size: fileSize,
+        status: "created",
+      });
+    }
+
+    return items;
+  }, []);
+
+  return normalized;
 }
 
 /**
@@ -84,7 +183,7 @@ function toOutputMessage(msg: Message): OutputMessage {
  * Build a user card (AgentScopeRuntimeRequestCard) from a user message.
  */
 function buildUserCard(msg: Message): IAgentScopeRuntimeWebUIMessage {
-  const text = extractTextFromContent(msg.content);
+  const content = normalizeUserContent(msg.content);
   return {
     id: (msg.id as string) || generateId(),
     role: "user",
@@ -96,7 +195,7 @@ function buildUserCard(msg: Message): IAgentScopeRuntimeWebUIMessage {
             {
               role: "user",
               type: "message",
-              content: [{ type: "text", text, status: "created" }],
+              content,
             },
           ],
         },

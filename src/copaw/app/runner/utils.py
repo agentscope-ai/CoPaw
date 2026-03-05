@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+from pathlib import Path
 from typing import Optional, Union, List
 from urllib.parse import urlparse
 from agentscope.message import Msg
@@ -10,6 +11,8 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
     MessageType,
 )
 from agentscope_runtime.engine.helpers.agent_api_builder import ResponseBuilder
+
+from ..media import to_public_media_url
 
 
 def build_env_context(
@@ -247,12 +250,20 @@ def agentscope_msg_to_message(
                     }
                     current_type = MessageType.MESSAGE
                 cb = current_mb.create_content_builder(content_type="image")
+                image_url = to_public_media_url(block.get("image_url"))
 
-                if (
+                if image_url:
+                    cb.set_image_url(image_url)
+
+                elif (
                     isinstance(block.get("source"), dict)
                     and block.get("source", {}).get("type") == "url"
                 ):
-                    cb.set_image_url(block.get("source", {}).get("url"))
+                    source_url = to_public_media_url(
+                        block.get("source", {}).get("url"),
+                    )
+                    if source_url:
+                        cb.set_image_url(source_url)
 
                 elif (
                     isinstance(block.get("source"), dict)
@@ -269,6 +280,57 @@ def agentscope_msg_to_message(
                     url = f"data:{media_type};base64,{base64_data}"
                     cb.set_image_url(url)
 
+                cb.complete()
+
+            elif btype == "file":
+                # Create/continue MESSAGE type with file
+                if current_type != MessageType.MESSAGE:
+                    if current_mb:
+                        current_mb.complete()
+                        results.append(current_mb.get_message_data())
+                    rb = ResponseBuilder()
+                    current_mb = rb.create_message_builder(
+                        role=role,
+                        message_type=MessageType.MESSAGE,
+                    )
+                    current_mb.message.metadata = {
+                        "original_id": msg.id,
+                        "original_name": msg.name,
+                        "metadata": msg.metadata,
+                    }
+                    current_type = MessageType.MESSAGE
+                cb = current_mb.create_content_builder(content_type="file")
+                file_url = to_public_media_url(block.get("file_url"))
+
+                if file_url:
+                    cb.content.file_url = file_url
+                elif (
+                    isinstance(block.get("source"), dict)
+                    and block.get("source", {}).get("type") == "url"
+                ):
+                    cb.content.file_url = to_public_media_url(
+                        block.get("source", {}).get("url"),
+                    )
+                elif (
+                    isinstance(block.get("source"), dict)
+                    and block.get("source").get("type") == "base64"
+                ):
+                    cb.content.file_data = block.get("source", {}).get(
+                        "data",
+                        "",
+                    )
+
+                filename = (
+                    block.get("filename")
+                    or block.get("file_name")
+                    or block.get("name")
+                )
+                if isinstance(filename, str) and filename.strip():
+                    cb.content.filename = filename.strip()
+                elif cb.content.file_url:
+                    cb.content.filename = Path(
+                        urlparse(cb.content.file_url).path,
+                    ).name
                 cb.complete()
 
             elif btype == "audio":
@@ -298,12 +360,17 @@ def agentscope_msg_to_message(
                     )
                     == "url"
                 ):
-                    url = block.get("source", {}).get("url")
-                    cb.content.data = url
-                    try:
-                        cb.content.format = urlparse(url).path.split(".")[-1]
-                    except (AttributeError, IndexError, ValueError):
-                        cb.content.format = None
+                    url = to_public_media_url(
+                        block.get("source", {}).get("url"),
+                    )
+                    if url:
+                        cb.content.data = url
+                        try:
+                            cb.content.format = urlparse(url).path.split(
+                                ".",
+                            )[-1]
+                        except (AttributeError, IndexError, ValueError):
+                            cb.content.format = None
 
                 # Base64Source runtime check (dict with type == "base64")
                 elif (
