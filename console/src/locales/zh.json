@@ -246,6 +246,9 @@
     "allowFrom": "白名单用户",
     "allowFromTooltip": "允许与机器人交互的用户 ID 列表（格式：昵称#后4位，如 张三#1234）",
     "allowFromPlaceholder": "输入用户ID后按回车添加"
+    "filterAll": "全部",
+    "builtin": "内置",
+    "custom": "自定义"
   },
   "sessions": {
     "title": "会话",

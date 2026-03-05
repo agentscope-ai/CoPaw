@@ -246,6 +246,9 @@
     "allowFrom": "Allowlist Users",
     "allowFromTooltip": "List of user IDs allowed to interact with the bot (format: nickname#last4, e.g. John#1234)",
     "allowFromPlaceholder": "Enter user ID and press Enter to add"
+    "filterAll": "All",
+    "builtin": "Built-in",
+    "custom": "Custom"
   },
   "sessions": {
     "title": "Sessions",
