@@ -238,8 +238,8 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                 <span
                   style={{
                     fontSize: 12,
-                    color: hasUpdate ? "#615ced" : "#999",
-                    fontWeight: hasUpdate ? 600 : 400,
+                    color: "#615ced",
+                    fontWeight: 600,
                     lineHeight: 1,
                     cursor: hasUpdate ? "pointer" : "default",
                   }}
