@@ -2,6 +2,7 @@ export interface BaseChannelConfig {
   enabled: boolean;
   bot_prefix: string;
   filter_tool_messages?: boolean;
+  filter_thinking?: boolean;
 }
 
 export interface IMessageChannelConfig extends BaseChannelConfig {

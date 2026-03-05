@@ -228,6 +228,7 @@ export function ChannelDrawer({
       "enabled",
       "bot_prefix",
       "filter_tool_messages",
+      "filter_thinking",
       "isBuiltin",
     ];
     const extraKeys = Object.keys(initialValues).filter(
@@ -319,14 +320,24 @@ export function ChannelDrawer({
           )}
 
           {activeKey !== "console" && (
-            <Form.Item
-              name="filter_tool_messages"
-              label={t("channels.filterToolMessages")}
-              valuePropName="checked"
-              tooltip={t("channels.filterToolMessagesTooltip")}
-            >
-              <Switch />
-            </Form.Item>
+            <>
+              <Form.Item
+                name="filter_tool_messages"
+                label={t("channels.filterToolMessages")}
+                valuePropName="checked"
+                tooltip={t("channels.filterToolMessagesTooltip")}
+              >
+                <Switch />
+              </Form.Item>
+              <Form.Item
+                name="filter_thinking"
+                label={t("channels.filterThinking")}
+                valuePropName="checked"
+                tooltip={t("channels.filterThinkingTooltip")}
+              >
+                <Switch />
+              </Form.Item>
+            </>
           )}
 
           {isBuiltin
