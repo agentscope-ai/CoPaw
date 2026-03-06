@@ -13,7 +13,6 @@ import logging
 import os
 import secrets
 import time
-from pathlib import Path
 from typing import Optional
 
 from fastapi import Request, Response
@@ -34,7 +33,7 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
         "/api/auth/login",
         "/api/auth/status",
         "/api/version",
-    }
+    },
 )
 
 # Prefixes that do NOT require authentication (static assets)
@@ -49,7 +48,11 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
 # Password hashing (salted SHA-256, no external deps)
 # ---------------------------------------------------------------------------
 
-def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+
+def _hash_password(
+    password: str,
+    salt: Optional[str] = None,
+) -> tuple[str, str]:
     """Hash password with salt. Returns (hash_hex, salt_hex)."""
     if salt is None:
         salt = secrets.token_hex(16)
@@ -66,6 +69,7 @@ def verify_password(password: str, stored_hash: str, salt: str) -> bool:
 # ---------------------------------------------------------------------------
 # Token generation / verification (HMAC-SHA256 based, no PyJWT needed)
 # ---------------------------------------------------------------------------
+
 
 def _get_jwt_secret() -> str:
     """Get JWT secret from auth.json, or generate one."""
@@ -88,11 +92,13 @@ def create_token(username: str) -> str:
             "sub": username,
             "exp": int(time.time()) + TOKEN_EXPIRY_SECONDS,
             "iat": int(time.time()),
-        }
+        },
     )
     payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode()
     sig = hmac.new(
-        secret.encode(), payload_b64.encode(), hashlib.sha256
+        secret.encode(),
+        payload_b64.encode(),
+        hashlib.sha256,
     ).hexdigest()
     return f"{payload_b64}.{sig}"
 
@@ -108,7 +114,9 @@ def verify_token(token: str) -> Optional[str]:
         payload_b64, sig = parts
         secret = _get_jwt_secret()
         expected_sig = hmac.new(
-            secret.encode(), payload_b64.encode(), hashlib.sha256
+            secret.encode(),
+            payload_b64.encode(),
+            hashlib.sha256,
         ).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None
@@ -124,6 +132,7 @@ def verify_token(token: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Auth data persistence (auth.json in WORKING_DIR)
 # ---------------------------------------------------------------------------
+
 
 def _load_auth_data() -> dict:
     """Load auth.json from WORKING_DIR.
@@ -147,8 +156,6 @@ def _save_auth_data(data: dict) -> None:
     AUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(AUTH_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    # Best-effort chmod 0600 — effective on Linux/macOS (Docker),
-    # silently ignored on Windows where os.chmod is limited.
     try:
         os.chmod(AUTH_FILE, 0o600)
     except OSError:
@@ -183,11 +190,9 @@ def init_auth_from_env() -> None:
     password = raw_password.strip()
     username = raw_username.strip() or "admin"
 
-    # If ADMIN_PASSWORD is not explicitly provided, skip initialization
-    # so auth stays disabled (or keeps whatever was previously configured).
     if not password:
         logger.debug(
-            "ADMIN_PASSWORD not set; skipping auth initialization"
+            "ADMIN_PASSWORD not set; skipping auth initialization",
         )
         return
 
@@ -196,7 +201,6 @@ def init_auth_from_env() -> None:
     existing_salt = data.get("password_salt", "")
     existing_user = data.get("username", "")
 
-    # If credentials already match, skip
     if (
         existing_hash
         and existing_salt
@@ -206,8 +210,6 @@ def init_auth_from_env() -> None:
         logger.debug("Auth credentials unchanged, skipping update")
         return
 
-    # Hash and store — rotate jwt_secret on credential change so that
-    # previously issued tokens are invalidated immediately.
     pw_hash, salt = _hash_password(password)
     data["username"] = username
     data["password_hash"] = pw_hash
@@ -241,36 +243,33 @@ def authenticate(username: str, password: str) -> Optional[str]:
 # FastAPI middleware
 # ---------------------------------------------------------------------------
 
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware that checks Bearer token on protected routes."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(  # pylint: disable=too-many-return-statements
+        self,
+        request: Request,
+        call_next,
+    ) -> Response:
+        """Check Bearer token on protected API routes; skip public paths."""
         path = request.url.path
 
-        # Skip auth check if auth is not configured
         if not is_auth_enabled():
             return await call_next(request)
 
-        # Let CORS preflight through so CORSMiddleware can add headers
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        # Public paths don't need auth
         if path in _PUBLIC_PATHS:
             return await call_next(request)
 
-        # Static assets don't need auth
-        for prefix in _PUBLIC_PREFIXES:
-            if path.startswith(prefix):
-                return await call_next(request)
+        if any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return await call_next(request)
 
-        # SPA HTML pages: let them through (frontend handles redirect)
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        # Try Authorization header first, then fall back to query param
-        # ONLY for WebSocket upgrade requests (browser WebSocket API
-        # cannot set custom headers, so token is passed via ?token=xxx).
         token: Optional[str] = None
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
@@ -293,6 +292,5 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 media_type="application/json",
             )
 
-        # Attach user to request state
         request.state.user = user
         return await call_next(request)

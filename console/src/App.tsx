@@ -17,9 +17,9 @@ const GlobalStyle = createGlobalStyle`
 `;
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<
-    "loading" | "auth-required" | "ok"
-  >("loading");
+  const [status, setStatus] = useState<"loading" | "auth-required" | "ok">(
+    "loading",
+  );
 
   useEffect(() => {
     authApi
@@ -60,7 +60,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (status === "loading") return null;
   if (status === "auth-required")
-    return <Navigate to={`/login?redirect=${encodeURIComponent(window.location.pathname)}`} replace />;
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(window.location.pathname)}`}
+        replace
+      />
+    );
   return <>{children}</>;
 }
 

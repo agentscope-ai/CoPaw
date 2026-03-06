@@ -12,10 +12,7 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
 
-  const onFinish = async (values: {
-    username: string;
-    password: string;
-  }) => {
+  const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
       const res = await authApi.login(values.username, values.password);
@@ -75,9 +72,7 @@ export default function LoginPage() {
         >
           <Form.Item
             name="username"
-            rules={[
-              { required: true, message: t("login.usernameRequired") },
-            ]}
+            rules={[{ required: true, message: t("login.usernameRequired") }]}
           >
             <Input
               prefix={<UserOutlined />}
@@ -88,9 +83,7 @@ export default function LoginPage() {
 
           <Form.Item
             name="password"
-            rules={[
-              { required: true, message: t("login.passwordRequired") },
-            ]}
+            rules={[{ required: true, message: t("login.passwordRequired") }]}
           >
             <Input.Password
               prefix={<LockOutlined />}
