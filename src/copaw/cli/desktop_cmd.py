@@ -101,7 +101,12 @@ def desktop_cmd(
         env=env,
     ) as proc:
         if _wait_for_http(host, port):
-            webview.create_window("CoPaw Desktop", url)
+            webview.create_window(
+                "CoPaw Desktop",
+                url,
+                width=1280,
+                height=800,
+            )
             webview.start()  # blocks until user closes the window
             proc.terminate()
             proc.wait()

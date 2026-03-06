@@ -23,6 +23,7 @@ dependencies = [
     "lark-oapi>=1.5.3",
     "python-telegram-bot>=20.0",
     "twilio>=9.10.2",
+    "pywebview>=4.0",
 ]
 
 [tool.setuptools.dynamic]
@@ -69,11 +70,8 @@ mlx = [
 ollama = [
     "ollama>=0.6.1",
 ]
-desktop = [
-    "pywebview>=4.0",
-]
 full = [
-    "copaw[local,desktop,ollama,llamacpp,mlx]",
+    "copaw[local,ollama,llamacpp,mlx]",
 ]
 
 [tool.pytest.ini_options]
