@@ -1,0 +1,99 @@
+# -*- coding: utf-8 -*-
+"""An OpenAI provider implementation."""
+
+from __future__ import annotations
+
+import os
+from typing import Any, List
+
+from agentscope.model import ChatModelBase
+from openai import APIError, AsyncOpenAI
+
+from copaw.providers.provider import ModelInfo, Provider
+
+
+class OpenAIProvider(Provider):
+    def model_post_init(self, __context: Any) -> None:
+        if not self.api_key:  # type: ignore
+            self.api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not self.base_url:  # type: ignore
+            self.base_url = os.environ.get(
+                "OPENAI_BASE_URL",
+                "https://api.openai.com/v1",
+            )
+
+    def _client(self, timeout: float = 5) -> AsyncOpenAI:
+        return AsyncOpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    def _normalize_models_payload(payload: Any) -> List[ModelInfo]:
+        models: List[ModelInfo] = []
+        rows = getattr(payload, "data", [])
+        for row in rows or []:
+            model_id = str(getattr(row, "id", "") or "").strip()
+            if not model_id:
+                continue
+            model_name = (
+                str(getattr(row, "name", "") or model_id).strip() or model_id
+            )
+            models.append(ModelInfo(id=model_id, name=model_name))
+
+        deduped: List[ModelInfo] = []
+        seen: set[str] = set()
+        for model in models:
+            if model.id in seen:
+                continue
+            seen.add(model.id)
+            deduped.append(model)
+        return deduped
+
+    async def check_connection(self, timeout: float = 5) -> bool:
+        """Check if OpenAI provider is reachable with current configuration."""
+        client = self._client()
+        try:
+            await client.models.list(timeout=timeout)
+            return True
+        except APIError:
+            return False
+
+    async def fetch_models(self, timeout: float = 5) -> List[ModelInfo]:
+        """Fetch available models."""
+        try:
+            client = self._client(timeout=timeout)
+            payload = await client.models.list(timeout=timeout)
+            models = self._normalize_models_payload(payload)
+            return models
+        except APIError:
+            return []
+
+    async def check_model_connection(
+        self,
+        model_id: str,
+        timeout: float = 5,
+    ) -> bool:
+        """Check if a specific model is reachable/usable"""
+        try:
+            client = self._client(timeout=timeout)
+            await client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": "ping"}],
+                timeout=timeout,
+                max_tokens=1,
+            )
+            return True
+        except APIError:
+            return False
+
+    def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
+        from agentscope.model import OpenAIChatModel
+
+        return OpenAIChatModel(
+            model_name=model_id,
+            stream=True,
+            api_key=self.api_key,
+            client_kwargs={"base_url": self.base_url},
+        )

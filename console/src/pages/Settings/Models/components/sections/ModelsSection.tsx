@@ -12,8 +12,8 @@ interface ModelsSectionProps {
     name: string;
     models?: Array<{ id: string; name: string }>;
     extra_models?: Array<{ id: string; name: string }>;
-    current_base_url?: string;
-    current_api_key?: string;
+    base_url?: string;
+    api_key?: string;
     is_custom: boolean;
     is_local?: boolean;
   }>;
@@ -48,10 +48,10 @@ export function ModelsSection({
       providers.filter((p) => {
         const hasModels = (p.models?.length ?? 0) > 0;
         if (!hasModels) return false;
-        if (p.id === "ollama") return !!p.current_base_url;
+        if (p.id === "ollama") return !!p.base_url;
         if (p.is_local) return true;
-        if (p.is_custom) return !!p.current_base_url;
-        return !!p.current_api_key;
+        if (p.is_custom) return !!p.base_url;
+        return !!p.api_key;
       }),
     [providers],
   );

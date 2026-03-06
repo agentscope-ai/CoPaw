@@ -15,9 +15,9 @@ export interface ProviderInfo {
   is_custom: boolean;
   is_local: boolean;
   /** True when the user must supply a base URL (custom or no default URL). */
-  needs_base_url: boolean;
-  current_api_key: string;
-  current_base_url: string;
+  freeze_url: boolean;
+  api_key: string;
+  base_url: string;
 }
 
 export interface ProviderConfigRequest {
