@@ -370,11 +370,21 @@ Join the conversation on [GitHub Discussions](https://github.com/agentscope-ai/C
 ```bash
 git clone https://github.com/agentscope-ai/CoPaw.git
 cd CoPaw
+
+# Build console frontend first (required for web UI)
+cd console && npm ci && npm run build
+cd ..
+
+# Copy console build output to package directory
+mkdir -p src/copaw/console
+cp -R console/dist/. src/copaw/console/
+
+# Install Python package
 pip install -e .
 ```
 
 - **Dev** (tests, formatting): `pip install -e ".[dev]"`
-- **Console** (build frontend): From project root run `cd console && npm ci && npm run build`, then `copaw init --defaults`, then `copaw app`.
+- **Then**: Run `copaw init --defaults`, then `copaw app`.
 
 ---
 
