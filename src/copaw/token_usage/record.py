@@ -4,8 +4,7 @@
 import json
 import logging
 import threading
-from datetime import date, datetime
-from pathlib import Path
+from datetime import date
 
 from .storage import get_token_usage_path
 

@@ -46,14 +46,16 @@ def query_token_usage(
         for model, entry in by_model.items():
             if model_name is not None and model != model_name:
                 continue
-            results.append({
-                "date": date_str,
-                "model": model,
-                "prompt_tokens": entry.get("prompt_tokens", 0),
-                "completion_tokens": entry.get("completion_tokens", 0),
-                "total_tokens": entry.get("total_tokens", 0),
-                "call_count": entry.get("call_count", 0),
-            })
+            results.append(
+                {
+                    "date": date_str,
+                    "model": model,
+                    "prompt_tokens": entry.get("prompt_tokens", 0),
+                    "completion_tokens": entry.get("completion_tokens", 0),
+                    "total_tokens": entry.get("total_tokens", 0),
+                    "call_count": entry.get("call_count", 0),
+                },
+            )
         current += timedelta(days=1)
 
     return results
