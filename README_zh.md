@@ -81,6 +81,7 @@
 
 - [新闻](#新闻)
 - [快速开始](#快速开始)
+- [桌面应用 (macOS)](#桌面应用-macos)
 - [API Key](#api-key)
 - [本地模型](#本地模型)
 - [文档](#文档)
@@ -268,6 +269,29 @@ docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:la
 
 ---
 
+## 桌面应用 (macOS)
+
+CoPaw 提供基于 Electron 的 macOS 原生桌面应用。它内置 Python 运行时，无需单独安装 Python — 打开应用即可开始对话。
+
+**从源码构建**（需要 [uv](https://github.com/astral-sh/uv) 和 Node.js）：
+
+```bash
+git clone https://github.com/agentscope-ai/CoPaw.git
+cd CoPaw
+bash scripts/desktop_build.sh
+```
+
+构建脚本将：
+1. 构建 Console 前端
+2. 创建包含 CoPaw 的独立 Python 运行时
+3. 通过 Electron Forge 打包为 macOS 应用
+
+产物位于：`desktop/out/make/`（DMG 和 ZIP）。
+
+> **开发模式：** 如需不打包直接运行桌面端，可使用 `cd desktop && npm ci && npm run dev`（需要内置运行时中已安装 `copaw` CLI）。
+
+---
+
 ## API Key
 
 若使用**云端大模型**（如 DashScope、ModelScope），在开始对话前必须配置 API Key。未配置有效 Key 前，CoPaw 无法正常工作。
@@ -382,6 +406,7 @@ pip install -e .
 
 - **开发**（测试、格式化）：`pip install -e ".[dev]"`
 - **控制台**（构建前端）：在项目根目录执行 `cd console && npm ci && npm run build`，再运行 `copaw app`。
+- **桌面应用**（macOS）：`bash scripts/desktop_build.sh` — 构建内置 Python 运行时的独立 `.app`。详见[桌面应用 (macOS)](#桌面应用-macos)。
 
 ---
 

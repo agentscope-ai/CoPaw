@@ -204,6 +204,22 @@ If you add or change platform support, please test on the affected OS and mentio
 
 ---
 
+### Desktop Client (Electron)
+
+The `desktop/` directory contains a **macOS desktop client** built with Electron + TypeScript + Vite. It bundles a self-contained Python runtime and launches the CoPaw backend as a child process.
+
+- **Tech stack:** Electron Forge, Vite, TypeScript.
+- **Build prerequisites:** [uv](https://github.com/astral-sh/uv) (Python toolchain) and Node.js/npm.
+- **Build command:** `bash scripts/desktop_build.sh` from the repo root.
+- **Dev mode:** `cd desktop && npm ci && npm run dev` (requires the bundled runtime at `desktop/runtime/`).
+
+Contributions are welcome for:
+- **Multi-platform support:** The desktop client currently targets macOS only. Adding Windows and Linux packaging (e.g. NSIS installer, AppImage/deb) is a valuable contribution.
+- **Native integrations:** System tray, notifications, auto-update, deep linking.
+- **UX improvements:** Splash screen, onboarding flow, menu actions.
+
+---
+
 ### Other Contributions
 
 - **MCP (Model Context Protocol):** CoPaw supports runtime **MCP tool** discovery and hot-plug. Contributing new MCP servers or tools (or docs on how to attach them) helps users extend the agent without changing core code.
