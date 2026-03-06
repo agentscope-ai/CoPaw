@@ -48,6 +48,8 @@ export interface MQTTConfig extends BaseChannelConfig {
   host: string;
   port: number;
   transport: string;
+  clean_session: boolean;
+  qos: number;
   username: string;
   password: string;
   subscribe_topic: string;

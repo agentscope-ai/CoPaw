@@ -215,6 +215,16 @@ export function ChannelDrawer({
                 <Select.Option value="websockets">WS (websockets)</Select.Option>
               </Select>
             </Form.Item>
+            <Form.Item name="clean_session" label="Clean Session" valuePropName="checked">
+              <Switch defaultChecked />
+            </Form.Item>
+            <Form.Item name="qos" label="QoS" initialValue="2" rules={[{ required: true}]}>
+              <Select>
+                <Select.Option value="0">At Most Once (0)</Select.Option>
+                <Select.Option value="1">At Least Once (1)</Select.Option>
+                <Select.Option value="2">Exactly Once (2)</Select.Option>
+              </Select>
+            </Form.Item>
             <Form.Item name="username" label="MQTT Username">
               <Input placeholder="Leave blank to disable / not use" />
             </Form.Item>

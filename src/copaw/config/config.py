@@ -80,6 +80,8 @@ class MQTTConfig(BaseChannelConfig):
     host: str = ""
     port: Optional[int] = None
     transport: str = ""
+    clean_session: bool = True
+    qos: int = 2
     username: Optional[str] = None
     password: Optional[str] = None
     subscribe_topic: str = ""

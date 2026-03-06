@@ -44,6 +44,8 @@ class MQTTChannel(BaseChannel):
       subscribe_topic: str,
       publish_topic: str,
       bot_prefix: str,
+      clean_session: bool = True,
+      qos: int = 2,
       tls_enabled: bool = False,
       tls_ca_certs: Optional[str] = None,
       tls_certfile: Optional[str] = None,
@@ -74,6 +76,8 @@ class MQTTChannel(BaseChannel):
     self.tls_ca_certs = tls_ca_certs
     self.tls_certfile = tls_certfile
     self.tls_keyfile = tls_keyfile
+    self.clean_session = clean_session
+    self.qos = qos
     self.client: Optional[mqtt.Client] = None
     self.connected = False
     self._thread: Optional[threading.Thread] = None
@@ -89,6 +93,10 @@ class MQTTChannel(BaseChannel):
     port_str = os.getenv("MQTT_PORT", "1883")
     port = int(port_str) if port_str.isdigit() else 1883
 
+    clean_session = os.getenv("MQTT_CLEAN_SESSION", "1") == "1"
+    qos_str = os.getenv("MQTT_QOS", "2")
+    qos = int(qos_str) if qos_str.isdigit() else 0
+
     return cls(
       process=process,
       enabled=os.getenv("MQTT_CHANNEL_ENABLED", "0") == "1",
@@ -100,6 +108,8 @@ class MQTTChannel(BaseChannel):
       subscribe_topic=os.getenv("MQTT_SUBSCRIBE_TOPIC", ""),
       publish_topic=os.getenv("MQTT_PUBLISH_TOPIC", ""),
       bot_prefix=os.getenv("MQTT_BOT_PREFIX", ""),
+      clean_session=clean_session,
+      qos=qos,
       tls_enabled=os.getenv("MQTT_TLS_ENABLED", "0") == "1",
       tls_ca_certs=os.getenv("MQTT_TLS_CA_CERTS"),
       tls_certfile=os.getenv("MQTT_TLS_CERTFILE"),
@@ -122,6 +132,10 @@ class MQTTChannel(BaseChannel):
       port_val = config.get("port", 1883)
       port = int(port_val) if isinstance(port_val, (str, int)) and str(port_val).isdigit() else 1883
 
+      clean_session = bool(config.get("clean_session", True))
+      qos_val = config.get("qos", 2)
+      qos = int(qos_val) if isinstance(qos_val, (str, int)) and str(qos_val).isdigit() else 0
+
       return cls(
         process=process,
         enabled=bool(config.get("enabled", False)),
@@ -132,6 +146,8 @@ class MQTTChannel(BaseChannel):
         subscribe_topic=(config.get("subscribe_topic") or "").strip(),
         publish_topic=(config.get("publish_topic") or "").strip(),
         bot_prefix=(config.get("bot_prefix") or "").strip(),
+        clean_session=clean_session,
+        qos=qos,
         tls_enabled=bool(config.get("tls_enabled", False)),
         tls_ca_certs=config.get("tls_ca_certs"),
         tls_certfile=config.get("tls_certfile"),
@@ -144,6 +160,9 @@ class MQTTChannel(BaseChannel):
       )
     port = int(config.port) if config.port else 1883
 
+    clean_session = getattr(config, "clean_session", True)
+    qos = getattr(config, "qos", 2)
+
     return cls(
       process=process,
       enabled=config.enabled,
@@ -154,6 +173,8 @@ class MQTTChannel(BaseChannel):
       subscribe_topic=config.subscribe_topic or "",
       publish_topic=config.publish_topic or "",
       bot_prefix=config.bot_prefix or "",
+      clean_session=clean_session,
+      qos=qos,
       transport=getattr(config, "transport", ""),
       tls_enabled=getattr(config, "tls_enabled", False),
       tls_ca_certs=getattr(config, "tls_ca_certs", None),
@@ -185,8 +206,8 @@ class MQTTChannel(BaseChannel):
     if reason_code == 0:
       self.connected = True
       logger.info("MQTT connected")
-      client.subscribe(self.subscribe_topic, qos=0)
-      logger.info(f"Subscribed to {self.subscribe_topic}")
+      client.subscribe(self.subscribe_topic, qos=self.qos)
+      logger.info(f"Subscribed to {self.subscribe_topic} with QoS={self.qos}")
     else:
       logger.error(f"MQTT connect failed, return code {reason_code}")
 
@@ -270,6 +291,7 @@ class MQTTChannel(BaseChannel):
       protocol=mqtt.MQTTv311,
       callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
       transport=self.transport,
+      clean_session=self.clean_session,
     )
 
     if self.username and self.password:
@@ -296,20 +318,19 @@ class MQTTChannel(BaseChannel):
       logger.error(f"MQTT connect failed: {str(e)}")
       return
 
-    self._thread = threading.Thread(
-      target=self.client.loop_forever,
-      daemon=True,
-    )
-    self._thread.start()
+    self.client.loop_start()
 
     logger.info("MQTT channel started")
     logger.info(f"Subscribing to: {self.subscribe_topic}")
     logger.info(f"Publishing to: {self.publish_topic}")
     logger.info(f"Using transport: {self.transport}")
+    logger.info(f"Clean session: {self.clean_session}")
+    logger.info(f"QoS level: {self.qos}")
 
   async def stop(self) -> None:
     logger.info("Stopping MQTT channel...")
     if self.client:
+      self.client.loop_stop()
       self.client.disconnect()
       self.client = None
     self.connected = False
@@ -334,8 +355,8 @@ class MQTTChannel(BaseChannel):
         return
 
       send_topic = self.publish_topic.format(client_id=client_id)
-      self.client.publish(send_topic, text, qos=0)
-      logger.info(f"MQTT [{client_id}] << {text}")
+      self.client.publish(send_topic, text, qos=self.qos)
+      logger.info(f"MQTT [{client_id}] << {text} (QoS={self.qos})")
 
     except Exception as e:
       logger.error(f"Failed to send MQTT message: {str(e)}")
@@ -363,15 +384,15 @@ class MQTTChannel(BaseChannel):
 
       if part_type == ContentType.IMAGE:
         img_url = getattr(part, "image_url", "")
-        self.client.publish(send_topic, f"[Image] {img_url}", qos=0)
+        self.client.publish(send_topic, f"[Image] {img_url}", qos=self.qos)
       elif part_type == ContentType.VIDEO:
         vid_url = getattr(part, "video_url", "")
-        self.client.publish(send_topic, f"[Video] {vid_url}", qos=0)
+        self.client.publish(send_topic, f"[Video] {vid_url}", qos=self.qos)
       elif part_type == ContentType.AUDIO:
-        self.client.publish(send_topic, "[Audio]", qos=0)
+        self.client.publish(send_topic, "[Audio]", qos=self.qos)
       elif part_type == ContentType.FILE:
         file_url = getattr(part, "file_url", "") or getattr(part, "file_id", "")
-        self.client.publish(send_topic, f"[File] {file_url}", qos=0)
+        self.client.publish(send_topic, f"[File] {file_url}", qos=self.qos)
 
     except Exception as e:
       logger.error(f"Failed to send MQTT media: {str(e)}")
