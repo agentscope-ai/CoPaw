@@ -1278,6 +1278,7 @@ class FeishuChannel(BaseChannel):
         url = (
             getattr(part, "file_url", None)
             or getattr(part, "image_url", None)
+            or getattr(part, "video_url", None)
             or getattr(part, "data", None)
             or ""
         )
@@ -1305,6 +1306,14 @@ class FeishuChannel(BaseChannel):
                     e,
                 )
                 return None
+            # Extract media_type from data URI and infer extension
+            media_type = "application/octet-stream"
+            if b64.startswith("data:") and ";" in b64:
+                media_type = b64[5:].split(";", 1)[0]
+            ext = mimetypes.guess_extension(media_type) or ""
+            # Use inferred extension if filename is generic
+            if filename == "file.bin" and ext:
+                filename = f"file{ext}"
             self._media_dir.mkdir(parents=True, exist_ok=True)
             path = self._media_dir / f"upload_{id(part)}_{filename}"
             path.write_bytes(data)
@@ -1333,10 +1342,11 @@ class FeishuChannel(BaseChannel):
         receive_id: str,
         part: OutgoingContentPart,
     ) -> bool:
-        """Upload file and send file message (msg_type=file, file_key)."""
+        """Upload file and send file/video/audio message."""
+        part_type = getattr(part, "type", None)
         logger.info(
             "feishu _send_file: part type=%s",
-            getattr(part, "type", None),
+            part_type,
         )
         path_or_url = await self._part_to_file_path_or_url(part)
         if not path_or_url:
@@ -1354,14 +1364,45 @@ class FeishuChannel(BaseChannel):
             "feishu _send_file: upload ok file_key=%s",
             file_key[:24] if file_key else "",
         )
-        content = json.dumps({"file_key": file_key}, ensure_ascii=False)
+        # Determine msg_type and content based on part type
+        if part_type == ContentType.VIDEO:
+            # Use post type with media tag for video
+            msg_type = "post"
+            # Get filename for title
+            filename = getattr(part, "filename", None)
+            # If no filename in part, try to extract from path_or_url
+            if not filename and path_or_url:
+                filename = Path(path_or_url).name
+            filename = filename or "视频文件"
+            post_content = {
+                "zh_cn": {
+                    "title": filename,
+                    "content": [
+                        [
+                            {
+                                "tag": "media",
+                                "file_key": file_key,
+                            },
+                        ],
+                    ],
+                },
+            }
+            content = json.dumps(post_content, ensure_ascii=False)
+        else:
+            msg_type = "file"
+            content = json.dumps({"file_key": file_key}, ensure_ascii=False)
+        logger.info(
+            "feishu _send_file: sending msg_type=%s content=%s...",
+            msg_type,
+            content[:50],
+        )
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: self._send_message_sync(
                 receive_id_type,
                 receive_id,
-                "file",
+                msg_type,
                 content,
             ),
         )
