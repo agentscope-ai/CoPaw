@@ -59,7 +59,10 @@ export function RemoteProviderCard({
 
   const totalCount = provider.models.length;
 
-  const isConfigured = provider.is_local || (provider.is_custom && provider.base_url) || provider.api_key;
+  const isConfigured =
+    provider.is_local ||
+    (provider.is_custom && provider.base_url) ||
+    provider.api_key;
   const hasModels = totalCount > 0;
   const isAvailable = isConfigured && hasModels;
 
@@ -137,10 +140,7 @@ export function RemoteProviderCard({
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>{t("models.baseURL")}:</span>
             {provider.base_url ? (
-              <span
-                className={styles.infoValue}
-                title={provider.base_url}
-              >
+              <span className={styles.infoValue} title={provider.base_url}>
                 {provider.base_url}
               </span>
             ) : (
@@ -150,9 +150,7 @@ export function RemoteProviderCard({
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>{t("models.apiKey")}:</span>
             {provider.api_key ? (
-              <span className={styles.infoValue}>
-                {provider.api_key}
-              </span>
+              <span className={styles.infoValue}>{provider.api_key}</span>
             ) : (
               <span className={styles.infoEmpty}>{t("models.notSet")}</span>
             )}
