@@ -82,9 +82,14 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 
 def _safe_filename(original: str) -> str:
-    """Generate an unpredictable unique filename preserving the extension."""
+    """Generate an unpredictable unique filename preserving the original
+    name so that downstream agents can infer file semantics."""
+    stem = Path(original).stem
     suffix = Path(original).suffix.lower()
-    return f"{uuid.uuid4().hex}{suffix}"
+    safe_stem = "".join(c if c.isalnum() or c in "-_." else "_" for c in stem)[
+        :64
+    ]
+    return f"{uuid.uuid4().hex[:12]}_{safe_stem}{suffix}"
 
 
 @router.post(
@@ -109,19 +114,28 @@ async def upload_file(file: UploadFile = File(...)):
     dest = UPLOAD_DIR / safe_name
 
     size = 0
-    with open(dest, "wb") as f:
-        while chunk := await file.read(1024 * 1024):
-            size += len(chunk)
-            if size > MAX_FILE_SIZE:
-                dest.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=413,
-                    detail=(
-                        f"File too large "
-                        f"(max {MAX_FILE_SIZE // (1024 * 1024)} MB)"
-                    ),
-                )
-            f.write(chunk)
+    try:
+        with open(dest, "wb") as f:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_FILE_SIZE:
+                    dest.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            f"File too large "
+                            f"(max {MAX_FILE_SIZE // (1024 * 1024)} MB)"
+                        ),
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to store uploaded file",
+        ) from exc
 
     logger.info(
         "Uploaded file: %s -> %s (%d bytes)",

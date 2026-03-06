@@ -50,7 +50,6 @@ export default function ChatPage() {
   const customUploadRequest = useCallback(async (options: any) => {
     const { file, onSuccess, onError, onProgress } = options;
     try {
-      onProgress?.({ percent: 30 });
       const result = await uploadApi.uploadFile(
         file as File,
         (pct: number) => onProgress?.({ percent: pct }),
@@ -156,7 +155,7 @@ export default function ChatPage() {
         ...optionsConfig?.sender,
         attachments: {
           accept:
-            "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml,.py,.js,.ts,.java,.c,.cpp,.go,.rs,.sh,.zip,.tar,.gz,.rar,.7z",
+            "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml,.py,.js,.ts,.java,.c,.cpp,.go,.rs,.sh,.bat,.ps1,.zip,.tar,.gz,.rar,.7z",
           multiple: true,
           customRequest: customUploadRequest,
         },

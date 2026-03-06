@@ -35,7 +35,7 @@ def _resolve_upload_url_to_local(url: str) -> Optional[str]:
     does not match or the file does not exist on disk.
     """
     parsed = urllib.parse.urlparse(url)
-    raw_path = parsed.path if (parsed.scheme or parsed.netloc) else url
+    raw_path = parsed.path
 
     if not raw_path.startswith(_UPLOAD_URL_PREFIX):
         return None
