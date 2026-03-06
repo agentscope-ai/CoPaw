@@ -59,6 +59,7 @@ class CronExecutor:
         )
         assert job.request is not None
         req: Dict[str, Any] = job.request.model_dump(mode="json")
+        # req["channel"] is set by CronJobSpec._validate_task_type_fields
         req["user_id"] = target_user_id or "cron"
         req["session_id"] = target_session_id or f"cron:{job.id}"
 

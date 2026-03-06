@@ -74,6 +74,7 @@ class CronJobRequest(BaseModel):
     input: Any
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    channel: Optional[str] = None
 
 
 TaskType = Literal["text", "agent"]
@@ -101,12 +102,13 @@ class CronJobSpec(BaseModel):
         elif self.task_type == "agent":
             if self.request is None:
                 raise ValueError("task_type is agent but request is missing")
-            # Keep request.user_id and request.session_id in sync with target
+            # Keep request fields in sync with dispatch
             target = self.dispatch.target
             self.request = self.request.model_copy(
                 update={
                     "user_id": target.user_id,
                     "session_id": target.session_id,
+                    "channel": self.dispatch.channel,
                 },
             )
         return self
