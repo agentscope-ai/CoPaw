@@ -19,8 +19,10 @@ from agentscope.message import TextBlock, ToolUseBlock, ThinkingBlock
 
 from .backends.base import LocalBackend
 from .tag_parser import (
+    extract_channel_tags_from_text,
     extract_thinking_from_text,
     parse_tool_calls_from_text,
+    text_contains_channel_tag,
     text_contains_think_tag,
     text_contains_tool_call_tag,
 )
@@ -175,6 +177,19 @@ class LocalChatModel(ChatModelBase):
             effective_thinking = accumulated_thinking
             effective_text = accumulated_text
 
+            if effective_text and text_contains_channel_tag(effective_text):
+                parsed_channel = extract_channel_tags_from_text(effective_text)
+                if parsed_channel.thinking:
+                    effective_thinking = (
+                        f"{effective_thinking}\n{parsed_channel.thinking}"
+                        if effective_thinking
+                        else parsed_channel.thinking
+                    ).strip()
+                effective_text = parsed_channel.remaining_text
+                # Keep silent until a final channel appears.
+                if parsed_channel.has_open_tag and not effective_text:
+                    effective_text = ""
+
             if (
                 not effective_thinking
                 and effective_text
@@ -273,6 +288,19 @@ class LocalChatModel(ChatModelBase):
             # Reasoning/thinking content
             thinking = message.get("reasoning_content") or ""
             text = message.get("content") or ""
+
+            # Some local coding models emit Codex-style channel tags
+            # (<|channel|>analysis/final...). Extract them so control tags
+            # never leak into conversation history.
+            if text and text_contains_channel_tag(text):
+                parsed_channel = extract_channel_tags_from_text(text)
+                if parsed_channel.thinking:
+                    thinking = (
+                        f"{thinking}\n{parsed_channel.thinking}"
+                        if thinking
+                        else parsed_channel.thinking
+                    ).strip()
+                text = parsed_channel.remaining_text
 
             # Fallback: if backend didn't return structured
             # reasoning_content but the text contains <think> tags,
