@@ -212,7 +212,11 @@
     "misfireGraceSecondsTooltip": "错过执行的宽限期。如果任务错过计划时间超过此时长，将不会执行。",
     "executeNowTitle": "立即执行任务",
     "executeNowContent": "确定要立即执行任务 \"{{name}}\" 吗？",
-    "executeNowConfirm": "立即执行"
+    "executeNowConfirm": "立即执行",
+    "running": "运行中",
+    "paused": "已暂停",
+    "pause": "暂停",
+    "resume": "恢复"
   },
   "channels": {
     "title": "频道",

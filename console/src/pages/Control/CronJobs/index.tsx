@@ -23,6 +23,7 @@ function CronJobsPage() {
     updateJob,
     deleteJob,
     toggleEnabled,
+    togglePaused,
     executeNow,
   } = useCronJobs();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -89,6 +90,10 @@ function CronJobsPage() {
 
   const handleToggleEnabled = async (job: CronJob) => {
     await toggleEnabled(job);
+  };
+
+  const handleTogglePaused = async (job: CronJob) => {
+    await togglePaused(job);
   };
 
   const handleExecuteNow = async (job: CronJob) => {
@@ -168,6 +173,7 @@ function CronJobsPage() {
 
   const columns = createColumns({
     onToggleEnabled: handleToggleEnabled,
+    onTogglePaused: handleTogglePaused,
     onExecuteNow: handleExecuteNow,
     onEdit: handleEdit,
     onDelete: handleDelete,

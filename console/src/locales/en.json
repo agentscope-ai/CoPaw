@@ -212,7 +212,11 @@
     "misfireGraceSecondsTooltip": "Grace period for missed executions. If a job misses its scheduled time by more than this, it won't run.",
     "executeNowTitle": "Execute Task Now",
     "executeNowContent": "Are you sure you want to execute \"{{name}}\" now?",
-    "executeNowConfirm": "Execute Now"
+    "executeNowConfirm": "Execute Now",
+    "running": "Running",
+    "paused": "Paused",
+    "pause": "Pause",
+    "resume": "Resume"
   },
   "channels": {
     "title": "Channels",

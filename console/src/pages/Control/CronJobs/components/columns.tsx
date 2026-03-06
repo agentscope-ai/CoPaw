@@ -11,6 +11,7 @@ type CronJob = CronJobSpecOutput;
 
 interface ColumnHandlers {
   onToggleEnabled: (job: CronJob) => void;
+  onTogglePaused: (job: CronJob) => void;
   onExecuteNow: (job: CronJob) => void;
   onEdit: (job: CronJob) => void;
   onDelete: (jobId: string) => void;
@@ -65,28 +66,43 @@ export const createColumns = (
       dataIndex: "enabled",
       key: "enabled",
       width: 100,
-      render: (enabled: boolean) => (
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-          }}
-        >
+      render: (enabled: boolean, record: CronJob) => {
+        const paused = record.paused ?? false;
+        let statusText: string;
+        let statusColor: string;
+
+        if (!enabled) {
+          statusText = handlers.t("common.disabled");
+          statusColor = "#d9d9d9";
+        } else if (paused) {
+          statusText = handlers.t("cronJobs.paused");
+          statusColor = "#faad14";
+        } else {
+          statusText = handlers.t("cronJobs.running");
+          statusColor = "#52c41a";
+        }
+
+        return (
           <span
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              backgroundColor: enabled ? "#52c41a" : "#d9d9d9",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
             }}
-          />
-          {enabled
-            ? handlers.t("common.enabled")
-            : handlers.t("common.disabled")}
-        </span>
-      ),
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: statusColor,
+              }}
+            />
+            {statusText}
+          </span>
+        );
+      },
     },
     {
       title: handlers.t("cronJobs.scheduleType"),
@@ -359,6 +375,17 @@ export const createColumns = (
                 ? handlers.t("cronJobs.disable")
                 : handlers.t("common.enable")}
             </Button>
+            {record.enabled && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handlers.onTogglePaused(record)}
+              >
+                {record.paused
+                  ? handlers.t("cronJobs.resume")
+                  : handlers.t("cronJobs.pause")}
+              </Button>
+            )}
             <Button
               type="link"
               size="small"

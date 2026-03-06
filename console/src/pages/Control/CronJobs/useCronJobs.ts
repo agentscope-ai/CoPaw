@@ -112,6 +112,29 @@ export function useCronJobs() {
     }
   };
 
+  const togglePaused = async (job: CronJob) => {
+    const paused = job.paused ?? false;
+    const updated = { ...job, paused: !paused };
+    setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+
+    try {
+      if (!paused) {
+        await api.pauseCronJob(job.id);
+      } else {
+        await api.resumeCronJob(job.id);
+      }
+      // Refetch to get the latest state from server
+      await fetchJobs();
+      message.success(`${paused ? "Resumed" : "Paused"}`);
+      return true;
+    } catch (error) {
+      console.error("Failed to toggle pause state", error);
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+      message.error("Operation failed");
+      return false;
+    }
+  };
+
   const executeNow = async (jobId: string) => {
     try {
       await api.triggerCronJob(jobId);
@@ -131,6 +154,7 @@ export function useCronJobs() {
     updateJob,
     deleteJob,
     toggleEnabled,
+    togglePaused,
     executeNow,
   };
 }
