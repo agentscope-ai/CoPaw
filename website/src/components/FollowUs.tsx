@@ -91,7 +91,7 @@ export function FollowUs({ lang, delay = 0 }: FollowUsProps) {
               <a
                 href={item.href}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 style={{
                   textDecoration: "underline",
                   textUnderlineOffset: "0.15em",
