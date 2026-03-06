@@ -9,6 +9,7 @@ from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...constant import WORKING_DIR
+from .utils import DEFAULT_MAX_BYTES, read_file_safe, truncate_output
 
 
 def _resolve_file_path(file_path: str) -> str:
@@ -70,63 +71,67 @@ async def read_file(  # pylint: disable=too-many-return-statements
         )
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            all_lines = f.readlines()
+        content = read_file_safe(file_path)
+        all_lines = content.split("\n")
+        total = len(all_lines)
 
-        range_requested = start_line is not None or end_line is not None
+        # Determine read range
+        s = max(1, start_line if start_line is not None else 1)
+        e = min(total, end_line if end_line is not None else total)
 
-        if range_requested:
-            total = len(all_lines)
-            s = max(1, start_line if start_line is not None else 1)
-            e = min(total, end_line if end_line is not None else total)
-
-            if s > total:
-                return ToolResponse(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text=(
-                                f"Error: start_line {s} exceeds file length "
-                                f"({total} lines) in {file_path}."
-                            ),
-                        ),
-                    ],
-                )
-
-            if s > e:
-                return ToolResponse(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text=(
-                                f"Error: start_line ({s}) is greater than "
-                                f"end_line ({e}) in {file_path}."
-                            ),
-                        ),
-                    ],
-                )
-
-            selected = all_lines[s - 1 : e]
-            content = "".join(selected)
-            header = f"{file_path}  (lines {s}-{e} of {total})\n"
+        if s > total:
             return ToolResponse(
                 content=[
                     TextBlock(
                         type="text",
-                        text=header + content,
+                        text=f"Error: start_line {s} exceeds file length ({total} lines).",
                     ),
                 ],
+            )
+
+        if s > e:
+            return ToolResponse(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=f"Error: start_line ({s}) > end_line ({e}).",
+                    ),
+                ],
+            )
+
+        # Extract selected lines
+        selected_content = "\n".join(all_lines[s - 1 : e])
+
+        # Apply smart truncation (keep head for file reading)
+        truncated, was_truncated, output_lines, reason = truncate_output(
+            selected_content,
+            keep="head",
+        )
+
+        # Build response with truncation hints
+        if was_truncated:
+            end_display = s + output_lines - 1
+            next_line = end_display + 1
+            if reason == "lines":
+                hint = f"\n\n[Lines {s}-{end_display} of {total}. Use start_line={next_line} to continue.]"
+            else:
+                hint = (
+                    f"\n\n[Lines {s}-{end_display} of {total} ({DEFAULT_MAX_BYTES // 1024}KB limit). "
+                    f"Use start_line={next_line} to continue.]"
+                )
+            text = truncated + hint
+        elif e < total:
+            remaining = total - e
+            text = (
+                f"{file_path}  (lines {s}-{e} of {total})\n{truncated}\n\n[{remaining} more lines. "
+                f"Use start_line={e + 1} to continue.]"
             )
         else:
-            content = "".join(all_lines)
-            return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=content,
-                    ),
-                ],
-            )
+            text = truncated
+
+        return ToolResponse(
+            content=[TextBlock(type="text", text=text)],
+        )
 
     except Exception as e:
         return ToolResponse(
