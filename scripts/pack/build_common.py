@@ -40,8 +40,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--python",
-        default="3.12",
-        help="Python version for conda env (default: 3.12)",
+        default="3.10",
+        help="Python version for conda env (default: 3.10)",
     )
     args = parser.parse_args()
     out_path = Path(args.output).resolve()
@@ -62,7 +62,7 @@ def main() -> int:
                 env_name,
                 "pip",
                 "install",
-                ".",
+                ".[full]",
             ],
         )
         _run(

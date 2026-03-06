@@ -18,10 +18,10 @@ From the **repo root**:
 
 **macOS**
 ```bash
-./scripts/pack/build_macos.sh
+bash ./scripts/pack/build_macos.sh
 # Output: dist/CoPaw.app
 
-CREATE_ZIP=1 ./scripts/pack/build_macos.sh   # also create dist/CoPaw-<version>-macOS.zip
+CREATE_ZIP=1 bash ./scripts/pack/build_macos.sh   # also create .zip and .dmg
 ```
 
 **Windows (PowerShell)**
@@ -29,6 +29,17 @@ CREATE_ZIP=1 ./scripts/pack/build_macos.sh   # also create dist/CoPaw-<version>-
 ./scripts/pack/build_win.ps1
 # Output: dist/CoPaw-Setup-<version>.exe
 ```
+
+## Run from terminal and see logs (macOS)
+
+If the .app crashes on double-click, run it from Terminal to see the full error and logs:
+
+```bash
+# From repo root; use env's python so system conda is not used (adjust path if needed)
+./dist/CoPaw.app/Contents/Resources/env/bin/python -m copaw.cli.main desktop
+```
+
+All stdout/stderr (including Python tracebacks) will appear in the terminal. Use this to debug startup errors or to run with `--log-level debug`.
 
 ## CI
 

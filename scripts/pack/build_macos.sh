@@ -33,10 +33,15 @@ mkdir -p "${APP_DIR}/Contents/Resources"
 mkdir -p "${APP_DIR}/Contents/Resources/env"
 tar -xzf "$ARCHIVE" -C "${APP_DIR}/Contents/Resources/env" --strip-components=0
 
-# Launcher script: run copaw desktop from the packed env
+# Fix paths for portability (required or app will crash on launch)
+if [[ -x "${APP_DIR}/Contents/Resources/env/bin/conda-unpack" ]]; then
+  (cd "${APP_DIR}/Contents/Resources/env" && ./bin/conda-unpack)
+fi
+
+# Launcher: use env's python -m so we never pick up system conda
 cat > "${APP_DIR}/Contents/MacOS/${APP_NAME}" << 'LAUNCHER'
 #!/usr/bin/env bash
-exec "$(dirname "$0")/../Resources/env/bin/copaw" desktop
+exec "$(dirname "$0")/../Resources/env/bin/python" -m copaw.cli.main desktop
 LAUNCHER
 chmod +x "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
@@ -60,7 +65,10 @@ cat > "${APP_DIR}/Contents/Info.plist" << INFOPLIST
 </plist>
 INFOPLIST
 
-# Icon (optional)
+# Icon: generate from icon.svg if needed, then copy into app
+if [[ -f "${PACK_DIR}/assets/icon.svg" ]] && [[ ! -f "${PACK_DIR}/assets/icon.icns" ]]; then
+  python "${PACK_DIR}/gen_icon_icns.py" || true
+fi
 if [[ -f "${PACK_DIR}/assets/icon.icns" ]]; then
   cp "${PACK_DIR}/assets/icon.icns" "${APP_DIR}/Contents/Resources/"
   /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string icon.icns" \
@@ -68,9 +76,13 @@ if [[ -f "${PACK_DIR}/assets/icon.icns" ]]; then
 fi
 
 echo "== Built ${APP_DIR} =="
-# Optional: create zip for distribution (set CREATE_ZIP=1)
+# Optional: create zip and DMG for distribution (set CREATE_ZIP=1)
 if [[ -n "${CREATE_ZIP}" ]]; then
   ZIP_NAME="${DIST}/CoPaw-${VERSION}-macOS.zip"
   ditto -c -k --sequesterRsrc --keepParent "${APP_DIR}" "${ZIP_NAME}"
   echo "== Created ${ZIP_NAME} =="
+  DMG_NAME="${DIST}/CoPaw-${VERSION}-macOS.dmg"
+  hdiutil create -volname "CoPaw ${VERSION}" -srcfolder "${APP_DIR}" \
+    -ov -format UDZO "${DMG_NAME}"
+  echo "== Created ${DMG_NAME} =="
 fi

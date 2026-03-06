@@ -37,7 +37,7 @@ $LauncherBat = Join-Path $Unpacked "CoPaw Desktop.bat"
 @"
 @echo off
 cd /d "%~dp0"
-"%~dp0Scripts\copaw.exe" desktop
+"%~dp0python.exe" -m copaw.cli.main desktop
 pause
 "@ | Set-Content -Path $LauncherBat -Encoding ASCII
 
