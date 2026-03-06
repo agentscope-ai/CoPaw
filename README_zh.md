@@ -13,6 +13,7 @@
 [![GitHub Fork](https://img.shields.io/github/forks/agentscope-ai/CoPaw?style=flat&logo=github&color=purple&label=Fork)](https://github.com/agentscope-ai/CoPaw/network)
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-Ask_Devin-navy.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/agentscope-ai/CoPaw)
 [![Discord](https://img.shields.io/badge/Discord-Join_Us-blueviolet.svg?logo=discord)](https://discord.gg/eYMpfnkG8h)
+[![X](https://img.shields.io/badge/X-Follow_Us-black.svg?logo=x)](https://x.com/agentscope_ai)
 [![钉钉群](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
 [[文档](https://copaw.agentscope.io/)] [[English](README.md)] [[日本語](README_ja.md)]
@@ -53,7 +54,15 @@
 
 ## 新闻
 
-[2026-03-02] 我们发布了 v0.0.4！完整更新说明见 [v0.0.4 发布说明](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.4)。
+[2026-03-06] 我们发布了 v0.0.5！完整更新说明见 [v0.0.5 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
+
+- **[v0.0.5]** **新增：** 频道管理；Twilio 语音频道；DeepSeek Reasoner 支持；Daemon 模式；智能体中断 API；版本更新提醒。
+- **[v0.0.5]** **优化：** 记忆系统升级（reme-ai 0.3.0.3）；控制台界面改进（请求取消、可折叠侧边栏）；可选频道懒加载；Windows 一键安装脚本。
+- **[v0.0.5]** **修复：** Docker 配置持久化；Ollama base URL；频道修复（钉钉、飞书、Telegram）；Windows 兼容性；MCP 客户端稳定性；shell超时阻滞修复。
+- **[v0.0.5]** **文档：** 模型配置指南；Docker + Ollama 连接指南；日文 README；发布说明系统；优化频道配置指南。
+- **[v0.0.5]** **贡献者：** 感谢新贡献者：[@qoli](https://github.com/qoli)、[@qbc2016](https://github.com/qbc2016)、[@yunlzheng](https://github.com/yunlzheng)、[@BlueSkyXN](https://github.com/BlueSkyXN)、[@sidonsoft](https://github.com/sidonsoft)、[@lishengzxc](https://github.com/lishengzxc)、[@pikaxinge](https://github.com/pikaxinge)、[@linshengli](https://github.com/linshengli)、[@eltociear](https://github.com/eltociear)、[@liuxiaopai-ai](https://github.com/liuxiaopai-ai)、[@Leirunlin](https://github.com/Leirunlin)、[@pan-x-c](https://github.com/pan-x-c)、[@garyzhang99](https://github.com/garyzhang99)、[@celestialhorse51D](https://github.com/celestialhorse51D)、[@wwx814](https://github.com/wwx814)、[@nszhsl](https://github.com/nszhsl)、[@DavdGao](https://github.com/DavdGao)、[@zhangckcup](https://github.com/zhangckcup)。
+
+[2026-03-02] 我们发布了 v0.0.4！完整更新说明见 [v0.0.4 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
 - **[v0.0.4]** **FEAT：** Telegram 频道；OpenAI 与 Azure OpenAI 作为内置模型提供商；Ollama SDK；coding-plan 提供商；模型连接测试；心跳监控面板；CORS 配置；钉钉与飞书支持音频文件。
 - **[v0.0.4]** **FEAT：** 基于 token 的记忆压缩；文件块处理；嵌入配置；tool_choice 行为统一。
@@ -345,7 +354,7 @@ copaw app # 启动服务
 | 多模态 | 语音/视频通话与实时交互 | 长期规划 |
 | 多智能体 | 基于 [AgentScope](https://github.com/agentscope-ai/agentscope)，原生支持多智能体协作 | 长期规划 |
 | 沙箱 | 与 AgentScope Runtime 沙箱深度集成 | 长期规划 |
-| 自愈 | 守护进程 Agent，实现自动恢复与健康监控 | 长期规划 |
+| 自愈 | Daemon Agent，实现自动恢复与健康监控 | 长期规划 |
 | CoPaw 优化本地模型 | 针对 CoPaw 原生 Skills 与常见任务调优的本地模型，提升个人助理可用性 | 长期规划 |
 | 大小模型协同 | 本地模型处理敏感数据，云端模型负责规划与编码；兼顾隐私、性能与能力 | 长期规划 |
 | 云原生 | 与 AgentScope Runtime 深度集成，充分利用云端算力、存储与工具生态 | 长期规划 |
@@ -391,9 +400,9 @@ CoPaw 既是「你的搭档小爪子」（co-paw），也寓意 **Co Personal Ag
 
 ## 联系我们
 
-| [Discord](https://discord.gg/eYMpfnkG8h)                     | [钉钉](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| [<img src="https://gw.alicdn.com/imgextra/i1/O1CN01hhD1mu1Dd3BWVUvxN_!!6000000000238-2-tps-400-400.png" width="80" height="80" alt="Discord">](https://discord.gg/eYMpfnkG8h) | [<img src="https://img.alicdn.com/imgextra/i2/O1CN01vCWI8a1skHtLGXEMQ_!!6000000005804-2-tps-458-460.png" width="80" height="80" alt="钉钉">](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
+| [Discord](https://discord.gg/eYMpfnkG8h)                     | [X (Twitter)](https://x.com/agentscope_ai)                   | [钉钉](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| [<img src="https://gw.alicdn.com/imgextra/i1/O1CN01hhD1mu1Dd3BWVUvxN_!!6000000000238-2-tps-400-400.png" width="80" height="80" alt="Discord">](https://discord.gg/eYMpfnkG8h) | [<img src="https://img.shields.io/badge/X-black.svg?logo=x&logoColor=white" width="80" height="80" alt="X">](https://x.com/agentscope_ai) | [<img src="https://img.alicdn.com/imgextra/i2/O1CN01vCWI8a1skHtLGXEMQ_!!6000000005804-2-tps-458-460.png" width="80" height="80" alt="钉钉">](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
 
 ---
 
