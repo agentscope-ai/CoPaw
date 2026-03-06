@@ -78,7 +78,7 @@ class TelegramConfig(BaseChannelConfig):
 
 class MQTTConfig(BaseChannelConfig):
     host: str = ""
-    port: str = ""
+    port: Optional[int] = None
     transport: str = ""
     username: Optional[str] = None
     password: Optional[str] = None

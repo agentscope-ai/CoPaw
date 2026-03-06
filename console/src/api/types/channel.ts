@@ -46,7 +46,7 @@ export interface TelegramConfig extends BaseChannelConfig {
 
 export interface MQTTConfig extends BaseChannelConfig {
   host: string;
-  port: string;
+  port: number;
   transport: string;
   username: string;
   password: string;
@@ -93,5 +93,5 @@ export type SingleChannelConfig =
   | ConsoleConfig
   | TelegramConfig
   | MQTTConfig
-  | ConsoleConfig;
+  | ConsoleConfig
   | VoiceChannelConfig;

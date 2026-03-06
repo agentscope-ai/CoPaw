@@ -203,13 +203,13 @@ export function ChannelDrawer({
       case "mqtt":
         return (
           <>
-            <Form.Item name="host" label="MQTT Host">
+            <Form.Item name="host" label="MQTT Host" rules={[{ required: true}]}>
               <Input placeholder="127.0.0.1" />
             </Form.Item>
-            <Form.Item name="port" label="MQTT Port">
-              <Input placeholder="1883" />
+            <Form.Item name="port" label="MQTT Port" rules={[{ required: true}, { type: 'number', min: 1, max: 65535, message: 'Port must be between 1 and 65535' }]}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} placeholder="1883" />
             </Form.Item>
-            <Form.Item name="transport" label="Transport" initialValue="mqtt">
+            <Form.Item name="transport" label="Transport" initialValue="tcp" rules={[{ required: true}]}>
               <Select>
                 <Select.Option value="tcp">MQTT (tcp)</Select.Option>
                 <Select.Option value="websockets">WS (websockets)</Select.Option>
@@ -221,10 +221,10 @@ export function ChannelDrawer({
             <Form.Item name="password" label="MQTT Password">
               <Input.Password placeholder="Leave blank to disable / not use" />
             </Form.Item>
-            <Form.Item name="subscribe_topic" label="Subscribe Topic">
+            <Form.Item name="subscribe_topic" label="Subscribe Topic" rules={[{ required: true}]}>
               <Input placeholder="server/+/up" />
             </Form.Item>
-            <Form.Item name="publish_topic" label="Publish Topic">
+            <Form.Item name="publish_topic" label="Publish Topic" rules={[{ required: true}]}>
               <Input placeholder="client/{client_id}/down" />
             </Form.Item>
             <Form.Item name="tls_enabled" label="TLS Enabled" valuePropName="checked">
