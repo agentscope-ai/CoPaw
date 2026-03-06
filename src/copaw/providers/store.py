@@ -1301,7 +1301,7 @@ async def test_model_connection(
         test_payload = {
             "model": model_id,
             "messages": [{"role": "user", "content": "hi"}],
-            "max_completion_tokens": 16,
+            "max_tokens": 1,
         }
     else:
         # Most OpenAI-compatible APIs use the chat completions endpoint
