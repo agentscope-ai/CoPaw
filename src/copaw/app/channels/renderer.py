@@ -278,7 +278,7 @@ class MessageRenderer:
                                 p
                                 for p in block_parts
                                 if getattr(p, "type", None) in media_types
-                            ]
+                            ],
                         )
                 return media_parts  # 简化返回语句
             parts = _parts_for_tool_output(content)
