@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..download_task_store import (
@@ -97,7 +97,6 @@ async def _pop_background_task(task_id: str) -> Optional[asyncio.Task]:
     summary="List downloaded local models",
 )
 async def list_local(
-    request: Request,
     backend: Optional[str] = None,
 ) -> List[LocalModelResponse]:
     try:
@@ -127,7 +126,6 @@ async def list_local(
     summary="Start a background model download",
 )
 async def download_model(
-    request: Request,
     body: DownloadRequest,
 ) -> DownloadTaskResponse:
     """Start a background download. Returns a task_id immediately."""
@@ -161,7 +159,6 @@ async def download_model(
         _run_download_in_background(
             task_id=task.task_id,
             body=body,
-            request=request,
         ),
         name=f"model-download-{task.task_id}",
     )
@@ -173,7 +170,6 @@ async def download_model(
 async def _run_download_in_background(
     task_id: str,
     body: DownloadRequest,
-    request: Request,
 ) -> None:
     """Execute the download in a thread and update task status."""
     from ..console_push_store import append as push_store_append
@@ -275,7 +271,7 @@ async def get_download_status(
     "/{model_id:path}",
     summary="Delete a downloaded local model",
 )
-async def delete_local(request: Request, model_id: str) -> dict:
+async def delete_local(model_id: str) -> dict:
     try:
         from ...local_models import delete_local_model
     except ImportError as exc:
@@ -295,7 +291,8 @@ async def delete_local(request: Request, model_id: str) -> dict:
 
 
 async def _cancel_download_task(task_id: str) -> dict:
-    """Cancel a pending or downloading task and stop its background coroutine."""
+    """Cancel a pending or downloading task and stop its
+    background coroutine."""
     success = await cancel_task(task_id)
     if not success:
         raise HTTPException(
