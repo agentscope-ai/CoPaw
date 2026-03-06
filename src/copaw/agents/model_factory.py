@@ -34,7 +34,6 @@ from ..local_models import create_local_chat_model
 from ..providers import (
     get_active_llm_config,
     get_chat_model_class,
-    get_provider,
     get_provider_chat_model,
     load_providers_json,
 )
@@ -288,34 +287,23 @@ def _resolve_routing_slot(
     slot: Any,
     *,
     providers_data,
-) -> Tuple[str, "ResolvedModelConfig"]:
-    from ..providers import ResolvedModelConfig
+) -> Optional[Tuple[str, "ResolvedModelConfig"]]:
+    from ..providers.store import _resolve_slot
 
-    provider_id = slot.provider_id
-    provider = get_provider(provider_id)
-    llm_cfg = ResolvedModelConfig(
-        model=slot.model,
-        is_local=bool(provider is not None and provider.is_local),
-    )
-    if not llm_cfg.is_local:
-        base_url, api_key = providers_data.get_credentials(provider_id)
-        llm_cfg.base_url = base_url
-        llm_cfg.api_key = api_key
-
-    return provider_id, llm_cfg
+    llm_cfg = _resolve_slot(slot, providers_data)
+    if llm_cfg is None:
+        return None
+    return slot.provider_id, llm_cfg
 
 
 def _create_routing_endpoint(
-    slot: Any,
+    provider_id: str,
+    llm_cfg: "ResolvedModelConfig",
     *,
     providers_data,
 ) -> "RoutingEndpoint":
     from .routing_chat_model import RoutingEndpoint
 
-    provider_id, llm_cfg = _resolve_routing_slot(
-        slot,
-        providers_data=providers_data,
-    )
     model, chat_model_class = _create_model_instance_for_provider(
         llm_cfg,
         provider_id,
@@ -339,12 +327,23 @@ def _create_routing_model_and_formatter(
 ) -> Optional[Tuple[ChatModelBase, FormatterBase]]:
     from .routing_chat_model import RoutingChatModel
 
-    local_endpoint = _create_routing_endpoint(
+    local_resolved = _resolve_routing_slot(
         local_slot,
         providers_data=providers_data,
     )
-    cloud_endpoint = _create_routing_endpoint(
+    cloud_resolved = _resolve_routing_slot(
         cloud_slot,
+        providers_data=providers_data,
+    )
+    if local_resolved is None or cloud_resolved is None:
+        return None
+
+    local_endpoint = _create_routing_endpoint(
+        *local_resolved,
+        providers_data=providers_data,
+    )
+    cloud_endpoint = _create_routing_endpoint(
+        *cloud_resolved,
         providers_data=providers_data,
     )
 

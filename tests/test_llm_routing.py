@@ -245,10 +245,42 @@ def test_create_model_and_formatter_with_explicit_cfg_skips_routing(
     )
 
     model, created_formatter = model_factory.create_model_and_formatter(
-        llm_cfg
+        llm_cfg,
     )
 
     assert seen["llm_cfg"] is llm_cfg
     assert seen["chat_model_class"] is StubModel
     assert model.name == "explicit"
     assert created_formatter is formatter
+
+
+def test_create_routing_model_and_formatter_skips_unresolved_slot(
+    monkeypatch,
+) -> None:
+    cfg = _mk_cfg()
+    called = {"value": False}
+
+    def _unexpected_create_model_instance_for_provider(*args, **kwargs):
+        del args, kwargs
+        called["value"] = True
+        raise AssertionError("routing endpoint should not be created")
+
+    monkeypatch.setattr(
+        model_factory,
+        "_create_model_instance_for_provider",
+        _unexpected_create_model_instance_for_provider,
+    )
+
+    routed = model_factory._create_routing_model_and_formatter(
+        cfg.local,
+        cfg.cloud,
+        cfg,
+        SimpleNamespace(
+            providers={},
+            custom_providers={},
+            active_llm=ModelSlotConfig(),
+        ),
+    )
+
+    assert routed is None
+    assert called["value"] is False
