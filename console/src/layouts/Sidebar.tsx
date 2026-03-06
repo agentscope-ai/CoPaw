@@ -35,6 +35,7 @@ import {
   Check,
 } from "lucide-react";
 import api from "../api";
+import styles from "./index.module.less";
 
 const { Sider } = Layout;
 
@@ -145,13 +146,9 @@ function CopyButton({ text }: { text: string }) {
         size="small"
         icon={copied ? <Check size={13} /> : <Copy size={13} />}
         onClick={handleCopy}
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          color: copied ? "#52c41a" : "#999",
-          transition: "color 0.2s",
-        }}
+        className={`${styles.copyBtn} ${
+          copied ? styles.copyBtnCopied : styles.copyBtnDefault
+        }`}
       />
     </Tooltip>
   );
@@ -311,42 +308,21 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     <Sider
       collapsed={collapsed}
       onCollapse={setCollapsed}
-      width={260}
-      style={{
-        background: "#fff",
-        borderRight: "1px solid #f0f0f0",
-        overflow: "auto",
-        height: "100vh",
-      }}
+      width={275}
+      className={styles.sider}
     >
-      <div
-        style={{
-          height: 64,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 16px",
-          gap: 12,
-        }}
-      >
+      <div className={styles.siderTop}>
         {!collapsed && (
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <img
-              src="/logo.png"
-              alt="CoPaw"
-              style={{ height: 32, width: "auto" }}
-            />
+          <div className={styles.logoWrapper}>
+            <img src="/logo.png" alt="CoPaw" className={styles.logoImg} />
             {version && (
               <Badge dot={!!hasUpdate} color="red" offset={[4, 18]}>
                 <span
-                  style={{
-                    fontSize: 10,
-                    color: "#615ced",
-                    fontWeight: 600,
-                    lineHeight: 1,
-                    cursor: hasUpdate ? "pointer" : "default",
-                    position: "relative",
-                    top: 10,
-                  }}
+                  className={`${styles.versionBadge} ${
+                    hasUpdate
+                      ? styles.versionBadgeClickable
+                      : styles.versionBadgeDefault
+                  }`}
                   onClick={() => hasUpdate && handleOpenUpdateModal()}
                 >
                   v{version}
@@ -365,7 +341,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
             )
           }
           onClick={() => setCollapsed(!collapsed)}
-          style={{ margin: "auto", color: "#615ced" }}
+          className={styles.collapseBtn}
         />
       </div>
 
@@ -385,7 +361,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         open={updateModalOpen}
         onCancel={() => setUpdateModalOpen(false)}
         title={
-          <h3 style={{ color: "#615ced" }}>
+          <h3 className={styles.updateModalTitle}>
             {t("sidebar.updateModal.title", { version: latestVersion })}
           </h3>
         }
@@ -400,7 +376,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                 "_blank",
               )
             }
-            style={{ background: "#615ced", borderColor: "#615ced" }}
+            className={styles.updateModalPrimaryBtn}
           >
             {t("sidebar.updateModal.viewReleases")}
           </Button>,
@@ -409,23 +385,9 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           </Button>,
         ]}
       >
-        <div
-          style={{
-            maxHeight: 480,
-            overflowY: "auto",
-            padding: "8px 4px",
-            minHeight: 120,
-          }}
-        >
+        <div className={styles.updateModalBody}>
           {!updateMarkdown ? (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: 120,
-              }}
-            >
+            <div className={styles.updateModalSpinWrapper}>
               <Spin />
             </div>
           ) : (
@@ -438,38 +400,16 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                     String(children).includes("\n");
                   if (isBlock) {
                     return (
-                      <pre
-                        style={{
-                          position: "relative",
-                          background: "#f5f5f5",
-                          border: "1px solid #e8e8e8",
-                          borderRadius: 6,
-                          padding: "12px 40px 12px 16px",
-                          overflowX: "auto",
-                          margin: "8px 0",
-                        }}
-                      >
+                      <pre className={styles.codeBlock}>
                         <CopyButton text={String(children)} />
-                        <code
-                          style={{ fontFamily: "monospace", fontSize: 13 }}
-                          {...props}
-                        >
+                        <code className={styles.codeBlockInner} {...props}>
                           {children}
                         </code>
                       </pre>
                     );
                   }
                   return (
-                    <code
-                      style={{
-                        background: "#f5f5f5",
-                        borderRadius: 3,
-                        padding: "1px 5px",
-                        fontFamily: "monospace",
-                        fontSize: 13,
-                      }}
-                      {...props}
-                    >
+                    <code className={styles.codeInline} {...props}>
                       {children}
                     </code>
                   );
