@@ -61,6 +61,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_IMAGE_LIKE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+
 
 class DingTalkChannel(BaseChannel):
     """DingTalk Channel: DingTalk Stream -> Incoming -> to_agent_request ->
@@ -1826,10 +1828,17 @@ class DingTalkChannel(BaseChannel):
             self._media_dir.mkdir(parents=True, exist_ok=True)
             path = self._media_dir / f"{safe_key}{suffix}"
             path.write_bytes(data)
-            # Fix .file/.bin with magic bytes so images get .png/.jpg etc.
-            if path.suffix in (".file", ".bin"):
-                real_suffix = guess_suffix_from_file_content(path)
-                if real_suffix:
+            # Fix generic suffix (".file"/".bin") and mismatched image suffixes
+            # with magic bytes so image/jpeg isn't mislabeled as image/png.
+            real_suffix = guess_suffix_from_file_content(path)
+            if real_suffix:
+                current = path.suffix.lower()
+                image_like = _IMAGE_LIKE_SUFFIXES
+                should_replace = current in (".file", ".bin") or (
+                    current in image_like and real_suffix in image_like
+                    and current != real_suffix
+                )
+                if should_replace:
                     new_path = path.with_suffix(real_suffix)
                     path.rename(new_path)
                     path = new_path

@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 # Download filename hint by type (e.g. voice -> .amr).
 FILENAME_HINT_BY_MAPPED = {
     "audio": "audio.amr",
-    "image": "image.png",
+    # Keep image suffix generic so downstream mime detection can infer from
+    # actual bytes (jpg/png/webp...) instead of this hint.
+    "image": "image.bin",
     "video": "video.mp4",
 }
 DEFAULT_FILENAME_HINT = "file.bin"
