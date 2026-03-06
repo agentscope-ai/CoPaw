@@ -28,9 +28,9 @@ try:
 
     _REME_AVAILABLE = True
 
-except ImportError:
+except ImportError as e:
     _REME_AVAILABLE = False
-    logger.warning("reme package not installed.")
+    logger.warning(f"reme package not installed. {e}")
 
     class ReMeLight:  # type: ignore
         """Placeholder when reme is not available."""
