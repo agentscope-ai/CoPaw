@@ -170,11 +170,11 @@ If you prefer visual operations, install CoPaw from the [1Panel](https://github.
 
 For 1Panel installation, refer to the official guide: [Online installation](https://docs.1panel.pro/v2/installation/online_installation/).
 
-Install and management flow:
+Installation and management steps:
 
 1. **Install CoPaw**: Go to the App Store page in 1Panel, search for `CoPaw`, and click Install. Select a version, enter the Web port, choose whether to expose the port externally, then click Confirm.
-2. **Manage on Installed page**: On the Installed page, you can start, stop, back up, restore, and view logs for CoPaw.
-3. **Upgrade on Upgradable page**: On the Upgradable page, you can perform one-click visual upgrades for installed apps such as CoPaw.
+2. **Manage CoPaw**: On the Installed page, you can start, stop, back up, restore, and view logs for CoPaw.
+3. **Upgrade CoPaw**: On the Upgradable page, you can perform one-click visual upgrades for installed apps such as CoPaw.
 
 ---
 
