@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build CoPaw Desktop .app on macOS: conda-pack -> CoPaw.app
-# Run from repo root. Requires conda on PATH.
+# One-click build: console -> conda-pack -> CoPaw.app. Run from repo root.
+# Requires: conda, node/npm (for console). Optional: icon.icns in assets/.
 
 set -e
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -10,6 +10,16 @@ DIST="${DIST:-dist}"
 ARCHIVE="${DIST}/copaw-env.tar.gz"
 APP_NAME="CoPaw"
 APP_DIR="${DIST}/${APP_NAME}.app"
+
+echo "== Building console frontend =="
+if [[ -f "console/package.json" ]]; then
+  (cd console && npm ci && npm run build)
+  rm -rf src/copaw/console
+  mkdir -p src/copaw/console
+  cp -R console/dist/* src/copaw/console/
+else
+  echo "Warning: console/ not found; packing without web console." >&2
+fi
 
 echo "== Building conda-packed env =="
 "${PACK_DIR}/build_common.py" --output "$ARCHIVE" --format tar.gz

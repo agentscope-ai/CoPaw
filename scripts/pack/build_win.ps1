@@ -1,5 +1,5 @@
-# Build CoPaw Desktop installer on Windows: conda-pack -> NSIS .exe
-# Run from repo root. Requires conda and NSIS (makensis) on PATH.
+# One-click build: console -> conda-pack -> NSIS .exe. Run from repo root.
+# Requires: conda, node/npm (for console), NSIS (makensis) on PATH.
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
@@ -11,6 +11,19 @@ $Unpacked = Join-Path $Dist "win-unpacked"
 $NsiPath = Join-Path $PackDir "copaw_desktop.nsi"
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+
+Write-Host "== Building console frontend =="
+if (Test-Path "console\package.json") {
+  Push-Location console
+  npm ci
+  npm run build
+  Pop-Location
+  if (Test-Path src\copaw\console) { Remove-Item -Recurse -Force src\copaw\console }
+  New-Item -ItemType Directory -Force -Path src\copaw\console | Out-Null
+  Copy-Item -Recurse -Force console\dist\* src\copaw\console\
+} else {
+  Write-Warning "console/ not found; packing without web console."
+}
 
 Write-Host "== Building conda-packed env =="
 & python $PackDir\build_common.py --output $Archive --format zip

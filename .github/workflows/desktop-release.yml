@@ -20,22 +20,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Node (console frontend)
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: console/package-lock.json
-
-      - name: Build console frontend
-        run: |
-          cd console && npm ci && npm run build
-
-      - name: Copy console into package
-        run: |
-          if (Test-Path src/copaw/console) { Remove-Item -Recurse -Force src/copaw/console }
-          New-Item -ItemType Directory -Force -Path src/copaw/console | Out-Null
-          Copy-Item -Recurse -Force console/dist/* src/copaw/console/
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -66,22 +56,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Node (console frontend)
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: console/package-lock.json
-
-      - name: Build console frontend
-        run: |
-          cd console && npm ci && npm run build
-
-      - name: Copy console into package
-        run: |
-          rm -rf src/copaw/console
-          mkdir -p src/copaw/console
-          cp -R console/dist/* src/copaw/console/
 
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
