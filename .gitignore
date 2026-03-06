@@ -15,6 +15,7 @@ cookbook/_build
 # production
 /build
 dist/
+.wheelshim/
 # Console frontend build (generated in Docker/CI, do not commit)
 src/copaw/console/dist/
 

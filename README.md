@@ -75,6 +75,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 
 - [News](#news)
 - [Quick Start](#quick-start)
+- [macOS Desktop app: if macOS blocks opening](#macos-desktop-app-if-macos-blocks-opening)
 - [API Key](#api-key)
 - [Local Models](#local-models)
 - [Documentation](#documentation)
@@ -218,6 +219,21 @@ copaw uninstall --purge  # removes everything
 ```
 
 </details>
+
+### macOS Desktop app: if macOS blocks opening
+
+When you download the CoPaw macOS app (e.g. from [Releases](https://github.com/agentscope-ai/CoPaw/releases)) as a `.app` (inside a zip) or DMG, macOS may show: *"Apple cannot verify that 'CoPaw' contains no malicious software"*. This happens because the app is not notarized. You can still open it as follows:
+
+- **Right-click to open (recommended)**
+  Right-click (or Control+click) the CoPaw app → **Open** → in the dialog click **Open** again. This tells Gatekeeper you trust the app; after that you can double-click to launch as usual.
+
+- **Allow in System Settings**
+  If it is still blocked, go to **System Settings → Privacy & Security**, scroll to the message like *"CoPaw was blocked because it is from an unidentified developer"*, and click **Open Anyway** or **Allow**.
+
+- **Remove quarantine attribute (not recommended for most users)**
+  In Terminal run:
+  `xattr -cr /Applications/CoPaw.app`
+  (or use the path to the `.app` after unzipping). This clears the "downloaded from the internet" quarantine flag so the warning usually does not appear, but is less safe and controllable than using **Right-click → Open**.
 
 ### Using Docker
 
