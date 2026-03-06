@@ -181,46 +181,30 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       .catch(() => {});
   }, []);
 
-  // PEP 440 version parsing and comparison
-  const parseVersion = (v: string): number[] => {
-    // Normalize version: 0.0.5b1 -> [0,0,5,-1,1], 0.0.5 -> [0,0,5,0,0], 0.0.5p -> [0,0,5,1,0]
-    // Release segment: a=-3, b=-2, rc=-1, (none)=0, post=1
-    const match = v.match(/^(\d+(?:\.\d+)*)(?:(a|b|rc|post)(\d+))?$/i);
-    if (!match) return [0, 0, 0, 0, 0];
-
-    const parts = match[1].split(".").map(Number);
-    const preRelease = match[2]?.toLowerCase() || "";
-    const preNum = parseInt(match[3] || "0", 10);
-
-    let releaseType = 0; // stable
-    if (preRelease === "a") releaseType = -3;
-    else if (preRelease === "b") releaseType = -2;
-    else if (preRelease === "rc") releaseType = -1;
-    else if (preRelease === "post" || preRelease === "p") releaseType = 1;
-
-    return [...parts, releaseType, preNum];
-  };
-
-  const compareVersion = (a: string, b: string): number => {
-    const pa = parseVersion(a);
-    const pb = parseVersion(b);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-      const va = pa[i] ?? 0;
-      const vb = pb[i] ?? 0;
-      if (va !== vb) return va - vb;
-    }
-    return 0;
-  };
-
   useEffect(() => {
     fetch(PYPI_URL)
       .then((res) => res.json())
       .then((data) => {
         const releases = data?.releases ?? {};
-        const versions = Object.keys(releases).sort(compareVersion);
-        const latest =
-          versions[versions.length - 1] ?? data?.info?.version ?? "";
+        // Sort versions by upload_time (newest first)
+        const versionsWithTime = Object.entries(releases).map(
+          ([version, files]) => {
+            const fileList = files as Array<{ upload_time_iso_8601?: string }>;
+            // Get the latest upload time among all files for this version
+            const latestUpload = fileList
+              .map((f) => f.upload_time_iso_8601)
+              .filter(Boolean)
+              .sort()
+              .pop();
+            return { version, uploadTime: latestUpload || "" };
+          },
+        );
+        versionsWithTime.sort(
+          (a, b) =>
+            new Date(b.uploadTime).getTime() - new Date(a.uploadTime).getTime(),
+        );
+        const versions = versionsWithTime.map((v) => v.version);
+        const latest = versions[0] ?? data?.info?.version ?? "";
         setAllVersions(versions);
         setLatestVersion(latest);
       })
