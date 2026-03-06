@@ -320,7 +320,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
           );
           if (persistedSession) {
             this.updateWindowVariables(persistedSession as ExtendedSession);
-            this.saveCurrentSessionId(persistedId);
             return persistedSession;
           }
           // Session not in local list - check if it's a local timestamp ID
