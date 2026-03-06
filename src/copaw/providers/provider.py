@@ -13,7 +13,6 @@ class ModelInfo(BaseModel):
     name: str = Field(..., description="Human-readable model name")
 
 
-
 class ProviderInfo(BaseModel):
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Human-readable provider name")
@@ -21,7 +20,7 @@ class ProviderInfo(BaseModel):
     api_key: str = Field(default="", description="API key for authentication")
     chat_model: str = Field(
         default="OpenAIChatModel",
-        description="AgentScope ChatModel class name (e.g., 'OpenAIChatModel')",
+        description="AgentScope ChatModel name (e.g., 'OpenAIChatModel')",
     )
     models: List[ModelInfo] = Field(
         default_factory=list,
@@ -38,6 +37,10 @@ class ProviderInfo(BaseModel):
     is_local: bool = Field(
         default=False,
         description="Whether this provider is for a local hosting platform",
+    )
+    freeze_url: bool = Field(
+        default=False,
+        description="Whether the base_url should be frozen (not editable)",
     )
     is_custom: bool = Field(
         default=False,
@@ -60,35 +63,51 @@ class Provider(ProviderInfo, ABC):
     async def check_model_connection(
         self,
         model_id: str,
-        timeout: float = 5,
+        timeout: float = 5,  # pylint: disable=unused-argument
     ) -> bool:
         """Check if a specific model is reachable/usable."""
 
     async def add_model(
         self,
         model_info: ModelInfo,
-        timeout: float = 10,
-    ) -> None:
+        timeout: float = 10,  # pylint: disable=unused-argument
+    ) -> bool:
         """Add a model to the provider's model list."""
-        if model_info.id in {model.id for model in self.models + self.extra_models}:
+        if model_info.id in {
+            model.id for model in self.models + self.extra_models
+        }:
             raise ValueError(f"Model with id '{model_info.id}' already exists")
         self.extra_models.append(model_info)
+        return True
 
-    async def delete_model(self, model_id: str, timeout: float = 10) -> None:
+    async def delete_model(
+        self,
+        model_id: str,
+        timeout: float = 10,  # pylint: disable=unused-argument
+    ) -> bool:
         """Delete a model from the provider's model list."""
         self.extra_models = [
             model for model in self.extra_models if model.id != model_id
         ]
+        return True
 
     def update_config(self, config: Dict) -> None:
         """Update provider configuration with the given dictionary."""
         if "name" in config and config["name"] is not None:
             self.name = str(config["name"])
-        if "base_url" in config and config["base_url"] is not None:
+        if (
+            not self.freeze_url
+            and "base_url" in config
+            and config["base_url"] is not None
+        ):
             self.base_url = str(config["base_url"])
         if "api_key" in config and config["api_key"] is not None:
             self.api_key = str(config["api_key"])
-        if "chat_model" in config and config["chat_model"] is not None:
+        if (
+            self.is_custom
+            and "chat_model" in config
+            and config["chat_model"] is not None
+        ):
             self.chat_model = str(config["chat_model"])
         if "api_key_prefix" in config and config["api_key_prefix"] is not None:
             self.api_key_prefix = str(config["api_key_prefix"])
@@ -109,13 +128,15 @@ class Provider(ProviderInfo, ABC):
             )
         return chat_model_cls
 
-    def get_info(self) -> ProviderInfo:
+    def get_info(self, mock_secret: bool = True) -> ProviderInfo:
         """Return a ProviderInfo instance with the provider's details."""
         return ProviderInfo(
             id=self.id,
             name=self.name,
             base_url=self.base_url,
-            api_key=self.api_key,
+            api_key=self.api_key_prefix + "*" * 6
+            if mock_secret
+            else self.api_key,
             chat_model=self.chat_model,
             models=self.models,
             extra_models=self.extra_models,

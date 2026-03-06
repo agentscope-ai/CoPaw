@@ -89,6 +89,7 @@ PROVIDER_MODELSCOPE = OpenAIProvider(
     base_url="https://api-inference.modelscope.cn/v1",
     api_key_prefix="ms",
     models=MODELSCOPE_MODELS,
+    freeze_url=True,
 )
 
 PROVIDER_DASHSCOPE = OpenAIProvider(
@@ -97,6 +98,7 @@ PROVIDER_DASHSCOPE = OpenAIProvider(
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key_prefix="sk",
     models=DASHSCOPE_MODELS,
+    freeze_url=True,
 )
 
 PROVIDER_ALIYUN_CODINGPLAN = OpenAIProvider(
@@ -105,6 +107,7 @@ PROVIDER_ALIYUN_CODINGPLAN = OpenAIProvider(
     base_url="https://coding.dashscope.aliyuncs.com/v1",
     api_key_prefix="sk-sp",
     models=ALIYUN_CODINGPLAN_MODELS,
+    freeze_url=True,
 )
 
 PROVIDER_LLAMACPP = DefaultProvider(
@@ -122,8 +125,10 @@ PROVIDER_MLX = DefaultProvider(
 PROVIDER_OPENAI = OpenAIProvider(
     id="openai",
     name="OpenAI",
+    base_url="https://api.openai.com/v1",
     api_key_prefix="sk-",
     models=OPENAI_MODELS,
+    freeze_url=True,
 )
 
 PROVIDER_AZURE_OPENAI = OpenAIProvider(
@@ -136,9 +141,11 @@ PROVIDER_AZURE_OPENAI = OpenAIProvider(
 PROVIDER_ANTHROPIC = AnthropicProvider(
     id="anthropic",
     name="Anthropic",
+    base_url="https://api.anthropic.com",
     api_key_prefix="sk-ant-",
     models=ANTHROPIC_MODELS,
     chat_model="AnthropicChatModel",
+    freeze_url=True,
 )
 
 PROVIDER_OLLAMA = OllamaProvider(
@@ -212,7 +219,7 @@ class ProviderManager:
     def _add_builtin(self, provider: Provider):
         self.builtin_providers[provider.id] = provider
 
-    def list_providers(self) -> List[ProviderInfo]:
+    def list_provider_info(self) -> List[ProviderInfo]:
         provider_infos = []
         for provider in self.builtin_providers.values():
             provider_infos.append(provider.get_info())
@@ -229,6 +236,14 @@ class ProviderManager:
             return self.custom_providers[provider_id]
         return None
 
+    def get_provider_info(self, provider_id: str) -> ProviderInfo | None:
+        provider = self.get_provider(provider_id)
+        return provider.get_info() if provider else None
+
+    def get_active_model(self) -> ModelSlotConfig | None:
+        # Return the currently active provider/model configuration.
+        return self.active_model
+
     def update_provider(self, provider_id: str, config: Dict) -> bool:
         # Update the configuration of a provider (e.g., base URL, API key).
         # This will be called when the user edits a provider's settings in the
@@ -244,7 +259,7 @@ class ProviderManager:
         )
         return True
 
-    def add_custom_provider(self, provider_data: Provider):
+    def add_custom_provider(self, provider_data: ProviderInfo):
         # Add a new custom provider with the given data. This will update the
         # providers.json file and make the new provider available in the UI.
         if provider_data.id in self.builtin_providers:
@@ -252,10 +267,14 @@ class ProviderManager:
                 f"'{provider_data.id}' conflicts with a built-in provider.",
             )
         provider_data.is_custom = True
-        self.custom_providers[provider_data.id] = provider_data
-        self.save_provider(provider_data, is_builtin=False)
+        provider = self._provider_from_data(
+            provider_data.model_dump(),
+        )  # Validate provider data
+        self.custom_providers[provider.id] = provider
+        self.save_provider(provider, is_builtin=False)
+        return provider.get_info()
 
-    def remove_custom_provider(self, provider_id: str):
+    def remove_custom_provider(self, provider_id: str) -> bool:
         # Remove a custom provider by its ID. This will update the
         # providers.json file and remove the provider from the UI.
         if provider_id in self.custom_providers:
@@ -263,8 +282,10 @@ class ProviderManager:
             provider_path = self.custom_path / f"{provider_id}.json"
             if provider_path.exists():
                 os.remove(provider_path)
+            return True
+        return False
 
-    def activate_provider(self, provider_id: str, model_id: str):
+    async def activate_model(self, provider_id: str, model_id: str):
         # Set the active provider and model for the agent. This will update
         # providers.json and determine which provider/model is used when the
         # agent creates chat model instances.
@@ -274,6 +295,10 @@ class ProviderManager:
         if not any(model.id == model_id for model in provider.models):
             raise ValueError(
                 f"Model '{model_id}' not found in provider '{provider_id}'.",
+            )
+        if not await provider.check_connection():
+            raise ValueError(
+                f"Provider '{provider_id}' is not reachable.",
             )
         self.active_model = ModelSlotConfig(
             provider_id=provider_id,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,10 +47,25 @@ def test_add_custom_provider_and_reload_from_storage(
     assert [m.id for m in loaded.models] == ["custom-model"]
 
 
-def test_activate_provider_persists_active_model(isolated_secret_dir) -> None:
+async def test_activate_provider_persists_active_model(
+    isolated_secret_dir,
+    monkeypatch,
+) -> None:
     manager = ProviderManager()
 
-    manager.activate_provider("openai", "gpt-5")
+    class FakeModels:
+        async def list(self, timeout=None):
+            return SimpleNamespace(data=[])
+
+    fake_client = SimpleNamespace(models=FakeModels())
+
+    monkeypatch.setattr(
+        OpenAIProvider,
+        "_client",
+        lambda timeout=5: fake_client,
+    )
+
+    await manager.activate_model("openai", "gpt-5")
 
     assert manager.active_model is not None
     assert manager.active_model.provider_id == "openai"
@@ -163,7 +179,7 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     ok = manager.update_provider(
         "openai",
         {
-            "base_url": "https://updated.example/v1",
+            "base_url": "https://updated.example/v1",  # not taken effect
             "api_key": "sk-updated",
         },
     )
@@ -172,8 +188,22 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     persisted = manager.load_provider("openai", is_builtin=True)
     assert persisted is not None
     assert isinstance(persisted, OpenAIProvider)
-    assert persisted.base_url == "https://updated.example/v1"
+    assert persisted.base_url == "https://api.openai.com/v1"
     assert persisted.api_key == "sk-updated"
+
+    ok = manager.update_provider(
+        "azure-openai",
+        {
+            "base_url": "https://azure-updated.example/v1",
+            "api_key": "sk-azure-updated",
+        },
+    )
+    assert ok is True
+    persisted_azure = manager.load_provider("azure-openai", is_builtin=True)
+    assert persisted_azure is not None
+    assert isinstance(persisted_azure, OpenAIProvider)
+    assert persisted_azure.base_url == "https://azure-updated.example/v1"
+    assert persisted_azure.api_key == "sk-azure-updated"
 
 
 def test_update_provider_for_unknown_returns_false(
@@ -186,20 +216,22 @@ def test_update_provider_for_unknown_returns_false(
     assert ok is False
 
 
-def test_activate_provider_invalid_provider_raises(
+async def test_activate_provider_invalid_provider_raises(
     isolated_secret_dir,
 ) -> None:
     manager = ProviderManager()
 
     with pytest.raises(ValueError, match="Provider 'missing' not found"):
-        manager.activate_provider("missing", "gpt-5")
+        await manager.activate_model("missing", "gpt-5")
 
 
-def test_activate_provider_invalid_model_raises(isolated_secret_dir) -> None:
+async def test_activate_provider_invalid_model_raises(
+    isolated_secret_dir,
+) -> None:
     manager = ProviderManager()
 
     with pytest.raises(ValueError, match="Model 'not-exists' not found"):
-        manager.activate_provider("openai", "not-exists")
+        await manager.activate_model("openai", "not-exists")
 
 
 def test_save_provider_skip_if_exists_does_not_overwrite(

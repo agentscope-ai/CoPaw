@@ -17,6 +17,7 @@ def _make_provider() -> OllamaProvider:
         chat_model="OllamaChatModel",
     )
 
+
 async def test_auto_load_from_env(monkeypatch) -> None:
     monkeypatch.setenv("OLLAMA_HOST", "http://env-ollama.local:11434")
 
@@ -198,7 +199,11 @@ async def test_add_model_calls_pull(monkeypatch) -> None:
         timeout=8.0,
     )
 
-    assert called == {"timeout": [8.0, 5], "model": "qwen2:7b", "list_count": 1}
+    assert called == {
+        "timeout": [8.0, 5],
+        "model": "qwen2:7b",
+        "list_count": 1,
+    }
 
 
 async def test_delete_model_calls_delete(monkeypatch) -> None:
@@ -221,4 +226,8 @@ async def test_delete_model_calls_delete(monkeypatch) -> None:
 
     await provider.delete_model("qwen2:7b", timeout=6.0)
 
-    assert called == {"timeout": [6.0, 5], "model": "qwen2:7b", "list_count": 1}
+    assert called == {
+        "timeout": [6.0, 5],
+        "model": "qwen2:7b",
+        "list_count": 1,
+    }

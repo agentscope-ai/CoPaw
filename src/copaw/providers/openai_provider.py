@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from typing import Any, List
 
 from openai import APIError, AsyncOpenAI
 

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from typing import Any, List
 
 try:
     import ollama
@@ -100,15 +100,27 @@ class OllamaProvider(Provider):
         self,
         model_info: ModelInfo,
         timeout: float = 7200,
-    ) -> None:
+    ) -> bool:
         client = self._client(timeout=timeout)
-        await client.pull(model=model_info.id)
+        try:
+            await client.pull(model=model_info.id)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to pull model '{model_info.id}': {e}",
+            ) from e
         self.models = await self.fetch_models()
+        return True
 
-    async def delete_model(self, model_id: str, timeout: float = 60) -> None:
+    async def delete_model(self, model_id: str, timeout: float = 60) -> bool:
         client = self._client(timeout=timeout)
-        await client.delete(model=model_id)
+        try:
+            await client.delete(model=model_id)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to delete model '{model_id}': {e}",
+            ) from e
         self.models = await self.fetch_models()
+        return True
 
 
 if __name__ == "__main__":
