@@ -465,7 +465,9 @@ class QQChannel(BaseChannel):
         if not use_markdown:
             text, had_url = _sanitize_qq_text(text)
             if had_url:
-                logger.info("qq send: stripped URL content for API compatibility")
+                logger.info(
+                    "qq send: stripped URL content for API compatibility",
+                )
         message_type = meta.get("message_type")
         msg_id = meta.get("message_id")
         sender_id = meta.get("sender_id") or to_handle
@@ -485,6 +487,7 @@ class QQChannel(BaseChannel):
         except Exception:
             logger.exception("get access_token failed")
             return
+
         async def _dispatch(send_text: str, markdown: bool) -> None:
             if message_type == "c2c":
                 await _send_c2c_message_async(
