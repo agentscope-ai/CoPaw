@@ -212,6 +212,35 @@ class DiscordChannel(BaseChannel):
             filter_thinking=filter_thinking,
         )
 
+    def _normalize_discord_id(
+        self,
+        raw_value: Any,
+        *,
+        kind: str,
+    ) -> int:
+        """Normalize a Discord id from raw value or prefixed handle."""
+        if raw_value is None:
+            text = ""
+        else:
+            text = str(raw_value).strip()
+        if not text:
+            raise ValueError(f"discord {kind} id is empty")
+
+        if text.startswith("discord:"):
+            route = self._route_from_handle(text)
+            if kind == "channel":
+                route_value = route.get("channel_id")
+            else:
+                route_value = route.get("user_id")
+            text = "" if route_value is None else str(route_value).strip()
+
+        if not text.isdigit():
+            raise ValueError(
+                f"invalid discord {kind} id: {raw_value!r}",
+            )
+
+        return int(text)
+
     async def send(
         self,
         to_handle: str,
@@ -245,19 +274,27 @@ class DiscordChannel(BaseChannel):
         user_id = meta.get("user_id")
 
         if channel_id:
-            ch = self._client.get_channel(int(channel_id))
+            channel_id_int = self._normalize_discord_id(
+                channel_id,
+                kind="channel",
+            )
+            ch = self._client.get_channel(channel_id_int)
             if ch is None:
                 ch = await self._client.fetch_channel(
-                    int(channel_id),
+                    channel_id_int,
                 )
             await ch.send(text)
             return
 
         if user_id:
-            user = self._client.get_user(int(user_id))
+            user_id_int = self._normalize_discord_id(
+                user_id,
+                kind="user",
+            )
+            user = self._client.get_user(user_id_int)
             if user is None:
                 user = await self._client.fetch_user(
-                    int(user_id),
+                    user_id_int,
                 )
             dm = user.dm_channel or await user.create_dm()
             await dm.send(text)
