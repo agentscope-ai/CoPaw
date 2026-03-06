@@ -15,7 +15,7 @@
 [![Discord](https://img.shields.io/badge/Discord-Join_Us-blueviolet.svg?logo=discord)](https://discord.gg/eYMpfnkG8h)
 [![DingTalk](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
-[[Documentation](https://copaw.agentscope.io/)] [[中文 README](README_zh.md)]
+[[Documentation](https://copaw.agentscope.io/)] [[中文 README](README_zh.md)] [[日本語](README_ja.md)]
 
 <p align="center">
   <img src="https://img.alicdn.com/imgextra/i1/O1CN01tvT5rg1JHQNRP8tXR_!!6000000001003-2-tps-1632-384.png" alt="CoPaw Logo" width="120">
@@ -53,13 +53,15 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 
 ## News
 
-[2026-03-02] We released v0.0.4! See the [v0.0.4 Release Notes](https://github.com/agentscope-ai/CoPaw/releases/tag/v0.0.4) for the full changelog.
+[2026-03-06] We released v0.0.5! See the [v0.0.5 Release Notes](https://agentscope-ai.github.io/CoPaw/release-notes) for the full changelog.
 
-- **[v0.0.4]** **FEAT:** Telegram channel; OpenAI & Azure OpenAI providers; Ollama SDK; coding-plan provider; model connection testing; heartbeat monitoring panel; CORS configuration; audio file support for DingTalk & Feishu.
-- **[v0.0.4]** **FEAT:** Token-based memory compaction; file block processing; embedding configuration; normalized tool_choice behavior.
-- **[v0.0.4]** **BUGFIX:** Windows file paths; empty tool calls; console workspace UI; Ollama URL & connectivity; MCP transport; browser resource leak; static asset MIME types; API headers; Playwright Docker; heartbeat parsing; media message queuing.
-- **[v0.0.4]** **RELS:** Installation scripts with PowerShell; Docker guide; channel CLI docs; Feishu SOCKS proxy; MCP & runtime docs; FAQ (EN/ZH); skill-writing guide; CONTRIBUTING; console docs; website improvements.
-- **[v0.0.4]** **COMM:** Special thanks to all new contributors: [@ekzhu](https://github.com/ekzhu), [@fancyboi999](https://github.com/fancyboi999), [@zhaozhuang521](https://github.com/zhaozhuang521), [@hobostay](https://github.com/hobostay), [@dhbxs](https://github.com/dhbxs), [@longway-code](https://github.com/longway-code), [@ydlstartx](https://github.com/ydlstartx), [@LudovicoYIN](https://github.com/LudovicoYIN), [@fenixc9](https://github.com/fenixc9), [@dittotang](https://github.com/dittotang), [@forestxieCode](https://github.com/forestxieCode), [@yongtenglei](https://github.com/yongtenglei), [@kerwin612](https://github.com/kerwin612), [@luixiao0](https://github.com/luixiao0), [@gongpx20069](https://github.com/gongpx20069).
+- **FEAT:** Channel management system; Twilio voice channel; DeepSeek Reasoner support; daemon mode; agent interruption API; version update notifications; Windows installation script.
+- **PERF:** Memory system upgrade (reme-ai 0.3.0.3); console UI improvements (request cancellation, collapsible sidebar); optional channel lazy loading.
+- **BUGFIX:** Configuration persistence for Docker; Ollama base URL; channel fixes (DingTalk, Feishu, Telegram); Windows compatibility; MCP client stability.
+- **DOCS:** Model configuration guide; Docker + Ollama guide; Japanese README; release notes system.
+- **COMM:** Special thanks to all new contributors: [@qoli](https://github.com/qoli), [@qbc2016](https://github.com/qbc2016), [@yunlzheng](https://github.com/yunlzheng), [@BlueSkyXN](https://github.com/BlueSkyXN), [@sidonsoft](https://github.com/sidonsoft), [@lishengzxc](https://github.com/lishengzxc), [@pikaxinge](https://github.com/pikaxinge), [@linshengli](https://github.com/linshengli), [@eltociear](https://github.com/eltociear), [@liuxiaopai-ai](https://github.com/liuxiaopai-ai), [@Leirunlin](https://github.com/Leirunlin), [@pan-x-c](https://github.com/pan-x-c), [@garyzhang99](https://github.com/garyzhang99), [@celestialhorse51D](https://github.com/celestialhorse51D), [@wwx814](https://github.com/wwx814), [@nszhsl](https://github.com/nszhsl), [@DavdGao](https://github.com/DavdGao), [@zhangckcup](https://github.com/zhangckcup).
+
+[2026-03-02] We released v0.0.4! See the [v0.0.4 Release Notes](https://agentscope-ai.github.io/CoPaw/release-notes) for the full changelog.
 
 ---
 
@@ -76,6 +78,7 @@ Your Personal AI Assistant; easy to install, deploy on your own machine or on th
 - [API Key](#api-key)
 - [Local Models](#local-models)
 - [Documentation](#documentation)
+- [FAQ](#faq)
 - [Roadmap](#roadmap)
 - [Contributing](#get-involved)
 - [Install from source](#install-from-source)
@@ -123,13 +126,44 @@ To install with multiple extras (e.g., Ollama + llama.cpp):
 curl -fsSL https://copaw.agentscope.io/install.sh | bash -s -- --extras ollama,llamacpp
 ```
 
+**Windows (CMD):**
+
+```CMD
+curl -fsSL https://copaw.agentscope.io/install.bat -o install.bat && install.bat
+```
+
 **Windows (PowerShell):**
 
 ```powershell
 irm https://copaw.agentscope.io/install.ps1 | iex
 ```
 
-Then open a new terminal and run:
+> **Note**: The installer will automatically check the status of uv. If it is not installed, it will attempt to download and configure it automatically. If the automatic installation fails, please follow the on-screen prompts or execute `python -m pip install -U uv`, then rerun the installer.
+
+> **⚠️ Special Notice for Windows Enterprise LTSC Users**
+>
+> If you are using Windows LTSC or an enterprise environment governed by strict security policies, PowerShell may run in **Constrained Language Mode**, potentially causing the following issue:
+> 1. **If using CMD (.bat): Script executes successfully but fails to write to `Path`**
+>
+>    The script completes file installation. Due to **Constrained Language Mode**, it cannot automatically update environment variables. Manually configure as follows:
+>    - **Locate the installation directory**:
+>      - Check if `uv` is available: Enter `uv --version` in CMD. If a version number appears, **only configure the CoPaw path**. If you receive the prompt `'uv' is not recognized as an internal or external command, operable program or batch file,` configure both paths.
+>      - uv path (choose one based on installation location; use if `uv` fails): Typically `%USERPROFILE%\.local\bin`, `%USERPROFILE%\AppData\Local\uv`, or the `Scripts` folder within your Python installation directory
+>      - CoPaw path: Typically located at `%USERPROFILE%\.copaw\bin`.
+>    - **Manually add to the system's Path environment variable**:
+>      - Press `Win + R`, type `sysdm.cpl` and press Enter to open System Properties.
+>      - Click “Advanced” -> “Environment Variables”.
+>      - Under “System variables”, locate and select `Path`, then click “Edit”.
+>      - Click “New”, enter both directory paths sequentially, then click OK to save.
+> 2. **If using PowerShell (.ps1): Script execution interrupted**
+>
+>   Due to **Constrained Language Mode**, the script may fail to automatically download `uv`.
+>   - **Manually install uv**: Refer to the [GitHub Release](https://github.com/astral-sh/uv/releases) to download `uv.exe` and place it in `%USERPROFILE%\.local\bin` or `%USERPROFILE%\AppData\Local\uv`; or ensure Python is installed and run `python -m pip install -U uv`.
+>   - **Configure `uv` environment variables**: Add the `uv` directory and `%USERPROFILE%\.copaw\bin` to your system's `Path` variable.
+>   - **Re-run the installation**: Open a new terminal and execute the installation script again to complete the `CoPaw` installation.
+>   - **Configure the `CoPaw` environment variable**: Add `%USERPROFILE%\.copaw\bin` to your system's `Path` variable.
+
+Once installed, open a new terminal and run:
 
 ```bash
 copaw init --defaults   # or: copaw init (interactive)
@@ -191,12 +225,30 @@ Images are on **Docker Hub** (`agentscope/copaw`). Image tags: `latest` (stable)
 
 ```bash
 docker pull agentscope/copaw:latest
-docker run -p 8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
 ```
 
 Also available on Alibaba Cloud Container Registry (ACR) for users in China: `agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/copaw` (same tags).
 
 Then open **http://127.0.0.1:8088/** for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys (e.g. `DASHSCOPE_API_KEY`), add `-e VAR=value` or `--env-file .env` to `docker run`.
+
+> **Connecting to Ollama or other services on the host machine**
+>
+> Inside a Docker container, `localhost` refers to the container itself, not your host machine. If you run Ollama (or other model services) on the host and want CoPaw in Docker to reach them, use one of these approaches:
+>
+> **Option A** — Explicit host binding (all platforms):
+> ```bash
+> docker run -p 127.0.0.1:8088:8088 \
+>   --add-host=host.docker.internal:host-gateway \
+>   -v copaw-data:/app/working agentscope/copaw:latest
+> ```
+> Then in CoPaw **Settings → Models → Ollama**, change the Base URL to `http://host.docker.internal:11434/v1` or your corresponding port.
+>
+> **Option B** — Host networking (Linux only):
+> ```bash
+> docker run --network=host -v copaw-data:/app/working agentscope/copaw:latest
+> ```
+> No port mapping (`-p`) is needed; the container shares the host network directly. Note that all container ports are exposed on the host, which may cause conflicts if the port is already in use.
 
 The image is built from scratch. To build the image yourself, please refer to the [Build Docker image](scripts/README.md#build-docker-image) section in `scripts/README.md`, and then push to your registry.
 
@@ -263,6 +315,12 @@ You can also download and manage local models from the Console UI.
 | [Config](https://copaw.agentscope.io/docs/config)             | Working directory and config file                 |
 
 Full docs in this repo: [website/public/docs/](website/public/docs/).
+
+---
+
+## FAQ
+
+For common questions, troubleshooting tips, and known issues, please visit the **[FAQ page](https://copaw.agentscope.io/docs/faq)**.
 
 ---
 
@@ -335,10 +393,20 @@ CoPaw represents both a **Co Personal Agent Workstation** and a "co-paw"—a par
 
 | [Discord](https://discord.gg/eYMpfnkG8h)                     | [DingTalk](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| [<img src="https://gw.alicdn.com/imgextra/i1/O1CN01hhD1mu1Dd3BWVUvxN_!!6000000000238-2-tps-400-400.png" width="80" height="80" alt="Discord">](https://discord.gg/eYMpfnkG8h) | [<img src="https://img.alicdn.com/imgextra/i4/O1CN014mhqFq1ZlgNuYjxrz_!!6000000003235-2-tps-400-400.png" width="80" height="80" alt="DingTalk">](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
+| [<img src="https://gw.alicdn.com/imgextra/i1/O1CN01hhD1mu1Dd3BWVUvxN_!!6000000000238-2-tps-400-400.png" width="80" height="80" alt="Discord">](https://discord.gg/eYMpfnkG8h) | [<img src="https://img.alicdn.com/imgextra/i2/O1CN01vCWI8a1skHtLGXEMQ_!!6000000005804-2-tps-458-460.png" width="80" height="80" alt="DingTalk">](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11) |
 
 ---
 
 ## License
 
 CoPaw is released under the [Apache License 2.0](LICENSE).
+
+---
+
+## Contributors
+
+All thanks to our contributors:
+
+<a href="https://github.com/agentscope-ai/CoPaw/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=agentscope-ai/CoPaw" alt="Contributors" />
+</a>

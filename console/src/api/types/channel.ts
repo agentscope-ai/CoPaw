@@ -1,6 +1,8 @@
 export interface BaseChannelConfig {
   enabled: boolean;
   bot_prefix: string;
+  filter_tool_messages?: boolean;
+  filter_thinking?: boolean;
 }
 
 export interface IMessageChannelConfig extends BaseChannelConfig {
@@ -17,6 +19,9 @@ export interface DiscordConfig extends BaseChannelConfig {
 export interface DingTalkConfig extends BaseChannelConfig {
   client_id: string;
   client_secret: string;
+  dm_policy: "open" | "allowlist";
+  group_policy: "open" | "allowlist";
+  allow_from: string[];
 }
 
 export interface FeishuConfig extends BaseChannelConfig {
@@ -55,6 +60,18 @@ export interface MQTTConfig extends BaseChannelConfig {
 
 export type ConsoleConfig = BaseChannelConfig;
 
+export interface VoiceChannelConfig extends BaseChannelConfig {
+  twilio_account_sid: string;
+  twilio_auth_token: string;
+  phone_number: string;
+  phone_number_sid: string;
+  tts_provider: string;
+  tts_voice: string;
+  stt_provider: string;
+  language: string;
+  welcome_greeting: string;
+}
+
 export interface ChannelConfig {
   imessage: IMessageChannelConfig;
   discord: DiscordConfig;
@@ -64,6 +81,7 @@ export interface ChannelConfig {
   telegram: TelegramConfig;
   mqtt: MQTTConfig;
   console: ConsoleConfig;
+  voice: VoiceChannelConfig;
 }
 
 export type SingleChannelConfig =
@@ -72,6 +90,8 @@ export type SingleChannelConfig =
   | DingTalkConfig
   | FeishuConfig
   | QQConfig
+  | ConsoleConfig
   | TelegramConfig
   | MQTTConfig
   | ConsoleConfig;
+  | VoiceChannelConfig;

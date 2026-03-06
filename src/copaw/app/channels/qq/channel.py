@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -61,6 +62,18 @@ MAX_QUICK_DISCONNECT_COUNT = 3
 
 DEFAULT_API_BASE = "https://api.sgroup.qq.com"
 TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
+_URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
+
+
+def _sanitize_qq_text(text: str) -> tuple[str, bool]:
+    """QQ API disallows URL links in plain messages.
+
+    Return the sanitized text and whether any URL was removed.
+    """
+    if not text:
+        return "", False
+    sanitized, count = _URL_PATTERN.subn("[链接已省略]", text)
+    return sanitized, count > 0
 
 
 def _get_api_base() -> str:
@@ -239,11 +252,15 @@ class QQChannel(BaseChannel):
         bot_prefix: str = "",
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
+        filter_thinking: bool = False,
     ):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+            filter_thinking=filter_thinking,
         )
         self.enabled = enabled
         self.app_id = app_id
@@ -353,6 +370,8 @@ class QQChannel(BaseChannel):
         config: QQChannelConfig,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
+        filter_tool_messages: bool = False,
+        filter_thinking: bool = False,
     ) -> "QQChannel":
         return cls(
             process=process,
@@ -362,6 +381,8 @@ class QQChannel(BaseChannel):
             bot_prefix=config.bot_prefix or "",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+            filter_thinking=filter_thinking,
         )
 
     async def send(
@@ -375,6 +396,10 @@ class QQChannel(BaseChannel):
         """
         if not self.enabled or not text.strip():
             return
+        text = text.strip()
+        text, had_url = _sanitize_qq_text(text)
+        if had_url:
+            logger.info("qq send: stripped URL content for API compatibility")
         meta = meta or {}
         message_type = meta.get("message_type")
         msg_id = meta.get("message_id")
@@ -401,7 +426,7 @@ class QQChannel(BaseChannel):
                     self._http,
                     token,
                     sender_id,
-                    text.strip(),
+                    text,
                     msg_id,
                 )
             elif message_type == "group" and group_openid:
@@ -409,7 +434,7 @@ class QQChannel(BaseChannel):
                     self._http,
                     token,
                     group_openid,
-                    text.strip(),
+                    text,
                     msg_id,
                 )
             elif channel_id:
@@ -417,7 +442,7 @@ class QQChannel(BaseChannel):
                     self._http,
                     token,
                     channel_id,
-                    text.strip(),
+                    text,
                     msg_id,
                 )
             else:
@@ -425,7 +450,7 @@ class QQChannel(BaseChannel):
                     self._http,
                     token,
                     sender_id,
-                    text.strip(),
+                    text,
                     msg_id,
                 )
         except Exception:
@@ -499,13 +524,9 @@ class QQChannel(BaseChannel):
                 elif obj == "response":
                     last_response = event
 
-            if last_response and getattr(last_response, "error", None):
-                err = getattr(
-                    last_response.error,
-                    "message",
-                    str(last_response.error),
-                )
-                err_text = self.bot_prefix + f"Error: {err}"
+            err_msg = self._get_response_error_message(last_response)
+            if err_msg:
+                err_text = self.bot_prefix + f"Error: {err_msg}"
                 await self.send_content_parts(
                     to_handle,
                     [{"type": "text", "text": err_text}],
@@ -536,19 +557,14 @@ class QQChannel(BaseChannel):
                     to_handle,
                     request.session_id or f"{self.channel}:{to_handle}",
                 )
-        except Exception:
+        except Exception as e:
             logger.exception("qq process/reply failed")
+            err_msg = str(e).strip() or "An error occurred while processing."
             try:
                 fallback_handle = getattr(request, "user_id", "")
                 await self.send_content_parts(
                     fallback_handle,
-                    [
-                        {
-                            "type": "text",
-                            "text": "An error occurred while processing "
-                            "your request.",
-                        },
-                    ],
+                    [{"type": "text", "text": f"Error: {err_msg}"}],
                     getattr(request, "channel_meta", None) or {},
                 )
             except Exception:
