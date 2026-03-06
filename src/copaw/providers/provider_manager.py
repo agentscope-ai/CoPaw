@@ -117,12 +117,14 @@ PROVIDER_LLAMACPP = DefaultProvider(
     id="llamacpp",
     name="llama.cpp (Local)",
     is_local=True,
+    require_api_key=False,
 )
 
 PROVIDER_MLX = DefaultProvider(
     id="mlx",
     name="MLX (Local, Apple Silicon)",
     is_local=True,
+    require_api_key=False,
 )
 
 PROVIDER_OPENAI = OpenAIProvider(
@@ -154,6 +156,7 @@ PROVIDER_ANTHROPIC = AnthropicProvider(
 PROVIDER_OLLAMA = OllamaProvider(
     id="ollama",
     name="Ollama",
+    require_api_key=False,
 )
 
 
@@ -187,7 +190,7 @@ class ProviderManager:
         self._init_builtins()
         self._migrate_legacy_providers()
         self._init_from_storage()
-        self._update_local_models()
+        self.update_local_models()
 
     def _prepare_disk_storage(self):
         """Prepare directory structure"""
@@ -454,7 +457,7 @@ class ProviderManager:
         if active_model:
             self.active_model = active_model
 
-    def _update_local_models(self):
+    def update_local_models(self):
         """Update the model list of a local provider."""
         try:
             from ..local_models.manager import list_local_models
@@ -499,7 +502,7 @@ class ProviderManager:
             return create_local_chat_model(
                 model_id=model.model,
                 stream=True,
-                generate_kwargs={"max_tokens": None}
+                generate_kwargs={"max_tokens": None},
             )
         return chat_model_cls(
             model_name=model.model,

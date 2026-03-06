@@ -42,6 +42,10 @@ class ProviderInfo(BaseModel):
         default=False,
         description="Whether the base_url should be frozen (not editable)",
     )
+    require_api_key: bool = Field(
+        default=True,
+        description="Whether this provider requires an API key",
+    )
     is_custom: bool = Field(
         default=False,
         description=("Whether this provider is user-created (not built-in)."),

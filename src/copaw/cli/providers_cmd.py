@@ -8,19 +8,13 @@ from typing import Optional
 import click
 
 from ..providers.ollama_manager import OllamaModelManager
-from ..providers.provider import ModelInfo, ProviderInfo
+from ..providers.provider import ModelInfo, Provider, ProviderInfo
 from ..providers.provider_manager import ProviderManager
 from .utils import prompt_choice
 
 
-_manager_instance = None
-
-
 def _manager() -> ProviderManager:
-    global _manager_instance
-    if _manager_instance is None:
-        _manager_instance = ProviderManager()
-    return _manager_instance
+    return ProviderManager.get_instance()
 
 
 def _mask_api_key(api_key: str) -> str:
@@ -31,13 +25,9 @@ def _mask_api_key(api_key: str) -> str:
     return f"{api_key[:4]}...{api_key[-2:]}"
 
 
-def _is_configured(provider) -> bool:
+def _is_configured(provider: Provider) -> bool:
     if provider.is_local or provider.id == "ollama":
         return True
-    if provider.id == "azure-openai":
-        return bool(provider.base_url)
-    if provider.is_custom:
-        return bool(provider.base_url)
     return bool(provider.base_url)
 
 
@@ -51,8 +41,8 @@ def _save_provider(manager: ProviderManager, provider_id: str) -> None:
     )
 
 
-def _all_provider_objects(manager: ProviderManager):
-    objs = []
+def _all_provider_objects(manager: ProviderManager) -> list[Provider]:
+    objs: list[Provider] = []
     for info in manager.list_provider_info():
         provider = manager.get_provider(info.id)
         if provider is not None:
@@ -116,18 +106,10 @@ def configure_provider_api_key_interactive(
             ),
         )
         raise SystemExit(1)
-
-    # Local providers (llamacpp, mlx) don't need API key configuration
-    if defn.is_local:
-        click.echo(f"{defn.name} does not require API key configuration.")
+    if not defn.require_api_key:
         click.echo(
-            "Use 'copaw models download' to add models, "
-            "then 'copaw models set-llm' to activate.",
+            f"{defn.name} does not require API key configuration. Skipping.",
         )
-        return provider_id
-
-    # Ollama provider is local-like (no API key needed)
-    if provider_id == "ollama":
         return provider_id
 
     current_base, current_key = defn.base_url, defn.api_key
@@ -237,7 +219,7 @@ def _add_models_interactive(provider_id: str) -> None:
 
 
 def _pick_model_from_list(
-    models: list,
+    models: list[ModelInfo],
     prompt_text: str,
     current_model: str = "",
 ) -> str:
@@ -260,7 +242,7 @@ def _pick_model_free_text(prompt_text: str, current_model: str = "") -> str:
     return model
 
 
-def _filter_eligible(all_providers):
+def _filter_eligible(all_providers: list[Provider]) -> list[Provider]:
     return [d for d in all_providers if _is_configured(d)]
 
 

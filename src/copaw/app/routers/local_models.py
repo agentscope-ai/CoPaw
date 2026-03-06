@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..download_task_store import (
@@ -20,10 +20,14 @@ from ..download_task_store import (
     get_tasks,
     update_status,
 )
+from ...providers import ProviderManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/local-models", tags=["local-models"])
+
+_background_tasks: Dict[str, asyncio.Task] = {}
+_background_tasks_lock = asyncio.Lock()
 
 
 class DownloadRequest(BaseModel):
@@ -77,12 +81,23 @@ def _task_to_response(task: DownloadTask) -> DownloadTaskResponse:
     )
 
 
+async def _register_background_task(task_id: str, task: asyncio.Task) -> None:
+    async with _background_tasks_lock:
+        _background_tasks[task_id] = task
+
+
+async def _pop_background_task(task_id: str) -> Optional[asyncio.Task]:
+    async with _background_tasks_lock:
+        return _background_tasks.pop(task_id, None)
+
+
 @router.get(
     "",
     response_model=List[LocalModelResponse],
     summary="List downloaded local models",
 )
 async def list_local(
+    request: Request,
     backend: Optional[str] = None,
 ) -> List[LocalModelResponse]:
     try:
@@ -111,7 +126,10 @@ async def list_local(
     response_model=DownloadTaskResponse,
     summary="Start a background model download",
 )
-async def download_model(body: DownloadRequest) -> DownloadTaskResponse:
+async def download_model(
+    request: Request,
+    body: DownloadRequest,
+) -> DownloadTaskResponse:
     """Start a background download. Returns a task_id immediately."""
     try:
         from ...local_models import BackendType, DownloadSource
@@ -139,11 +157,15 @@ async def download_model(body: DownloadRequest) -> DownloadTaskResponse:
         source=body.source,
     )
 
-    loop = asyncio.get_running_loop()
-    asyncio.create_task(
-        _run_download_in_background(task.task_id, body, loop),
+    background_task = asyncio.create_task(
+        _run_download_in_background(
+            task_id=task.task_id,
+            body=body,
+            request=request,
+        ),
         name=f"model-download-{task.task_id}",
     )
+    await _register_background_task(task.task_id, background_task)
 
     return _task_to_response(task)
 
@@ -151,7 +173,7 @@ async def download_model(body: DownloadRequest) -> DownloadTaskResponse:
 async def _run_download_in_background(
     task_id: str,
     body: DownloadRequest,
-    loop: asyncio.AbstractEventLoop,
+    request: Request,
 ) -> None:
     """Execute the download in a thread and update task status."""
     from ..console_push_store import append as push_store_append
@@ -161,11 +183,13 @@ async def _run_download_in_background(
     task = await get_task(task_id)
     if task and task.status == DownloadTaskStatus.CANCELLED:
         logger.info("Task %s was cancelled before download started", task_id)
+        await _pop_background_task(task_id)
         return
 
     await update_status(task_id, DownloadTaskStatus.DOWNLOADING)
 
     try:
+        loop = asyncio.get_running_loop()
         # Periodically check if task was cancelled during download
         # We run the download in executor, but check cancellation status
         info = await loop.run_in_executor(
@@ -193,6 +217,7 @@ async def _run_download_in_background(
                 delete_local_model(info.id)
             except Exception:
                 pass
+            await _pop_background_task(task_id)
             return
 
         result_dict = {
@@ -214,6 +239,11 @@ async def _run_download_in_background(
             "console",
             f"Model downloaded: {info.display_name}",
         )
+        ProviderManager.get_instance().update_local_models()
+    except asyncio.CancelledError:
+        await update_status(task_id, DownloadTaskStatus.CANCELLED)
+        logger.info("Local model download task %s cancelled", task_id)
+        raise
     except Exception as exc:
         logger.exception("Background model download failed: %s", exc)
         await update_status(
@@ -225,6 +255,8 @@ async def _run_download_in_background(
             "console",
             f"Model download failed: {body.repo_id} — {exc}",
         )
+    finally:
+        await _pop_background_task(task_id)
 
 
 @router.get(
@@ -243,7 +275,7 @@ async def get_download_status(
     "/{model_id:path}",
     summary="Delete a downloaded local model",
 )
-async def delete_local(model_id: str) -> dict:
+async def delete_local(request: Request, model_id: str) -> dict:
     try:
         from ...local_models import delete_local_model
     except ImportError as exc:
@@ -257,20 +289,13 @@ async def delete_local(model_id: str) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    # Refresh provider model lists so deleted models disappear immediately
-    from ...providers import sync_local_models
-
-    sync_local_models()
+    ProviderManager.get_instance().update_local_models()
 
     return {"status": "deleted", "model_id": model_id}
 
 
-@router.post(
-    "/cancel-download/{task_id}",
-    summary="Cancel an active download task",
-)
-async def cancel_download(task_id: str) -> dict:
-    """Cancel a pending or downloading task."""
+async def _cancel_download_task(task_id: str) -> dict:
+    """Cancel a pending or downloading task and stop its background coroutine."""
     success = await cancel_task(task_id)
     if not success:
         raise HTTPException(
@@ -280,4 +305,18 @@ async def cancel_download(task_id: str) -> dict:
                 "(already completed/failed/cancelled)"
             ),
         )
+
+    background_task = await _pop_background_task(task_id)
+    if background_task and not background_task.done():
+        background_task.cancel()
+
     return {"status": "cancelled", "task_id": task_id}
+
+
+@router.post(
+    "/cancel-download/{task_id}",
+    summary="Cancel an active download task",
+)
+async def cancel_download(task_id: str) -> dict:
+    """Cancel a pending or downloading task."""
+    return await _cancel_download_task(task_id)

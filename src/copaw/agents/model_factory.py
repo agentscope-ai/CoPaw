@@ -11,7 +11,7 @@ Example:
 
 
 import logging
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type, Any
+from typing import TYPE_CHECKING, Sequence, Tuple, Type, Any
 from functools import wraps
 
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
@@ -246,9 +246,7 @@ def _strip_top_level_message_name(
     return messages
 
 
-def create_model_and_formatter(
-    llm_cfg: Optional["ResolvedModelConfig"] = None,
-) -> Tuple[ChatModelBase, FormatterBase]:
+def create_model_and_formatter() -> Tuple[ChatModelBase, FormatterBase]:
     """Factory method to create model and formatter instances.
 
     This method handles both local and remote models, selecting the
@@ -263,10 +261,6 @@ def create_model_and_formatter(
 
     Example:
         >>> model, formatter = create_model_and_formatter()
-        >>> # Use with custom config
-        >>> from copaw.providers import get_active_llm_config
-        >>> custom_cfg = get_active_llm_config()
-        >>> model, formatter = create_model_and_formatter(custom_cfg)
     """
     # Fetch config if not provided
     model = ProviderManager.get_active_chat_model()

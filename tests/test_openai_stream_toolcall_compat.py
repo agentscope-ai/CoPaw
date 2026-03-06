@@ -60,7 +60,6 @@ def _make_chunk(tool_calls: list[Any]) -> Any:
     return SimpleNamespace(usage=None, choices=[choice])
 
 
-
 async def test_stream_parser_skips_tool_call_without_function() -> None:
     model = CompatHarnessOpenAIChatModel(
         "dummy",
