@@ -65,6 +65,16 @@ TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
 _URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 
 
+class QQApiError(RuntimeError):
+    """HTTP error returned by QQ API."""
+
+    def __init__(self, path: str, status: int, data: Any):
+        self.path = path
+        self.status = status
+        self.data = data
+        super().__init__(f"API {path} {status}: {data}")
+
+
 def _sanitize_qq_text(text: str) -> tuple[str, bool]:
     """QQ API disallows URL links in plain messages.
 
@@ -82,6 +92,24 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def _should_plaintext_fallback_from_markdown(exc: Exception) -> bool:
+    """Only fallback for explicit markdown payload validation failures."""
+    if not isinstance(exc, QQApiError):
+        return False
+    if exc.status < 400 or exc.status >= 500:
+        return False
+    try:
+        payload_text = json.dumps(exc.data, ensure_ascii=False).lower()
+    except Exception:
+        payload_text = str(exc.data).lower()
+    return (
+        "markdown" in payload_text
+        or "msg_type" in payload_text
+        or "msg type" in payload_text
+        or "message type" in payload_text
+    )
 
 
 def _get_api_base() -> str:
@@ -181,7 +209,7 @@ async def _api_request_async(
     async with session.request(method, url, **kwargs) as resp:
         data = await resp.json()
         if resp.status >= 400:
-            raise RuntimeError(f"API {path} {resp.status}: {data}")
+            raise QQApiError(path=path, status=resp.status, data=data)
         return data
 
 
@@ -496,11 +524,18 @@ class QQChannel(BaseChannel):
 
         try:
             await _dispatch(text, use_markdown)
-        except Exception:
+        except Exception as exc:
             if not use_markdown:
                 logger.exception("send failed")
                 return
-            logger.exception("send failed with markdown; fallback to plain text")
+            if not _should_plaintext_fallback_from_markdown(exc):
+                logger.exception(
+                    "send failed with markdown; skip fallback to avoid duplicates",
+                )
+                return
+            logger.exception(
+                "send failed with markdown payload validation; fallback to plain text",
+            )
             fallback_text, had_url = _sanitize_qq_text(text)
             if had_url:
                 logger.info(
