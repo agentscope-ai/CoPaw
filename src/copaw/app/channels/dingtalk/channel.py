@@ -826,11 +826,9 @@ class DingTalkChannel(BaseChannel):
                         ext = base.rsplit(".", 1)[-1].lower()
                 except Exception:
                     pass
-        # DingTalk API: video=mp4 only; voice=amr/mp3/wav only. Upload
-        # unsupported formats (e.g. mov, m4a) as "file" so they still send.
         if upload_type == "video" and ext not in ("mp4",):
             upload_type = "file"
-        elif upload_type == "voice" and ext not in ("amr", "mp3", "wav"):
+        elif upload_type == "voice":
             upload_type = "file"
 
         # ---------- if already has media id ----------
@@ -864,7 +862,6 @@ class DingTalkChannel(BaseChannel):
 
             if upload_type == "voice":
                 # sendBySession returns 400105 "unsupported msgtype" for voice.
-                # Send as file so user still receives the audio (amr/mp3/wav).
                 payload = {
                     "msgtype": "file",
                     "file": {
