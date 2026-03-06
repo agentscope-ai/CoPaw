@@ -48,9 +48,6 @@ from .constants import (
     SENT_VIA_WEBHOOK,
 )
 from .content_utils import (
-    get_chat_type_from_meta,
-    get_msg_key_for_media_type,
-    get_user_id_from_meta,
     parse_data_url,
     session_param_from_webhook_url,
     short_session_id_from_conversation_id,
@@ -92,18 +89,26 @@ class DingTalkChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
+        dm_policy: str = "open",
+        group_policy: str = "open",
+        allow_from: Optional[List[str]] = None,
+        filter_thinking: bool = False,
     ):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
+            filter_thinking=filter_thinking,
         )
         self.enabled = enabled
         self.client_id = client_id
         self.client_secret = client_secret
         self.bot_prefix = bot_prefix
         self._media_dir = Path(media_dir).expanduser()
+        self.dm_policy = dm_policy or "open"
+        self.group_policy = group_policy or "open"
+        self.allow_from = set(allow_from or [])
 
         self._client: Optional[dingtalk_stream.DingTalkStreamClient] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -135,6 +140,12 @@ class DingTalkChannel(BaseChannel):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
     ) -> "DingTalkChannel":
+        allow_from_env = os.getenv("DINGTALK_ALLOW_FROM", "")
+        allow_from = (
+            [s.strip() for s in allow_from_env.split(",") if s.strip()]
+            if allow_from_env
+            else []
+        )
         return cls(
             process=process,
             enabled=os.getenv("DINGTALK_CHANNEL_ENABLED", "1") == "1",
@@ -143,6 +154,9 @@ class DingTalkChannel(BaseChannel):
             bot_prefix=os.getenv("DINGTALK_BOT_PREFIX", "[BOT] "),
             media_dir=os.getenv("DINGTALK_MEDIA_DIR", "~/.copaw/media"),
             on_reply_sent=on_reply_sent,
+            dm_policy=os.getenv("DINGTALK_DM_POLICY", "open"),
+            group_policy=os.getenv("DINGTALK_GROUP_POLICY", "open"),
+            allow_from=allow_from,
         )
 
     @classmethod
@@ -153,6 +167,7 @@ class DingTalkChannel(BaseChannel):
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
+        filter_thinking: bool = False,
     ) -> "DingTalkChannel":
         return cls(
             process=process,
@@ -164,6 +179,10 @@ class DingTalkChannel(BaseChannel):
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
+            dm_policy=config.dm_policy or "open",
+            group_policy=config.group_policy or "open",
+            allow_from=config.allow_from or [],
+            filter_thinking=filter_thinking,
         )
 
     # ---------------------------
@@ -754,13 +773,8 @@ class DingTalkChannel(BaseChannel):
         self,
         session_webhook: str,
         part: OutgoingContentPart,
-        meta: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Upload and send one media part via session webhook or OpenAPI.
-
-        For images with mediaId, tries OpenAPI first (for preview support),
-        falls back to sessionWebhook if OpenAPI is unavailable.
-        """
+        """Upload and send one media part via session webhook."""
         ptype = getattr(part, "type", None)
         upload_type = self._map_upload_type(part)
 
@@ -784,7 +798,8 @@ class DingTalkChannel(BaseChannel):
                     session_webhook,
                     payload,
                 )
-            # else: will try OpenAPI with mediaId, fallback to file via webhook
+            # else: fallthrough to upload-by-bytes then send as file
+            # (your existing fallback)
 
         # ---------- decide filename/ext ----------
         default_name = {
@@ -797,16 +812,23 @@ class DingTalkChannel(BaseChannel):
             part,
             default=default_name,
         )
-
-        # Video upload only supports MP4 format via DingTalk OpenAPI
-        # If not MP4, upload as file instead
-        if upload_type == "video" and ext.lower() != "mp4":
-            logger.info(
-                "dingtalk video format %s not supported, uploading as file: "
-                "filename=%s",
-                ext,
-                filename,
-            )
+        # AudioContent URL is in part.data; derive filename/ext for m4a etc.
+        if ptype == ContentType.AUDIO:
+            data_attr = getattr(part, "data", None)
+            if isinstance(data_attr, str) and (
+                data_attr.startswith("http") or data_attr.startswith("file:")
+            ):
+                try:
+                    path = urlparse(data_attr).path
+                    base = os.path.basename(path)
+                    if base and "." in base:
+                        filename = base
+                        ext = base.rsplit(".", 1)[-1].lower()
+                except Exception:
+                    pass
+        if upload_type == "video" and ext not in ("mp4",):
+            upload_type = "file"
+        elif upload_type == "voice":
             upload_type = "file"
 
         # ---------- if already has media id ----------
@@ -823,15 +845,8 @@ class DingTalkChannel(BaseChannel):
                 return False
 
             if upload_type == "image":
-                # Try OpenAPI first for image preview support (using mediaId)
-                if await self._try_send_media_via_openapi(
-                    meta=meta,
-                    media_id=media_id,
-                    media_type="image",
-                    filename=filename,
-                ):
-                    return True
-                # Fallback: send as file via sessionWebhook
+                # sendBySession supports image by picURL;
+                # but if we only have mediaId, send as file
                 payload = {
                     "msgtype": "file",
                     "file": {
@@ -846,13 +861,20 @@ class DingTalkChannel(BaseChannel):
                 )
 
             if upload_type == "voice":
-                payload = {"msgtype": "voice", "voice": {"mediaId": media_id}}
+                # sendBySession returns 400105 "unsupported msgtype" for voice.
+                payload = {
+                    "msgtype": "file",
+                    "file": {
+                        "mediaId": media_id,
+                        "fileType": ext,
+                        "fileName": filename,
+                    },
+                }
                 return await self._send_payload_via_session_webhook(
                     session_webhook,
                     payload,
                 )
 
-            # Video: try OpenAPI first, fallback to sessionWebhook
             if upload_type == "video":
                 pic_media_id = (
                     getattr(part, "pic_media_id", None)
@@ -860,20 +882,10 @@ class DingTalkChannel(BaseChannel):
                     or ""
                 )
                 pic_media_id = (pic_media_id or "").strip()
-                duration = getattr(part, "duration", None)
-                if duration is None:
-                    duration = 1
-
-                if await self._try_send_media_via_openapi(
-                    meta=meta,
-                    media_id=media_id,
-                    media_type="video",
-                    filename=filename,
-                    duration=duration,
-                ):
-                    return True
-
                 if pic_media_id:
+                    duration = getattr(part, "duration", None)
+                    if duration is None:
+                        duration = 1
                     payload = {
                         "msgtype": "video",
                         "video": {
@@ -886,6 +898,7 @@ class DingTalkChannel(BaseChannel):
                         session_webhook,
                         payload,
                     )
+                # No picMediaId: send as file so user still gets the video
                 payload = {
                     "msgtype": "file",
                     "file": {
@@ -921,6 +934,13 @@ class DingTalkChannel(BaseChannel):
             or getattr(part, "video_url", None)
             or ""
         )
+        # AudioContent stores URL in "data" (renderer _blocks_to_parts)
+        if not url and ptype == ContentType.AUDIO:
+            data_attr = getattr(part, "data", None)
+            if isinstance(data_attr, str) and (
+                data_attr.startswith("http") or data_attr.startswith("file:")
+            ):
+                url = data_attr
         url = (url or "").strip() if isinstance(url, str) else ""
         raw_b64 = None
         if (
@@ -960,7 +980,8 @@ class DingTalkChannel(BaseChannel):
 
         if not data:
             logger.warning(
-                "dingtalk media part: no data to upload, type=%s",
+                "dingtalk media part: no data to upload (empty file?), "
+                "type=%s",
                 ptype,
             )
             return False
@@ -977,15 +998,7 @@ class DingTalkChannel(BaseChannel):
 
         # ---------- send ----------
         if upload_type == "image":
-            # Try OpenAPI first for image preview support (using mediaId)
-            if await self._try_send_media_via_openapi(
-                meta=meta,
-                media_id=media_id,
-                media_type="image",
-                filename=filename,
-            ):
-                return True
-            # Fallback: send as file via sessionWebhook
+            # no public url -> safest is send as file (your current behavior)
             payload = {
                 "msgtype": "file",
                 "file": {
@@ -1000,38 +1013,30 @@ class DingTalkChannel(BaseChannel):
             )
 
         if upload_type == "voice":
-            payload = {"msgtype": "voice", "voice": {"mediaId": media_id}}
+            # sendBySession returns 400105 for voice; send as file.
+            payload = {
+                "msgtype": "file",
+                "file": {
+                    "mediaId": media_id,
+                    "fileType": ext,
+                    "fileName": filename,
+                },
+            }
             return await self._send_payload_via_session_webhook(
                 session_webhook,
                 payload,
             )
 
-        # Video (after upload): try OpenAPI first, fallback to sessionWebhook
         if upload_type == "video":
             pic_media_id = (
-                getattr(part, "pic_media_id", None) or getattr(
-                    part, "picMediaId", None) or ""
-            )
-            duration = getattr(part, "duration", None)
-            if duration is None:
-                duration = 1
-
-            if meta:
-                ok = await self._try_send_media_via_openapi(
-                    meta=meta,
-                    media_id=media_id,
-                    media_type="video",
-                    filename=filename,
-                    duration=duration,
-                )
-                if ok:
-                    logger.info(
-                        "dingtalk video sent: media_id=%s",
-                        media_id[:32],
-                    )
-                    return True
-
+                getattr(part, "pic_media_id", None)
+                or getattr(part, "picMediaId", None)
+                or ""
+            ).strip()
             if pic_media_id:
+                duration = getattr(part, "duration", None)
+                if duration is None:
+                    duration = 1
                 payload = {
                     "msgtype": "video",
                     "video": {
@@ -1044,6 +1049,7 @@ class DingTalkChannel(BaseChannel):
                     session_webhook,
                     payload,
                 )
+            # No picMediaId: send as file so user still gets the video
             payload = {
                 "msgtype": "file",
                 "file": {
@@ -1143,7 +1149,6 @@ class DingTalkChannel(BaseChannel):
                 ok = await self._send_media_part_via_webhook(
                     session_webhook,
                     part,
-                    meta=meta,
                 )
                 logger.info(
                     "dingtalk send_content_parts: media part %s result=%s",
@@ -1206,6 +1211,53 @@ class DingTalkChannel(BaseChannel):
         ):
             self._reply_sync(pm, SENT_VIA_WEBHOOK)
 
+    def _check_allowlist(
+        self,
+        sender_id: str,
+        conversation_type: str,
+    ) -> tuple[bool, Optional[str]]:
+        """Check if sender is allowed based on dm_policy/group_policy.
+
+        Args:
+            sender_id: The sender's ID (format: nickname#last4)
+            conversation_type: "dm" for direct message, "group" for group chat
+
+        Returns:
+            (allowed, error_message): allowed=True if message should be
+            processed, error_message contains the rejection message if not
+            allowed
+        """
+        # Determine which policy to apply
+        is_group = conversation_type == "group"
+        policy = self.group_policy if is_group else self.dm_policy
+
+        # If policy is "open", allow all
+        if policy == "open":
+            return True, None
+
+        # If policy is "allowlist", check if sender is in allow_from
+        if sender_id in self.allow_from:
+            return True, None
+
+        # Not allowed - return rejection message
+        if is_group:
+            msg = (
+                "抱歉，此机器人仅对授权用户开放。请联系管理员配置访问权限。\n"
+                f"您的 ID：{sender_id}\n"
+                "Sorry, this bot is only available to authorized users. "
+                "Please contact the administrator. Your ID: "
+                f"{sender_id}"
+            )
+        else:
+            msg = (
+                "抱歉，您没有权限使用此机器人。请联系管理员添加您的 ID 到白名单。\n"
+                f"您的 ID：{sender_id}\n"
+                "Sorry, you are not authorized to use this bot. "
+                "Please contact the administrator to add your ID to "
+                f"the allowlist. Your ID: {sender_id}"
+            )
+        return False, msg
+
     async def _run_process_loop(
         self,
         request: Any,
@@ -1214,6 +1266,37 @@ class DingTalkChannel(BaseChannel):
     ) -> None:
         """Use webhook multi-message send instead of default loop."""
         del to_handle
+
+        # Check allowlist before processing
+        sender_id = getattr(request, "user_id", "") or ""
+        conversation_type = (send_meta or {}).get("conversation_type", "dm")
+        allowed, error_msg = self._check_allowlist(
+            sender_id,
+            conversation_type,
+        )
+        if not allowed:
+            logger.info(
+                "dingtalk allowlist blocked: sender=%s conversation_type=%s",
+                sender_id,
+                conversation_type,
+            )
+            # Send rejection message
+            session_webhook = self._get_session_webhook(send_meta)
+            # error_msg is always str when allowed is False
+            rejection_msg = error_msg or ""
+            if session_webhook:
+                await self._send_via_session_webhook(
+                    session_webhook,
+                    self.bot_prefix + rejection_msg,
+                    bot_prefix="",
+                )
+            else:
+                self._reply_sync_batch(
+                    send_meta,
+                    self.bot_prefix + rejection_msg,
+                )
+            return
+
         logger.info(
             "dingtalk _run_process_loop: send_meta has_sw=%s "
             "req.channel_meta has_sw=%s",
@@ -1346,7 +1429,6 @@ class DingTalkChannel(BaseChannel):
                             ok = await self._send_media_part_via_webhook(
                                 session_webhook,
                                 part,
-                                meta=reply_meta,
                             )
                             logger.info(
                                 "dingtalk consume_loop: media part "
@@ -1891,207 +1973,3 @@ class DingTalkChannel(BaseChannel):
             return False
         s = s.strip()
         return s.startswith("http://") or s.startswith("https://")
-
-    def _build_media_msg_param(
-        self,
-        media_id: str,
-        media_type: str,
-        filename: Optional[str] = None,
-        duration: Optional[float] = None,
-    ) -> str:
-        """Build msgParam JSON string for DingTalk OpenAPI."""
-        duration_ms = str(int((duration or 1) * 1000))
-        if media_type == "image":
-            return json.dumps({
-                "photoURL": media_id,
-            })
-        elif media_type == "voice":
-            return json.dumps({
-                "mediaId": media_id,
-                "duration": duration_ms,
-            })
-        elif media_type == "video":
-            return json.dumps({
-                "videoMediaId": media_id,
-                "videoType": "mp4",
-                "duration": duration_ms,
-            })
-        elif media_type == "file":
-            return json.dumps({
-                "mediaId": media_id,
-                "fileName": filename or "file",
-                "fileType": "file",
-            })
-        else:
-            return json.dumps({"mediaId": media_id})
-
-    async def _send_media_via_openapi(
-        self,
-        user_id: str,
-        conversation_id: str,
-        chat_type: str,
-        media_id: str,
-        media_type: str,
-        filename: Optional[str] = None,
-        duration: Optional[float] = None,
-    ) -> bool:
-        """Send media message via DingTalk OpenAPI (not sessionWebhook).
-        This allows sending images with mediaId for preview support.
-        """
-        logger.info(
-            "dingtalk send_media_via_openapi: type=%s chat_type=%s user_id=%s",
-            media_type,
-            chat_type,
-            user_id[:20] if user_id else "none",
-        )
-        token = await self._get_access_token()
-        msg_key = get_msg_key_for_media_type(media_type)
-        msg_param = self._build_media_msg_param(
-            media_id, 
-            media_type, 
-            filename, 
-            duration
-        )
-
-        if chat_type == "group":
-            url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
-            payload: Dict[str, Any] = {
-                "robotCode": self.client_id,
-                "openConversationId": conversation_id,
-                "msgKey": msg_key,
-                "msgParam": msg_param,
-            }
-        else:
-            url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
-            user_ids = [user_id]
-            payload: Dict[str, Any] = {
-                "robotCode": self.client_id,
-                "userIds": user_ids,
-                "msgKey": msg_key,
-                "msgParam": msg_param,
-            }
-
-        try:
-            async with self._http.post(
-                url,
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-acs-dingtalk-access-token": token,
-                },
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as resp:
-                body_text = await resp.text()
-                if resp.status >= 400:
-                    logger.warning(
-                        "dingtalk openapi send failed: type=%s status=%s body=%s",
-                        media_type,
-                        resp.status,
-                        body_text[:500],
-                    )
-                    return False
-                result = await resp.json(content_type=None)
-                if chat_type == "direct":
-                    invalid_users = result.get("invalidStaffIdList") or []
-                    if invalid_users:
-                        logger.warning(
-                            "dingtalk openapi send: invalid user IDs: %s",
-                            [u[:20] for u in invalid_users],
-                        )
-                        return False
-                logger.info(
-                    "dingtalk openapi send ok: type=%s status=%s",
-                    media_type,
-                    resp.status,
-                )
-                return True
-        except Exception:
-            logger.exception(
-                "dingtalk openapi send failed: type=%s",
-                media_type,
-            )
-            return False
-
-    async def _try_send_media_via_openapi(
-        self,
-        meta: Optional[Dict[str, Any]],
-        media_id: str,
-        media_type: str,
-        filename: Optional[str] = None,
-        duration: Optional[float] = None,
-    ) -> bool:
-        """Try to send media via DingTalk OpenAPI.
-
-        Args:
-            meta: The meta dict containing user info and conversation info
-            media_id: The media ID to send
-            media_type: Type of media (image, video, voice, file)
-            filename: Optional filename for the media
-            duration: Optional duration in seconds for voice/video messages
-
-        Returns:
-            True if OpenAPI send succeeded, False otherwise.
-            When False is returned, caller should fall back to sessionWebhook.
-        """
-        log_prefix = f"{media_type} send"
-        if not meta:
-            return False
-
-        user_id = get_user_id_from_meta(meta)
-        conversation_id = meta.get("conversation_id")
-        chat_type = get_chat_type_from_meta(meta)
-
-        logger.debug(
-            "dingtalk %s: user_id=%s conversation_id=%s chat_type=%s",
-            log_prefix,
-            user_id[:20] if user_id else None,
-            conversation_id[:20] if conversation_id else None,
-            chat_type,
-        )
-
-        missing = [
-            field
-            for field, value in [
-                ("user_id", user_id),
-                ("conversation_id", conversation_id),
-                ("chat_type", chat_type),
-            ]
-            if not value
-        ]
-
-        if missing:
-            logger.debug(
-                "dingtalk OpenAPI %s skipped: missing %s, "
-                "falling back to file via sessionWebhook",
-                f"{media_type} send",
-                ", ".join(missing),
-            )
-            return False
-
-        assert user_id is not None
-        assert conversation_id is not None
-        assert chat_type is not None
-
-        ok = await self._send_media_via_openapi(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            chat_type=chat_type,
-            media_id=media_id,
-            media_type=media_type,
-            filename=filename,
-            duration=duration,
-        )
-
-        if ok:
-            logger.info(
-                "dingtalk %s via OpenAPI: media_id=%s",
-                log_prefix,
-                media_id[:32] + "..." if len(media_id) > 32 else media_id,
-            )
-            return True
-
-        logger.warning(
-            "dingtalk OpenAPI %s failed, falling back to file",
-            log_prefix,
-        )
-        return False
