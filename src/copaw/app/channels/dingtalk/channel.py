@@ -812,6 +812,26 @@ class DingTalkChannel(BaseChannel):
             part,
             default=default_name,
         )
+        # AudioContent URL is in part.data; derive filename/ext for m4a etc.
+        if ptype == ContentType.AUDIO:
+            data_attr = getattr(part, "data", None)
+            if isinstance(data_attr, str) and (
+                data_attr.startswith("http") or data_attr.startswith("file:")
+            ):
+                try:
+                    path = urlparse(data_attr).path
+                    base = os.path.basename(path)
+                    if base and "." in base:
+                        filename = base
+                        ext = base.rsplit(".", 1)[-1].lower()
+                except Exception:
+                    pass
+        # DingTalk API: video=mp4 only; voice=amr/mp3/wav only. Upload
+        # unsupported formats (e.g. mov, m4a) as "file" so they still send.
+        if upload_type == "video" and ext not in ("mp4",):
+            upload_type = "file"
+        elif upload_type == "voice" and ext not in ("amr", "mp3", "wav"):
+            upload_type = "file"
 
         # ---------- if already has media id ----------
         # for file you used file_id;
@@ -843,7 +863,16 @@ class DingTalkChannel(BaseChannel):
                 )
 
             if upload_type == "voice":
-                payload = {"msgtype": "voice", "voice": {"mediaId": media_id}}
+                # sendBySession returns 400105 "unsupported msgtype" for voice.
+                # Send as file so user still receives the audio (amr/mp3/wav).
+                payload = {
+                    "msgtype": "file",
+                    "file": {
+                        "mediaId": media_id,
+                        "fileType": ext,
+                        "fileName": filename,
+                    },
+                }
                 return await self._send_payload_via_session_webhook(
                     session_webhook,
                     payload,
@@ -908,6 +937,13 @@ class DingTalkChannel(BaseChannel):
             or getattr(part, "video_url", None)
             or ""
         )
+        # AudioContent stores URL in "data" (renderer _blocks_to_parts)
+        if not url and ptype == ContentType.AUDIO:
+            data_attr = getattr(part, "data", None)
+            if isinstance(data_attr, str) and (
+                data_attr.startswith("http") or data_attr.startswith("file:")
+            ):
+                url = data_attr
         url = (url or "").strip() if isinstance(url, str) else ""
         raw_b64 = None
         if (
@@ -947,7 +983,8 @@ class DingTalkChannel(BaseChannel):
 
         if not data:
             logger.warning(
-                "dingtalk media part: no data to upload, type=%s",
+                "dingtalk media part: no data to upload (empty file?), "
+                "type=%s",
                 ptype,
             )
             return False
@@ -979,7 +1016,15 @@ class DingTalkChannel(BaseChannel):
             )
 
         if upload_type == "voice":
-            payload = {"msgtype": "voice", "voice": {"mediaId": media_id}}
+            # sendBySession returns 400105 for voice; send as file.
+            payload = {
+                "msgtype": "file",
+                "file": {
+                    "mediaId": media_id,
+                    "fileType": ext,
+                    "fileName": filename,
+                },
+            }
             return await self._send_payload_via_session_webhook(
                 session_webhook,
                 payload,
