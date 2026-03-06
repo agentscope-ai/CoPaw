@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover - compatibility fallback
 from .utils.tool_message_utils import _sanitize_tool_messages
 from ..config.utils import load_config
 from ..local_models import create_local_chat_model
+from ..token_usage.model_wrapper import TokenRecordingModelWrapper
 from ..providers import (
     get_active_llm_config,
     get_chat_model_class,
@@ -410,6 +411,9 @@ def create_model_and_formatter(
 
     # Create the model instance and determine chat model class
     model, chat_model_class = _create_model_instance(llm_cfg)
+
+    # Wrap model to record token usage for each LLM call
+    model = TokenRecordingModelWrapper(model)
 
     # Create the formatter based on chat_model_class
     formatter = _create_formatter_instance(chat_model_class)
