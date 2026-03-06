@@ -177,7 +177,6 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   useEffect(() => {
     api
       .getVersion()
-      // .then((res) => setVersion("0.0.5"))
       .then((res) => setVersion(res?.version ?? ""))
       .catch(() => {});
   }, []);
