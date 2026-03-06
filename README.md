@@ -332,7 +332,7 @@ For common questions, troubleshooting tips, and known issues, please visit the *
 | Horizontal Expansion | More channels, models, skills, MCPs — **community contributions welcome** | Seeking Contributors |
 | Existing Feature Extension | Display optimization, download hints, Windows path compatibility, etc. — **community contributions welcome** | Seeking Contributors |
 | Console Web UI | Expose more info/config in the Console | In Progress |
-| Compatibility & Ease of Use | App-level packaging (DMG, EXE) | In Progress |
+| Compatibility & Ease of Use | App-level packaging (.dmg, .exe) | In Progress |
 | Self-healing | Magic commands and daemon capabilities (CLI, status, restart, logs) | In Progress |
 | | DaemonAgent: autonomous diagnostics, self-healing, and recovery | Planned |
 | Multi-agent | Background task support | In Progress |
