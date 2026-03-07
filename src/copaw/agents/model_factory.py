@@ -33,6 +33,7 @@ from ..local_models import create_local_chat_model
 from ..providers import (
     get_active_llm_config,
     get_chat_model_class,
+    get_model_slot,
     get_provider_chat_model,
     load_providers_json,
 )
@@ -338,7 +339,7 @@ def _create_model_instance(
         return model, OpenAIChatModel
 
     # Handle remote models - determine chat_model_class from provider config
-    chat_model_class = _get_chat_model_class_from_provider()
+    chat_model_class = _get_chat_model_class_from_provider(llm_cfg)
 
     # Create remote model instance with configuration
     model = _create_remote_model_instance(llm_cfg, chat_model_class)
@@ -346,8 +347,13 @@ def _create_model_instance(
     return model, chat_model_class
 
 
-def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
+def _get_chat_model_class_from_provider(
+    llm_cfg: Optional["ResolvedModelConfig"] = None,
+) -> Type[ChatModelBase]:
     """Get the chat model class from provider configuration.
+
+    Args:
+        llm_cfg: Optional resolved model configuration to determine provider from
 
     Returns:
         Chat model class, defaults to OpenAI-compatible chat model if not found
@@ -355,7 +361,14 @@ def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
     chat_model_class = get_chat_model_class("OpenAIChatModel")
     try:
         providers_data = load_providers_json()
-        provider_id = providers_data.active_llm.provider_id
+        
+        # Use provider from resolved config if available, otherwise fall back to active
+        provider_id = None
+        if llm_cfg and llm_cfg.provider_id:
+            provider_id = llm_cfg.provider_id
+        elif providers_data.active_llm.provider_id:
+            provider_id = providers_data.active_llm.provider_id
+            
         if provider_id:
             chat_model_name = get_provider_chat_model(
                 provider_id,
@@ -463,6 +476,87 @@ def _create_formatter_instance(
     return formatter_class()
 
 
+class ModelManager:
+    """Manager for cached model instances with tier-based selection.
+
+    Provides lazy instantiation and caching of model/formatter pairs
+    for efficient multi-tier model routing.
+
+    Usage:
+        model, formatter = ModelManager.get_model_for_tier("complex")
+    """
+
+    _instances: Dict[str, Tuple[ChatModelBase, FormatterBase]] = {}
+
+    @classmethod
+    def get_model_for_tier(
+        cls,
+        tier: str,
+    ) -> Tuple[ChatModelBase, FormatterBase]:
+        """Get or create a model instance for the specified tier.
+
+        Uses lazy instantiation with caching for efficiency.
+        Falls back to active_llm if tier not configured.
+
+        Args:
+            tier: Tier name (simple, medium, complex, reasoning)
+
+        Returns:
+            Tuple of (model_instance, formatter_instance)
+        """
+        # Get resolved config for tier
+        resolved = get_model_slot(tier)
+        if resolved is None:
+            # Fall back to active_llm
+            resolved = get_active_llm_config()
+            if resolved is None:
+                raise ValueError(
+                    f"No model configured for tier '{tier}' "
+                    "and no active_llm set",
+                )
+
+        # Create cache key including provider_id and api_key to handle credential rotation
+        key = f"{resolved.provider_id}:{resolved.base_url}:{resolved.model}:{resolved.api_key}"
+
+        # Check cache
+        if key not in cls._instances:
+            cls._instances[key] = create_model_and_formatter(resolved)
+
+        return cls._instances[key]
+
+    @classmethod
+    def get_model_for_config(
+        cls,
+        config: "ResolvedModelConfig",
+    ) -> Tuple[ChatModelBase, FormatterBase]:
+        """Get or create a model instance for a specific config.
+
+        Args:
+            config: Resolved model configuration
+
+        Returns:
+            Tuple of (model_instance, formatter_instance)
+        """
+        # Create cache key including provider_id and api_key to handle credential rotation
+        key = f"{config.provider_id}:{config.base_url}:{config.model}:{config.api_key}"
+
+        if key not in cls._instances:
+            cls._instances[key] = create_model_and_formatter(config)
+
+        return cls._instances[key]
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear all cached model instances."""
+        cls._instances.clear()
+
+    @classmethod
+    def cached_count(cls) -> int:
+        """Return number of cached model instances."""
+        return len(cls._instances)
+
+
 __all__ = [
     "create_model_and_formatter",
+    "ModelManager",
 ]

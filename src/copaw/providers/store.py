@@ -16,9 +16,11 @@ from .models import (
     CustomProviderData,
     ModelInfo,
     ModelSlotConfig,
+    ModelTier,
     ProviderSettings,
     ProvidersData,
     ResolvedModelConfig,
+    RoutingConfig,
 )
 from .registry import (
     PROVIDERS,
@@ -243,7 +245,8 @@ def _migrate_legacy_custom(
 
 
 def _parse_new_format(raw: dict):
-    """Returns ``(providers, custom_providers, active_llm)``."""
+    """Parse new format and return providers, custom_providers, active_llm,
+    model_slots, and routing."""
     providers: dict[str, ProviderSettings] = {}
     for key, value in raw.get("providers", {}).items():
         if isinstance(value, dict):
@@ -262,11 +265,33 @@ def _parse_new_format(raw: dict):
         if isinstance(llm_raw, dict)
         else ModelSlotConfig()
     )
-    return providers, custom_providers, active_llm
+
+    # Parse model_slots with validation
+    model_slots: dict[str, ModelSlotConfig] = {}
+    slot_container = raw.get("model_slots")
+    if not isinstance(slot_container, dict):
+        # Handle malformed JSON - treat as empty dict
+        slot_container = {}
+    
+    for tier in ModelTier.ALL_TIERS:
+        slot_raw = slot_container.get(tier)
+        if isinstance(slot_raw, dict):
+            model_slots[tier] = ModelSlotConfig.model_validate(slot_raw)
+
+    # Parse routing config
+    routing_raw = raw.get("routing")
+    routing = (
+        RoutingConfig.model_validate(routing_raw)
+        if isinstance(routing_raw, dict)
+        else RoutingConfig()
+    )
+
+    return providers, custom_providers, active_llm, model_slots, routing
 
 
 def _parse_legacy_format(raw: dict):
-    """Returns ``(providers, custom_providers, active_llm)``."""
+    """Parse legacy format and return providers, custom_providers,
+    active_llm, model_slots, and routing."""
     providers: dict[str, ProviderSettings] = {}
     custom_providers: dict[str, CustomProviderData] = {}
     old_active = raw.get("active_provider", "")
@@ -286,7 +311,7 @@ def _parse_legacy_format(raw: dict):
         if old_active
         else ModelSlotConfig()
     )
-    return providers, custom_providers, active_llm
+    return providers, custom_providers, active_llm, {}, RoutingConfig()
 
 
 def _validate_active_llm(data: ProvidersData) -> None:
@@ -354,19 +379,29 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
     providers: dict[str, ProviderSettings] = {}
     custom_providers: dict[str, CustomProviderData] = {}
     active_llm = ModelSlotConfig()
+    model_slots: dict[str, ModelSlotConfig] = {}
+    routing = RoutingConfig()
 
     if path.is_file():
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 raw: dict = json.load(fh)
             if "providers" in raw and isinstance(raw["providers"], dict):
-                providers, custom_providers, active_llm = _parse_new_format(
-                    raw,
-                )
+                (
+                    providers,
+                    custom_providers,
+                    active_llm,
+                    model_slots,
+                    routing,
+                ) = _parse_new_format(raw)
             else:
-                providers, custom_providers, active_llm = _parse_legacy_format(
-                    raw,
-                )
+                (
+                    providers,
+                    custom_providers,
+                    active_llm,
+                    model_slots,
+                    routing,
+                ) = _parse_legacy_format(raw)
         except (json.JSONDecodeError, ValueError):
             providers = {}
 
@@ -386,6 +421,8 @@ def load_providers_json(path: Optional[Path] = None) -> ProvidersData:
         providers=providers,
         custom_providers=custom_providers,
         active_llm=active_llm,
+        model_slots=model_slots,
+        routing=routing,
     )
     _validate_active_llm(data)
     save_providers_json(data, path)
@@ -415,6 +452,11 @@ def save_providers_json(
             for pid, cpd in data.custom_providers.items()
         },
         "active_llm": data.active_llm.model_dump(mode="json"),
+        "model_slots": {
+            tier: slot.model_dump(mode="json")
+            for tier, slot in data.model_slots.items()
+        },
+        "routing": data.routing.model_dump(mode="json"),
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2, ensure_ascii=False)
@@ -471,6 +513,99 @@ def set_active_llm(provider_id: str, model: str) -> ProvidersData:
     return data
 
 
+def set_model_slot(
+    tier: str,
+    provider_id: str,
+    model: str,
+) -> ProvidersData:
+    """Set a model slot for a specific tier.
+
+    Args:
+        tier: Tier name (simple, medium, complex, reasoning)
+        provider_id: Provider identifier
+        model: Model identifier
+
+    Returns:
+        Updated ProvidersData
+
+    Raises:
+        ValueError: If provider_id doesn't exist in providers collection
+    """
+    if tier not in ModelTier.ALL_TIERS:
+        raise ValueError(
+            f"Invalid tier '{tier}'. Must be one of: {ModelTier.ALL_TIERS}",
+        )
+    
+    data = load_providers_json()
+    
+    # Validate provider exists before setting
+    # Check data.providers, data.custom_providers, and the canonical provider registry
+    from .registry import get_provider
+    provider_def = get_provider(provider_id)
+    if provider_id not in data.providers and provider_id not in data.custom_providers and provider_def is None:
+        raise ValueError(
+            f"Provider '{provider_id}' not found in providers collection"
+        )
+    
+    data.model_slots[tier] = ModelSlotConfig(
+        provider_id=provider_id,
+        model=model,
+    )
+    save_providers_json(data)
+    return data
+
+
+def get_model_slot(tier: str) -> Optional[ResolvedModelConfig]:
+    """Get resolved model configuration for a tier.
+
+    Validates tier against allowed values before proceeding.
+    Falls back to fallback_tier or active_llm if tier not configured.
+    Honors routing.enabled setting - bypasses tier lookup when disabled.
+
+    Args:
+        tier: Tier name (simple, medium, complex, reasoning)
+
+    Returns:
+        ResolvedModelConfig or None if no model available
+
+    Raises:
+        ValueError: If tier is not in the allowed set
+    """
+    from .models import ModelTier
+    
+    # Validate tier is in allowed set
+    if tier not in ModelTier.ALL_TIERS:
+        raise ValueError(
+            f"Invalid tier '{tier}'. Must be one of: {ModelTier.ALL_TIERS}"
+        )
+    
+    data = load_providers_json()
+
+    # Check if routing is enabled before using tier slots
+    if not data.routing.enabled:
+        # Routing disabled - use active_llm directly
+        if data.active_llm.provider_id and data.active_llm.model:
+            return _resolve_slot(data.active_llm, data)
+        return None
+
+    # Try requested tier first
+    slot = data.model_slots.get(tier)
+    if slot and slot.provider_id and slot.model:
+        return _resolve_slot(slot, data)
+
+    # Try fallback tier
+    if data.routing.fallback_tier != tier:
+        fallback_slot = data.model_slots.get(data.routing.fallback_tier)
+        if fallback_slot and fallback_slot.provider_id and fallback_slot.model:
+            return _resolve_slot(fallback_slot, data)
+
+    # Fall back to active_llm
+    if data.active_llm.provider_id and data.active_llm.model:
+        return _resolve_slot(data.active_llm, data)
+
+    return None
+
+
 # -- Query --
 
 
@@ -488,6 +623,7 @@ def _resolve_slot(
         return ResolvedModelConfig(
             model=slot.model,
             is_local=True,
+            provider_id=pid,
         )
 
     if pid not in data.custom_providers and pid not in data.providers:
@@ -497,7 +633,34 @@ def _resolve_slot(
         model=slot.model,
         base_url=base_url,
         api_key=api_key,
+        provider_id=pid,
     )
+
+
+def get_routing_enabled() -> bool:
+    """Read routing.enabled flag without side effects.
+
+    Lightweight read-only accessor for hot paths (e.g., agent reply).
+    Does NOT trigger sync operations or file writes.
+
+    Returns:
+        True if routing is enabled, False otherwise.
+    """
+    path = get_providers_json_path()
+    if not path.is_file():
+        return False
+
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw: dict = json.load(fh)
+
+        # Parse just the routing.enabled flag
+        routing_raw = raw.get("routing")
+        if isinstance(routing_raw, dict):
+            return bool(routing_raw.get("enabled", False))
+        return False
+    except (json.JSONDecodeError, OSError, ValueError):
+        return False
 
 
 def get_active_llm_config() -> Optional[ResolvedModelConfig]:

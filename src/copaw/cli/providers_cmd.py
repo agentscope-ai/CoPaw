@@ -8,6 +8,8 @@ import click
 
 from ..providers import (
     ModelInfo,
+    ModelSlotConfig,
+    ModelTier,
     PROVIDERS,
     add_model,
     create_custom_provider,
@@ -19,6 +21,7 @@ from ..providers import (
     mask_api_key,
     remove_model,
     set_active_llm,
+    set_model_slot,
     update_provider_settings,
 )
 from .utils import prompt_choice
@@ -303,6 +306,73 @@ def configure_llm_slot_interactive(*, use_defaults: bool = False) -> None:
         return
     set_active_llm(pid, model)
     click.echo(f"✓ LLM: {defn.name} / {model}")
+
+
+def configure_tier_slot_interactive(
+    tier: str,
+    *,
+    use_defaults: bool = False,
+) -> bool:
+    """Interactively configure a model slot for a specific tier.
+
+    Args:
+        tier: Tier name (simple, medium, complex, reasoning)
+        use_defaults: Use default values without prompting
+
+    Returns:
+        True if configured successfully, False otherwise
+    """
+    data = load_providers_json()
+    all_providers = list_providers()
+    current_slot = data.model_slots.get(tier, ModelSlotConfig())
+
+    eligible = _filter_eligible(data, all_providers)
+
+    if not eligible:
+        click.echo(
+            click.style(
+                "No providers configured. Configure a provider first.",
+                fg="yellow",
+            ),
+        )
+        return False
+
+    ids = [d.id for d in eligible]
+    if use_defaults:
+        pid = (
+            current_slot.provider_id
+            if current_slot.provider_id in ids
+            else ids[0]
+        )
+    else:
+        labels = [f"{d.name} ({d.id})" for d in eligible]
+        default_label = (
+            labels[ids.index(current_slot.provider_id)]
+            if current_slot.provider_id in ids
+            else None
+        )
+        chosen_label = prompt_choice(
+            f"Select provider for {tier} tier:",
+            options=labels,
+            default=default_label,
+        )
+        pid = ids[labels.index(chosen_label)]
+
+    defn = PROVIDERS[pid]
+    model = _select_llm_model(
+        defn,
+        pid,
+        current_slot,
+        data,
+        use_defaults=use_defaults,
+    )
+    if not model:
+        click.echo(f"Skipped {tier} tier configuration.")
+        return False
+
+    set_model_slot(tier, pid, model)
+    click.echo(f"✓ {tier.upper()}: {defn.name} / {model}")
+    return True
 
 
 def configure_providers_interactive(*, use_defaults: bool = False) -> None:
@@ -797,3 +867,158 @@ def ollama_remove_cmd(model_name: str, yes: bool) -> None:
     except Exception as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"))
         raise SystemExit(1) from exc
+
+
+# ---------------------------------------------------------------------------
+# Model tier management commands
+# ---------------------------------------------------------------------------
+
+
+@models_group.command("set-tier")
+@click.argument("tier", type=click.Choice(ModelTier.ALL_TIERS))
+@click.option("--provider", "-p", required=True, help="Provider ID")
+@click.option("--model", "-m", required=True, help="Model ID")
+def set_tier_cmd(tier: str, provider: str, model: str) -> None:
+    """Set a model for a specific complexity tier.
+
+    \b
+    Tiers:
+      simple    - Greetings, status checks, simple queries
+      medium    - Summarization, single-file edits, explanations
+      complex   - Multi-file code generation, architecture
+      reasoning - Math proofs, multi-step reasoning, deep analysis
+
+    \b
+    Examples:
+      copaw models set-tier simple --provider ollama --model qwen2.5:3b
+      copaw models set-tier complex --provider openai --model gpt-4
+    """
+    if provider not in PROVIDERS:
+        click.echo(click.style(f"Unknown provider: {provider}", fg="red"))
+        raise SystemExit(1)
+
+    # Validate provider is configured before setting tier
+    data = load_providers_json()
+    defn = PROVIDERS[provider]
+    if not data.is_configured(defn):
+        click.echo(click.style(f"Unconfigured provider: {provider}", fg="red"))
+        raise SystemExit(1)
+
+    try:
+        set_model_slot(tier, provider, model)
+        click.echo(f"✓ Tier '{tier}' set to {provider} / {model}")
+    except ValueError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"))
+        raise SystemExit(1) from exc
+
+
+@models_group.command("list-tiers")
+def list_tiers_cmd() -> None:
+    """Show all tier configurations and routing status."""
+    data = load_providers_json()
+
+    click.echo(f"\n{'═' * 44}")
+    click.echo("  Model Tiers")
+    click.echo(f"{'═' * 44}")
+
+    tier_descriptions = {
+        "simple": "Greetings, status checks, simple queries",
+        "medium": "Summarization, single-file edits, explanations",
+        "complex": "Multi-file code generation, architecture",
+        "reasoning": "Math proofs, multi-step reasoning, deep analysis",
+    }
+
+    for tier in ModelTier.ALL_TIERS:
+        slot = data.model_slots.get(tier)
+        click.echo(f"\n  {tier.upper()}")
+        click.echo(f"  {'─' * 40}")
+        click.echo(f"  Description: {tier_descriptions.get(tier, '')}")
+        if slot and slot.provider_id and slot.model:
+            click.echo(f"  Model:       {slot.provider_id} / {slot.model}")
+        else:
+            click.echo("  Model:       (not configured)")
+
+    click.echo(f"\n{'═' * 44}")
+    click.echo("  Routing Configuration")
+    click.echo(f"{'═' * 44}")
+    click.echo(f"  Enabled:      {data.routing.enabled}")
+    click.echo(f"  Mode:         {data.routing.mode}")
+    click.echo(f"  Fallback:     {data.routing.fallback_tier}")
+    click.echo("  Default LLM:  ", nl=False)
+    if data.active_llm.provider_id and data.active_llm.model:
+        click.echo(f"{data.active_llm.provider_id} / {data.active_llm.model}")
+    else:
+        click.echo("(not configured)")
+    click.echo()
+
+
+@models_group.command("routing")
+@click.argument(
+    "action",
+    type=click.Choice(["enable", "disable", "status", "mode"]),
+)
+@click.option(
+    "--mode",
+    "-m",
+    type=click.Choice(["balanced", "aggressive", "quality"]),
+    default=None,
+    help="Set routing mode (used with 'mode' action)",
+)
+def routing_cmd(action: str, mode: str | None) -> None:
+    """Manage task routing settings.
+
+    \b
+    Actions:
+      enable   - Enable intelligent task routing
+      disable  - Disable task routing (use default model for all)
+      status   - Show current routing configuration
+      mode     - Set routing mode
+
+    \b
+    Modes:
+      balanced   - Use configured tier defaults (default)
+      aggressive - Prefer cheaper models
+      quality    - Prefer stronger models
+
+    \b
+    Examples:
+      copaw models routing enable
+      copaw models routing disable
+      copaw models routing mode --mode aggressive
+      copaw models routing status
+    """
+    data = load_providers_json()
+    changed = False
+
+    if action == "enable":
+        if not data.routing.enabled:
+            data.routing.enabled = True
+            changed = True
+        click.echo("✓ Task routing enabled")
+
+    elif action == "disable":
+        if data.routing.enabled:
+            data.routing.enabled = False
+            changed = True
+        click.echo("✓ Task routing disabled")
+
+    elif action == "status":
+        click.echo(
+            f"\nRouting: {'enabled' if data.routing.enabled else 'disabled'}",
+        )
+        click.echo(f"Mode: {data.routing.mode}")
+        click.echo(f"Fallback tier: {data.routing.fallback_tier}")
+
+    elif action == "mode":
+        if mode is None:
+            click.echo(click.style("Error: --mode option required", fg="red"))
+            raise SystemExit(1)
+        if data.routing.mode != mode:
+            data.routing.mode = mode
+            changed = True
+        click.echo(f"✓ Routing mode set to '{mode}'")
+
+    # Only save if a change was actually made
+    if changed:
+        from ..providers import save_providers_json
+        save_providers_json(data)

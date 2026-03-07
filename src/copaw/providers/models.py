@@ -71,9 +71,37 @@ class CustomProviderData(BaseModel):
     )
 
 
+class ModelTier:
+    """Model tier constants for task routing."""
+
+    SIMPLE = "simple"  # Greetings, status checks, simple queries
+    MEDIUM = "medium"  # Summarization, single-file edits, explanations
+    COMPLEX = "complex"  # Multi-file code generation, architecture
+    REASONING = "reasoning"  # Math proofs, multi-step reasoning, deep analysis
+
+    ALL_TIERS = [SIMPLE, MEDIUM, COMPLEX, REASONING]
+
+
 class ModelSlotConfig(BaseModel):
     provider_id: str = Field(default="")
     model: str = Field(default="")
+
+
+class RoutingConfig(BaseModel):
+    """Configuration for task-based model routing."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable/disable smart routing",
+    )
+    fallback_tier: str = Field(
+        default="complex",
+        description="Fallback tier when classified tier not configured",
+    )
+    mode: str = Field(
+        default="balanced",
+        description="Routing mode: balanced, aggressive, or quality",
+    )
 
 
 class ProvidersData(BaseModel):
@@ -84,6 +112,14 @@ class ProvidersData(BaseModel):
         default_factory=dict,
     )
     active_llm: ModelSlotConfig = Field(default_factory=ModelSlotConfig)
+    model_slots: Dict[str, ModelSlotConfig] = Field(
+        default_factory=dict,
+        description="Multi-tier model slots for task routing",
+    )
+    routing: RoutingConfig = Field(
+        default_factory=RoutingConfig,
+        description="Routing configuration",
+    )
 
     def get_credentials(self, provider_id: str) -> tuple[str, str]:
         """Return ``(base_url, api_key)`` for *provider_id*."""
@@ -149,3 +185,4 @@ class ResolvedModelConfig(BaseModel):
     base_url: str = Field(default="")
     api_key: str = Field(default="")
     is_local: bool = Field(default=False)
+    provider_id: str = Field(default="")
