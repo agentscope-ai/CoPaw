@@ -123,13 +123,18 @@ export function SkillDrawer({
 
     setOptimizing(true);
     abortControllerRef.current = new AbortController();
+    const originalContent = contentValue;
+    setContentValue(""); // Clear content for streaming output
 
     try {
       await api.streamOptimizeSkill(
-        contentValue,
-        (text) => {
-          setContentValue(text);
-          form.setFieldsValue({ content: text });
+        originalContent,
+        (textChunk) => {
+          setContentValue((prev) => {
+            const newContent = prev + textChunk;
+            form.setFieldsValue({ content: newContent });
+            return newContent;
+          });
         },
         abortControllerRef.current.signal,
       );

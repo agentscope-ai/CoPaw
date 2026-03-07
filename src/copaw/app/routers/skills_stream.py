@@ -43,7 +43,7 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
         request: Contains current skill content to optimize
         
     Returns:
-        StreamingResponse with optimized skill content
+        StreamingResponse with optimized skill content (text deltas)
     """
     async def generate():
         try:
@@ -87,18 +87,27 @@ description: 查询指定城市天气信息，返回温度、湿度、风力等�
 
             response = await model(messages)
             
+            # Track accumulated text to send only deltas
+            accumulated = ""
+            
             # Stream the response
             if hasattr(response, "__aiter__"):
                 async for chunk in response:
                     if hasattr(chunk, "content"):
+                        text = ""
                         if isinstance(chunk.content, list):
                             for item in chunk.content:
                                 if isinstance(item, dict) and 'text' in item:
                                     text = item['text']
-                                    data = json.dumps({"text": text}, ensure_ascii=False)
-                                    yield f"data: {data}\n\n"
+                                    break
                         elif isinstance(chunk.content, str):
-                            data = json.dumps({"text": chunk.content}, ensure_ascii=False)
+                            text = chunk.content
+                        
+                        if text and len(text) > len(accumulated):
+                            # Send only the new part (delta)
+                            delta = text[len(accumulated):]
+                            accumulated = text
+                            data = json.dumps({"text": delta}, ensure_ascii=False)
                             yield f"data: {data}\n\n"
             else:
                 # Fallback for non-streaming response
