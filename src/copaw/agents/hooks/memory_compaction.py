@@ -127,7 +127,7 @@ class MemoryCompactionHook:
                 messages_to_compact,
                 _,
                 is_valid,
-            ) = self.memory_manager.check_context(
+            ) = await self.memory_manager.check_context(
                 messages=messages,
                 memory_compact_threshold=left_compact_threshold,
                 memory_compact_reserve=memory_compact_reserve,
