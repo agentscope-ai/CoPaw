@@ -77,6 +77,22 @@ class TelegramConfig(BaseChannelConfig):
     show_typing: Optional[bool] = None
 
 
+class MQTTConfig(BaseChannelConfig):
+    host: str = ""
+    port: Optional[int] = None
+    transport: str = ""
+    clean_session: bool = True
+    qos: int = 2
+    username: Optional[str] = None
+    password: Optional[str] = None
+    subscribe_topic: str = ""
+    publish_topic: str = ""
+    tls_enabled: bool = False
+    tls_ca_certs: Optional[str] = None
+    tls_certfile: Optional[str] = None
+    tls_keyfile: Optional[str] = None
+
+
 class ConsoleConfig(BaseChannelConfig):
     """Console channel: prints agent responses to stdout."""
 
@@ -108,6 +124,7 @@ class ChannelConfig(BaseModel):
     feishu: FeishuConfig = FeishuConfig()
     qq: QQConfig = QQConfig()
     telegram: TelegramConfig = TelegramConfig()
+    mqtt: MQTTConfig = MQTTConfig()
     console: ConsoleConfig = ConsoleConfig()
     voice: VoiceChannelConfig = VoiceChannelConfig()
 
@@ -298,6 +315,7 @@ ChannelConfigUnion = Union[
     FeishuConfig,
     QQConfig,
     TelegramConfig,
+    MQTTConfig,
     ConsoleConfig,
     VoiceChannelConfig,
 ]
