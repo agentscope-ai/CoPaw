@@ -21,6 +21,12 @@ from .browser_control import browser_use
 from .desktop_screenshot import desktop_screenshot
 from .memory_search import create_memory_search_tool
 from .get_current_time import get_current_time
+from .background_process import (
+    start_background_process,
+    stop_background_process,
+    list_background_processes,
+    get_process_output,
+)
 
 __all__ = [
     "execute_python_code",
@@ -38,4 +44,8 @@ __all__ = [
     "browser_use",
     "create_memory_search_tool",
     "get_current_time",
+    "start_background_process",
+    "stop_background_process",
+    "list_background_processes",
+    "get_process_output",
 ]

@@ -36,6 +36,10 @@ from .tools import (
     send_file_to_user,
     write_file,
     create_memory_search_tool,
+    start_background_process,
+    stop_background_process,
+    list_background_processes,
+    get_process_output,
 )
 from .utils import process_file_and_media_blocks_in_message
 from ..agents.memory import MemoryManager
@@ -198,6 +202,24 @@ class CoPawAgent(ReActAgent):
         )
         toolkit.register_tool_function(
             get_current_time,
+            namesake_strategy=namesake_strategy,
+        )
+
+        # Register background process management tools
+        toolkit.register_tool_function(
+            start_background_process,
+            namesake_strategy=namesake_strategy,
+        )
+        toolkit.register_tool_function(
+            stop_background_process,
+            namesake_strategy=namesake_strategy,
+        )
+        toolkit.register_tool_function(
+            list_background_processes,
+            namesake_strategy=namesake_strategy,
+        )
+        toolkit.register_tool_function(
+            get_process_output,
             namesake_strategy=namesake_strategy,
         )
 
