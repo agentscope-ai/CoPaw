@@ -2,7 +2,7 @@ import {
   AgentScopeRuntimeWebUI,
   IAgentScopeRuntimeWebUIOptions,
 } from "@agentscope-ai/chat";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Modal, Button, Result } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import defaultConfig, { DefaultConfig } from "./OptionsPanel/defaultConfig";
 import Weather from "./Weather";
 import { getApiUrl, getApiToken } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
+import { uploadApi } from "../../api/modules/upload";
 import "./index.module.less";
 
 interface CustomWindow extends Window {
@@ -45,6 +46,31 @@ export default function ChatPage() {
   const handleSkipConfiguration = () => {
     setShowModelPrompt(false);
   };
+
+  const customUploadRequest = useCallback(async (options: any) => {
+    const { file, onSuccess, onError, onProgress } = options;
+    try {
+      const result = await uploadApi.uploadFile(
+        file as File,
+        (pct: number) => onProgress?.({ percent: pct }),
+      );
+      onProgress?.({ percent: 100 });
+      let fullUrl: string;
+      if (/^https?:\/\//i.test(result.url)) {
+        fullUrl = result.url;
+      } else {
+        const base = getApiUrl("/");
+        if (/^https?:\/\//i.test(base)) {
+          fullUrl = new URL(result.url, base).toString();
+        } else {
+          fullUrl = `${window.location.origin}${result.url}`;
+        }
+      }
+      onSuccess?.({ url: fullUrl });
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error(String(err)));
+    }
+  }, []);
 
   const options = useMemo(() => {
     const handleModelError = () => {
@@ -125,6 +151,15 @@ export default function ChatPage() {
       theme: {
         ...optionsConfig.theme,
       },
+      sender: {
+        ...optionsConfig?.sender,
+        attachments: {
+          accept:
+            "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml,.py,.js,.ts,.java,.c,.cpp,.go,.rs,.sh,.bat,.ps1,.zip,.tar,.gz,.rar,.7z",
+          multiple: true,
+          customRequest: customUploadRequest,
+        },
+      },
       api: {
         ...optionsConfig.api,
         fetch: customFetch,
@@ -136,7 +171,7 @@ export default function ChatPage() {
         "weather search mock": Weather,
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
-  }, [optionsConfig]);
+  }, [optionsConfig, customUploadRequest]);
 
   return (
     <div style={{ height: "100%", width: "100%" }}>
