@@ -211,25 +211,26 @@ def _message_meta(update: Any) -> dict:
 def _escape_markdown_v2(text: str) -> str:
     """Convert standard Markdown to Telegram's strict MarkdownV2.
 
-    Includes user-provided SPECIAL_CHARS for escaping while preserving
-    formatting entities.
+    Includes support for headers, bold, italic, links, code blocks,
+    and blockquotes, with proper character escaping.
     """
     if not text:
         return text
 
-    # 1. Convert headers (# Title) to Bold
+    # 1. Pre-process standard Markdown for compatibility
+    # Convert headers (# Title) to Bold
     text = re.sub(r"^#{1,6}\s+(.*)$", r"**\1**", text, flags=re.MULTILINE)
-    # Handle thematic breaks
+    # Handle thematic breaks (--- or ***)
     text = re.sub(r"^[*-]{3,}$", r"---", text, flags=re.MULTILINE)
 
-    # 2. Escape EVERYTHING that is special in MarkdownV2
-    # User's specified set: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    # 2. Escape everything except the core formatting tokens
+    # Characters that MUST be escaped in MarkdownV2: _ * [ ] ( ) ~ ` > # + - = | { } . !
     special_chars_pattern = r"([\_\[\]\(\)\~\>\#\+\-\=\|\{\}\.\!\*\`\\])"
 
     def full_escape(s):
         return re.sub(special_chars_pattern, r"\\\1", s)
 
-    # Split to avoid escaping inside code blocks
+    # Split into code blocks/pre and other text
     parts = re.split(r"(```.*?```|`.*?`)", text, flags=re.DOTALL)
     for i in range(len(parts)):
         if not (parts[i].startswith("```") or parts[i].startswith("`")):
@@ -240,17 +241,26 @@ def _escape_markdown_v2(text: str) -> str:
 
     text = "".join(parts)
 
-    # 3. Restore formatting tokens (selective un-escaping)
-    # Bold: ** -> *
+    # 3. Restore and convert formatting tokens (selective un-escaping)
+
+    # Bold: Standard **text** -> Telegram *text*
     text = re.sub(r"\\\*\\\*(.*?)\\\*\\\*", r"*\1*", text)
-    text = re.sub(r"\\\_\\\_(.*?)\\\_\\\_", r"*\1*", text)
-    # Italic: * -> _
+
+    # Italic: Standard *text* -> Telegram _text_
     text = re.sub(r"\\\*(.*?)\\\*", r"_\1_", text)
-    text = re.sub(r"\\\_(.*?)\\\_", r"_\1_", text)
-    # Links: [text](url)
+
+    # Links: [text](url) -> [text](url)
     text = re.sub(r"\\\[(.*?)\\\]\\\((.*?)\\\)", r"[\1](\2)", text)
-    # Code
+
+    # Blockquotes: > Quote (must be on its own line)
+    # Restore unescaped > for lines starting with it
+    text = re.sub(r"^\\\>\s*(.*)$", r">\1", text, flags=re.MULTILINE)
+
+    # Code blocks: ```text```
+    # Ensure they start/end on newlines as per Telegram's recommendation in issue #4219
     text = re.sub(r"\\\`\\\`\\\`(.*?)\\\`\\\`\\\`", r"```\1```", text, flags=re.DOTALL)
+
+    # Inline code: `text`
     text = re.sub(r"\\\`(.*?)\\\`", r"`\1`", text)
 
     return text
