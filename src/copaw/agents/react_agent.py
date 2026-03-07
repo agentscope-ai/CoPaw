@@ -82,6 +82,7 @@ class CoPawAgent(ReActAgent):
         max_iters: int = 50,
         max_input_length: int = 128 * 1024,  # 128K = 131072 tokens
         namesake_strategy: NamesakeStrategy = "skip",
+        session_id: Optional[str] = None,
     ):
         """Initialize CoPawAgent.
 
@@ -99,6 +100,8 @@ class CoPawAgent(ReActAgent):
             namesake_strategy: Strategy to handle namesake tool functions.
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
+            session_id: Optional session identifier used for
+                provider-side sticky routing headers
         """
         self._env_context = env_context
         self._max_input_length = max_input_length
@@ -120,7 +123,9 @@ class CoPawAgent(ReActAgent):
         sys_prompt = self._build_sys_prompt()
 
         # Create model and formatter using factory method
-        model, formatter = create_model_and_formatter()
+        model, formatter = create_model_and_formatter(
+            session_id=session_id,
+        )
 
         # Initialize parent ReActAgent
         super().__init__(

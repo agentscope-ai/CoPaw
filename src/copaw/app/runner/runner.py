@@ -116,6 +116,7 @@ class AgentRunner(Runner):
 
             agent = CoPawAgent(
                 env_context=env_context,
+                session_id=session_id,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
                 max_iters=max_iters,

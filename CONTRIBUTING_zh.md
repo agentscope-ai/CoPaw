@@ -100,6 +100,10 @@ CoPaw 支持**多种模型后端**：云 API（如 DashScope、ModelScope）、*
 
 用户可以通过 Console 或 `providers.json` 添加**自定义提供商**：任何 OpenAI 兼容的 API（如 vLLM、SGLang、私有端点）都可以通过唯一 ID、base URL、API key 和可选的模型列表进行配置。标准 OpenAI 兼容 API 无需代码更改。
 
+对于**分布式自托管推理**（例如 vLLM 集群），生产稳定性依赖部署侧配置：
+- 请在推理框架侧开启前缀缓存（vLLM 参考：<https://docs.vllm.ai/en/stable/design/v1/prefix_caching.html>）。
+- 请保持会话级粘性路由（例如 `x-session-affinity` 或负载均衡器等价策略），否则跨 worker 的前缀缓存命中率会下降。
+
 #### B. 新的内置提供商或新的 ChatModel（代码贡献）
 
 如果你想添加**新的内置提供商**或**不兼容 OpenAI 的新 API 协议**：

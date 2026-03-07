@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Optional
@@ -95,6 +96,7 @@ def _migrate_legacy_providers_json(path: Path) -> None:
 _SUPPORTED_CHAT_MODELS: frozenset[str] = frozenset(
     ["OpenAIChatModel", "AnthropicChatModel"],
 )
+_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 
 def get_providers_json_path() -> Path:
@@ -121,6 +123,38 @@ def _normalize_chat_model_name(chat_model: Optional[str]) -> str:
             f"Supported values: {allowed}.",
         )
     return normalized
+
+
+def _sanitize_extra_headers(
+    headers: Optional[dict[str, str]],
+) -> dict[str, str]:
+    if headers is None:
+        return {}
+    sanitized: dict[str, str] = {}
+    for raw_key, raw_value in headers.items():
+        key = str(raw_key).strip()
+        if not key:
+            raise ValueError("Header name cannot be empty.")
+        if _HEADER_NAME_RE.fullmatch(key) is None:
+            raise ValueError(f"Invalid header name '{raw_key}'.")
+        value = "" if raw_value is None else str(raw_value).strip()
+        if any(
+            (ch in "\r\n") or (ord(ch) < 32 and ch != "\t") or ord(ch) == 127
+            for ch in value
+        ):
+            raise ValueError(
+                f"Invalid header value for '{key}': control characters "
+                "are not allowed.",
+            )
+        sanitized[key] = value
+    return sanitized
+
+
+def _normalize_session_affinity_header(name: Optional[str]) -> str:
+    value = (name or "").strip() or "x-session-affinity"
+    if _HEADER_NAME_RE.fullmatch(value) is None:
+        raise ValueError(f"Invalid session affinity header '{value}'.")
+    return value
 
 
 def _resolve_chat_model_name(
@@ -429,6 +463,9 @@ def update_provider_settings(
     *,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    extra_headers: Optional[dict[str, str]] = None,
+    enable_session_affinity: Optional[bool] = None,
+    session_affinity_header: Optional[str] = None,
     chat_model: Optional[str] = None,
 ) -> ProvidersData:
     """Partially update a provider's settings. Returns updated state."""
@@ -440,6 +477,14 @@ def update_provider_settings(
             cpd.api_key = api_key
         if base_url is not None:
             cpd.base_url = base_url
+        if extra_headers is not None:
+            cpd.extra_headers = _sanitize_extra_headers(extra_headers)
+        if enable_session_affinity is not None:
+            cpd.enable_session_affinity = bool(enable_session_affinity)
+        if session_affinity_header is not None:
+            cpd.session_affinity_header = _normalize_session_affinity_header(
+                session_affinity_header,
+            )
         if chat_model is not None:
             cpd.chat_model = _normalize_chat_model_name(chat_model)
         if not cpd.base_url:
@@ -451,6 +496,18 @@ def update_provider_settings(
             settings.api_key = api_key
         if base_url is not None:
             settings.base_url = base_url
+        if extra_headers is not None:
+            settings.extra_headers = _sanitize_extra_headers(extra_headers)
+        if enable_session_affinity is not None:
+            settings.enable_session_affinity = bool(
+                enable_session_affinity,
+            )
+        if session_affinity_header is not None:
+            settings.session_affinity_header = (
+                _normalize_session_affinity_header(
+                    session_affinity_header,
+                )
+            )
         if not settings.base_url:
             defn = PROVIDERS.get(provider_id)
             if defn:
@@ -486,17 +543,43 @@ def _resolve_slot(
     defn = PROVIDERS.get(pid)
     if defn is not None and defn.is_local:
         return ResolvedModelConfig(
+            provider_id=pid,
             model=slot.model,
             is_local=True,
         )
 
     if pid not in data.custom_providers and pid not in data.providers:
         return None
+    cpd = data.custom_providers.get(pid)
+    settings = data.providers.get(pid)
     base_url, api_key = data.get_credentials(pid)
     return ResolvedModelConfig(
+        provider_id=pid,
         model=slot.model,
         base_url=base_url,
         api_key=api_key,
+        is_custom=cpd is not None,
+        extra_headers=(
+            dict(cpd.extra_headers)
+            if cpd is not None
+            else dict(settings.extra_headers if settings else {})
+        ),
+        enable_session_affinity=(
+            bool(cpd.enable_session_affinity)
+            if cpd is not None
+            else bool(settings.enable_session_affinity)
+            if settings is not None
+            else False
+        ),
+        session_affinity_header=(
+            (cpd.session_affinity_header or "x-session-affinity")
+            if cpd is not None
+            else (
+                settings.session_affinity_header or "x-session-affinity"
+                if settings is not None
+                else "x-session-affinity"
+            )
+        ),
     )
 
 
@@ -529,6 +612,9 @@ def create_custom_provider(
     default_base_url: str = "",
     api_key_prefix: str = "",
     models: Optional[list[ModelInfo]] = None,
+    extra_headers: Optional[dict[str, str]] = None,
+    enable_session_affinity: bool = False,
+    session_affinity_header: str = "x-session-affinity",
     chat_model: str = "OpenAIChatModel",
 ) -> ProvidersData:
     err = validate_custom_provider_id(provider_id)
@@ -546,6 +632,11 @@ def create_custom_provider(
         api_key_prefix=api_key_prefix,
         models=models or [],
         base_url=default_base_url,
+        extra_headers=_sanitize_extra_headers(extra_headers),
+        enable_session_affinity=bool(enable_session_affinity),
+        session_affinity_header=_normalize_session_affinity_header(
+            session_affinity_header,
+        ),
         chat_model=_normalize_chat_model_name(chat_model),
     )
     data.custom_providers[provider_id] = cpd
