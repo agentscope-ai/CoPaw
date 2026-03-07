@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# flake8: noqa: E501
 """
 Streaming AI skill optimization API
 """
@@ -115,7 +116,8 @@ description: Запрос погоды для города, возвращает
 class AIOptimizeSkillRequest(BaseModel):
     content: str = Field(..., description="Current skill content to optimize")
     language: str = Field(
-        default="en", description="Language for optimization (en, zh, ru)"
+        default="en",
+        description="Language for optimization (en, zh, ru)",
     )
 
 
@@ -161,28 +163,6 @@ def _extract_text_from_response(response) -> str:
     return ""
 
 
-async def _stream_response(response, accumulated: str):
-    """Stream response chunks and yield text deltas.
-
-    Args:
-        response: Async iterable response from the model
-        accumulated: Previously accumulated text
-
-    Yields:
-        SSE formatted data strings with text deltas
-    """
-    async for chunk in response:
-        text = _extract_text_from_chunk(chunk)
-
-        if text and len(text) > len(accumulated):
-            delta = text[len(accumulated) :]
-            accumulated = text
-            data = json.dumps({"text": delta}, ensure_ascii=False)
-            yield f"data: {data}\n\n"
-
-    return accumulated
-
-
 @router.post("/skills/ai/optimize/stream")
 async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
     """Use AI to optimize an existing skill with streaming response.
@@ -199,13 +179,19 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
             model = get_model()
             if not model:
                 error_msg = json.dumps(
-                    {"error": "No AI model configured. Please configure in Settings."}
+                    {
+                        "error": (
+                            "No AI model configured. "
+                            "Please configure in Settings."
+                        )
+                    }
                 )
                 yield f"data: {error_msg}\n\n"
                 return
 
             system_prompt = SYSTEM_PROMPTS.get(
-                request.language, SYSTEM_PROMPTS["en"]
+                request.language,
+                SYSTEM_PROMPTS["en"],
             )
 
             messages = [
@@ -217,11 +203,24 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
             accumulated = ""
 
             if hasattr(response, "__aiter__"):
-                accumulated = await _stream_response(response, accumulated)
+                async for chunk in response:
+                    text = _extract_text_from_chunk(chunk)
+
+                    if text and len(text) > len(accumulated):
+                        delta = text[len(accumulated) :]
+                        accumulated = text
+                        data = json.dumps(
+                            {"text": delta},
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {data}\n\n"
             else:
                 text = _extract_text_from_response(response)
                 if text:
-                    data = json.dumps({"text": text}, ensure_ascii=False)
+                    data = json.dumps(
+                        {"text": text},
+                        ensure_ascii=False,
+                    )
                     yield f"data: {data}\n\n"
 
             yield f"data: {json.dumps({'done': True})}\n\n"
