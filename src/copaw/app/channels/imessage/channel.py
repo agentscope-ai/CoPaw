@@ -14,6 +14,7 @@ import base64
 import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional, List
+from urllib.parse import quote as urlquote
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
     TextContent,
@@ -175,11 +176,55 @@ class IMessageChannel(BaseChannel):
             self.db_path,
         )
 
-        conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row
-        last_rowid = conn.execute(
-            "SELECT IFNULL(MAX(ROWID),0) FROM message",
-        ).fetchone()[0]
+        db = Path(self.db_path)
+        try:
+            db.stat()
+        except PermissionError:
+            self.last_error = (
+                f"Cannot read iMessage database ({self.db_path}). "
+                "Grant Full Disk Access to your terminal app in "
+                "System Settings > Privacy & Security > Full Disk Access."
+            )
+            logger.error(
+                "iMessage watcher failed to start: %s",
+                self.last_error,
+            )
+            return
+        except OSError:
+            if not db.exists():
+                self.last_error = (
+                    f"iMessage database not found: {self.db_path}"
+                )
+            else:
+                self.last_error = (
+                    f"Cannot access iMessage database ({self.db_path})."
+                )
+            logger.error(
+                "iMessage watcher failed to start: %s",
+                self.last_error,
+            )
+            return
+
+        try:
+            conn = sqlite3.connect(
+                f"file:{urlquote(self.db_path, safe='/')}?mode=ro",
+                uri=True,
+            )
+            conn.row_factory = sqlite3.Row
+            last_rowid = conn.execute(
+                "SELECT IFNULL(MAX(ROWID),0) FROM message",
+            ).fetchone()[0]
+        except sqlite3.OperationalError as exc:
+            self.last_error = (
+                f"Cannot open iMessage database ({self.db_path}): {exc}"
+            )
+            logger.error(
+                "iMessage watcher failed to start: %s",
+                self.last_error,
+            )
+            return
+
+        self.last_error = None
 
         try:
             while not self._stop_event.is_set():
@@ -273,8 +318,15 @@ ORDER BY m.ROWID ASC
             logger.debug("disabled by env IMESSAGE_ENABLED=0")
             return
 
-        self._imsg_path = self._ensure_imsg()
+        try:
+            self._imsg_path = self._ensure_imsg()
+        except RuntimeError as exc:
+            self.last_error = str(exc)
+            logger.error("iMessage channel start failed: %s", self.last_error)
+            return
+
         logger.info(f"IMessage channel started with binary: {self._imsg_path}")
+        self.last_error = None
 
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._watcher_loop, daemon=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import click
 
@@ -815,6 +816,71 @@ def _channel_enabled(ch) -> bool:
     return False
 
 
+def _strip_ansi(s: str) -> str:
+    """Strip ANSI escape sequences from a string."""
+    import re
+
+    ansi_escape = re.compile(
+        r"""
+        \x1B                      # ESC
+        (?:
+            \[ [0-?]* [ -/]* [@-~]     # CSI sequence
+          # OSC sequence terminated by BEL or ST
+          | \] [^\x1b\x07]* (?:\x07|\x1b\\)
+          | [@-Z\\-_]                  # 7-bit C1 escape (single-char)
+        )
+        """,
+        re.VERBOSE,
+    )
+    return ansi_escape.sub("", s)
+
+
+def _validate_channel(key: str, ch: Any) -> list[str]:
+    """Run static validation checks for a channel config. Returns warnings."""
+    warnings: list[str] = []
+
+    if key == "imessage":
+        import shutil
+        import os
+
+        if not shutil.which("imsg"):
+            warnings.append(
+                "imsg binary not found. "
+                "Install with: brew install steipete/tap/imsg",
+            )
+
+        db_path = (
+            ch.get("db_path")
+            if isinstance(ch, dict)
+            else getattr(ch, "db_path", None)
+        )
+        if db_path:
+            expanded = os.path.expanduser(db_path)
+            safe_expanded = _strip_ansi(expanded)
+            try:
+                os.stat(expanded)
+            except PermissionError:
+                warnings.append(
+                    f"Cannot read iMessage database: {safe_expanded}. "
+                    "Grant Full Disk Access to your terminal in "
+                    "System Settings > Privacy & Security > Full Disk Access.",
+                )
+            except FileNotFoundError:
+                warnings.append(
+                    f"iMessage database not found: {safe_expanded}",
+                )
+            else:
+                if not os.access(expanded, os.R_OK):
+                    warnings.append(
+                        f"Cannot read iMessage database: {safe_expanded}. "
+                        "Grant Full Disk Access to your terminal in "
+                        "System Settings > Privacy & Security > "
+                        "Full Disk Access.",
+                    )
+
+    return warnings
+
+
 @channels_group.command("list")
 def list_cmd() -> None:
     """Show current channel configuration."""
@@ -849,6 +915,10 @@ def list_cmd() -> None:
                 _mask(str(value)) if field_name in _SECRET_FIELDS else value
             )
             click.echo(f"  {field_name:20s}: {display}")
+
+        if _channel_enabled(ch):
+            for warning in _validate_channel(key, ch):
+                click.echo(click.style(f"  ⚠ {warning}", fg="yellow"))
 
     click.echo()
 

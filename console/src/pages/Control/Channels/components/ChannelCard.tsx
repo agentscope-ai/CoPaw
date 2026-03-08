@@ -23,6 +23,8 @@ export function ChannelCard({
   const { t } = useTranslation();
   const enabled = Boolean(config.enabled);
   const isBuiltin = Boolean(config.isBuiltin);
+  const lastError =
+    typeof config.last_error === "string" ? config.last_error : "";
   const label = getChannelLabel(channelKey);
   const getConfigString = (key: string) =>
     typeof config[key] === "string" ? config[key] : "";
@@ -59,10 +61,20 @@ export function ChannelCard({
         <div className={styles.statusContainer}>
           <div
             className={`${styles.statusDot} ${
-              enabled ? styles.enabled : styles.disabled
+              enabled
+                ? lastError
+                  ? styles.error
+                  : styles.enabled
+                : styles.disabled
             }`}
           />
-          <div>{enabled ? t("common.enabled") : t("common.disabled")}</div>
+          <div>
+            {enabled
+              ? lastError
+                ? t("channels.error")
+                : t("common.enabled")
+              : t("common.disabled")}
+          </div>
         </div>
       </div>
 
@@ -77,6 +89,10 @@ export function ChannelCard({
           </>
         )}
       </div>
+
+      {enabled && lastError && (
+        <div className={styles.cardError}>{lastError}</div>
+      )}
 
       <div className={styles.cardHint}>{t("channels.clickCardToEdit")}</div>
     </Card>
