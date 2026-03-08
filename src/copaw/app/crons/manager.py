@@ -112,10 +112,18 @@ class CronManager:
     async def pause_job(self, job_id: str) -> None:
         async with self._lock:
             self._scheduler.pause_job(job_id)
+            job = await self._repo.get_job(job_id)
+            if job:
+                job.paused = True
+                await self._repo.upsert_job(job)
 
     async def resume_job(self, job_id: str) -> None:
         async with self._lock:
             self._scheduler.resume_job(job_id)
+            job = await self._repo.get_job(job_id)
+            if job:
+                job.paused = False
+                await self._repo.upsert_job(job)
 
     async def reschedule_heartbeat(self) -> None:
         """Reload heartbeat config and update or remove the heartbeat job."""
@@ -214,7 +222,7 @@ class CronManager:
             replace_existing=True,
         )
 
-        if not spec.enabled:
+        if not spec.enabled or spec.paused:
             self._scheduler.pause_job(spec.id)
 
         # update next_run

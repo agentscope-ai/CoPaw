@@ -83,6 +83,7 @@ class CronJobSpec(BaseModel):
     id: str
     name: str
     enabled: bool = True
+    paused: bool = False
 
     schedule: ScheduleSpec
     task_type: TaskType = "agent"

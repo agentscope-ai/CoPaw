@@ -34,6 +34,7 @@ export interface CronJobSpecInput {
   id: string;
   name: string;
   enabled?: boolean;
+  paused?: boolean;
   schedule: CronJobSchedule;
   task_type?: "text" | "agent";
   text?: string;
