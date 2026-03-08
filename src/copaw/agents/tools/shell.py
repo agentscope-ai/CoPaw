@@ -5,6 +5,7 @@
 
 import asyncio
 import locale
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,8 @@ from agentscope.tool import ToolResponse
 from agentscope.message import TextBlock
 
 from copaw.constant import WORKING_DIR
+
+logger = logging.getLogger(__name__)
 
 
 def _execute_subprocess_sync(
@@ -73,16 +76,35 @@ async def execute_shell_command(
     timeout: int = 60,
     cwd: Optional[Path] = None,
 ) -> ToolResponse:
-    """Execute given command and return the return code, standard output and
-    error within <returncode></returncode>, <stdout></stdout> and
-    <stderr></stderr> tags.
+    """Execute a shell command and wait for it to complete, then return output.
+
+    ⚠️ IMPORTANT - When to use this tool vs start_background_process:
+
+    **Use THIS tool (execute_shell_command) for:**
+    - Quick commands that complete quickly (ls, cat, grep, git status, etc.)
+    - Commands where you NEED the output to proceed
+    - File operations (copy, move, delete)
+    - Package installations (pip install, npm install)
+    - Build/test commands that finish in reasonable time
+
+    **Use start_background_process instead for:**
+    - HTTP servers (python -m http.server, nginx, apache)
+    - Development servers (npm run dev, flask run, django runserver)
+    - File watchers (webpack --watch, nodemon)
+    - Long-running daemons or services
+    - Any command that runs until manually stopped
+
+    The key question: Does the command finish by itself?
+    - YES → Use execute_shell_command
+    - NO (runs until stopped) → Use start_background_process
 
     Args:
         command (`str`):
             The shell command to execute.
-        timeout (`int`, defaults to `10`):
+        timeout (`int`, defaults to `60`):
             The maximum time (in seconds) allowed for the command to run.
-            Default is 60 seconds.
+            Default is 60 seconds. For longer operations, increase timeout
+            or consider if start_background_process is more appropriate.
         cwd (`Optional[Path]`, defaults to `None`):
             The working directory for the command execution.
             If None, defaults to WORKING_DIR.
@@ -96,6 +118,43 @@ async def execute_shell_command(
 
     cmd = (command or "").strip()
 
+    # Detect server-like commands that should use background_process instead
+    server_patterns = [
+        "http.server",
+        "simplehttpserver",
+        "flask run",
+        "django runserver",
+        "uvicorn",
+        "gunicorn",
+        "npm run dev",
+        "npm start",
+        "yarn dev",
+        "yarn start",
+        "webpack --watch",
+        "nodemon",
+        "tsc --watch",
+        "nginx",
+        "apache",
+        "mongod",
+        "redis-server",
+        "postgres",
+        "live-server",
+        "http-server",
+    ]
+    cmd_lower = cmd.lower()
+    # Tokenize command to detect generic 'serve' as a standalone word only
+    cmd_tokens = cmd_lower.split()
+    is_server_like = (
+        any(pattern in cmd_lower for pattern in server_patterns)
+        or "serve" in cmd_tokens
+    )
+
+    if is_server_like:
+        logger.warning(
+            "Detected server-like command that may run indefinitely. "
+            "Consider using start_background_process instead.",
+        )
+
     # Set working directory
     working_dir = cwd if cwd is not None else WORKING_DIR
 
@@ -108,6 +167,18 @@ async def execute_shell_command(
                 str(working_dir),
                 timeout,
             )
+
+            # Handle Windows timeout with server-like command detection
+            if returncode == -1 and "timeout" in stderr_str.lower():
+                if is_server_like:
+                    stderr_str = (
+                        f"⚠️ TimeoutError: The command appears to be a server or "
+                        f"long-running process that exceeded the {timeout} second timeout.\n\n"
+                        f"💡 This command seems to run indefinitely. "
+                        f"Use start_background_process() instead:\n"
+                        f'   start_background_process(command="{cmd}")\n\n'
+                        f"This will start it in the background without blocking."
+                    )
         else:
             proc = await asyncio.create_subprocess_shell(
                 cmd,
@@ -135,12 +206,22 @@ async def execute_shell_command(
 
             except asyncio.TimeoutError:
                 # Handle timeout
-                stderr_suffix = (
-                    f"⚠️ TimeoutError: The command execution exceeded "
-                    f"the timeout of {timeout} seconds. "
-                    f"Please consider increasing the timeout value if this command "
-                    f"requires more time to complete."
-                )
+                if is_server_like:
+                    stderr_suffix = (
+                        f"⚠️ TimeoutError: The command appears to be a server or "
+                        f"long-running process that exceeded the {timeout} second timeout.\n\n"
+                        f"💡 This command seems to run indefinitely. "
+                        f"Use start_background_process() instead:\n"
+                        f'   start_background_process(command="{cmd}")\n\n'
+                        f"This will start it in the background without blocking."
+                    )
+                else:
+                    stderr_suffix = (
+                        f"⚠️ TimeoutError: The command execution exceeded "
+                        f"the timeout of {timeout} seconds. "
+                        f"Please consider increasing the timeout value if this command "
+                        f"requires more time to complete."
+                    )
                 returncode = -1
                 try:
                     proc.terminate()
