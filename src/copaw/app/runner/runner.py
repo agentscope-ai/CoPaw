@@ -118,6 +118,11 @@ class AgentRunner(Runner):
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
+                request_context={
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "channel": channel,
+                },
                 max_iters=max_iters,
                 max_input_length=max_input_length,
             )
