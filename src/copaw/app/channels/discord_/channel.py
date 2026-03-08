@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import logging
 import asyncio
+import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 import aiohttp
@@ -23,6 +25,51 @@ from ..base import BaseChannel, OnReplySent, ProcessHandler
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_MEDIA_DIR = Path("~/.copaw/media/discord").expanduser()
+
+
+async def _download_discord_attachment(
+    *,
+    url: str,
+    media_dir: Path,
+    filename_hint: str = "",
+) -> Optional[str]:
+    """Download a Discord attachment to local media_dir; return local path.
+
+    Avoids passing Discord CDN URLs (with signed params) directly to LLMs,
+    which causes 'Image url not in expected format' errors on Vertex AI etc.
+    """
+    try:
+        media_dir.mkdir(parents=True, exist_ok=True)
+        suffix = ""
+        if filename_hint:
+            suffix = Path(filename_hint).suffix
+        if not suffix:
+            url_path = url.split("?")[0]
+            suffix = Path(url_path).suffix
+        local_name = f"{uuid.uuid4().hex[:12]}{suffix or '.bin'}"
+        local_path = media_dir / local_name
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    local_path.write_bytes(data)
+                    logger.debug(
+                        "discord: downloaded attachment to %s (%d bytes)",
+                        local_path, len(data),
+                    )
+                    return str(local_path)
+                else:
+                    logger.warning(
+                        "discord: download failed status=%d for %s",
+                        resp.status, url,
+                    )
+                    return None
+    except Exception:
+        logger.exception("discord: download failed for %s", url)
+        return None
+
 
 class DiscordChannel(BaseChannel):
     channel = "discord"
@@ -40,6 +87,8 @@ class DiscordChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        media_dir: str = "",
+        show_typing: bool = True,
     ):
         super().__init__(
             process,
@@ -53,6 +102,10 @@ class DiscordChannel(BaseChannel):
         self.http_proxy = http_proxy
         self.http_proxy_auth = http_proxy_auth
         self.bot_prefix = bot_prefix
+        self._media_dir = (
+            Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
+        )
+        self._show_typing = show_typing
         self._task: Optional[asyncio.Task] = None
         self._client = None
 
@@ -119,32 +172,42 @@ class DiscordChannel(BaseChannel):
                             (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"),
                         )
 
+                        # Download to local to avoid CDN URL format
+                        # errors with LLMs (Vertex AI / Claude etc.)
+                        local_path = await _download_discord_attachment(
+                            url=url,
+                            media_dir=self._media_dir,
+                            filename_hint=att.filename or "",
+                        )
+                        # Fallback to URL if download fails
+                        src = local_path or url
+
                         if is_image:
                             content_parts.append(
                                 ImageContent(
                                     type=ContentType.IMAGE,
-                                    image_url=url,
+                                    image_url=src,
                                 ),
                             )
                         elif is_video:
                             content_parts.append(
                                 VideoContent(
                                     type=ContentType.VIDEO,
-                                    video_url=url,
+                                    video_url=src,
                                 ),
                             )
                         elif is_audio:
                             content_parts.append(
                                 AudioContent(
                                     type=ContentType.AUDIO,
-                                    data=url,
+                                    data=src,
                                 ),
                             )
                         else:
                             content_parts.append(
                                 FileContent(
                                     type=ContentType.FILE,
-                                    file_url=url,
+                                    file_url=src,
                                 ),
                             )
 
@@ -199,17 +262,32 @@ class DiscordChannel(BaseChannel):
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
     ) -> "DiscordChannel":
+        # Support both DiscordChannelConfig object and dict format
+        channel_show_typing = None
+        if isinstance(config, dict):
+            channel_show_typing = config.get("show_typing")
+        else:
+            channel_show_typing = getattr(config, "show_typing", None)
+
         return cls(
             process=process,
-            enabled=config.enabled,
-            token=config.bot_token or "",
-            http_proxy=config.http_proxy,
-            http_proxy_auth=config.http_proxy_auth or "",
-            bot_prefix=config.bot_prefix or "[BOT] ",
+            enabled=config.enabled if not isinstance(config, dict)
+            else bool(config.get("enabled", False)),
+            token=(config.bot_token if not isinstance(config, dict)
+                   else config.get("bot_token", "")) or "",
+            http_proxy=(config.http_proxy if not isinstance(config, dict)
+                        else config.get("http_proxy", "")) or "",
+            http_proxy_auth=(config.http_proxy_auth
+                             if not isinstance(config, dict)
+                             else config.get("http_proxy_auth", "")) or "",
+            bot_prefix=(config.bot_prefix if not isinstance(config, dict)
+                        else config.get("bot_prefix", "")) or "[BOT] ",
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
             filter_thinking=filter_thinking,
+            show_typing=channel_show_typing
+            if channel_show_typing is not None else True,
         )
 
     async def send(
@@ -295,7 +373,9 @@ class DiscordChannel(BaseChannel):
         sender_id: str,
         channel_meta: Optional[dict] = None,
     ) -> str:
-        """Session by channel (guild) or DM user id."""
+        """Session per user (user-level isolation).
+        Patch: use user_id + channel_id for isolation in guild channels,
+        so different users in same channel get separate sessions."""
         meta = channel_meta or {}
         is_dm = bool(meta.get("is_dm"))
         channel_id = meta.get("channel_id")
@@ -303,7 +383,7 @@ class DiscordChannel(BaseChannel):
         if is_dm:
             return f"discord:dm:{user_id}"
         if channel_id:
-            return f"discord:ch:{channel_id}"
+            return f"discord:u:{user_id}:{channel_id}"
         return f"discord:dm:{user_id}"
 
     def get_to_handle_from_request(self, request: Any) -> str:
@@ -313,11 +393,18 @@ class DiscordChannel(BaseChannel):
         return sid or uid or ""
 
     def build_agent_request_from_native(self, native_payload) -> Any:
-        """Build AgentRequest from Discord dict (content_parts + meta)."""
+        """Build AgentRequest from Discord dict (content_parts + meta).
+        Patch: filter out empty text content blocks that can cause
+        Vertex AI / Claude 400 errors (e.g. from @mention messages)."""
         payload = native_payload if isinstance(native_payload, dict) else {}
         channel_id = payload.get("channel_id") or self.channel
         sender_id = payload.get("sender_id") or ""
         content_parts = payload.get("content_parts") or []
+        # Filter empty text blocks
+        content_parts = [
+            p for p in content_parts
+            if not (isinstance(p, TextContent) and not (p.text or "").strip())
+        ]
         meta = payload.get("meta") or {}
         user_id = str(meta.get("user_id") or sender_id)
         session_id = self.resolve_session_id(user_id, meta)
