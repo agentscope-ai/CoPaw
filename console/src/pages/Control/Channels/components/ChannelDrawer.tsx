@@ -14,6 +14,13 @@ import type { FormInstance } from "antd";
 import { getChannelLabel, type ChannelKey } from "./constants";
 import styles from "../index.module.less";
 
+const CHANNELS_WITH_ACCESS_CONTROL: ChannelKey[] = [
+  "telegram",
+  "dingtalk",
+  "discord",
+  "feishu",
+];
+
 interface ChannelDrawerProps {
   open: boolean;
   activeKey: ChannelKey | null;
@@ -52,6 +59,49 @@ export function ChannelDrawer({
 }: ChannelDrawerProps) {
   const { t } = useTranslation();
   const label = activeKey ? getChannelLabel(activeKey) : activeLabel;
+
+  const renderAccessControlFields = () => (
+    <>
+      <Form.Item
+        name="dm_policy"
+        label={t("channels.dmPolicy")}
+        tooltip={t("channels.dmPolicyTooltip")}
+        initialValue="open"
+      >
+        <Select
+          options={[
+            { value: "open", label: t("channels.policyOpen") },
+            { value: "allowlist", label: t("channels.policyAllowlist") },
+          ]}
+        />
+      </Form.Item>
+      <Form.Item
+        name="group_policy"
+        label={t("channels.groupPolicy")}
+        tooltip={t("channels.groupPolicyTooltip")}
+        initialValue="open"
+      >
+        <Select
+          options={[
+            { value: "open", label: t("channels.policyOpen") },
+            { value: "allowlist", label: t("channels.policyAllowlist") },
+          ]}
+        />
+      </Form.Item>
+      <Form.Item
+        name="allow_from"
+        label={t("channels.allowFrom")}
+        tooltip={t("channels.allowFromTooltip")}
+        initialValue={[]}
+      >
+        <Select
+          mode="tags"
+          placeholder={t("channels.allowFromPlaceholder")}
+          tokenSeparators={[","]}
+        />
+      </Form.Item>
+    </>
+  );
 
   // Renders builtin channel-specific fields
   const renderBuiltinExtraFields = (key: ChannelKey) => {
@@ -99,44 +149,6 @@ export function ChannelDrawer({
             </Form.Item>
             <Form.Item name="client_secret" label="Client Secret">
               <Input.Password />
-            </Form.Item>
-            <Form.Item
-              name="dm_policy"
-              label={t("channels.dmPolicy")}
-              tooltip={t("channels.dmPolicyTooltip")}
-              initialValue="open"
-            >
-              <Select
-                options={[
-                  { value: "open", label: t("channels.policyOpen") },
-                  { value: "allowlist", label: t("channels.policyAllowlist") },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="group_policy"
-              label={t("channels.groupPolicy")}
-              tooltip={t("channels.groupPolicyTooltip")}
-              initialValue="open"
-            >
-              <Select
-                options={[
-                  { value: "open", label: t("channels.policyOpen") },
-                  { value: "allowlist", label: t("channels.policyAllowlist") },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="allow_from"
-              label={t("channels.allowFrom")}
-              tooltip={t("channels.allowFromTooltip")}
-              initialValue={[]}
-            >
-              <Select
-                mode="tags"
-                placeholder={t("channels.allowFromPlaceholder")}
-                tokenSeparators={[","]}
-              />
             </Form.Item>
           </>
         );
@@ -197,51 +209,6 @@ export function ChannelDrawer({
               valuePropName="checked"
             >
               <Switch />
-            </Form.Item>
-            <Form.Item
-              name="dm_policy"
-              label={t("channels.dmPolicy")}
-              tooltip={t("channels.dmPolicyTooltip")}
-              initialValue="open"
-            >
-              <Select
-                options={[
-                  { value: "open", label: t("channels.policyOpen") },
-                  { value: "allowlist", label: t("channels.policyAllowlist") },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="group_policy"
-              label={t("channels.groupPolicy")}
-              tooltip={t("channels.groupPolicyTooltip")}
-              initialValue="open"
-            >
-              <Select
-                options={[
-                  { value: "open", label: t("channels.policyOpen") },
-                  { value: "allowlist", label: t("channels.policyAllowlist") },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="allow_from"
-              label={t("channels.allowFrom")}
-              tooltip={t("channels.allowFromTooltip")}
-              initialValue={[]}
-            >
-              <Select
-                mode="tags"
-                placeholder={t("channels.allowFromPlaceholder")}
-                tokenSeparators={[","]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="deny_message"
-              label={t("channels.denyMessage")}
-              tooltip={t("channels.denyMessageTooltip")}
-            >
-              <Input.TextArea rows={3} />
             </Form.Item>
           </>
         );
@@ -427,6 +394,9 @@ export function ChannelDrawer({
           {isBuiltin
             ? renderBuiltinExtraFields(activeKey)
             : renderCustomExtraFields(initialValues)}
+
+          {CHANNELS_WITH_ACCESS_CONTROL.includes(activeKey) &&
+            renderAccessControlFields()}
 
           <Form.Item>
             <div className={styles.formActions}>

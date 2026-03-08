@@ -3,6 +3,9 @@ export interface BaseChannelConfig {
   bot_prefix: string;
   filter_tool_messages?: boolean;
   filter_thinking?: boolean;
+  dm_policy?: "open" | "allowlist";
+  group_policy?: "open" | "allowlist";
+  allow_from?: string[];
 }
 
 export interface IMessageChannelConfig extends BaseChannelConfig {
@@ -19,9 +22,6 @@ export interface DiscordConfig extends BaseChannelConfig {
 export interface DingTalkConfig extends BaseChannelConfig {
   client_id: string;
   client_secret: string;
-  dm_policy: "open" | "allowlist";
-  group_policy: "open" | "allowlist";
-  allow_from: string[];
 }
 
 export interface FeishuConfig extends BaseChannelConfig {
@@ -42,10 +42,6 @@ export interface TelegramConfig extends BaseChannelConfig {
   http_proxy: string;
   http_proxy_auth: string;
   show_typing?: boolean;
-  dm_policy?: "open" | "allowlist";
-  group_policy?: "open" | "allowlist";
-  allow_from?: string[];
-  deny_message?: string;
 }
 
 export type ConsoleConfig = BaseChannelConfig;

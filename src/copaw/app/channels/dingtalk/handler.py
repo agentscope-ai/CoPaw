@@ -239,6 +239,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 "reply_future": reply_future,
                 "reply_loop": loop,
                 "conversation_type": conversation_type,
+                "is_group": conversation_type == "group",
             }
             if conversation_id:
                 meta["conversation_id"] = conversation_id
