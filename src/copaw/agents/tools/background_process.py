@@ -17,7 +17,7 @@ import tempfile
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -176,7 +176,7 @@ class BackgroundProcessManager:
             command=command,
             process=process,
             cwd=cwd,
-            started_at=datetime.now(),
+            started_at=datetime.now(timezone.utc),
             stdout_file=stdout_path,
             stderr_file=stderr_path,
         )
@@ -325,9 +325,21 @@ class BackgroundProcessManager:
     def cleanup_stopped(self) -> int:
         """Remove all stopped/failed processes from tracking.
 
+        This method first updates the status of all tracked processes,
+        so naturally exited processes (whose status is still RUNNING)
+        will also be cleaned up along with their temp log files.
+
         Returns:
             Number of processes removed
         """
+        # First, update status of all processes to detect natural exits
+        # This is done outside the lock to avoid nested locking with
+        # update_status()
+        with self._lock:
+            process_ids = list(self._processes.keys())
+        for process_id in process_ids:
+            self.update_status(process_id)
+
         with self._lock:
             to_remove = [
                 process_id
@@ -621,7 +633,9 @@ async def list_background_processes(
     lines = ["## Background Processes\n"]
     for process_id, proc in processes.items():
         status_emoji = "🟢" if proc.status == ProcessStatus.RUNNING else "🔴"
-        running_time = (datetime.now() - proc.started_at).total_seconds()
+        running_time = (
+            datetime.now(timezone.utc) - proc.started_at
+        ).total_seconds()
 
         lines.append(
             f"{status_emoji} **{process_id}**\n"
