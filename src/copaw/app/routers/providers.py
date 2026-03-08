@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Path
 from pydantic import BaseModel, Field
@@ -37,6 +37,9 @@ ChatModelName = Literal["OpenAIChatModel", "AnthropicChatModel"]
 class ProviderConfigRequest(BaseModel):
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
+    extra_headers: Optional[Dict[str, str]] = Field(default=None)
+    enable_session_affinity: Optional[bool] = Field(default=None)
+    session_affinity_header: Optional[str] = Field(default=None)
     chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Chat model class name for protocol selection",
@@ -53,8 +56,17 @@ class CreateCustomProviderRequest(BaseModel):
     name: str = Field(...)
     default_base_url: str = Field(default="")
     api_key_prefix: str = Field(default="")
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+    enable_session_affinity: bool = Field(default=False)
+    session_affinity_header: str = Field(default="x-session-affinity")
     chat_model: ChatModelName = Field(default="OpenAIChatModel")
     models: List[ModelInfo] = Field(default_factory=list)
+
+
+class CustomProviderAdvancedConfigResponse(BaseModel):
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+    enable_session_affinity: bool = Field(default=False)
+    session_affinity_header: str = Field(default="x-session-affinity")
 
 
 class AddModelRequest(BaseModel):
@@ -140,6 +152,13 @@ async def configure_provider(
             provider_id,
             api_key=body.api_key,
             base_url=base_url,
+            extra_headers=body.extra_headers if provider.is_custom else None,
+            enable_session_affinity=(
+                body.enable_session_affinity if provider.is_custom else None
+            ),
+            session_affinity_header=(
+                body.session_affinity_header if provider.is_custom else None
+            ),
             chat_model=body.chat_model if provider.is_custom else None,
         )
     except ValueError as exc:
@@ -164,6 +183,9 @@ async def create_custom_provider_endpoint(
             name=body.name,
             default_base_url=body.default_base_url,
             api_key_prefix=body.api_key_prefix,
+            extra_headers=body.extra_headers,
+            enable_session_affinity=body.enable_session_affinity,
+            session_affinity_header=body.session_affinity_header,
             chat_model=body.chat_model,
             models=body.models,
         )
@@ -173,6 +195,39 @@ async def create_custom_provider_endpoint(
     provider = get_provider(body.id)
     assert provider is not None
     return _build_provider_info(provider, data)
+
+
+@router.get(
+    "/custom-providers/{provider_id}/advanced-config",
+    response_model=CustomProviderAdvancedConfigResponse,
+    summary="Get custom provider advanced config",
+)
+async def get_custom_provider_advanced_config(
+    provider_id: str = Path(...),
+) -> CustomProviderAdvancedConfigResponse:
+    provider = get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(404, detail=f"Provider '{provider_id}' not found")
+    if not provider.is_custom:
+        raise HTTPException(
+            400,
+            detail="This endpoint is only available for custom providers.",
+        )
+
+    data = load_providers_json()
+    cpd = data.custom_providers.get(provider_id)
+    if cpd is None:
+        raise HTTPException(
+            404,
+            detail=f"Custom provider '{provider_id}' not found.",
+        )
+
+    return CustomProviderAdvancedConfigResponse(
+        extra_headers=dict(cpd.extra_headers),
+        enable_session_affinity=bool(cpd.enable_session_affinity),
+        session_affinity_header=cpd.session_affinity_header
+        or "x-session-affinity",
+    )
 
 
 class TestConnectionResponse(BaseModel):

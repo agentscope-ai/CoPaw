@@ -44,6 +44,9 @@ class ProviderSettings(BaseModel):
     base_url: str = Field(default="")
     api_key: str = Field(default="")
     extra_models: List[ModelInfo] = Field(default_factory=list)
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+    enable_session_affinity: bool = Field(default=False)
+    session_affinity_header: str = Field(default="x-session-affinity")
     chat_model: str = Field(
         default="",
         description="Chat model class name (e.g., 'OpenAIChatModel'). "
@@ -65,6 +68,9 @@ class CustomProviderData(BaseModel):
     models: List[ModelInfo] = Field(default_factory=list)
     base_url: str = Field(default="")
     api_key: str = Field(default="")
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+    enable_session_affinity: bool = Field(default=False)
+    session_affinity_header: str = Field(default="x-session-affinity")
     chat_model: str = Field(
         default="OpenAIChatModel",
         description="Chat model class name (e.g., 'OpenAIChatModel')",
@@ -145,7 +151,12 @@ class ActiveModelsInfo(BaseModel):
 
 
 class ResolvedModelConfig(BaseModel):
+    provider_id: str = Field(default="")
     model: str = Field(default="")
     base_url: str = Field(default="")
     api_key: str = Field(default="")
+    is_custom: bool = Field(default=False)
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+    enable_session_affinity: bool = Field(default=False)
+    session_affinity_header: str = Field(default="x-session-affinity")
     is_local: bool = Field(default=False)

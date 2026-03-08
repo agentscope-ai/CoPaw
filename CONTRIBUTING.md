@@ -100,6 +100,10 @@ CoPaw supports **multiple model backends**: cloud APIs (e.g. DashScope, ModelSco
 
 Users can add **custom providers** via the Console or `providers.json`: any OpenAI-compatible API (e.g. vLLM, SGLang, private endpoints) can be configured with a unique ID, base URL, API key, and optional model list. No code change is required for standard OpenAI-compatible APIs.
 
+For **distributed self-hosted inference** (for example vLLM clusters), production stability depends on deployment settings:
+- Enable prefix caching in your inference framework (vLLM reference: <https://docs.vllm.ai/en/stable/design/v1/prefix_caching.html>).
+- Keep session-level sticky routing (for example via `x-session-affinity` or equivalent load-balancer policy), otherwise prefix-cache hit rate may degrade across workers.
+
 #### B. New built-in provider or new ChatModel (code contribution)
 
 If you want to add a **new built-in provider** or a **new API protocol** that is not OpenAI-compatible:

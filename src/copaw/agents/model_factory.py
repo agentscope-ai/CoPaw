@@ -11,6 +11,7 @@ Example:
 
 
 import json
+import hashlib
 import logging
 import os
 from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Type, Any
@@ -281,8 +282,25 @@ def _strip_top_level_message_name(
     return messages
 
 
+def _session_affinity_hash(session_id: str) -> str:
+    """Derive a stable, opaque affinity key from session_id."""
+    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+
+
+def _normalize_header_name(name: str | None) -> str:
+    value = (name or "").strip()
+    return value or "x-session-affinity"
+
+
+def _has_header(headers: dict[str, str], key: str) -> bool:
+    needle = key.lower()
+    return any(k.lower() == needle for k in headers)
+
+
 def create_model_and_formatter(
     llm_cfg: Optional["ResolvedModelConfig"] = None,
+    *,
+    session_id: Optional[str] = None,
 ) -> Tuple[ChatModelBase, FormatterBase]:
     """Factory method to create model and formatter instances.
 
@@ -292,6 +310,8 @@ def create_model_and_formatter(
     Args:
         llm_cfg: Resolved model configuration. If None, will call
             get_active_llm_config() to fetch the active configuration.
+        session_id: Optional session identifier used for session-affinity
+            header injection (custom providers only).
 
     Returns:
         Tuple of (model_instance, formatter_instance)
@@ -308,7 +328,10 @@ def create_model_and_formatter(
         llm_cfg = get_active_llm_config()
 
     # Create the model instance and determine chat model class
-    model, chat_model_class = _create_model_instance(llm_cfg)
+    model, chat_model_class = _create_model_instance(
+        llm_cfg,
+        session_id=session_id,
+    )
 
     # Create the formatter based on chat_model_class
     formatter = _create_formatter_instance(chat_model_class)
@@ -318,6 +341,8 @@ def create_model_and_formatter(
 
 def _create_model_instance(
     llm_cfg: Optional["ResolvedModelConfig"],
+    *,
+    session_id: Optional[str] = None,
 ) -> Tuple[ChatModelBase, Type[ChatModelBase]]:
     """Create a chat model instance and determine its class.
 
@@ -341,7 +366,11 @@ def _create_model_instance(
     chat_model_class = _get_chat_model_class_from_provider()
 
     # Create remote model instance with configuration
-    model = _create_remote_model_instance(llm_cfg, chat_model_class)
+    model = _create_remote_model_instance(
+        llm_cfg,
+        chat_model_class,
+        session_id=session_id,
+    )
 
     return model, chat_model_class
 
@@ -374,6 +403,8 @@ def _get_chat_model_class_from_provider() -> Type[ChatModelBase]:
 def _create_remote_model_instance(
     llm_cfg: Optional["ResolvedModelConfig"],
     chat_model_class: Type[ChatModelBase],
+    *,
+    session_id: Optional[str] = None,
 ) -> ChatModelBase:
     """Create a remote model instance with configuration.
 
@@ -417,19 +448,40 @@ def _create_remote_model_instance(
     ]
 
     client_kwargs = {"base_url": base_url}
+    default_headers: dict[str, str] = {}
 
     if base_url in dashscope_base_urls:
-        client_kwargs["default_headers"] = {
-            "x-dashscope-agentapp": json.dumps(
-                {
-                    "agentType": "CoPaw",
-                    "deployType": "UnKnown",
-                    "moduleCode": "model",
-                    "agentCode": "UnKnown",
-                },
-                ensure_ascii=False,
-            ),
-        }
+        default_headers.update(
+            {
+                "x-dashscope-agentapp": json.dumps(
+                    {
+                        "agentType": "CoPaw",
+                        "deployType": "UnKnown",
+                        "moduleCode": "model",
+                        "agentCode": "UnKnown",
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        )
+
+    if llm_cfg and llm_cfg.is_custom:
+        default_headers.update(dict(llm_cfg.extra_headers))
+        should_inject_affinity = llm_cfg.enable_session_affinity
+        affinity_header = _normalize_header_name(
+            llm_cfg.session_affinity_header,
+        )
+        if (
+            should_inject_affinity
+            and session_id
+            and not _has_header(default_headers, affinity_header)
+        ):
+            default_headers[affinity_header] = _session_affinity_hash(
+                session_id,
+            )
+
+    if default_headers:
+        client_kwargs["default_headers"] = default_headers
 
     # Instantiate model
     model = chat_model_class(
