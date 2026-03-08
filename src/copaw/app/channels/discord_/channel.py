@@ -40,6 +40,10 @@ class DiscordChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        dm_policy: str = "open",
+        group_policy: str = "open",
+        allow_from: Optional[list] = None,
+        deny_message: str = "",
     ):
         super().__init__(
             process,
@@ -47,6 +51,10 @@ class DiscordChannel(BaseChannel):
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
             filter_thinking=filter_thinking,
+            dm_policy=dm_policy,
+            group_policy=group_policy,
+            allow_from=allow_from,
+            deny_message=deny_message,
         )
         self.enabled = enabled
         self.token = token
@@ -148,6 +156,7 @@ class DiscordChannel(BaseChannel):
                                 ),
                             )
 
+                is_group = message.guild is not None
                 meta = {
                     "user_id": str(message.author.id),
                     "channel_id": str(message.channel.id),
@@ -155,8 +164,23 @@ class DiscordChannel(BaseChannel):
                     if message.guild
                     else None,
                     "message_id": str(message.id),
-                    "is_dm": message.guild is None,
+                    "is_dm": not is_group,
+                    "is_group": is_group,
                 }
+
+                allowed, error_msg = self._check_allowlist(
+                    str(message.author.id),
+                    is_group,
+                )
+                if not allowed:
+                    logger.info(
+                        "discord allowlist blocked: sender=%s is_group=%s",
+                        message.author.id,
+                        is_group,
+                    )
+                    await message.channel.send(error_msg or "")
+                    return
+
                 native = {
                     "channel_id": self.channel,
                     "sender_id": str(message.author),
@@ -176,6 +200,12 @@ class DiscordChannel(BaseChannel):
         process: ProcessHandler,
         on_reply_sent: OnReplySent = None,
     ) -> "DiscordChannel":
+        allow_from_env = os.getenv("DISCORD_ALLOW_FROM", "")
+        allow_from = (
+            [s.strip() for s in allow_from_env.split(",") if s.strip()]
+            if allow_from_env
+            else []
+        )
         return cls(
             process=process,
             enabled=os.getenv("DISCORD_CHANNEL_ENABLED", "1") == "1",
@@ -187,6 +217,10 @@ class DiscordChannel(BaseChannel):
             http_proxy_auth=os.getenv("DISCORD_HTTP_PROXY_AUTH", ""),
             bot_prefix=os.getenv("DISCORD_BOT_PREFIX", "[BOT] "),
             on_reply_sent=on_reply_sent,
+            dm_policy=os.getenv("DISCORD_DM_POLICY", "open"),
+            group_policy=os.getenv("DISCORD_GROUP_POLICY", "open"),
+            allow_from=allow_from,
+            deny_message=os.getenv("DISCORD_DENY_MESSAGE", ""),
         )
 
     @classmethod
@@ -210,6 +244,10 @@ class DiscordChannel(BaseChannel):
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
             filter_thinking=filter_thinking,
+            dm_policy=config.dm_policy or "open",
+            group_policy=config.group_policy or "open",
+            allow_from=config.allow_from or [],
+            deny_message=config.deny_message or "",
         )
 
     async def send(

@@ -16,6 +16,10 @@ class BaseChannelConfig(BaseModel):
     bot_prefix: str = ""
     filter_tool_messages: bool = False
     filter_thinking: bool = False
+    dm_policy: Literal["open", "allowlist"] = "open"
+    group_policy: Literal["open", "allowlist"] = "open"
+    allow_from: List[str] = Field(default_factory=list)
+    deny_message: str = ""
 
 
 class IMessageChannelConfig(BaseChannelConfig):
@@ -34,20 +38,9 @@ class DiscordConfig(BaseChannelConfig):
 
 
 class DingTalkConfig(BaseChannelConfig):
-    """DingTalk: client_id, client_secret; media_dir for received media.
-
-    Security / allowlist:
-        dm_policy    - "open" (default) or "allowlist" for direct messages
-        group_policy - "open" (default) or "allowlist" for group messages
-        allow_from   - list of sender IDs allowed when policy is "allowlist"
-    """
-
     client_id: str = ""
     client_secret: str = ""
     media_dir: str = "~/.copaw/media"
-    dm_policy: Literal["open", "allowlist"] = "open"
-    group_policy: Literal["open", "allowlist"] = "open"
-    allow_from: List[str] = Field(default_factory=list)
 
 
 class FeishuConfig(BaseChannelConfig):
@@ -69,23 +62,10 @@ class QQConfig(BaseChannelConfig):
 
 
 class TelegramConfig(BaseChannelConfig):
-    """Telegram channel: bot_token from BotFather; optional proxy.
-
-    Security / allowlist:
-        dm_policy    - "open" (default) or "allowlist" for direct messages
-        group_policy - "open" (default) or "allowlist" for group messages
-        allow_from   - list of sender IDs allowed when policy is "allowlist"
-        deny_message - custom message shown to unauthorized users
-    """
-
     bot_token: str = ""
     http_proxy: str = ""
     http_proxy_auth: str = ""
     show_typing: Optional[bool] = None
-    dm_policy: Literal["open", "allowlist"] = "open"
-    group_policy: Literal["open", "allowlist"] = "open"
-    allow_from: List[str] = Field(default_factory=list)
-    deny_message: str = ""
 
 
 class ConsoleConfig(BaseChannelConfig):
