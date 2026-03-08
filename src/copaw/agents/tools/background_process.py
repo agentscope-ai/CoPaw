@@ -146,6 +146,7 @@ class BackgroundProcessManager:
         # Create process with OS-specific process group isolation
         popen_kwargs: Dict[str, Any] = {
             "shell": False,
+            "stdin": subprocess.DEVNULL,
             "stdout": stdout_fd,
             "stderr": stderr_fd,
             "cwd": cwd,
