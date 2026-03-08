@@ -16,6 +16,10 @@ ENV NODE_ENV=production
 ENV WORKSPACE_DIR=/app
 ENV COPAW_WORKING_DIR=/app/working
 
+# Default auth credentials (override at runtime with -e ADMIN_USERNAME=... -e ADMIN_PASSWORD=...)
+ENV ADMIN_USERNAME=admin
+ENV ADMIN_PASSWORD=
+
 # Available channels for this image (imessage & discord excluded).
 # Override at runtime with -e COPAW_ENABLED_CHANNELS=... if needed.
 ARG COPAW_ENABLED_CHANNELS="dingtalk,feishu,qq,console"

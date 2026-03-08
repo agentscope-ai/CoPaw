@@ -29,6 +29,7 @@ from .runner.repo.json_repo import JsonChatRepository
 from .crons.repo.json_repo import JsonJobRepository
 from .crons.manager import CronManager
 from .runner.manager import ChatManager
+from .auth import AuthMiddleware, init_auth_from_env
 from .routers import router as api_router
 from .routers.voice import voice_router
 from ..envs import load_envs_into_environ
@@ -62,6 +63,7 @@ async def lifespan(
     app: FastAPI,
 ):  # pylint: disable=too-many-statements,too-many-branches
     add_copaw_file_handler(WORKING_DIR / "copaw.log")
+    init_auth_from_env()
     await runner.start()
 
     # --- MCP client manager init (independent module, hot-reloadable) ---
@@ -445,6 +447,8 @@ if CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+app.add_middleware(AuthMiddleware)
 
 
 # Console static dir: env, or copaw package data (console), or cwd.

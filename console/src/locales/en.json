@@ -489,5 +489,13 @@
       "viewReleases": "View Releases",
       "close": "Close"
     }
+  },
+  "login": {
+    "title": "Login to CoPaw",
+    "usernamePlaceholder": "Username",
+    "passwordPlaceholder": "Password",
+    "submit": "Login",
+    "failed": "Invalid username or password",
+    "logout": "Logout"
   }
 }

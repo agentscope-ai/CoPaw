@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  copaw:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-copaw}
+      - COPAW_PORT=8088
+    volumes:
+      - ./data:/app/working
+    restart: unless-stopped
