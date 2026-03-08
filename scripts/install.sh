@@ -19,10 +19,10 @@ choose_pypi_mirror() {
     # Test the connectivity of the official PyPI source (timeout 3 seconds, no output)
     if curl -s --connect-timeout 3 https://pypi.org/simple/ > /dev/null 2>&1; then
         echo "https://pypi.org/simple/"
-        info "Using official PyPI source (network is good)"
+        info "Using official PyPI source (network is good)" >&2
     else
         echo "https://mirrors.aliyun.com/pypi/simple/"
-        info "Using Aliyun PyPI mirror (official source is unreachable)"
+        info "Using Aliyun PyPI mirror (official source is unreachable)" >&2
     fi
 }
 PYPI_MIRROR=$(choose_pypi_mirror)
@@ -237,7 +237,7 @@ else
     fi
 
     info "Installing ${PACKAGE}${EXTRAS_SUFFIX} from PyPI..."
-    uv pip install "${PACKAGE}${EXTRAS_SUFFIX}" --python "$COPAW_VENV/bin/python" --prerelease=allow --quiet --index-url "$PYPI_MIRROR"
+    uv pip install "${PACKAGE}${EXTRAS_SUFFIX}" --python "$COPAW_VENV/bin/python" --prerelease=allow --index-url "$PYPI_MIRROR"
 fi
 
 # Verify the CLI entry point exists
