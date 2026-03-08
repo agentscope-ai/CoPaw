@@ -16,7 +16,14 @@ cookbook/_build
 /build
 dist/
 # Console frontend build (generated in Docker/CI, do not commit)
-src/copaw/console/dist/
+!src/copaw/agents/skills/__init__.py
+
+# Customized skills and local app data
+customized_skills/
+active_skills/
+.copaw/
+fal_gen/
+Email_Skill/
 
 # frontend (website)
 website/node_modules/

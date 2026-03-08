@@ -431,6 +431,13 @@ def _create_remote_model_instance(
             ),
         }
 
+    # OpenRouter requires special headers for identification
+    if base_url and "openrouter.ai" in base_url.lower():
+        client_kwargs["default_headers"] = {
+            "HTTP-Referer": "https://github.com/copaw-ai/CoPaw",
+            "X-Title": "CoPaw",
+        }
+
     # Instantiate model
     model = chat_model_class(
         model_name,
