@@ -1315,7 +1315,7 @@ async def test_model_connection(
         test_payload = {
             "model": model_id,
             "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 1,
+            "max_completion_tokens": 16,
         }
 
     try:
