@@ -1,12 +1,13 @@
 # 快速开始
 
-本节介绍五种方式运行 CoPAW：
+本节介绍六种方式运行 CoPAW：
 
 - **方式一 — 一键安装（推荐）**：无需手动配置 Python，一行命令自动完成安装。
 - **方式二 — pip 安装**：适合自行管理 Python 环境的用户。
 - **方式三 — 魔搭创空间**：一键配置，部署到创空间云端运行，无需本地安装。
-- **方式四 — Docker**：使用官方镜像（Docker Hub；国内可选 ACR），镜像 tag 含 `latest`（稳定版）与 `pre`（PyPI 预发布版）。
-- **方式五 — 阿里云 ECS**：在阿里云上一键部署 CoPaw，无需本地安装。
+- **方式四 — 1Panel 安装**：通过 1Panel 应用商店可视化安装与运维 CoPaw。
+- **方式五 — Docker**：使用官方镜像（Docker Hub；国内可选 ACR），镜像 tag 含 `latest`（稳定版）与 `pre`（PyPI 预发布版）。
+- **方式六 — 阿里云 ECS**：在阿里云上一键部署 CoPaw，无需本地安装。
 
 > 📖 阅读前请先了解 [项目介绍](./intro)，完成安装与启动后可查看 [控制台](./console)。
 
@@ -156,7 +157,21 @@ pip install copaw
 
 ---
 
-## 方式四：Docker
+## 方式四：1Panel 安装
+
+如需可视化运维，推荐使用 [1Panel](https://github.com/1Panel-dev/1Panel) 应用商店安装 CoPaw。
+
+1Panel 安装可参考官方文档：[在线安装](https://1panel.cn/docs/v2/installation/online_installation/)。
+
+安装与运维流程：
+
+1. **开始安装 CoPaw**：进入 1Panel 的「应用商店」，搜索 `CoPaw`，点击安装；选择版本、输入 Web 端口、选择端口对外暴露后，点击确定即可。
+2. **运维 CoPaw**：在「已安装」页面可对 CoPaw 执行启动、停止、备份、恢复、查看日志等操作。
+3. **升级 CoPaw**：在「可升级」页面可对 CoPaw 等已安装应用进行一键可视化升级。
+
+---
+
+## 方式五：Docker
 
 镜像在 **Docker Hub**（`agentscope/copaw`）。镜像 tag：`latest`（稳定版）；`pre`（PyPI 预发布版）。国内用户也可选用阿里云 ACR：`agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/copaw`（tag 相同）。
 
@@ -171,7 +186,7 @@ docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:la
 
 ---
 
-## 方式五：部署到阿里云 ECS
+## 方式六：部署到阿里云 ECS
 
 若希望将 CoPaw 部署在阿里云上，可使用阿里云 ECS 一键部署：
 

@@ -1,12 +1,13 @@
 # Quick start
 
-This section describes five ways to run CoPAW:
+This section describes six ways to run CoPAW:
 
 - **Option A — One-line install (recommended)**: run on your machine with no Python setup required.
 - **Option B — pip install**: if you prefer managing Python yourself.
 - **Option C — ModelScope Studio**: one-click cloud deploy, no local install needed.
-- **Option D — Docker**: use official images from Docker Hub (ACR also available for users in China); tags include `latest` (stable) and `pre` (PyPI pre-release).
-- **Option E — Alibaba Cloud ECS**: one-click deploy on Alibaba Cloud, no local install.
+- **Option D — 1Panel installation**: install and manage CoPaw visually from the 1Panel App Store.
+- **Option E — Docker**: use official images from Docker Hub (ACR also available for users in China); tags include `latest` (stable) and `pre` (PyPI pre-release).
+- **Option F — Alibaba Cloud ECS**: one-click deploy on Alibaba Cloud, no local install.
 
 > 📖 Read [Introduction](./intro) first; after install see [Console](./console).
 
@@ -163,7 +164,21 @@ CoPaw.
 
 ---
 
-## Option D: Docker
+## Option D: 1Panel installation
+
+If you prefer visual operations, install CoPaw from the [1Panel](https://github.com/1Panel-dev/1Panel) App Store.
+
+For 1Panel installation, refer to the official guide: [Online installation](https://docs.1panel.pro/v2/installation/online_installation/).
+
+Installation and management steps:
+
+1. **Install CoPaw**: Go to the App Store page in 1Panel, search for `CoPaw`, and click Install. Select a version, enter the Web port, choose whether to expose the port externally, then click Confirm.
+2. **Manage CoPaw**: On the Installed page, you can start, stop, back up, restore, and view logs for CoPaw.
+3. **Upgrade CoPaw**: On the Upgradable page, you can perform one-click visual upgrades for installed apps such as CoPaw.
+
+---
+
+## Option E: Docker
 
 Images are on **Docker Hub** (`agentscope/copaw`). Image tags: `latest` (stable); `pre` (PyPI pre-release). Also available on Alibaba Cloud ACR for users in China: `agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/copaw` (same tags).
 
@@ -178,7 +193,7 @@ Then open **http://127.0.0.1:8088/** in your browser for the Console. Config, me
 
 ---
 
-## Option E: Deploy on Alibaba Cloud ECS
+## Option F: Deploy on Alibaba Cloud ECS
 
 To run CoPaw on Alibaba Cloud, use the ECS one-click deployment:
 
