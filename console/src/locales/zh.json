@@ -35,7 +35,8 @@
     "agentConfig": "运行配置",
     "settings": "设置",
     "models": "模型",
-    "environments": "环境变量"
+    "environments": "环境变量",
+    "tokenUsage": "Token 消耗"
   },
   "workspace": {
     "title": "工作区",
@@ -311,6 +312,21 @@
     "selected": "已选",
     "variable": "变量",
     "variables": "变量"
+  },
+  "tokenUsage": {
+    "title": "Token 消耗",
+    "description": "查看一段时间内的 LLM Token 消耗，按日期和模型统计。",
+    "totalTokens": "总 Token 数",
+    "totalCalls": "总调用次数",
+    "promptTokens": "输入 Token",
+    "completionTokens": "输出 Token",
+    "byModel": "按模型",
+    "byDate": "按日期",
+    "model": "模型",
+    "date": "日期",
+    "refresh": "刷新",
+    "loadFailed": "加载 Token 消耗数据失败",
+    "noData": "所选时间段内暂无 Token 消耗数据"
   },
   "models": {
     "llmConfiguration": "LLM 配置",

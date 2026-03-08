@@ -22,6 +22,8 @@ JOBS_FILE = os.environ.get("COPAW_JOBS_FILE", "jobs.json")
 
 CHATS_FILE = os.environ.get("COPAW_CHATS_FILE", "chats.json")
 
+TOKEN_USAGE_FILE = os.environ.get("COPAW_TOKEN_USAGE_FILE", "token_usage.json")
+
 CONFIG_FILE = os.environ.get("COPAW_CONFIG_FILE", "config.json")
 
 HEARTBEAT_FILE = os.environ.get("COPAW_HEARTBEAT_FILE", "HEARTBEAT.md")
