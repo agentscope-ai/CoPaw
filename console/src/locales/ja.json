@@ -301,6 +301,8 @@
     "duplicateKey": "キーが重複しています",
     "saveSuccess": "環境変数を保存しました",
     "saveFailed": "保存に失敗しました",
+    "deleteSuccess": "\"{{name}}\" を削除しました",
+    "deleteFailed": "削除に失敗しました",
     "noVariables": "環境変数がまだ設定されていません。",
     "addVariable": "変数を追加",
     "loading": "読み込み中...",

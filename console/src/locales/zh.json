@@ -303,6 +303,8 @@
     "duplicateKey": "键重复",
     "saveSuccess": "环境变量已保存",
     "saveFailed": "保存失败",
+    "deleteSuccess": "\"{{name}}\" 已删除",
+    "deleteFailed": "删除失败",
     "noVariables": "尚未配置环境变量。",
     "addVariable": "添加变量",
     "loading": "加载中…",

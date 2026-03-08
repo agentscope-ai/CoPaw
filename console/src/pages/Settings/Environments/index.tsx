@@ -119,28 +119,43 @@ function EnvironmentsPage() {
   const removeRow = useCallback(
     (idx: number) => {
       const row = workingRows[idx];
-      const doRemove = () => {
+
+      // New (unsaved) row — just remove from local state, no API call needed
+      if (row.isNew) {
         const next = ensureLocal();
         next.splice(idx, 1);
         setRows(next.length === 0 && envVars.length === 0 ? null : next);
         setSelected((prev) => shiftIndices(prev, idx));
-      };
-
-      if (row.isNew) {
-        doRemove();
         return;
       }
 
+      // Persisted row — confirm then call DELETE API immediately
       Modal.confirm({
         title: t("environments.deleteVariable"),
         content: t("environments.deleteConfirm", { name: row.key }),
         okText: t("common.delete"),
         okButtonProps: { danger: true },
         cancelText: t("common.cancel"),
-        onOk: doRemove,
+        onOk: async () => {
+          try {
+            await api.deleteEnv(row.key);
+            message.success(t("environments.deleteSuccess", { name: row.key }));
+            // Refresh from server so local state is in sync
+            setRows(null);
+            setSelected(new Set());
+            setKeyErrors({});
+            fetchAll();
+          } catch (err) {
+            const errMsg =
+              err instanceof Error
+                ? err.message
+                : t("environments.deleteFailed");
+            message.error(errMsg);
+          }
+        },
       });
     },
-    [workingRows, ensureLocal, envVars.length],
+    [workingRows, ensureLocal, envVars.length, fetchAll],
   );
 
   const removeSelected = useCallback(() => {
@@ -149,14 +164,11 @@ function EnvironmentsPage() {
     const names = indices.map((i) => workingRows[i]?.key).filter(Boolean);
     const hasPersistedRows = indices.some((i) => !workingRows[i]?.isNew);
 
-    const doRemove = () => {
+    // All selected rows are new — just remove from local state
+    if (!hasPersistedRows) {
       const next = ensureLocal().filter((_, i) => !selected.has(i));
       setRows(next.length === 0 && envVars.length === 0 ? null : next);
       setSelected(new Set());
-    };
-
-    if (!hasPersistedRows) {
-      doRemove();
       return;
     }
 
@@ -171,9 +183,28 @@ function EnvironmentsPage() {
       okText: t("common.delete"),
       okButtonProps: { danger: true },
       cancelText: t("common.cancel"),
-      onOk: doRemove,
+      onOk: async () => {
+        try {
+          // Compute the remaining rows after deletion
+          const remaining = ensureLocal().filter((_, i) => !selected.has(i));
+          const dict: Record<string, string> = {};
+          for (const r of remaining) {
+            if (r.key.trim()) dict[r.key.trim()] = r.value;
+          }
+          await api.saveEnvs(dict);
+          message.success(t("environments.deleteSuccess", { name: label }));
+          setRows(null);
+          setSelected(new Set());
+          setKeyErrors({});
+          fetchAll();
+        } catch (err) {
+          const errMsg =
+            err instanceof Error ? err.message : t("environments.deleteFailed");
+          message.error(errMsg);
+        }
+      },
     });
-  }, [selected, workingRows, ensureLocal, envVars.length]);
+  }, [selected, workingRows, ensureLocal, envVars.length, fetchAll]);
 
   /* ---- validate & save ---- */
 

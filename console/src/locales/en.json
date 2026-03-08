@@ -303,6 +303,8 @@
     "duplicateKey": "Duplicate key",
     "saveSuccess": "Environment variables saved",
     "saveFailed": "Failed to save",
+    "deleteSuccess": "\"{{name}}\" deleted",
+    "deleteFailed": "Failed to delete",
     "noVariables": "No environment variables configured yet.",
     "addVariable": "Add Variable",
     "loading": "Loading…",
