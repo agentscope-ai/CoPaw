@@ -15,6 +15,7 @@ from agentscope_runtime.engine.app import AgentApp
 from .runner import AgentRunner
 from ..config import (  # pylint: disable=no-name-in-module
     load_config,
+    save_config,
     update_last_dispatch,
     ConfigWatcher,
 )
@@ -25,6 +26,7 @@ from ..utils.logging import setup_logger, add_copaw_file_handler
 from .channels import ChannelManager  # pylint: disable=no-name-in-module
 from .channels.utils import make_process_from_runner
 from .mcp import MCPClientManager, MCPConfigWatcher  # MCP hot-reload support
+from .mcp.token_refresh import MCPTokenRefresher  # OAuth token auto-refresh
 from .runner.repo.json_repo import JsonChatRepository
 from .crons.repo.json_repo import JsonJobRepository
 from .crons.manager import CronManager
@@ -69,7 +71,10 @@ async def lifespan(
     mcp_manager = MCPClientManager()
     if hasattr(config, "mcp"):
         try:
-            await mcp_manager.init_from_config(config.mcp)
+            await mcp_manager.init_from_config(
+                config.mcp,
+                save_config_fn=lambda: save_config(config),
+            )
             logger.debug("MCP client manager initialized")
         except BaseException as e:
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
@@ -112,6 +117,7 @@ async def lifespan(
 
     # --- MCP config watcher (auto-reload MCP clients on change) ---
     mcp_watcher = None
+    mcp_token_refresher = None
     if hasattr(config, "mcp"):
         try:
             mcp_watcher = MCPConfigWatcher(
@@ -126,6 +132,16 @@ async def lifespan(
                 raise
             logger.exception("Failed to start MCP watcher")
 
+        # --- MCP OAuth token auto-refresh ---
+        try:
+            mcp_token_refresher = MCPTokenRefresher(mcp_manager=mcp_manager)
+            await mcp_token_refresher.start()
+            logger.debug("MCP token refresher started")
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.exception("Failed to start MCP token refresher")
+
     # expose to endpoints
     app.state.runner = runner
     app.state.channel_manager = channel_manager
@@ -134,6 +150,7 @@ async def lifespan(
     app.state.config_watcher = config_watcher
     app.state.mcp_manager = mcp_manager
     app.state.mcp_watcher = mcp_watcher
+    app.state.mcp_token_refresher = mcp_token_refresher
 
     _restart_task: asyncio.Task | None = None
 
@@ -175,6 +192,7 @@ async def lifespan(
         await asyncio.shield(_restart_task)
 
     async def _teardown_new_stack(
+        mcp_token_refresher=None,
         mcp_watcher=None,
         config_watcher=None,
         cron_mgr=None,
@@ -182,6 +200,14 @@ async def lifespan(
         mcp_mgr=None,
     ) -> None:
         """Stop new stack in reverse start order (for rollback on failure)."""
+        if mcp_token_refresher is not None:
+            try:
+                await mcp_token_refresher.stop()
+            except Exception:
+                logger.debug(
+                    "rollback: mcp_token_refresher.stop failed",
+                    exc_info=True,
+                )
         if mcp_watcher is not None:
             try:
                 await mcp_watcher.stop()
@@ -229,7 +255,7 @@ async def lifespan(
         """Cancel in-flight agent requests first (so they can send error to
         channel), then stop old stack, then start new stack and swap.
         """
-        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-statements,too-many-return-statements
         try:
             config = load_config(get_config_path())
         except Exception:
@@ -256,6 +282,7 @@ async def lifespan(
 
         # 2) Stop old stack
         cfg_w = app.state.config_watcher
+        mcp_tr = getattr(app.state, "mcp_token_refresher", None)
         mcp_w = getattr(app.state, "mcp_watcher", None)
         cron_mgr = app.state.cron_manager
         ch_mgr = app.state.channel_manager
@@ -266,6 +293,13 @@ async def lifespan(
             logger.exception(
                 "restart_services: old config_watcher.stop failed",
             )
+        if mcp_tr is not None:
+            try:
+                await mcp_tr.stop()
+            except Exception:
+                logger.exception(
+                    "restart_services: old mcp_token_refresher.stop failed",
+                )
         if mcp_w is not None:
             try:
                 await mcp_w.stop()
@@ -297,7 +331,10 @@ async def lifespan(
         new_mcp_manager = MCPClientManager()
         if hasattr(config, "mcp"):
             try:
-                await new_mcp_manager.init_from_config(config.mcp)
+                await new_mcp_manager.init_from_config(
+                    config.mcp,
+                    save_config_fn=lambda: save_config(config),
+                )
             except Exception:
                 logger.exception(
                     "restart_services: mcp init_from_config failed",
@@ -355,6 +392,7 @@ async def lifespan(
             return
 
         new_mcp_watcher = None
+        new_mcp_token_refresher = None
         if hasattr(config, "mcp"):
             try:
                 new_mcp_watcher = MCPConfigWatcher(
@@ -375,14 +413,35 @@ async def lifespan(
                 )
                 return
 
+            # Start new token refresher
+            try:
+                new_mcp_token_refresher = MCPTokenRefresher(
+                    mcp_manager=new_mcp_manager,
+                )
+                await new_mcp_token_refresher.start()
+            except Exception:
+                logger.exception(
+                    "restart_services: mcp_token_refresher.start failed",
+                )
+                await _teardown_new_stack(
+                    mcp_watcher=new_mcp_watcher,
+                    config_watcher=new_config_watcher,
+                    cron_mgr=new_cron_manager,
+                    ch_mgr=new_channel_manager,
+                    mcp_mgr=new_mcp_manager,
+                )
+                return
+
         if hasattr(config, "mcp"):
             runner.set_mcp_manager(new_mcp_manager)
             app.state.mcp_manager = new_mcp_manager
             app.state.mcp_watcher = new_mcp_watcher
+            app.state.mcp_token_refresher = new_mcp_token_refresher
         else:
             runner.set_mcp_manager(None)
             app.state.mcp_manager = None
             app.state.mcp_watcher = None
+            app.state.mcp_token_refresher = None
         app.state.channel_manager = new_channel_manager
         app.state.cron_manager = new_cron_manager
         app.state.config_watcher = new_config_watcher
@@ -395,14 +454,21 @@ async def lifespan(
     finally:
         # Stop current app.state refs (post-restart instances if any)
         cfg_w = getattr(app.state, "config_watcher", None)
+        mcp_tr = getattr(app.state, "mcp_token_refresher", None)
         mcp_w = getattr(app.state, "mcp_watcher", None)
         cron_mgr = getattr(app.state, "cron_manager", None)
         ch_mgr = getattr(app.state, "channel_manager", None)
         mcp_mgr = getattr(app.state, "mcp_manager", None)
-        # stop order: watchers -> cron -> channels -> mcp -> runner
+        # stop order: watchers -> token_refresher -> cron
+        # -> channels -> mcp -> runner
         if cfg_w is not None:
             try:
                 await cfg_w.stop()
+            except Exception:
+                pass
+        if mcp_tr is not None:
+            try:
+                await mcp_tr.stop()
             except Exception:
                 pass
         if mcp_w is not None:
