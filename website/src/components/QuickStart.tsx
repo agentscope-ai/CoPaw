@@ -375,8 +375,8 @@ export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
                   scriptPlatform === "mac"
                     ? COMMANDS.scriptMac
                     : scriptWinVariant === "cmd"
-                    ? COMMANDS.scriptWinCmd
-                    : COMMANDS.scriptWinPs
+                      ? COMMANDS.scriptWinCmd
+                      : COMMANDS.scriptWinPs
                 }
                 copied={
                   copiedId === `script-${scriptPlatform}-${scriptWinVariant}`
@@ -386,8 +386,8 @@ export function QuickStart({ config, lang, delay = 0 }: QuickStartProps) {
                     (scriptPlatform === "mac"
                       ? COMMANDS.scriptMac
                       : scriptWinVariant === "cmd"
-                      ? COMMANDS.scriptWinCmd
-                      : COMMANDS.scriptWinPs
+                        ? COMMANDS.scriptWinCmd
+                        : COMMANDS.scriptWinPs
                     ).join("\n"),
                     `script-${scriptPlatform}-${scriptWinVariant}`,
                   )
