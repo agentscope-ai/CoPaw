@@ -13,6 +13,10 @@ from agentscope.message import (
 )
 
 from ..schema import FileBlock
+from ..utils.message_processing import (
+    _file_to_base64_source,
+    _should_use_base64_for_media,
+)
 
 
 def _auto_as_type(mt: str) -> str:
@@ -74,10 +78,17 @@ async def send_file_to_user(
                     content=[TextBlock(type="text", text=file.read())],
                 )
 
-        # Use local file URL instead of base64
+        # For Anthropic/Claude models, use base64 instead of file:// URL
+        # because Anthropic API doesn't support file:// URLs
         absolute_path = os.path.abspath(file_path)
-        file_url = f"file://{absolute_path}"
-        source = {"type": "url", "url": file_url}
+
+        if as_type == "image" and _should_use_base64_for_media():
+            # Use base64 for Anthropic/Claude
+            source = _file_to_base64_source(absolute_path)
+        else:
+            # Use file:// URL for other models
+            file_url = f"file://{absolute_path}"
+            source = {"type": "url", "url": file_url}
 
         if as_type == "image":
             return ToolResponse(

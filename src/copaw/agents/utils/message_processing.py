@@ -145,10 +145,6 @@ def _file_to_base64_source(file_path: str) -> dict:
             ".bmp": "image/bmp",
             ".tiff": "image/tiff",
             ".tif": "image/tiff",
-            ".mp3": "audio/mpeg",
-            ".wav": "audio/wav",
-            ".mp4": "video/mp4",
-            ".webm": "video/webm",
         }.get(ext, "application/octet-stream")
 
     with open(file_path, "rb") as f:
@@ -197,7 +193,7 @@ def _update_block_with_local_path(
         # Check if we need base64 encoding for Anthropic/Claude
         use_base64 = _should_use_base64_for_media()
 
-        if use_base64 and block_type in ("image", "video"):
+        if use_base64 and block_type == "image":
             # Anthropic/Claude requires base64 source with media_type
             block["source"] = _file_to_base64_source(local_path)
         elif block_type == "audio":

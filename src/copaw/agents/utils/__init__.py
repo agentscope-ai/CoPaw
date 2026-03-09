@@ -18,6 +18,8 @@ from .file_handling import (
 
 # Message processing
 from .message_processing import (
+    _file_to_base64_source,
+    _should_use_base64_for_media,
     is_first_user_interaction,
     prepend_to_message_content,
     process_file_and_media_blocks_in_message,
@@ -50,6 +52,8 @@ __all__ = [
     "download_file_from_url",
     # Message processing
     "process_file_and_media_blocks_in_message",
+    "_file_to_base64_source",
+    "_should_use_base64_for_media",
     "is_first_user_interaction",
     "prepend_to_message_content",
     # Setup utilities
