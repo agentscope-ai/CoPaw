@@ -169,11 +169,11 @@ class AgentRunner(Runner):
             ):
                 yield msg, last
 
-        except asyncio.CancelledError as exc:
-            logger.info(f"query_handler: {session_id} cancelled!")
+        except asyncio.CancelledError:
+            logger.info("query_handler: %s cancelled!", session_id)
             if agent is not None:
                 await agent.interrupt()
-            raise RuntimeError("Task has been cancelled!") from exc
+            raise
         except Exception as e:
             debug_dump_path = write_query_error_dump(
                 request=request,
