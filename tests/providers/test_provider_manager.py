@@ -96,6 +96,18 @@ async def test_add_custom_provider_and_reload_from_storage(
     )
 
     await manager.add_custom_provider(custom)
+    with pytest.raises(ValueError, match="conflicts with a built-in provider"):
+        await manager.add_custom_provider(
+            OpenAIProvider(
+                id="openai",
+                name="Conflict OpenAI",
+            ),
+        )
+
+    with pytest.raises(
+        ValueError, match="Custom provider 'custom-openai' already exists"
+    ):
+        await manager.add_custom_provider(custom)
 
     reloaded = ProviderManager()
     loaded = reloaded.get_provider("custom-openai")

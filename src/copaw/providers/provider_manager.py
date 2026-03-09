@@ -300,6 +300,10 @@ class ProviderManager:
             raise ValueError(
                 f"'{provider_data.id}' conflicts with a built-in provider.",
             )
+        if provider_data.id in self.custom_providers:
+            raise ValueError(
+                f"Custom provider '{provider_data.id}' already exists.",
+            )
         provider_data.is_custom = True
         provider = self._provider_from_data(
             provider_data.model_dump(),
@@ -495,6 +499,8 @@ class ProviderManager:
                         ModelInfo.model_validate(model)
                         for model in data["models"]
                     ]
+                if "chat_model" in data:
+                    custom_provider.chat_model = data["chat_model"]
                 self._save_provider(custom_provider, is_builtin=False)
             # Migrate active model
             if active_model:
