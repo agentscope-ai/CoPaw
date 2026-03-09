@@ -26,6 +26,7 @@ from ..base import (
     ProcessHandler,
     OutgoingContentPart,
 )
+from ..utils import file_url_to_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -556,16 +557,20 @@ class TelegramChannel(BaseChannel):
         try:
             if part_type == ContentType.IMAGE:
                 image_url = getattr(part, "image_url", None)
-                if image_url and image_url.startswith("file://"):
-                    local_path = image_url.replace("file://", "")
+                local_path = (
+                    file_url_to_local_path(image_url) if image_url else None
+                )
+                if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_photo(chat_id=chat_id, photo=f)
                 elif image_url:
                     await bot.send_photo(chat_id=chat_id, photo=image_url)
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
-                if video_url and video_url.startswith("file://"):
-                    local_path = video_url.replace("file://", "")
+                local_path = (
+                    file_url_to_local_path(video_url) if video_url else None
+                )
+                if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_video(chat_id=chat_id, video=f)
                 elif video_url:
@@ -576,8 +581,10 @@ class TelegramChannel(BaseChannel):
                     await bot.send_audio(chat_id=chat_id, audio=data)
             elif part_type == ContentType.FILE:
                 file_url = getattr(part, "file_url", None)
-                if file_url and file_url.startswith("file://"):
-                    local_path = file_url.replace("file://", "")
+                local_path = (
+                    file_url_to_local_path(file_url) if file_url else None
+                )
+                if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_document(chat_id=chat_id, document=f)
                 elif file_url:

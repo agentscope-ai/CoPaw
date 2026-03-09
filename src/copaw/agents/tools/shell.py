@@ -51,7 +51,7 @@ def _execute_subprocess_sync(
             timeout=timeout,
             encoding=locale.getpreferredencoding(False) or "utf-8",
             errors="replace",
-            check=True,
+            check=False,
         )
         return (
             result.returncode,
