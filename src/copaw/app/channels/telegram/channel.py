@@ -142,8 +142,9 @@ async def _build_content_parts_from_message(
                 has_bot_command = True
                 break
 
-    # Note: Quoted messages have been passed to the Agent via conversation history (session)
-    # No longer inlined into message text to avoid duplication and context pollution
+    # Note: Quoted messages have been passed to the Agent via
+    # conversation history (session). They are no longer inlined into
+    # message text to avoid duplication and context pollution.
 
     if text:
         content_parts.append(TextContent(type=ContentType.TEXT, text=text))
@@ -579,118 +580,102 @@ class TelegramChannel(BaseChannel):
         try:
             if part_type == ContentType.IMAGE:
                 image_url = getattr(part, "image_url", None)
-                if image_url and image_url.startswith("file://"):
-                    local_path = image_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        if message_thread_id:
-                            await bot.send_photo(
-                                chat_id=chat_id,
-                                photo=f,
-                                message_thread_id=message_thread_id,
-                                parse_mode="Markdown",
-                            )
-                        else:
-                            await bot.send_photo(
-                                chat_id=chat_id,
-                                photo=f,
-                                parse_mode="Markdown",
-                            )
-                elif image_url:
-                    if message_thread_id:
-                        await bot.send_photo(
-                            chat_id=chat_id,
-                            photo=image_url,
-                            message_thread_id=message_thread_id,
-                            parse_mode="Markdown",
-                        )
-                    else:
-                        await bot.send_photo(
-                            chat_id=chat_id,
-                            photo=image_url,
-                            parse_mode="Markdown",
-                        )
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=image_url,
+                    method_name="send_photo",
+                    payload_name="photo",
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
-                if video_url and video_url.startswith("file://"):
-                    local_path = video_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        if message_thread_id:
-                            await bot.send_video(
-                                chat_id=chat_id,
-                                video=f,
-                                message_thread_id=message_thread_id,
-                                parse_mode="Markdown",
-                            )
-                        else:
-                            await bot.send_video(
-                                chat_id=chat_id,
-                                video=f,
-                                parse_mode="Markdown",
-                            )
-                elif video_url:
-                    if message_thread_id:
-                        await bot.send_video(
-                            chat_id=chat_id,
-                            video=video_url,
-                            message_thread_id=message_thread_id,
-                            parse_mode="Markdown",
-                        )
-                    else:
-                        await bot.send_video(
-                            chat_id=chat_id,
-                            video=video_url,
-                            parse_mode="Markdown",
-                        )
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=video_url,
+                    method_name="send_video",
+                    payload_name="video",
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.AUDIO:
                 data = getattr(part, "data", None)
-                if data:
-                    if message_thread_id:
-                        await bot.send_audio(
-                            chat_id=chat_id,
-                            audio=data,
-                            message_thread_id=message_thread_id,
-                            parse_mode="Markdown",
-                        )
-                    else:
-                        await bot.send_audio(
-                            chat_id=chat_id,
-                            audio=data,
-                            parse_mode="Markdown",
-                        )
+                await self._send_media_payload(
+                    bot=bot,
+                    chat_id=chat_id,
+                    method_name="send_audio",
+                    payload_name="audio",
+                    payload=data,
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.FILE:
                 file_url = getattr(part, "file_url", None)
-                if file_url and file_url.startswith("file://"):
-                    local_path = file_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        if message_thread_id:
-                            await bot.send_document(
-                                chat_id=chat_id,
-                                document=f,
-                                message_thread_id=message_thread_id,
-                                parse_mode="Markdown",
-                            )
-                        else:
-                            await bot.send_document(
-                                chat_id=chat_id,
-                                document=f,
-                                parse_mode="Markdown",
-                            )
-                elif file_url:
-                    if message_thread_id:
-                        await bot.send_document(
-                            chat_id=chat_id,
-                            document=file_url,
-                            message_thread_id=message_thread_id,
-                            parse_mode="Markdown",
-                        )
-                    else:
-                        await bot.send_document(
-                            chat_id=chat_id,
-                            document=file_url,
-                            parse_mode="Markdown",
-                        )
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=file_url,
+                    method_name="send_document",
+                    payload_name="document",
+                    message_thread_id=message_thread_id,
+                )
         except Exception:
             logger.exception("telegram send_media failed")
+
+    async def _send_media_value(
+        self,
+        *,
+        bot: Any,
+        chat_id: str,
+        value: Any,
+        method_name: str,
+        payload_name: str,
+        message_thread_id: Optional[int],
+    ) -> None:
+        """Send media from a URL or local file path."""
+        if not value:
+            return
+        if isinstance(value, str) and value.startswith("file://"):
+            local_path = value.replace("file://", "")
+            with open(local_path, "rb") as media_file:
+                await self._send_media_payload(
+                    bot=bot,
+                    chat_id=chat_id,
+                    method_name=method_name,
+                    payload_name=payload_name,
+                    payload=media_file,
+                    message_thread_id=message_thread_id,
+                )
+            return
+        await self._send_media_payload(
+            bot=bot,
+            chat_id=chat_id,
+            method_name=method_name,
+            payload_name=payload_name,
+            payload=value,
+            message_thread_id=message_thread_id,
+        )
+
+    async def _send_media_payload(
+        self,
+        *,
+        bot: Any,
+        chat_id: str,
+        method_name: str,
+        payload_name: str,
+        payload: Any,
+        message_thread_id: Optional[int],
+    ) -> None:
+        """Send a prepared Telegram media payload."""
+        if not payload:
+            return
+        kwargs = {
+            "chat_id": chat_id,
+            payload_name: payload,
+            "parse_mode": "Markdown",
+        }
+        if message_thread_id:
+            kwargs["message_thread_id"] = message_thread_id
+        await getattr(bot, method_name)(**kwargs)
 
     async def _run_polling(self) -> None:
         """Run Telegram bot in existing event loop (FastAPI/uvicorn).

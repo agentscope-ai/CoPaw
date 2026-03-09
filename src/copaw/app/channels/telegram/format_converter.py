@@ -17,12 +17,13 @@ Conversion rules:
 - Links [text](url) → <a href="url">text</a>
 """
 
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 
+# pylint: disable=too-many-branches,too-many-statements
 def convert_markdown_to_telegram_html(text: str) -> str:
     """
     Convert Markdown format to Telegram HTML format
@@ -77,7 +78,9 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                 # Support single-column tables (no tabs)
                 if "\t" in prev:
                     cells = prev.split("\t")
-                    converted_lines[-1] = "\t".join(f"<b>{cell}</b>" for cell in cells)
+                    converted_lines[-1] = "\t".join(
+                        f"<b>{cell}</b>" for cell in cells
+                    )
                 else:
                     # Single column case
                     converted_lines[-1] = f"<b>{prev}</b>"
@@ -95,7 +98,8 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                 # Process content after ``` (if any)
                 parts = line.split("```", 1)
                 if len(parts) > 1 and parts[1].strip():
-                    # Content after end on same line, continue processing without re-entering code block
+                    # Content after end on same line; continue processing
+                    # without re-entering the code block.
                     line = parts[1]
                     # Fall through to process the remaining content
                 else:
@@ -151,13 +155,15 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                         )
                     converted_lines.append(processed_before)
 
-                # Check if there is content after ``` (same line, single-line code block)
+                # Check for content after ``` on the same line for a
+                # single-line code block.
                 after_parts = line.split("```")[1:]
                 if len(after_parts) >= 2 and after_parts[0].strip():
-                    # Single line has start and end (```code``` format)
+                    # Single line has start and end in ```code``` format.
                     code_content = after_parts[0]
                     if code_content.strip():
-                        # Process single-line code block directly, do not set state
+                        # Process single-line code block directly without
+                        # entering code-block state.
                         code_text = escape_html(code_content)
                         converted_lines.append(f"<pre>{code_text}</pre>")
                     # Process content after the last ```
@@ -174,7 +180,8 @@ def convert_markdown_to_telegram_html(text: str) -> str:
             code_block_content.append(line)
             continue
 
-        # 2. Title processing (support anywhere in line, e.g., "[TG_bot]  ## Title")
+        # 2. Title processing, including prefixed text such as
+        # "[TG_bot]  ## Title".
         title_match = re.search(r"(######?|#####|####|###|##|#)\s+(.+)", line)
         if title_match:
             flush_blockquote()
@@ -270,11 +277,11 @@ def convert_markdown_to_telegram_html(text: str) -> str:
             if not in_blockquote:
                 in_blockquote = True
                 blockquote_lines = [line[2:].strip()]
-            else:
-                blockquote_lines.append(line[2:].strip())
+                continue
+            blockquote_lines.append(line[2:].strip())
             continue
-        else:
-            flush_blockquote()
+
+        flush_blockquote()
 
         # 6. List prefix replacement
         if re.match(r"^[-*+]\s+", line):
@@ -323,9 +330,9 @@ def convert_markdown_to_telegram_html(text: str) -> str:
     flush_code_block()
     process_table_header()
 
-    result = "\n".join(converted_lines)
-    logger.debug(f"[FORMAT] Output: {mask_text(result, 100)}")
-    return result
+    converted_text = "\n".join(converted_lines)
+    logger.debug(f"[FORMAT] Output: {mask_text(converted_text, 100)}")
+    return converted_text
 
 
 def escape_html(text: str, quote: bool = False) -> str:
@@ -407,20 +414,23 @@ def hello():
 Plain text
 """
 
-    result = convert_markdown_to_telegram_html(test_text)
+    demo_result = convert_markdown_to_telegram_html(test_text)
     print("Conversion Result:")
     print("=" * 60)
-    print(result)
+    print(demo_result)
     print("=" * 60)
     print("\nVerification:")
-    print("✓ Bold:", "<b>" in result)
-    print("✓ Italic:", "<i>" in result)
-    print("✓ Heading:", "<b>Main Heading</b>" in result)
-    print("✓ List:", "• " in result)
-    print("✓ Blockquote:", "<blockquote>" in result and "\n" in result)
-    print("✓ Table tabs:", "\t" in result)
-    print("✓ Table header bold:", "<b>Col 1</b>" in result)
-    print("✓ Code block:", "<pre>" in result)
-    print("✓ Link:", "<a href=" in result)
-    print("✓ Strikethrough:", "<s>" in result)
-    print("✓ Separator:", "──────────" in result)
+    print("✓ Bold:", "<b>" in demo_result)
+    print("✓ Italic:", "<i>" in demo_result)
+    print("✓ Heading:", "<b>Main Heading</b>" in demo_result)
+    print("✓ List:", "• " in demo_result)
+    print(
+        "✓ Blockquote:",
+        "<blockquote>" in demo_result and "\n" in demo_result,
+    )
+    print("✓ Table tabs:", "\t" in demo_result)
+    print("✓ Table header bold:", "<b>Col 1</b>" in demo_result)
+    print("✓ Code block:", "<pre>" in demo_result)
+    print("✓ Link:", "<a href=" in demo_result)
+    print("✓ Strikethrough:", "<s>" in demo_result)
+    print("✓ Separator:", "──────────" in demo_result)
