@@ -465,6 +465,9 @@ class TelegramChannel(BaseChannel):
         """Start the typing indicator loop for a chat."""
         if not self._show_typing:
             return
+        # Ensure only one typing loop per chat_id by cancelling
+        # any existing task.
+        self._stop_typing(chat_id)
         self._typing_tasks[chat_id] = asyncio.create_task(
             self._typing_loop(chat_id),
         )
@@ -513,30 +516,31 @@ class TelegramChannel(BaseChannel):
         # Stop previous typing indicator
         self._stop_typing(chat_id)
 
-        # Chunk the raw Markdown text first, then convert each chunk to HTML
-        # Avoid splitting HTML tags which causes parsing errors
-        chunks = self._chunk_text(text)
+        # Convert full markdown to HTML first, then chunk to avoid
+        # splitting multi-line constructs (fenced code blocks, blockquotes)
+        # across chunk boundaries.
+        html_text = convert_markdown_to_telegram_html(text)
+        chunks = self._chunk_text(html_text)
         for chunk in chunks:
-            # Convert each chunk to HTML
-            html_chunk = convert_markdown_to_telegram_html(chunk)
             try:
                 if message_thread_id:
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=html_chunk,
+                        text=chunk,
                         message_thread_id=message_thread_id,
                         parse_mode="HTML",
                     )
                 else:
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=html_chunk,
+                        text=chunk,
                         parse_mode="HTML",
                     )
             except telegram.error.BadRequest as e:
                 # HTML parse failed, fallback to plain text
                 logger.warning(
-                    f"HTML parse failed, sending as plain text: {e}",
+                    "HTML parse failed, sending as plain text: %s",
+                    e,
                 )
                 if message_thread_id:
                     await bot.send_message(
@@ -671,7 +675,6 @@ class TelegramChannel(BaseChannel):
         kwargs = {
             "chat_id": chat_id,
             payload_name: payload,
-            "parse_mode": "Markdown",
         }
         if message_thread_id:
             kwargs["message_thread_id"] = message_thread_id
