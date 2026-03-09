@@ -8,6 +8,7 @@ import pytest
 
 from copaw.app.channels.dingtalk.channel import DingTalkChannel
 from copaw.app.channels.dingtalk.handler import DingTalkChannelHandler
+from copaw.app.channels.dingtalk.utils import sanitize_download_filename
 
 
 class _FakeRichFileMessage:
@@ -237,3 +238,9 @@ async def test_download_media_to_local_appends_short_hash_only_on_collision(
     saved = Path(local_path)
     assert saved.name == "报告_deadbeef.pdf"
     assert saved.read_bytes() == b"%PDF-1.4\nnew"
+
+
+def test_sanitize_download_filename_avoids_windows_reserved_names() -> None:
+    assert sanitize_download_filename("CON") == "CON_"
+    assert sanitize_download_filename("nul.txt") == "nul_.txt"
+    assert sanitize_download_filename("Lpt1...") == "Lpt1_"

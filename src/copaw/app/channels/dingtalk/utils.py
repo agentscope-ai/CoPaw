@@ -42,6 +42,14 @@ def guess_suffix_from_file_content(path: Path) -> Optional[str]:
 
 
 _INVALID_WINDOWS_FILENAME_RE = re.compile(r'[\x00-\x1f\\/:*?"<>|]+')
+_WINDOWS_RESERVED_BASENAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
 
 def sanitize_download_filename(
@@ -56,4 +64,10 @@ def sanitize_download_filename(
         basename = fallback
     sanitized = _INVALID_WINDOWS_FILENAME_RE.sub("_", basename)
     sanitized = sanitized.strip().strip(". ")
+    sanitized = sanitized or fallback
+    stem = Path(sanitized).stem or sanitized
+    suffix = Path(sanitized).suffix
+    normalized_stem = stem.rstrip(". ").upper()
+    if normalized_stem in _WINDOWS_RESERVED_BASENAMES:
+        sanitized = f"{stem}_{suffix}"
     return sanitized or fallback
