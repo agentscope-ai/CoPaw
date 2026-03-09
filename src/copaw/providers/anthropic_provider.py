@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, List
 
 from agentscope.model import ChatModelBase
@@ -14,7 +13,6 @@ from copaw.providers.provider import ModelInfo, Provider
 
 
 class AnthropicProvider(Provider):
-
     def _client(self, timeout: float = 5) -> anthropic.AsyncAnthropic:
         return anthropic.AsyncAnthropic(
             api_key=self.api_key,

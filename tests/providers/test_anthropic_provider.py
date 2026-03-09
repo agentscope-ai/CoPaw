@@ -16,6 +16,7 @@ def _make_provider() -> AnthropicProvider:
         chat_model="AnthropicChatModel",
     )
 
+
 async def test_check_connection_success(monkeypatch) -> None:
     provider = _make_provider()
     called = {"count": 0}

@@ -334,7 +334,7 @@ class ProviderManager:
             raise ValueError(
                 f"Model '{model_id}' not found in provider '{provider_id}'.",
             )
-        if not await provider.check_connection():
+        if not await provider.check_model_connection(model_id=model_id):
             raise ValueError(
                 f"Provider '{provider_id}' is not reachable.",
             )

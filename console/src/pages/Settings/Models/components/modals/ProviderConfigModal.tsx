@@ -135,7 +135,10 @@ export function ProviderConfigModal({
 
       if (!result.success) {
         message.error(result.message || t("models.testConnectionFailed"));
-        return;
+        if (!provider.is_custom) {
+          // For built-in providers, we want to enforce valid config before saving
+          return;
+        }
       }
 
       await api.configureProvider(provider.id, values);

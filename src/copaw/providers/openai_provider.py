@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import json
 from typing import Any, List
 
@@ -14,7 +13,6 @@ from copaw.providers.provider import ModelInfo, Provider
 
 
 class OpenAIProvider(Provider):
-
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         return AsyncOpenAI(
             base_url=self.base_url,
