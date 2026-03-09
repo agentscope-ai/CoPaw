@@ -9,6 +9,7 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 **The first launch may take a considerable amount of time (10-60 seconds or more, depending on your system configuration).** The application needs to initialize the Python environment, load dependencies, and start the web service. Please be patient while waiting for the window to appear. Subsequent launches will be faster.
 
 ## 📚 Table of Contents
+
 - [Windows Guide](#-windows-guide)
 - [macOS Guide](#-macos-guide)
 - [Technical Support](#-technical-support)
@@ -18,6 +19,7 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 ## 📦 Windows Guide
 
 ### System Requirements
+
 - **Operating System**: Windows 10 or later
 - **Architecture**: x64 (64-bit)
 
@@ -36,12 +38,14 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 After installation, you'll see **two launch shortcuts**:
 
 #### 🎯 **CoPaw Desktop** (Recommended for daily use)
+
 - **Features**: Silent launch, no terminal window, clean interface
 - **Use Case**: Normal usage when you don't need to view technical logs
 - **How to Launch**: Double-click the "CoPaw Desktop" icon on desktop or Start Menu
 - **Technical Note**: Uses VBScript launcher, runs Python process in background
 
 #### 🔧 **CoPaw Desktop (Debug)** (Debug Mode)
+
 - **Features**: Shows terminal window with real-time logging
 - **Use Cases**:
   - Need to view error messages when encountering problems
@@ -64,6 +68,7 @@ A: Go to Windows Settings → Apps → Installed apps → Find "CoPaw Desktop" �
 
 **Q: Is the installer safe?**
 A:
+
 - The application is **not Microsoft code-signed** (costs $200-800/year), so Windows Defender SmartScreen will show a warning
 - This is normal behavior; click "More info" → "Run anyway" to proceed
 - The code is completely open source, and the build process is transparently verifiable on GitHub Actions
@@ -73,6 +78,7 @@ A:
 ## 🍎 macOS Guide
 
 ### System Requirements
+
 - **Operating System**: macOS 14 (Sonoma) or later
 - **Architecture**:
   - ✅ **Apple Silicon (M1/M2/M3/M4)** - Recommended, supports MLX local model acceleration
@@ -96,9 +102,11 @@ A:
 CoPaw is **not Apple Developer-signed or notarized**, so macOS Gatekeeper will block it by default.
 
 **Why no signature?**
+
 - 📋 Developer signing requires additional cost and procedures; will be added in future releases
 
 **Current impact:**
+
 - ✅ **No functional impact**: Application runs completely normally
 - ⚠️ **First-time manual trust required**: One-time operation, permanently effective
 - 🔒 **Security**: Open source code is auditable, transparent build process (CI/CD)
@@ -143,6 +151,7 @@ When first launched, macOS may request the following permissions:
 ### Launch Options
 
 #### 🎯 Normal Launch (Double-click)
+
 - Double-click `CoPaw.app` to launch
 - The app runs in the background and opens a browser window
 - Logs are written to: `~/.copaw/desktop.log`
@@ -161,12 +170,14 @@ PYTHONPATH= PYTHONHOME="$APP_ENV" "$APP_ENV/bin/python" -m copaw desktop
 ```
 
 **Advantages of terminal launch:**
+
 - ✅ View all log output in real-time
 - ✅ See complete Python error stack traces
 - ✅ Convenient for debugging and reporting issues
 - ✅ Can add `--log-level debug` for more detailed information
 
 **View log file:**
+
 ```bash
 # View recent startup logs
 tail -f ~/.copaw/desktop.log
@@ -215,10 +226,12 @@ Currently using:
 ## 🎉 Usage Recommendations
 
 ### Windows Users
+
 - **Daily use**: Use the normal version (no terminal window)
 - **Troubleshooting**: Switch to Debug version to view logs
 
 ### macOS Users
+
 - **First install**: Make sure to follow the "Bypassing Security Restrictions" steps
 - **Debugging issues**: Use terminal launch method to view real-time logs
 - **Permission issues**: Allow file access permission on first launch

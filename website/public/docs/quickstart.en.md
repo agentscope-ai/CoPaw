@@ -167,10 +167,12 @@ If you're not comfortable with command-line tools, you can download and use CoPa
 
 1. **Download the installer**
    Go to [GitHub Releases](https://github.com/agentscope-ai/CoPaw/releases) to download the version for your system:
+
    - Windows: `CoPaw-Setup-<version>.exe`
    - macOS: `CoPaw-<version>-macOS.zip`
 
 2. **Install and Launch**
+
    - **Windows**: Double-click the `.exe` file to install following the wizard, then double-click the desktop shortcut to launch
    - **macOS**: Extract the `.zip` to get `CoPaw.app`, first time requires right-click and select "Open" to bypass system security restrictions
 
