@@ -62,8 +62,10 @@ class AddModelRequest(BaseModel):
     response_model=List[ProviderInfo],
     summary="List all providers",
 )
-async def list_all_providers(request: Request) -> List[ProviderInfo]:
-    return await request.app.state.provider_manager.list_provider_info()
+async def list_all_providers(
+    manager: ProviderManager = Depends(get_provider_manager),
+) -> List[ProviderInfo]:
+    return await manager.list_provider_info()
 
 
 @router.put(
@@ -72,12 +74,10 @@ async def list_all_providers(request: Request) -> List[ProviderInfo]:
     summary="Configure a provider",
 )
 async def configure_provider(
-    request: Request,
+    manager: ProviderManager = Depends(get_provider_manager),
     provider_id: str = Path(...),
     body: ProviderConfigRequest = Body(...),
 ) -> ProviderInfo:
-    manager = request.app.state.provider_manager
-
     try:
         ok = manager.update_provider(
             provider_id,
@@ -102,11 +102,9 @@ async def configure_provider(
     status_code=201,
 )
 async def create_custom_provider_endpoint(
-    request: Request,
+    manager: ProviderManager = Depends(get_provider_manager),
     body: CreateCustomProviderRequest = Body(...),
 ) -> ProviderInfo:
-    manager = request.app.state.provider_manager
-
     try:
         provider_info = await manager.add_custom_provider(
             ProviderInfo(
@@ -185,12 +183,11 @@ class DiscoverModelsResponse(BaseModel):
     summary="Test provider connection",
 )
 async def test_provider(
-    request: Request,
+    manager: ProviderManager = Depends(get_provider_manager),
     provider_id: str = Path(...),
     body: Optional[TestProviderRequest] = Body(default=None),
 ) -> TestConnectionResponse:
     """Test if a provider's URL and API key are valid."""
-    manager = request.app.state.provider_manager
     try:
         provider = manager.get_provider(provider_id)
         if provider is None:
