@@ -28,8 +28,13 @@ def _mask_api_key(api_key: str) -> str:
 def _is_configured(provider: Provider) -> bool:
     if provider.is_local or provider.id == "ollama":
         return True
-    return bool(provider.base_url)
-
+    # for API-based providers, we consider them
+    # configured if they have a base URL and (if required) an API key
+    if not provider.base_url:
+        return False
+    if provider.require_api_key and not provider.api_key:
+        return False
+    return True
 
 def _save_provider(manager: ProviderManager, provider_id: str) -> None:
     provider = manager.get_provider(provider_id)

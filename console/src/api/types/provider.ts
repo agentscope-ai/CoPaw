@@ -32,7 +32,7 @@ export interface ModelSlotConfig {
 }
 
 export interface ActiveModelsInfo {
-  active_llm: ModelSlotConfig;
+  active_llm?: ModelSlotConfig;
 }
 
 export interface ModelSlotRequest {
