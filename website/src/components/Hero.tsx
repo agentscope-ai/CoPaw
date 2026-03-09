@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { motion } from "motion/react";
 import { CopawMascot } from "./CopawMascot";
 import { t, type Lang } from "../i18n";
@@ -115,6 +115,45 @@ export function Hero({
           {t(lang, "hero.cta")}
           <ArrowRight size={20} strokeWidth={2} aria-hidden />
         </Link>
+      </motion.div>
+      <motion.div
+        variants={item}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "var(--space-2)",
+          marginTop: "var(--space-6)",
+        }}
+      >
+        <motion.div
+          animate={{
+            y: [0, 8, 0],
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          style={{
+            color: "var(--text-muted)",
+            opacity: 0.6,
+          }}
+        >
+          <ChevronDown size={28} strokeWidth={2} aria-hidden />
+        </motion.div>
+        <p
+          style={{
+            fontSize: "0.875rem",
+            color: "var(--text-muted)",
+            margin: 0,
+            fontWeight: 500,
+          }}
+        >
+          {lang === "zh"
+            ? "向下滚动查看快速开始"
+            : "Scroll down for quick start"}
+        </p>
       </motion.div>
     </motion.section>
   );

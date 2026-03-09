@@ -35,7 +35,7 @@ export function Home({ config, lang, onLangClick }: HomeProps) {
           lang={lang}
           docsPath={config.docsPath}
         />
-        <QuickStart config={config} lang={lang} delay={0.3} />
+        <QuickStart config={config} lang={lang} />
         <Features lang={lang} delay={0.35} />
         <UseCases lang={lang} delay={0.4} />
         {config.showTestimonials !== false && (
