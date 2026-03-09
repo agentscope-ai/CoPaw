@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=unused-argument too-many-branches too-many-statements
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from pathlib import Path
 
+from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import stream_printing_messages
 from agentscope_runtime.engine.runner import Runner
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
@@ -20,11 +23,12 @@ from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
 from ...agents.memory import MemoryManager
-from ...agents.react_agent import CoPawAgent
+from ...agents.react_agent import CoPawAgent, _TOOL_GUARD_DENIED_MARK
 from ...config import load_config
 from ...constant import (
     WORKING_DIR,
 )
+from ...security.tool_guard.approval import ApprovalDecision
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,59 @@ class AgentRunner(Runner):
         """
         self._mcp_manager = mcp_manager
 
+    async def _resolve_pending_approval(
+        self,
+        session_id: str,
+        query: str | None,
+    ) -> tuple[Msg | None, bool]:
+        """Check for a pending tool-guard approval for *session_id*.
+
+        Returns ``(response_msg, was_consumed)``:
+
+        - ``(None, False)`` — no pending approval, continue normally.
+        - ``(Msg, True)``   — denied; yield the Msg and stop.
+        - ``(None, True)``  — approved; skip the command path and let
+          the message reach the agent so the LLM can re-call the tool.
+        """
+        if not session_id:
+            return None, False
+
+        from ..approvals import get_approval_service
+
+        svc = get_approval_service()
+        pending = await svc.get_pending_by_session(session_id)
+        if pending is None:
+            return None, False
+
+        normalized = (query or "").strip().lower()
+        if normalized in ("/daemon approve", "/approve"):
+            await svc.resolve_request(
+                pending.request_id,
+                ApprovalDecision.APPROVED,
+            )
+            # Return (None, True): no response message, but approval
+            # WAS consumed → skip the command path so the message goes
+            # straight to the agent.
+            return None, True
+
+        # Any other input → deny
+        await svc.resolve_request(
+            pending.request_id,
+            ApprovalDecision.DENIED,
+        )
+        return Msg(
+            name="Friday",
+            role="assistant",
+            content=[
+                TextBlock(
+                    type="text",
+                    text=(
+                        f"❌ Tool `{pending.tool_name}` execution denied."
+                    ),
+                ),
+            ],
+        ), True
+
     async def query_handler(
         self,
         msgs,
@@ -62,9 +119,32 @@ class AgentRunner(Runner):
         """
         Handle agent query.
         """
-        # Command path: do not create agent; yield from run_command_path
         query = _get_last_user_text(msgs)
-        if query and _is_command(query):
+        session_id = getattr(request, "session_id", "") or ""
+
+        # ── Pending tool-guard approval interception ──────────────
+        # While an approval is pending for this session, the user
+        # must type "/daemon approve" to allow execution.  Any other
+        # message is treated as a denial.
+        approval_response, approval_consumed = (
+            await self._resolve_pending_approval(session_id, query)
+        )
+        if approval_response is not None:
+            yield approval_response, True
+            # Clean up session memory: remove the LLM denial text,
+            # strip marks, and persist the denial response.
+            user_id = getattr(request, "user_id", "") or ""
+            await self._cleanup_denied_session_memory(
+                session_id,
+                user_id,
+                denial_response=approval_response,
+            )
+            return
+
+        # Command path: do not create agent; yield from run_command_path
+        # Skip if an approval was just consumed — the message must
+        # reach the agent so the LLM can re-call the approved tool.
+        if not approval_consumed and query and _is_command(query):
             logger.info("Command path: %s", query.strip()[:50])
             async for msg, last in run_command_path(request, msgs, self):
                 yield msg, last
@@ -205,6 +285,112 @@ class AgentRunner(Runner):
 
             if self._chat_manager is not None and chat is not None:
                 await self._chat_manager.update_chat(chat)
+
+    async def _cleanup_denied_session_memory(
+        self,
+        session_id: str,
+        user_id: str,
+        denial_response: "Msg | None" = None,
+    ) -> None:
+        """Clean up session memory after a tool-guard denial.
+
+        In the deny path (no agent is created), this method:
+
+        1. Removes the LLM denial explanation (the assistant message
+           immediately following the last marked entry).
+        2. Strips ``_TOOL_GUARD_DENIED_MARK`` from all marks lists so
+           the kept tool-call info becomes normal memory entries.
+        3. Appends *denial_response* (e.g. "❌ Tool denied") to the
+           persisted session memory.
+        """
+        if not hasattr(self, "session") or self.session is None:
+            return
+
+        path = self.session._get_save_path(session_id, user_id)
+        if not Path(path).exists():
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8", errors="surrogatepass") as f:
+                states = json.load(f)
+
+            agent_state = states.get("agent", {})
+            memory_state = agent_state.get("memory", {})
+            content = memory_state.get("content", [])
+
+            if not content:
+                return
+
+            def _is_marked(entry):
+                return (
+                    isinstance(entry, list)
+                    and len(entry) >= 2
+                    and isinstance(entry[1], list)
+                    and _TOOL_GUARD_DENIED_MARK in entry[1]
+                )
+
+            # Find the last marked entry
+            last_marked_idx = -1
+            for i, entry in enumerate(content):
+                if _is_marked(entry):
+                    last_marked_idx = i
+
+            modified = False
+
+            # 1. Remove the LLM denial text (assistant message right
+            #    after the last marked entry).
+            if (
+                last_marked_idx >= 0
+                and last_marked_idx + 1 < len(content)
+            ):
+                next_entry = content[last_marked_idx + 1]
+                if (
+                    isinstance(next_entry, list)
+                    and len(next_entry) >= 1
+                    and isinstance(next_entry[0], dict)
+                    and next_entry[0].get("role") == "assistant"
+                ):
+                    del content[last_marked_idx + 1]
+                    modified = True
+
+            # 2. Strip the denied mark from remaining entries.
+            for entry in content:
+                if _is_marked(entry):
+                    entry[1].remove(_TOOL_GUARD_DENIED_MARK)
+                    modified = True
+
+            # 3. Append the denial response message.
+            if denial_response is not None:
+                ts = getattr(denial_response, "timestamp", None)
+                msg_dict = {
+                    "id": getattr(denial_response, "id", ""),
+                    "name": getattr(denial_response, "name", "Friday"),
+                    "role": getattr(denial_response, "role", "assistant"),
+                    "content": denial_response.content,
+                    "metadata": getattr(
+                        denial_response, "metadata", None,
+                    ),
+                    "timestamp": str(ts) if ts is not None else "",
+                }
+                content.append([msg_dict, []])
+                modified = True
+
+            if modified:
+                with open(
+                    path, "w", encoding="utf-8", errors="surrogatepass",
+                ) as f:
+                    json.dump(states, f, ensure_ascii=False)
+                logger.info(
+                    "Tool guard: cleaned up denied session memory "
+                    "in %s",
+                    path,
+                )
+        except Exception:  # pylint: disable=broad-except
+            logger.warning(
+                "Failed to clean up denied messages from session %s",
+                session_id,
+                exc_info=True,
+            )
 
     async def init_handler(self, *args, **kwargs):
         """

@@ -162,18 +162,21 @@ class ApprovalService:
         Raises ``ValueError`` if no handler is registered for *channel*.
         """
         handler = self._handlers.get(channel)
-        if handler is None:
-            raise ValueError(
-                f"No approval handler registered for channel '{channel}'. "
-                f"Registered: {self.registered_channels}",
-            )
 
         request_id = str(uuid.uuid4())
         loop = asyncio.get_running_loop()
         base_url = self._base_url()
 
-        approve_url = handler.build_action_url(base_url, request_id, "approve")
-        deny_url = handler.build_action_url(base_url, request_id, "deny")
+        if handler is not None:
+            approve_url = handler.build_action_url(
+                base_url, request_id, "approve",
+            )
+            deny_url = handler.build_action_url(
+                base_url, request_id, "deny",
+            )
+        else:
+            approve_url = f"{base_url}/api/approvals/{request_id}/approve"
+            deny_url = f"{base_url}/api/approvals/{request_id}/deny"
 
         pending = PendingApproval(
             request_id=request_id,
@@ -286,6 +289,46 @@ class ApprovalService:
             return self._pending.get(request_id) or self._completed.get(
                 request_id,
             )
+
+    async def get_pending_by_session(
+        self,
+        session_id: str,
+    ) -> PendingApproval | None:
+        """Return the most recent pending approval for *session_id*.
+
+        Iterates in reverse insertion order so the newest pending
+        record is returned first.
+        """
+        async with self._lock:
+            for pending in reversed(list(self._pending.values())):
+                if (
+                    pending.session_id == session_id
+                    and pending.status == "pending"
+                ):
+                    return pending
+        return None
+
+    async def consume_approval(
+        self,
+        session_id: str,
+        tool_name: str,
+    ) -> bool:
+        """Check and consume a one-shot tool approval.
+
+        If *tool_name* was recently approved via ``/daemon approve``
+        for *session_id*, remove the completed record and return
+        ``True`` so the caller can skip the guard check.
+        """
+        async with self._lock:
+            for key, completed in list(self._completed.items()):
+                if (
+                    completed.session_id == session_id
+                    and completed.tool_name == tool_name
+                    and completed.status == "approved"
+                ):
+                    del self._completed[key]
+                    return True
+        return False
 
     def format_approval_message(
         self,

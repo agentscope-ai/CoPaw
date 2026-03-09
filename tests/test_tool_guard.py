@@ -868,17 +868,106 @@ class TestApprovalService:
         assert pending.channel == "dingtalk"
         assert "/api/approvals/" in pending.approve_url
 
-    async def test_create_pending_unknown_channel_raises(self):
+    async def test_create_pending_unknown_channel_uses_fallback_urls(self):
         svc = self._make_service()
-        result = ToolGuardResult(tool_name="test", params={})
-        with pytest.raises(ValueError, match="No approval handler"):
-            await svc.create_pending(
-                session_id="s1",
-                user_id="u1",
-                channel="unknown",
-                tool_name="test",
-                result=result,
-            )
+        result = ToolGuardResult(
+            tool_name="test",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="unknown",
+            tool_name="test",
+            result=result,
+        )
+        assert pending.channel == "unknown"
+        assert "/api/approvals/" in pending.approve_url
+        assert "/approve" in pending.approve_url
+        assert "/deny" in pending.deny_url
+
+    async def test_get_pending_by_session(self):
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+
+        svc = self._make_service()
+        svc.register_handler(ConsoleApprovalHandler())
+        result = ToolGuardResult(
+            tool_name="test",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test",
+                ),
+            ],
+        )
+        # No pending → None
+        assert await svc.get_pending_by_session("s1") is None
+
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="test",
+            result=result,
+        )
+        # Should find the pending approval
+        found = await svc.get_pending_by_session("s1")
+        assert found is not None
+        assert found.request_id == pending.request_id
+
+        # Different session → None
+        assert await svc.get_pending_by_session("s2") is None
+
+    async def test_get_pending_by_session_returns_none_after_resolve(self):
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = self._make_service()
+        svc.register_handler(ConsoleApprovalHandler())
+        result = ToolGuardResult(
+            tool_name="test",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="test",
+            result=result,
+        )
+        await svc.resolve_request(
+            pending.request_id, ApprovalDecision.APPROVED,
+        )
+        # Once resolved, should not be in pending anymore
+        assert await svc.get_pending_by_session("s1") is None
 
     async def test_resolve_approve(self):
         from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
@@ -1093,3 +1182,782 @@ class TestApprovalService:
             assert svc.supports_channel("console")
         finally:
             svc_mod._approval_service = None
+
+    async def test_consume_approval_returns_true_after_approve(self):
+        """consume_approval returns True for an approved tool+session."""
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = self._make_service()
+        svc.register_handler(ConsoleApprovalHandler())
+        result = ToolGuardResult(
+            tool_name="test_tool",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test_tool",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="test_tool",
+            result=result,
+        )
+        # Resolve as approved
+        await svc.resolve_request(
+            pending.request_id, ApprovalDecision.APPROVED,
+        )
+        # First consume should succeed
+        assert await svc.consume_approval("s1", "test_tool") is True
+        # Second consume should fail (one-shot)
+        assert await svc.consume_approval("s1", "test_tool") is False
+
+    async def test_consume_approval_returns_false_when_denied(self):
+        """consume_approval returns False for a denied tool."""
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = self._make_service()
+        svc.register_handler(ConsoleApprovalHandler())
+        result = ToolGuardResult(
+            tool_name="test_tool",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test_tool",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="test_tool",
+            result=result,
+        )
+        await svc.resolve_request(
+            pending.request_id, ApprovalDecision.DENIED,
+        )
+        assert await svc.consume_approval("s1", "test_tool") is False
+
+    async def test_consume_approval_returns_false_for_wrong_tool(self):
+        """consume_approval returns False when tool_name doesn't match."""
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = self._make_service()
+        svc.register_handler(ConsoleApprovalHandler())
+        result = ToolGuardResult(
+            tool_name="tool_a",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="tool_a",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="tool_a",
+            result=result,
+        )
+        await svc.resolve_request(
+            pending.request_id, ApprovalDecision.APPROVED,
+        )
+        assert await svc.consume_approval("s1", "tool_b") is False
+
+
+# =====================================================================
+# Daemon approve command tests
+# =====================================================================
+
+
+def _import_daemon_commands():
+    """Import daemon_commands without triggering the runner __init__.py.
+
+    The runner package ``__init__.py`` eagerly imports ``AgentRunner`` which
+    depends on ``reme`` — unavailable in some test environments.  We load
+    ``daemon_commands`` by file path to dodge the package __init__.
+    """
+    import sys
+    import importlib.util
+    import pathlib
+
+    mod_name = "copaw.app.runner.daemon_commands"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+
+    mod_path = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "src"
+        / "copaw"
+        / "app"
+        / "runner"
+        / "daemon_commands.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        mod_name,
+        mod_path,
+    )
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[mod_name] = mod
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+class TestDaemonApproveCommand:
+    """Test /daemon approve subcommand parsing and execution."""
+
+    def test_parse_daemon_approve(self):
+        mod = _import_daemon_commands()
+        result = mod.parse_daemon_query("/daemon approve")
+        assert result is not None
+        assert result[0] == "approve"
+
+    def test_parse_short_approve(self):
+        mod = _import_daemon_commands()
+        result = mod.parse_daemon_query("/approve")
+        assert result is not None
+        assert result[0] == "approve"
+
+    async def test_run_daemon_approve_no_pending(self):
+        mod = _import_daemon_commands()
+        ctx = mod.DaemonContext()
+        import copaw.app.approvals.service as svc_mod
+
+        svc_mod._approval_service = None
+        try:
+            text = await mod.run_daemon_approve(
+                ctx, session_id="no-such-session",
+            )
+            assert "No pending approval" in text
+        finally:
+            svc_mod._approval_service = None
+
+    async def test_run_daemon_approve_resolves_pending(self):
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.app.approvals.service import ApprovalService
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        mod = _import_daemon_commands()
+
+        svc = ApprovalService()
+        svc.register_handler(ConsoleApprovalHandler())
+
+        result = ToolGuardResult(
+            tool_name="execute_shell_command",
+            params={"command": "rm -rf /"},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.CRITICAL,
+                    title="Test",
+                    description="desc",
+                    tool_name="execute_shell_command",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="s1",
+            user_id="u1",
+            channel="console",
+            tool_name="execute_shell_command",
+            result=result,
+        )
+
+        import copaw.app.approvals.service as svc_mod
+
+        original = svc_mod._approval_service
+        svc_mod._approval_service = svc
+        try:
+            ctx = mod.DaemonContext()
+            text = await mod.run_daemon_approve(ctx, session_id="s1")
+            assert "approved" in text.lower()
+            assert pending.future.result() == ApprovalDecision.APPROVED
+        finally:
+            svc_mod._approval_service = original
+
+
+# =====================================================================
+# Runner pending-approval interception tests
+# =====================================================================
+
+
+class _StubRunner:
+    """Minimal stub mimicking AgentRunner._resolve_pending_approval.
+
+    Re-implements the same logic as ``AgentRunner._resolve_pending_approval``
+    so we can test the approval interception without importing the full
+    runner module (which depends on ``reme``).
+
+    Returns ``(response_msg | None, was_consumed: bool)``.
+    """
+
+    async def _resolve_pending_approval(
+        self,
+        session_id: str,
+        query: str | None,
+    ) -> tuple:
+        if not session_id:
+            return None, False
+
+        from copaw.app.approvals import get_approval_service
+        from copaw.security.tool_guard.approval import ApprovalDecision
+        from agentscope.message import Msg, TextBlock
+
+        svc = get_approval_service()
+        pending = await svc.get_pending_by_session(session_id)
+        if pending is None:
+            return None, False
+
+        normalized = (query or "").strip().lower()
+        if normalized in ("/daemon approve", "/approve"):
+            await svc.resolve_request(
+                pending.request_id,
+                ApprovalDecision.APPROVED,
+            )
+            # No response message — let the message reach the agent
+            return None, True
+
+        await svc.resolve_request(
+            pending.request_id,
+            ApprovalDecision.DENIED,
+        )
+        return Msg(
+            name="Friday",
+            role="assistant",
+            content=[
+                TextBlock(
+                    type="text",
+                    text=(
+                        f"❌ Tool `{pending.tool_name}` execution denied."
+                    ),
+                ),
+            ],
+        ), True
+
+
+class TestRunnerApprovalInterception:
+    """Test that the runner intercepts /daemon approve and denies other input."""
+
+    def _make_runner(self):
+        return _StubRunner()
+
+    async def test_resolve_approve(self):
+        from copaw.app.approvals.service import ApprovalService
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = ApprovalService()
+        svc.register_handler(ConsoleApprovalHandler())
+
+        result = ToolGuardResult(
+            tool_name="test_tool",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test_tool",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="sess1",
+            user_id="u1",
+            channel="console",
+            tool_name="test_tool",
+            result=result,
+        )
+
+        import copaw.app.approvals.service as svc_mod
+
+        original = svc_mod._approval_service
+        svc_mod._approval_service = svc
+        try:
+            runner = self._make_runner()
+            msg, consumed = await runner._resolve_pending_approval(
+                "sess1",
+                "/daemon approve",
+            )
+            # approve returns (None, True): no Msg but approval consumed
+            assert msg is None
+            assert consumed is True
+            assert pending.future.result() == ApprovalDecision.APPROVED
+        finally:
+            svc_mod._approval_service = original
+
+    async def test_resolve_deny_on_other_input(self):
+        from copaw.app.approvals.service import ApprovalService
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = ApprovalService()
+        svc.register_handler(ConsoleApprovalHandler())
+
+        result = ToolGuardResult(
+            tool_name="test_tool",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="test_tool",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="sess2",
+            user_id="u1",
+            channel="console",
+            tool_name="test_tool",
+            result=result,
+        )
+
+        import copaw.app.approvals.service as svc_mod
+
+        original = svc_mod._approval_service
+        svc_mod._approval_service = svc
+        try:
+            runner = self._make_runner()
+            msg, consumed = await runner._resolve_pending_approval(
+                "sess2",
+                "hello world",
+            )
+            assert msg is not None
+            assert consumed is True
+            text = msg.content[0]["text"]
+            assert "denied" in text.lower()
+            assert pending.future.result() == ApprovalDecision.DENIED
+        finally:
+            svc_mod._approval_service = original
+
+    async def test_no_pending_returns_none(self):
+        import copaw.app.approvals.service as svc_mod
+        from copaw.app.approvals.service import ApprovalService
+
+        svc = ApprovalService()
+        original = svc_mod._approval_service
+        svc_mod._approval_service = svc
+        try:
+            runner = self._make_runner()
+            msg, consumed = await runner._resolve_pending_approval(
+                "no-session",
+                "/daemon approve",
+            )
+            assert msg is None
+            assert consumed is False
+        finally:
+            svc_mod._approval_service = original
+
+    async def test_empty_session_returns_none(self):
+        runner = self._make_runner()
+        msg, consumed = await runner._resolve_pending_approval(
+            "", "/daemon approve",
+        )
+        assert msg is None
+        assert consumed is False
+
+    async def test_short_approve_alias(self):
+        from copaw.app.approvals.service import ApprovalService
+        from copaw.app.approvals.handlers.console import ConsoleApprovalHandler
+        from copaw.security.tool_guard.approval import ApprovalDecision
+
+        svc = ApprovalService()
+        svc.register_handler(ConsoleApprovalHandler())
+
+        result = ToolGuardResult(
+            tool_name="shell",
+            params={},
+            findings=[
+                GuardFinding(
+                    id="f1",
+                    rule_id="R1",
+                    category=GuardThreatCategory.COMMAND_INJECTION,
+                    severity=GuardSeverity.HIGH,
+                    title="Test",
+                    description="desc",
+                    tool_name="shell",
+                ),
+            ],
+        )
+        pending = await svc.create_pending(
+            session_id="sess3",
+            user_id="u1",
+            channel="console",
+            tool_name="shell",
+            result=result,
+        )
+
+        import copaw.app.approvals.service as svc_mod
+
+        original = svc_mod._approval_service
+        svc_mod._approval_service = svc
+        try:
+            runner = self._make_runner()
+            msg, consumed = await runner._resolve_pending_approval(
+                "sess3",
+                "/approve",
+            )
+            # approve returns (None, True): no Msg but approval consumed
+            assert msg is None
+            assert consumed is True
+            assert pending.future.result() == ApprovalDecision.APPROVED
+        finally:
+            svc_mod._approval_service = original
+
+
+# =====================================================================
+# Memory cleanup tests
+# =====================================================================
+
+
+class TestToolGuardMemoryCleanup:
+    """Test memory cleanup after tool-guard approval / denial."""
+
+    @staticmethod
+    async def _make_memory_with_denied_messages():
+        """Build an InMemoryMemory containing a denied tool-guard sequence.
+
+        Returns (memory, msg_ids) where msg_ids is a dict mapping
+        logical names to Msg ids.
+        """
+        from agentscope.memory import InMemoryMemory
+        from agentscope.message import Msg, ToolResultBlock
+        from copaw.agents.react_agent import _TOOL_GUARD_DENIED_MARK
+
+        mem = InMemoryMemory()
+        ids: dict[str, str] = {}
+
+        # #0 system prompt
+        sys_msg = Msg("system", "You are an assistant.", "system")
+        ids["system"] = sys_msg.id
+
+        # #1 user message
+        user_msg = Msg("user", "run rm -rf /", "user")
+        ids["user"] = user_msg.id
+
+        # #2 assistant reasoning with tool_use (denied)
+        reasoning_msg = Msg(
+            "assistant",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "call_1",
+                    "name": "execute_shell_command",
+                    "input": {"command": "rm -rf /"},
+                },
+            ],
+            "assistant",
+        )
+        ids["reasoning"] = reasoning_msg.id
+
+        # #3 denied tool result
+        denied_result_msg = Msg(
+            "system",
+            [
+                ToolResultBlock(
+                    type="tool_result",
+                    id="call_1",
+                    name="execute_shell_command",
+                    output=[
+                        {
+                            "type": "text",
+                            "text": (
+                                "⚠️ **Tool Guard: Risk Detected"
+                                " — execution denied**"
+                            ),
+                        },
+                    ],
+                ),
+            ],
+            "system",
+        )
+        ids["denied_result"] = denied_result_msg.id
+
+        # #4 assistant denial text
+        denial_text_msg = Msg(
+            "assistant",
+            "The tool call has been denied due to risk.",
+            "assistant",
+        )
+        ids["denial_text"] = denial_text_msg.id
+
+        await mem.add(sys_msg)
+        await mem.add(user_msg)
+        await mem.add(reasoning_msg, marks=_TOOL_GUARD_DENIED_MARK)
+        await mem.add(denied_result_msg, marks=_TOOL_GUARD_DENIED_MARK)
+        await mem.add(denial_text_msg)
+
+        return mem, ids
+
+    @staticmethod
+    def _make_mock_agent_with_memory(mem):
+        """Create a mock that has ``memory`` and the cleanup method."""
+        from copaw.agents.react_agent import CoPawAgent
+
+        agent = MagicMock(spec=CoPawAgent)
+        agent.memory = mem
+        # Bind the real cleanup method to the mock
+        agent._cleanup_tool_guard_denied_messages = (
+            CoPawAgent._cleanup_tool_guard_denied_messages.__get__(agent)
+        )
+        return agent
+
+    @pytest.mark.asyncio
+    async def test_cleanup_for_approval_removes_reasoning_result_and_text(
+        self,
+    ):
+        """Approval path: delete #2 (reasoning), #3 (denied result),
+        #4 (denial text).  Keep #0 (system) and #1 (user)."""
+        from agentscope.message import Msg
+
+        mem, ids = await self._make_memory_with_denied_messages()
+
+        # Simulate the approval path: also add /daemon approve + new
+        # reasoning (these should be kept).
+        approve_msg = Msg("user", "/daemon approve", "user")
+        ids["approve"] = approve_msg.id
+        new_reasoning_msg = Msg(
+            "assistant",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "call_2",
+                    "name": "execute_shell_command",
+                    "input": {"command": "rm -rf /"},
+                },
+            ],
+            "assistant",
+        )
+        ids["new_reasoning"] = new_reasoning_msg.id
+        await mem.add(approve_msg)
+        await mem.add(new_reasoning_msg)
+
+        agent = self._make_mock_agent_with_memory(mem)
+
+        await agent._cleanup_tool_guard_denied_messages(
+            include_denial_response=True,
+        )
+
+        remaining_ids = [msg.id for msg, _ in mem.content]
+        # System, user, /daemon approve, new reasoning should remain
+        assert ids["system"] in remaining_ids
+        assert ids["user"] in remaining_ids
+        assert ids["approve"] in remaining_ids
+        assert ids["new_reasoning"] in remaining_ids
+        # Denied reasoning, denied result, denial text should be gone
+        assert ids["reasoning"] not in remaining_ids
+        assert ids["denied_result"] not in remaining_ids
+        assert ids["denial_text"] not in remaining_ids
+
+    @pytest.mark.asyncio
+    async def test_cleanup_for_denial_keeps_denial_text(self):
+        """Denial path: delete #2 (reasoning), #3 (denied result).
+        Keep #0 (system), #1 (user), #4 (denial text)."""
+        mem, ids = await self._make_memory_with_denied_messages()
+
+        agent = self._make_mock_agent_with_memory(mem)
+
+        await agent._cleanup_tool_guard_denied_messages(
+            include_denial_response=False,
+        )
+
+        remaining_ids = [msg.id for msg, _ in mem.content]
+        # System, user, denial text should remain
+        assert ids["system"] in remaining_ids
+        assert ids["user"] in remaining_ids
+        assert ids["denial_text"] in remaining_ids
+        # Denied reasoning and denied result should be gone
+        assert ids["reasoning"] not in remaining_ids
+        assert ids["denied_result"] not in remaining_ids
+
+    @pytest.mark.asyncio
+    async def test_cleanup_noop_when_no_denied_messages(self):
+        """Cleanup on memory without denied marks should be a no-op."""
+        from agentscope.memory import InMemoryMemory
+        from agentscope.message import Msg
+
+        mem = InMemoryMemory()
+        msg1 = Msg("user", "hello", "user")
+        msg2 = Msg("assistant", "hi", "assistant")
+        await mem.add(msg1)
+        await mem.add(msg2)
+
+        agent = self._make_mock_agent_with_memory(mem)
+
+        await agent._cleanup_tool_guard_denied_messages(
+            include_denial_response=True,
+        )
+
+        assert len(mem.content) == 2
+
+    @pytest.mark.asyncio
+    async def test_runner_cleanup_denied_session_memory(self, tmp_path):
+        """Runner deny path: keep tool-call info (#2,#3), remove
+        LLM denial text (#4), strip marks, append denial msg."""
+        import json as _json
+        from agentscope.message import Msg
+        from copaw.agents.react_agent import _TOOL_GUARD_DENIED_MARK
+
+        # Build a fake session JSON file
+        session_data = {
+            "agent": {
+                "memory": {
+                    "content": [
+                        [
+                            {
+                                "id": "m0",
+                                "name": "system",
+                                "role": "system",
+                                "content": "prompt",
+                            },
+                            [],
+                        ],
+                        [
+                            {
+                                "id": "m1",
+                                "name": "user",
+                                "role": "user",
+                                "content": "run rm -rf /",
+                            },
+                            [],
+                        ],
+                        [
+                            {
+                                "id": "m2",
+                                "name": "assistant",
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "c1",
+                                        "name": "shell",
+                                        "input": {},
+                                    },
+                                ],
+                            },
+                            [_TOOL_GUARD_DENIED_MARK],
+                        ],
+                        [
+                            {
+                                "id": "m3",
+                                "name": "system",
+                                "role": "system",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "id": "c1",
+                                        "name": "shell",
+                                        "output": [
+                                            {
+                                                "type": "text",
+                                                "text": "denied",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            [_TOOL_GUARD_DENIED_MARK],
+                        ],
+                        [
+                            {
+                                "id": "m4",
+                                "name": "assistant",
+                                "role": "assistant",
+                                "content": "The tool call has been denied.",
+                            },
+                            [],
+                        ],
+                    ],
+                },
+            },
+        }
+
+        session_file = tmp_path / "test_session.json"
+        session_file.write_text(
+            _json.dumps(session_data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        # Create a mock runner with a mock session
+        from copaw.app.runner.runner import AgentRunner
+
+        runner = AgentRunner()
+        runner.session = MagicMock()
+        runner.session._get_save_path = MagicMock(
+            return_value=str(session_file),
+        )
+
+        denial_msg = Msg(
+            name="Friday",
+            role="assistant",
+            content=[
+                TextBlock(
+                    type="text",
+                    text="❌ Tool `shell` execution denied.",
+                ),
+            ],
+        )
+
+        await runner._cleanup_denied_session_memory(
+            "sess1", "user1", denial_response=denial_msg,
+        )
+
+        # Reload and verify
+        with open(session_file, "r", encoding="utf-8") as f:
+            result = _json.load(f)
+
+        content = result["agent"]["memory"]["content"]
+        remaining_ids = [entry[0]["id"] for entry in content]
+
+        # m0 (system), m1 (user), m2 (reasoning), m3 (denied result)
+        # should be kept; m4 (LLM denial text) removed.
+        assert "m0" in remaining_ids
+        assert "m1" in remaining_ids
+        assert "m2" in remaining_ids
+        assert "m3" in remaining_ids
+        assert "m4" not in remaining_ids
+
+        # Marks should be stripped from m2 and m3.
+        for entry in content:
+            assert _TOOL_GUARD_DENIED_MARK not in entry[1]
+
+        # Denial response message appended as the last entry.
+        last_entry = content[-1]
+        assert last_entry[0]["name"] == "Friday"
+        assert last_entry[0]["role"] == "assistant"
+        assert "denied" in last_entry[0]["content"][0]["text"].lower()

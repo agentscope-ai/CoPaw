@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 # Valid namesake strategies for tool registration
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
+# Memory mark for tool-guard denied messages (reasoning + tool result)
+_TOOL_GUARD_DENIED_MARK = "tool_guard_denied"
+
 
 def normalize_reasoning_tool_choice(
     tool_choice: Literal["auto", "none", "required"] | None,
@@ -514,27 +517,24 @@ class CoPawAgent(ReActAgent):
         return tool_name in self._tool_guard_guarded_tools
 
     def _should_require_approval(self) -> bool:
-        """True when the current channel supports approval and has a session.
+        """True when the current session can use the /daemon approve flow.
 
-        This replaces the old console-only check.  Any channel that has
-        a registered ``ApprovalHandler`` in the ``ApprovalService`` will
-        trigger the interactive approval flow.
+        Approval is requested as long as a ``session_id`` is available
+        so the runner can match the subsequent ``/daemon approve``
+        message to the correct pending record.
         """
-        channel = self._request_context.get("channel") or ""
-        if not channel or not self._request_context.get("session_id"):
-            return False
-        return self._tool_guard_approval_service.supports_channel(channel)
+        return bool(self._request_context.get("session_id"))
 
     async def _acting(self, tool_call) -> dict | None:  # noqa: C901
         """Override to intercept sensitive tool calls before execution.
 
-        1. Run ToolGuardEngine on the tool parameters.
-        2. If findings exist and channel supports approval, ask user
-           by sending the approval links as a ToolResultBlock (so the
-           UI renders it inline as a tool result).
-        3. If approved, execute the real tool and update the same message.
-        4. If denied/timeout, mark the tool result as denied.
-        5. If no guard needed, delegate to super()._acting.
+        1. Check for a one-shot pre-approval (from a prior
+           ``/daemon approve``). If found, skip the guard.
+        2. Run ToolGuardEngine on the tool parameters.
+        3. If findings exist and session supports approval, deny the
+           tool immediately and record a pending approval so the user
+           can type ``/daemon approve`` later.
+        4. If no guard needed, delegate to ``super()._acting``.
         """
         # Lazy initialise guard components
         if not hasattr(self, "_tool_guard_engine"):
@@ -545,6 +545,32 @@ class CoPawAgent(ReActAgent):
 
         try:
             if tool_name and self._should_guard_tool(tool_name):
+                # Check one-shot pre-approval from a previous
+                # ``/daemon approve`` command.
+                session_id = str(
+                    self._request_context.get("session_id") or "",
+                )
+                if session_id:
+                    consumed = await (
+                        self._tool_guard_approval_service.consume_approval(
+                            session_id,
+                            tool_name,
+                        )
+                    )
+                    if consumed:
+                        logger.info(
+                            "Tool guard: pre-approved call for '%s' "
+                            "(session %s), skipping guard",
+                            tool_name,
+                            session_id[:8],
+                        )
+                        # Clean up the previous denied messages
+                        # (reasoning + denied result + denial text)
+                        await self._cleanup_tool_guard_denied_messages(
+                            include_denial_response=True,
+                        )
+                        return await super()._acting(tool_call)
+
                 result = self._tool_guard_engine.guard(tool_name, tool_input)
                 if result is not None and result.findings:
                     from copaw.security.tool_guard.hook import _log_findings
@@ -573,14 +599,16 @@ class CoPawAgent(ReActAgent):
         tool_name: str,
         guard_result,
     ) -> dict | None:
-        """Handle the approval flow as an inline tool result.
+        """Deny the tool call immediately and record a pending approval.
 
-        Sends the approval links as a ToolResultBlock so the frontend
-        renders them inside the tool-call card.  Then waits for the
-        user to click Allow/Deny and either executes or rejects.
+        The agent loop continues with a "denied" tool result so the
+        LLM can inform the user about the risk.  The user can later
+        type ``/daemon approve`` to grant a one-shot approval; the
+        LLM will then re-call the tool and the guard check will be
+        skipped via ``consume_approval``.
         """
         from agentscope.message import ToolResultBlock
-        from copaw.security.tool_guard.approval import ApprovalDecision
+        from copaw.security.tool_guard.approval import format_findings_summary
 
         channel = str(self._request_context.get("channel") or "")
 
@@ -598,67 +626,90 @@ class CoPawAgent(ReActAgent):
             "system",
         )
 
-        # Create pending approval record
-        pending = await self._tool_guard_approval_service.create_pending(
+        # Mark the last assistant reasoning message (the denied tool_use)
+        # so it can be cleaned up later on approval or denial.
+        for msg, marks in reversed(self.memory.content):
+            if msg.role == "assistant":
+                if _TOOL_GUARD_DENIED_MARK not in marks:
+                    marks.append(_TOOL_GUARD_DENIED_MARK)
+                break
+
+        # Create pending approval record (stores tool_call for reference)
+        await self._tool_guard_approval_service.create_pending(
             session_id=str(self._request_context.get("session_id") or ""),
             user_id=str(self._request_context.get("user_id") or ""),
             channel=channel,
             tool_name=tool_name,
             result=guard_result,
+            extra={"tool_call": tool_call},
         )
 
-        # Format approval message via the channel-specific handler
-        approval_text = (
-            self._tool_guard_approval_service.format_approval_message(
-                channel=channel,
-                tool_name=tool_name,
-                guard_result=guard_result,
-                pending=pending,
-            )
+        # Format the denied tool result with risk details
+        findings_text = format_findings_summary(guard_result)
+        denied_text = (
+            f"⚠️ **Tool Guard: Risk Detected — execution denied**\n\n"
+            f"- Tool: `{tool_name}`\n"
+            f"- Max severity: `{guard_result.max_severity.value}`\n"
+            f"- Findings: `{guard_result.findings_count}`\n\n"
+            f"{findings_text}\n\n"
+            f"Type `/daemon approve` to allow execution, "
+            f"or send any other message to deny."
         )
         tool_res_msg.content[0]["output"] = [  # type: ignore[index]
-            {"type": "text", "text": approval_text},
+            {"type": "text", "text": denied_text},
         ]
-        # last=False → frontend keeps the tool result in "loading" state
-        await self.print(tool_res_msg, False)
 
-        # Wait for user decision
-        decision = await self._tool_guard_approval_service.await_decision(
-            pending,
-            notification_text=approval_text,
+        # last=True so the UI unlocks and the user can type.
+        await self.print(tool_res_msg, True)
+        # Add the denied tool result with the cleanup mark
+        await self.memory.add(
+            tool_res_msg,
+            marks=_TOOL_GUARD_DENIED_MARK,
         )
+        return None
 
-        if decision == ApprovalDecision.APPROVED:
-            # Execute the real tool, reusing the same tool_res_msg
-            try:
-                tool_res = await self.toolkit.call_tool_function(tool_call)
-                async for chunk in tool_res:
-                    tool_res_msg.content[0][  # type: ignore[index]
-                        "output"
-                    ] = chunk.content
-                    await self.print(tool_res_msg, chunk.is_last)
+    async def _cleanup_tool_guard_denied_messages(
+        self,
+        include_denial_response: bool = True,
+    ) -> None:
+        """Remove tool-guard denied messages from memory.
 
-                    if chunk.is_interrupted:
-                        raise asyncio.CancelledError()
+        Finds messages marked with ``_TOOL_GUARD_DENIED_MARK`` and
+        removes them.  When *include_denial_response* is ``True``,
+        also removes the assistant message immediately following the
+        last marked message (the LLM's denial explanation).
 
-                    if (
-                        tool_call["name"] == self.finish_function_name
-                        and chunk.metadata
-                        and chunk.metadata.get("success", False)
-                    ):
-                        return chunk.metadata.get("structured_output")
+        Args:
+            include_denial_response: If ``True``, also remove the
+                assistant denial-text response that follows the
+                denied tool result.
+        """
+        ids_to_delete: list[str] = []
+        last_marked_idx = -1
 
-                return None
-            finally:
-                await self.memory.add(tool_res_msg)
-        else:
-            # Denied or timed out
-            tool_res_msg.content[0]["output"] = [  # type: ignore[index]
-                {"type": "text", "text": "This tool has been denied."},
-            ]
-            await self.print(tool_res_msg, True)
-            await self.memory.add(tool_res_msg)
-            return None
+        for i, (msg, marks) in enumerate(self.memory.content):
+            if _TOOL_GUARD_DENIED_MARK in marks:
+                ids_to_delete.append(msg.id)
+                last_marked_idx = i
+
+        # Optionally remove the next assistant message after the last
+        # marked one (the LLM denial text, e.g. "The tool call has
+        # been denied...").
+        if (
+            include_denial_response
+            and last_marked_idx >= 0
+            and last_marked_idx + 1 < len(self.memory.content)
+        ):
+            next_msg, _ = self.memory.content[last_marked_idx + 1]
+            if next_msg.role == "assistant":
+                ids_to_delete.append(next_msg.id)
+
+        if ids_to_delete:
+            removed = await self.memory.delete(ids_to_delete)
+            logger.info(
+                "Tool guard: cleaned up %d denied message(s) from memory",
+                removed,
+            )
 
     async def _reasoning(
         self,
