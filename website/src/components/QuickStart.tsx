@@ -238,16 +238,19 @@ export function QuickStart({ config, lang }: QuickStartProps) {
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
               justifyContent: "center",
               gap: "var(--space-2)",
-              marginBottom: "var(--space-1)",
             }}
           >
             <Sparkles
               size={18}
               strokeWidth={2}
-              style={{ color: "#667eea" }}
+              style={{
+                color: "#667eea",
+                flexShrink: 0,
+                marginTop: "0.125rem",
+              }}
               aria-hidden
             />
             <p
@@ -260,6 +263,7 @@ export function QuickStart({ config, lang }: QuickStartProps) {
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
                 lineHeight: 1.4,
+                textAlign: "left",
               }}
             >
               {t(lang, "quickstart.serviceNotice")}
