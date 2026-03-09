@@ -67,6 +67,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
         download_code: str,
         robot_code: str,
         mapped: str,
+        filename: Optional[str] = None,
     ) -> Optional[Any]:
         """Fetch media by download_code; return Content to append or None."""
         hint = FILENAME_HINT_BY_MAPPED.get(mapped, DEFAULT_FILENAME_HINT)
@@ -75,12 +76,17 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 self._download_url_fetcher(
                     download_code=download_code,
                     robot_code=robot_code,
+                    filename=filename,
                     filename_hint=hint,
                 ),
                 self._main_loop,
             )
             download_url = fut.result(timeout=15)
-            return dingtalk_content_from_type(mapped, download_url)
+            return dingtalk_content_from_type(
+                mapped,
+                download_url,
+                filename=filename,
+            )
         except Exception:
             return None
 
@@ -123,6 +129,11 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 )
                 if not dl_code or not robot_code:
                     continue
+                item_filename = (
+                    item.get("fileName")
+                    or item.get("file_name")
+                    or item.get("name")
+                )
                 mapped = type_mapping.get(
                     item.get("type", "file"),
                     item.get("type", "file"),
@@ -131,6 +142,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     dl_code,
                     robot_code,
                     mapped,
+                    item_filename,
                 )
                 if part_content is not None:
                     content.append(part_content)
@@ -139,6 +151,11 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             if not content:
                 dl_code = c.get("downloadCode") or c.get("download_code")
                 if dl_code and robot_code:
+                    item_filename = (
+                        c.get("fileName")
+                        or c.get("file_name")
+                        or c.get("name")
+                    )
                     msgtype = (
                         (
                             msg_dict.get(
@@ -159,6 +176,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                         dl_code,
                         robot_code,
                         mapped,
+                        item_filename,
                     )
                     if part_content is not None:
                         content.append(part_content)
