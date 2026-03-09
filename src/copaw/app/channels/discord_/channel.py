@@ -31,6 +31,8 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+DISCORD_SEND_CHUNK_SIZE = 4000
+
 
 class DiscordChannel(BaseChannel):
     channel = "discord"
@@ -281,6 +283,28 @@ class DiscordChannel(BaseChannel):
             return user.dm_channel or await user.create_dm()
         return None
 
+    def _chunk_text(self, text: str) -> list[str]:
+        """Split text into chunks under Discord's message length limit."""
+        if not text or len(text) <= DISCORD_SEND_CHUNK_SIZE:
+            return [text] if text else []
+        chunks: list[str] = []
+        rest = text
+        while rest:
+            if len(rest) <= DISCORD_SEND_CHUNK_SIZE:
+                chunks.append(rest)
+                break
+            chunk = rest[:DISCORD_SEND_CHUNK_SIZE]
+            last_nl = chunk.rfind("\n")
+            if last_nl > DISCORD_SEND_CHUNK_SIZE // 2:
+                chunk = chunk[: last_nl + 1]
+            else:
+                last_space = chunk.rfind(" ")
+                if last_space > DISCORD_SEND_CHUNK_SIZE // 2:
+                    chunk = chunk[: last_space + 1]
+            chunks.append(chunk)
+            rest = rest[len(chunk) :].lstrip("\n ")
+        return chunks
+
     async def send(
         self,
         to_handle: str,
@@ -310,7 +334,8 @@ class DiscordChannel(BaseChannel):
                 "DiscordChannel.send requires meta['channel_id']"
                 " or meta['user_id']",
             )
-        await target.send(text)
+        for chunk in self._chunk_text(text):
+            await target.send(chunk)
 
     async def send_content_parts(
         self,
