@@ -345,7 +345,26 @@ export function ProviderConfigModal({
                         },
                       ]
                     : []),
-                  { type: "url", message: t("models.pleaseEnterValidURL") },
+                  {
+                    validator: (_: unknown, value: string) => {
+                      if (!value || !value.trim()) return Promise.resolve();
+                      try {
+                        const url = new URL(value.trim());
+                        if (
+                          !["http:", "https:"].includes(url.protocol)
+                        ) {
+                          return Promise.reject(
+                            new Error(t("models.pleaseEnterValidURL")),
+                          );
+                        }
+                        return Promise.resolve();
+                      } catch {
+                        return Promise.reject(
+                          new Error(t("models.pleaseEnterValidURL")),
+                        );
+                      }
+                    },
+                  },
                 ]
               : []
           }
