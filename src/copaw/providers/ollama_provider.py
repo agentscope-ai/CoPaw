@@ -106,8 +106,19 @@ class OllamaProvider(Provider):
     async def add_model(
         self,
         model_info: ModelInfo,
-        timeout: float = 7200,
+        target: str = "models",
+        ignore_duplicates: bool = False,
+        timeout: float = 36000,
     ) -> bool:
+        """Ollama models are added by pulling from a registry, so here we
+        interpret "adding" a model as pulling it from the registry.
+        The model_info.id is expected to be in the format of
+        "registry/model:tag" or "registry/model".
+        """
+        if model_info.id in {model.id for model in self.models}:
+            if not ignore_duplicates:
+                raise ValueError(f"Model '{model_info.id}' already exists")
+            return False  # the model was not added due to duplication
         client = self._client(timeout=timeout)
         try:
             await client.pull(model=model_info.id)

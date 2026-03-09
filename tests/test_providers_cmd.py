@@ -120,10 +120,43 @@ def test_set_llm_command_activates_selected_model(monkeypatch) -> None:
     fake = FakeManager(
         [
             FakeProvider(
+                id="llamacpp",
+                name="Llama.cpp",
+                is_local=True,
+                models=[ModelInfo(id="qwen-local", name="Qwen Local")],
+                require_api_key=False,
+            ),
+            FakeProvider(
+                id="ollama",
+                name="Ollama",
+                models=[ModelInfo(id="qwen2.5:3b", name="Qwen 2.5 3B")],
+                require_api_key=False,
+            ),
+            FakeProvider(
                 id="openai",
                 name="OpenAI",
                 base_url="https://api.openai.com/v1",
                 models=[ModelInfo(id="gpt-5", name="GPT-5")],
+                api_key="sk-test-123",
+            ),
+            FakeProvider(
+                id="custom-no-key",
+                name="Custom No Key",
+                base_url="https://example.com/v1",
+                models=[ModelInfo(id="custom-model", name="Custom Model")],
+                require_api_key=False,
+            ),
+            FakeProvider(
+                id="missing-base-url",
+                name="Missing Base URL",
+                api_key="sk-test-456",
+                models=[ModelInfo(id="bad-1", name="Bad 1")],
+            ),
+            FakeProvider(
+                id="missing-api-key",
+                name="Missing API Key",
+                base_url="https://azure.example.com/openai/v1",
+                models=[ModelInfo(id="bad-2", name="Bad 2")],
             ),
         ],
     )
@@ -132,9 +165,21 @@ def test_set_llm_command_activates_selected_model(monkeypatch) -> None:
     choice_calls: list[tuple[str, list[str]]] = []
 
     def _fake_choice(_prompt, options, default=None):
-        _ = default
         choice_calls.append((_prompt, list(options)))
-        return options[0]
+        if _prompt == "Select provider for LLM:":
+            assert default is None
+            assert options == [
+                "Llama.cpp (llamacpp)",
+                "Ollama (ollama)",
+                "OpenAI (openai)",
+                "Custom No Key (custom-no-key)",
+            ]
+            return "OpenAI (openai)"
+
+        assert _prompt == "Select LLM model:"
+        assert default is None
+        assert options == ["GPT-5"]
+        return "GPT-5"
 
     monkeypatch.setattr(
         providers_cmd_module,

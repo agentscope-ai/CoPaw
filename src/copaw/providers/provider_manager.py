@@ -265,7 +265,7 @@ class ProviderManager:
     async def fetch_provider_models(
         self,
         provider_id: str,
-        update_target: str | None = None,
+        update_target: str,
     ) -> List[ModelInfo]:
         """Fetch the list of available models from a provider and optionally
         update the provider's model list in memory and on disk."""
@@ -274,11 +274,11 @@ class ProviderManager:
             return []
         try:
             models = await provider.fetch_models()
-            if update_target == "models":
-                provider.models = models  # Update the provider's model list
-            elif update_target == "extra_models":
-                provider.extra_models = (
-                    models  # Update the provider's extra model list
+            for model in models:
+                await provider.add_model(
+                    model,
+                    target=update_target,
+                    ignore_duplicates=True,
                 )
             self._save_provider(
                 provider,

@@ -75,13 +75,16 @@ class Provider(ProviderInfo, ABC):
         self,
         model_info: ModelInfo,
         target: str = "extra_models",
+        ignore_duplicates: bool = False,
         timeout: float = 10,  # pylint: disable=unused-argument
     ) -> bool:
         """Add a model to the provider's model list."""
         if model_info.id in {
             model.id for model in self.models + self.extra_models
         }:
-            raise ValueError(f"Model with id '{model_info.id}' already exists")
+            if not ignore_duplicates:
+                raise ValueError(f"Model '{model_info.id}' already exists")
+            return False  # the model was not added due to duplication
         if target == "extra_models":
             self.extra_models.append(model_info)
         elif target == "models":
