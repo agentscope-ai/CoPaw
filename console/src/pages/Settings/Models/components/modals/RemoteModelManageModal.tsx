@@ -175,10 +175,10 @@ export function RemoteModelManageModal({
         );
         await onSaved();
       } else if (result.models.length > 0) {
-        await onSaved();
         message.info(
           t("models.autoDiscoveredNoNew", { count: result.models.length }),
         );
+        await onSaved();
       } else {
         message.info(result.message || t("models.noModels"));
       }
@@ -198,7 +198,10 @@ export function RemoteModelManageModal({
     // Instead, users can click the "Discover Models" button to trigger discovery when needed.
   }, [open, canDiscover, provider.id, provider.models.length]);
 
-  const all_models = [...provider.models, ...provider.extra_models];
+  const all_models = [
+    ...(provider.models ?? []),
+    ...(provider.extra_models ?? []),
+  ];
 
   return (
     <Modal
