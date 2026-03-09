@@ -16,7 +16,7 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 
 [releases]: https://github.com/agentscope-ai/CoPaw/releases
 
-## ⚡ Important Notice
+## Important Notice
 
 **The first launch may take a considerable amount of time (10-60 seconds or more, depending on your system configuration).** The application needs to initialize the Python environment, load dependencies, and start the web service. Please be patient while waiting for the window to appear. Subsequent launches will be faster.
 
@@ -28,7 +28,7 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 
 ---
 
-## 📦 Windows Guide
+## Windows Guide
 
 ### System Requirements
 
@@ -49,14 +49,14 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 
 After installation, you'll see **two launch shortcuts**:
 
-#### 🎯 **CoPaw Desktop** (Recommended for daily use)
+#### **CoPaw Desktop** (Recommended for daily use)
 
 - **Features**: Silent launch, no terminal window, clean interface
 - **Use Case**: Normal usage when you don't need to view technical logs
 - **How to Launch**: Double-click the "CoPaw Desktop" icon on desktop or Start Menu
 - **Technical Note**: Uses VBScript launcher, runs Python process in background
 
-#### 🔧 **CoPaw Desktop (Debug)** (Debug Mode)
+#### **CoPaw Desktop (Debug)** (Debug Mode)
 
 - **Features**: Shows terminal window with real-time logging
 - **Use Cases**:
@@ -107,7 +107,7 @@ A:
 3. **Move to Applications folder (Optional)**
    Drag `CoPaw.app` to the `/Applications` folder
 
-### ⚠️ First Launch: Bypassing System Security Restrictions
+### First Launch: Bypassing System Security Restrictions
 
 #### Why manual trust is needed?
 
@@ -162,13 +162,13 @@ When first launched, macOS may request the following permissions:
 
 ### Launch Options
 
-#### 🎯 Normal Launch (Double-click)
+#### Normal Launch (Double-click)
 
 - Double-click `CoPaw.app` to launch
 - The app runs in the background and opens a browser window
 - Logs are written to: `~/.copaw/desktop.log`
 
-#### 🔧 Terminal Launch (View real-time logs)
+#### Terminal Launch (View real-time logs)
 
 If the app crashes or you need to see detailed logs:
 
@@ -225,7 +225,7 @@ Currently using:
 
 ---
 
-## 📝 Technical Support
+## Technical Support
 
 - **GitHub Issues**: [Submit an issue](https://github.com/agentscope-ai/CoPaw/issues)
 - **Packaging documentation**: `scripts/pack/README.md` - Technical details and local build guide
