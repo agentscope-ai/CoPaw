@@ -215,7 +215,7 @@ class MQTTChannel(BaseChannel):
             logger.info("MQTT connected")
             client.subscribe(self.subscribe_topic, qos=self.qos)
             logger.info(
-                f"Subscribed to {self.subscribe_topic} with QoS={self.qos}"
+                f"Subscribed to {self.subscribe_topic} with QoS={self.qos}",
             )
         else:
             logger.error(f"MQTT connect failed, return code {reason_code}")
@@ -254,7 +254,8 @@ class MQTTChannel(BaseChannel):
             if not client_id:
                 client_id = "unknown-client"
                 logger.warning(
-                    f"MQTT: No client_id found in topic or payload: {msg.topic}"
+                    f"MQTT: No client_id found in topic or payload: "
+                    f"{msg.topic}",
                 )
 
             logger.info(f"MQTT [{client_id}] >> {content}")
@@ -278,7 +279,8 @@ class MQTTChannel(BaseChannel):
 
         except Exception as e:
             logger.error(
-                f"Error processing MQTT message: {str(e)}", exc_info=True
+                f"Error processing MQTT message: {str(e)}",
+                exc_info=True,
             )
 
     async def start(self) -> None:
@@ -322,7 +324,9 @@ class MQTTChannel(BaseChannel):
         try:
             self.client.connect(self.host, self.port, keepalive=60)
             logger.info(
-                f"MQTT connecting to {self.host}:{self.port} {'(TLS enabled)' if self.tls_enabled else ''} (transport: {self.transport})",
+                f"MQTT connecting to {self.host}:{self.port} "
+                f"{'(TLS enabled)' if self.tls_enabled else ''} "
+                f"(transport: {self.transport})",
             )
         except MQTTException as e:
             logger.error(f"MQTT connect failed: {str(e)}")
@@ -395,21 +399,29 @@ class MQTTChannel(BaseChannel):
             if part_type == ContentType.IMAGE:
                 img_url = getattr(part, "image_url", "")
                 self.client.publish(
-                    send_topic, f"[Image] {img_url}", qos=self.qos
+                    send_topic,
+                    f"[Image] {img_url}",
+                    qos=self.qos,
                 )
             elif part_type == ContentType.VIDEO:
                 vid_url = getattr(part, "video_url", "")
                 self.client.publish(
-                    send_topic, f"[Video] {vid_url}", qos=self.qos
+                    send_topic,
+                    f"[Video] {vid_url}",
+                    qos=self.qos,
                 )
             elif part_type == ContentType.AUDIO:
                 self.client.publish(send_topic, "[Audio]", qos=self.qos)
             elif part_type == ContentType.FILE:
                 file_url = getattr(part, "file_url", "") or getattr(
-                    part, "file_id", ""
+                    part,
+                    "file_id",
+                    "",
                 )
                 self.client.publish(
-                    send_topic, f"[File] {file_url}", qos=self.qos
+                    send_topic,
+                    f"[File] {file_url}",
+                    qos=self.qos,
                 )
 
         except Exception as e:
