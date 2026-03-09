@@ -1715,6 +1715,10 @@ class DingTalkChannel(BaseChannel):
             self._http = None
         self._client = None
 
+    # Note: dingtalk_stream SDK has AICardReplier/CardReplier,
+    # but those APIs are request/reply oriented and tied to ChatbotMessage
+    # context; here we keep raw OpenAPI calls to support proactive recovery
+    # and persisted card lifecycles across restarts.
     def _ai_card_enabled(self) -> bool:
         return (
             self.message_type == "card"
