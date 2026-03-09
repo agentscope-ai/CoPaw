@@ -1,8 +1,20 @@
 # CoPaw Desktop Application Guide
 
-Download Link: https://github.com/agentscope-ai/CoPaw/releases
+> ⚠️ **Beta Version Notice**
+>
+> The desktop application is currently in Beta testing phase with the following known limitations:
+>
+> - **Incomplete compatibility testing**: Not fully tested across all system versions and hardware configurations
+> - **Potential performance issues**: Startup time, memory usage, and other performance aspects may need further optimization
+> - **Features under development**: Some features may be unstable or missing
+>
+> We welcome your feedback to help improve product quality.
+
+**Download**: [GitHub Releases][releases]
 
 This guide explains how to install and use the CoPaw Desktop application on Windows and macOS.
+
+[releases]: https://github.com/agentscope-ai/CoPaw/releases
 
 ## ⚡ Important Notice
 
@@ -10,9 +22,9 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 
 ## 📚 Table of Contents
 
-- [Windows Guide](#-windows-guide)
-- [macOS Guide](#-macos-guide)
-- [Technical Support](#-technical-support)
+- [Windows Guide](#windows-guide)
+- [macOS Guide](#macos-guide)
+- [Technical Support](#technical-support)
 
 ---
 
@@ -26,7 +38,7 @@ This guide explains how to install and use the CoPaw Desktop application on Wind
 ### Installation Steps
 
 1. **Download the installer**
-   Download `CoPaw-Setup-<version>.exe` from the [Release page](https://github.com/agentscope-ai/CoPaw/releases)
+   Download `CoPaw-Setup-<version>.exe` from the [Release page][releases]
 
 2. **Run the installer**
    Double-click the `.exe` file and follow the installation wizard
@@ -87,7 +99,7 @@ A:
 ### Installation Steps
 
 1. **Download the archive**
-   Download `CoPaw-<version>-macOS.zip` from the [Release page](https://github.com/agentscope-ai/CoPaw/releases)
+   Download `CoPaw-<version>-macOS.zip` from the [Release page][releases]
 
 2. **Extract**
    Double-click the `.zip` file to extract and get `CoPaw.app`

@@ -1,8 +1,20 @@
 # CoPaw Desktop 桌面应用版使用指南
 
-下载链接：https://github.com/agentscope-ai/CoPaw/releases
+> ⚠️ **Beta 版本说明**
+>
+> 桌面应用目前处于 Beta 测试阶段，存在以下已知限制：
+>
+> - **兼容性测试不完整**：未在所有系统版本和硬件配置上进行充分测试
+> - **性能可能存在缺陷**：启动速度、内存占用等方面可能需要进一步优化
+> - **功能持续完善中**：部分功能可能不稳定或缺失
+>
+> 欢迎反馈问题，帮助我们改进产品质量。
+
+**下载地址**：[GitHub Releases][releases]
 
 本文档说明如何在 Windows 和 macOS 系统上安装和使用 CoPaw Desktop 桌面应用。
+
+[releases]: https://github.com/agentscope-ai/CoPaw/releases
 
 ## ⚡ 特别说明
 
@@ -10,9 +22,9 @@
 
 ## 📚 目录
 
-- [Windows 使用指南](#-windows-使用指南)
-- [macOS 使用指南](#-macos-使用指南)
-- [技术支持](#-技术支持)
+- [Windows 使用指南](#windows-使用指南)
+- [macOS 使用指南](#macos-使用指南)
+- [技术支持](#技术支持)
 
 ---
 
@@ -26,7 +38,7 @@
 ### 安装步骤
 
 1. **下载安装包**
-   从 [Release 页面](https://github.com/agentscope-ai/CoPaw/releases)下载 `CoPaw-Setup-<version>.exe` 文件
+   从 [Release 页面][releases]下载 `CoPaw-Setup-<version>.exe` 文件
 
 2. **运行安装程序**
    双击 `.exe` 文件，按照安装向导提示完成安装
@@ -87,7 +99,7 @@ A:
 ### 安装步骤
 
 1. **下载压缩包**
-   从 [Release 页面](https://github.com/agentscope-ai/CoPaw/releases)下载 `CoPaw-<version>-macOS.zip` 文件
+   从 [Release 页面][releases]下载 `CoPaw-<version>-macOS.zip` 文件
 
 2. **解压缩**
    双击 `.zip` 文件自动解压，得到 `CoPaw.app` 应用

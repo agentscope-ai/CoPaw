@@ -41,6 +41,7 @@ import {
   ArrowUp,
   Copy,
   Check,
+  AppWindow,
   type LucideIcon,
 } from "lucide-react";
 import { Nav } from "../components/Nav";
@@ -179,7 +180,7 @@ function parseFaqContent(md: string): { intro: string; items: FaqItem[] } {
 const DOC_SLUG_ICONS: Record<string, LucideIcon> = {
   intro: Rocket,
   quickstart: Zap,
-  desktop: Terminal,
+  desktop: AppWindow,
   console: Terminal,
   models: Cpu,
   channels: MessageSquare,
