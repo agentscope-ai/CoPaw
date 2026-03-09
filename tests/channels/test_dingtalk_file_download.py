@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access
+# pylint: disable=protected-access,redefined-outer-name
 import asyncio
 import threading
 from pathlib import Path
@@ -49,7 +49,7 @@ class _FakeHTTPClient:
     def __init__(self, response: _FakeDownloadResponse) -> None:
         self._response = response
 
-    def get(self, url: str) -> _FakeDownloadResponse:  # noqa: ARG002
+    def get(self, _url: str) -> _FakeDownloadResponse:
         return self._response
 
 
@@ -63,6 +63,7 @@ def dingtalk_handler_loop():
     finally:
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=3)
+        loop.close()
 
 
 def test_parse_rich_content_preserves_item_filename(

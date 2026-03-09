@@ -1811,7 +1811,7 @@ class DingTalkChannel(BaseChannel):
                     "",
                 )
             resolved_filename = filename or ""
-            if "filename=" in disposition:
+            if not resolved_filename and "filename=" in disposition:
                 part = (
                     disposition.split("filename=", 1)[-1].strip().strip("'\"")
                 )

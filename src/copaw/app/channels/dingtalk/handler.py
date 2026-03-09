@@ -62,6 +62,15 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 native,
             )
 
+    @staticmethod
+    def _get_filename_from_payload(payload: dict) -> Optional[str]:
+        """Extract original filename from DingTalk payload variants."""
+        return (
+            payload.get("fileName")
+            or payload.get("file_name")
+            or payload.get("name")
+        )
+
     def _fetch_download_url_and_content(
         self,
         download_code: str,
@@ -129,11 +138,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 )
                 if not dl_code or not robot_code:
                     continue
-                item_filename = (
-                    item.get("fileName")
-                    or item.get("file_name")
-                    or item.get("name")
-                )
+                item_filename = self._get_filename_from_payload(item)
                 mapped = type_mapping.get(
                     item.get("type", "file"),
                     item.get("type", "file"),
@@ -151,11 +156,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             if not content:
                 dl_code = c.get("downloadCode") or c.get("download_code")
                 if dl_code and robot_code:
-                    item_filename = (
-                        c.get("fileName")
-                        or c.get("file_name")
-                        or c.get("name")
-                    )
+                    item_filename = self._get_filename_from_payload(c)
                     msgtype = (
                         (
                             msg_dict.get(
