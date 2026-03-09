@@ -82,13 +82,35 @@ def _parse_md_table(table_lines: List[str]) -> Optional[Dict[str, Any]]:
     # Build column keys (safe ASCII slugs)
     col_keys = [f"col{i}" for i in range(len(headers))]
 
-    # Build column definitions with auto width.
+    # Parse alignment from separator line (e.g., |:---|:--:|---:|)
+    def parse_alignment(sep_line: str) -> List[str]:
+        cells = split_row(sep_line)
+        alignments = []
+        for cell in cells:
+            stripped = cell.strip()
+            if stripped.startswith(":") and stripped.endswith(":"):
+                alignments.append("center")
+            elif stripped.endswith(":"):
+                alignments.append("right")
+            else:
+                alignments.append("left")
+        return alignments
+
+    alignments = (
+        parse_alignment(lines[sep_idx])
+        if sep_idx is not None
+        else ["left"] * len(headers)
+    )
+
+    # Build column definitions with auto width and parsed alignment.
     columns = [
         {
             "name": col_keys[i],
             "display_name": headers[i],
             "width": "auto",
-            "horizontal_align": "left",
+            "horizontal_align": alignments[i]
+            if i < len(alignments)
+            else "left",
         }
         for i in range(len(headers))
     ]
@@ -98,15 +120,15 @@ def _parse_md_table(table_lines: List[str]) -> Optional[Dict[str, Any]]:
         row: Dict[str, Any] = {}
         for i, key in enumerate(col_keys):
             cell_text = cells[i] if i < len(cells) else ""
-            # Strip Markdown markers; table cells are plain strings.
-            cell_text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", cell_text)
+            # Strip Markdown emphasis; table cells are plain strings.
+            cell_text = re.sub(r"[*_]{1,2}(.+?)[*_]{1,2}", r"\1", cell_text)
             row[key] = cell_text
         rows.append(row)
     if not rows:
         return None
     return {
         "tag": "table",
-        "page_size": max(len(rows), 10),
+        "page_size": min(max(len(rows), 10), 50),
         "columns": columns,
         "rows": rows,
     }

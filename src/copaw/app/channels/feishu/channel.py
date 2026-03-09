@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import mimetypes
+import re
 import sys
 import threading
 import time
@@ -1211,9 +1212,7 @@ class FeishuChannel(BaseChannel):
     ) -> bool:
         """Send text as post (md) or interactive card (when body has tables).
         Body already has bot_prefix if needed."""
-        import re as _re
-
-        has_table = bool(_re.search(r"^\s*\|", body, _re.MULTILINE))
+        has_table = bool(re.search(r"^\s*\|", body, re.MULTILINE))
         loop = asyncio.get_running_loop()
         if has_table:
             content = build_interactive_content(body)
