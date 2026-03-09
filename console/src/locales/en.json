@@ -31,6 +31,7 @@
     "agent": "Agent",
     "workspace": "Workspace",
     "skills": "Skills",
+    "tools": "Tools",
     "mcp": "MCP",
     "agentConfig": "Configuration",
     "settings": "Settings",
@@ -468,6 +469,15 @@
     "saveSuccess": "Configuration saved successfully",
     "saveFailed": "Failed to save configuration",
     "loadFailed": "Failed to load configuration"
+  },
+  "tools": {
+    "title": "Built-in Tools",
+    "description": "Manage built-in tools and their enabled status. Disabled tools will not be available to the agent.",
+    "emptyState": "No tools configured",
+    "loadError": "Failed to load tools",
+    "enableSuccess": "Tool enabled successfully",
+    "disableSuccess": "Tool disabled successfully",
+    "toggleError": "Failed to toggle tool status"
   },
   "modelConfig": {
     "promptTitle": "LLM Model Required",

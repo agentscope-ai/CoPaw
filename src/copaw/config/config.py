@@ -326,11 +326,69 @@ class MCPConfig(BaseModel):
     )
 
 
+class BuiltinToolConfig(BaseModel):
+    """Configuration for a single built-in tool."""
+
+    name: str = Field(..., description="Tool function name")
+    enabled: bool = Field(True, description="Whether the tool is enabled")
+    description: str = Field(default="", description="Tool description")
+
+
+class ToolsConfig(BaseModel):
+    """Built-in tools management configuration."""
+
+    builtin_tools: Dict[str, BuiltinToolConfig] = Field(
+        default_factory=lambda: {
+            "execute_shell_command": BuiltinToolConfig(
+                name="execute_shell_command",
+                enabled=True,
+                description="Execute shell commands",
+            ),
+            "read_file": BuiltinToolConfig(
+                name="read_file",
+                enabled=True,
+                description="Read file contents",
+            ),
+            "write_file": BuiltinToolConfig(
+                name="write_file",
+                enabled=True,
+                description="Write content to file",
+            ),
+            "edit_file": BuiltinToolConfig(
+                name="edit_file",
+                enabled=True,
+                description="Edit file using find-and-replace",
+            ),
+            "browser_use": BuiltinToolConfig(
+                name="browser_use",
+                enabled=True,
+                description="Browser automation and web interaction",
+            ),
+            "desktop_screenshot": BuiltinToolConfig(
+                name="desktop_screenshot",
+                enabled=True,
+                description="Capture desktop screenshots",
+            ),
+            "send_file_to_user": BuiltinToolConfig(
+                name="send_file_to_user",
+                enabled=True,
+                description="Send files to user",
+            ),
+            "get_current_time": BuiltinToolConfig(
+                name="get_current_time",
+                enabled=True,
+                description="Get current date and time",
+            ),
+        },
+    )
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
     channels: ChannelConfig = ChannelConfig()
     mcp: MCPConfig = MCPConfig()
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     last_api: LastApiConfig = LastApiConfig()
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
