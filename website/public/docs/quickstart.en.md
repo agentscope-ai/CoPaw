@@ -2,7 +2,7 @@
 
 This section describes six ways to run CoPAW:
 
-- **Option A — One-line install (recommended)**: run on your machine with no Python setup required.
+- **Option A — Script install**: run on your machine with no Python setup required.
 - **Option B — pip install**: if you prefer managing Python yourself.
 - **Option C — Desktop Application (Beta)**: download and run desktop app with no command-line required, suitable for users unfamiliar with terminals. See [Desktop Application Guide](./desktop).
 - **Option D — ModelScope Studio**: one-click cloud deploy, no local install needed.
@@ -15,7 +15,7 @@ This section describes six ways to run CoPAW:
 
 ---
 
-## Option A: One-line install (recommended)
+## Option A: Script install
 
 No Python required — the installer handles everything automatically using [uv](https://docs.astral.sh/uv/).
 
