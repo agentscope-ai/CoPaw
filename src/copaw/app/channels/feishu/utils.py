@@ -40,6 +40,87 @@ def extract_json_key(content: Optional[str], *keys: str) -> Optional[str]:
     return None
 
 
+def extract_post_text(content: Optional[str]) -> Optional[str]:
+    # pylint: disable=too-many-branches
+    """Extract plain text from Feishu post message content."""
+    if not content:
+        return None
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    parts: list[str] = []
+
+    # Extract title if present
+    title = data.get("title")
+    if title and isinstance(title, str) and title.strip():
+        parts.append(title.strip())
+
+    # Extract text from content blocks
+    content_blocks = data.get("content") or []
+    if isinstance(content_blocks, list):
+        for block in content_blocks:
+            if not isinstance(block, list):
+                continue
+            for item in block:
+                if not isinstance(item, dict):
+                    continue
+                tag = item.get("tag")
+                # text, code_block, md tags have text field
+                if tag in {"text", "code_block", "md"}:
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        parts.append(text.strip())
+                # a tag: text + href as markdown link
+                elif tag == "a":
+                    text = item.get("text", "")
+                    href = item.get("href", "")
+                    if href:
+                        parts.append(f"[{text}]({href})" if text else href)
+                    elif text:
+                        parts.append(text.strip())
+                # at tag uses user_name
+                elif tag == "at":
+                    user_name = item.get("user_name") or item.get("user_id")
+                    if isinstance(user_name, str) and user_name.strip():
+                        parts.append(f"@{user_name.strip()}")
+
+    return " ".join(parts) if parts else None
+
+
+def extract_post_image_keys(content: Optional[str]) -> list[str]:
+    """Extract image_key list from Feishu post message content."""
+    if not content:
+        return []
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(data, dict):
+        return []
+
+    keys: list[str] = []
+    content_blocks = data.get("content") or []
+    if isinstance(content_blocks, list):
+        for block in content_blocks:
+            if not isinstance(block, list):
+                continue
+            for item in block:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("tag") == "img":
+                    key = item.get("image_key")
+                    if isinstance(key, str) and key.strip():
+                        keys.append(key.strip())
+
+    return keys
+
+
 def normalize_feishu_md(text: str) -> str:
     """
     Light markdown normalization for Feishu post (avoid broken rendering).

@@ -52,6 +52,8 @@ from .constants import (
 )
 from .utils import (
     extract_json_key,
+    extract_post_image_keys,
+    extract_post_text,
     normalize_feishu_md,
     sender_display_string,
     short_session_id_from_full_id,
@@ -614,6 +616,25 @@ class FeishuChannel(BaseChannel):
                 text = extract_json_key(content_raw, "text")
                 if text:
                     text_parts.append(text)
+            elif msg_type == "post":
+                text = extract_post_text(content_raw)
+                if text:
+                    text_parts.append(text)
+                # Download images in post message
+                for img_key in extract_post_image_keys(content_raw):
+                    url_or_path = await self._download_image_resource(
+                        message_id,
+                        img_key,
+                    )
+                    if url_or_path:
+                        content_parts.append(
+                            ImageContent(
+                                type=ContentType.IMAGE,
+                                image_url=url_or_path,
+                            ),
+                        )
+                    else:
+                        text_parts.append("[image: download failed]")
             elif msg_type == "image":
                 image_key = extract_json_key(
                     content_raw,
