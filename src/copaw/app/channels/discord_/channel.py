@@ -22,6 +22,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 
 from ....config.config import DiscordConfig as DiscordChannelConfig
 
+from ..utils import file_url_to_local_path
 from ..base import (
     BaseChannel,
     OnReplySent,
@@ -372,7 +373,7 @@ class DiscordChannel(BaseChannel):
 
         temp_path = None
         if url.startswith("file://"):
-            file = discord.File(url[7:])
+            file = discord.File(file_url_to_local_path(url))
         elif url.startswith(("http://", "https://")):
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
