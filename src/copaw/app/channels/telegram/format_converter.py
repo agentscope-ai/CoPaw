@@ -167,8 +167,8 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                         code_text = escape_html(code_content)
                         converted_lines.append(f"<pre>{code_text}</pre>")
                     # Process content after the last ```
-                    if len(after_parts) > 2 and after_parts[2].strip():
-                        line = after_parts[2]
+                    if after_parts[1].strip():
+                        line = after_parts[1]
                     else:
                         continue
                 else:

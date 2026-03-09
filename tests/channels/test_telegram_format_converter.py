@@ -10,7 +10,7 @@ def test_convert_markdown_to_telegram_html_formats_code_block() -> None:
 
     converted = convert_markdown_to_telegram_html(text)
 
-    assert converted == "before \n<pre>print('hi')</pre>"
+    assert converted == "before \n<pre>print('hi')</pre>\n after"
 
 
 def test_convert_markdown_to_telegram_html_merges_blockquotes() -> None:
