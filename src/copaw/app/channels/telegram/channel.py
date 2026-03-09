@@ -557,9 +557,7 @@ class TelegramChannel(BaseChannel):
         try:
             if part_type == ContentType.IMAGE:
                 image_url = getattr(part, "image_url", None)
-                local_path = (
-                    file_url_to_local_path(image_url) if image_url else None
-                )
+                local_path = file_url_to_local_path(image_url)
                 if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_photo(chat_id=chat_id, photo=f)
@@ -567,9 +565,7 @@ class TelegramChannel(BaseChannel):
                     await bot.send_photo(chat_id=chat_id, photo=image_url)
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
-                local_path = (
-                    file_url_to_local_path(video_url) if video_url else None
-                )
+                local_path = file_url_to_local_path(video_url)
                 if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_video(chat_id=chat_id, video=f)
@@ -581,9 +577,7 @@ class TelegramChannel(BaseChannel):
                     await bot.send_audio(chat_id=chat_id, audio=data)
             elif part_type == ContentType.FILE:
                 file_url = getattr(part, "file_url", None)
-                local_path = (
-                    file_url_to_local_path(file_url) if file_url else None
-                )
+                local_path = file_url_to_local_path(file_url)
                 if local_path:
                     with open(local_path, "rb") as f:
                         await bot.send_document(chat_id=chat_id, document=f)
