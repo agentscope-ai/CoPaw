@@ -286,9 +286,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   async getSession(sessionId: string) {
     // --- Local timestamp ID (New Chat / post-delete) ---
     if (isLocalTimestamp(sessionId)) {
-      const fromList = this.sessionList.find(
-        (s) => s.id === sessionId,
-      ) as ExtendedSession | undefined;
+      const fromList = this.sessionList.find((s) => s.id === sessionId) as
+        | ExtendedSession
+        | undefined;
       const { realId } = fromList ?? {};
 
       if (realId) {
@@ -314,9 +314,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       // the full history without racing against setMessages([]).
       await new Promise<void>((resolve) => {
         const check = () => {
-          const s = this.sessionList.find(
-            (x) => x.id === sessionId,
-          ) as ExtendedSession | undefined;
+          const s = this.sessionList.find((x) => x.id === sessionId) as
+            | ExtendedSession
+            | undefined;
           if (s?.realId) {
             resolve();
           } else {
@@ -327,9 +327,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       });
 
       // Re-read after realId is available and fall through to the realId branch
-      const refreshed = this.sessionList.find(
-        (s) => s.id === sessionId,
-      ) as ExtendedSession | undefined;
+      const refreshed = this.sessionList.find((s) => s.id === sessionId) as
+        | ExtendedSession
+        | undefined;
       if (refreshed?.realId) {
         const chatHistory = await api.getChat(refreshed.realId);
         const session: ExtendedSession = {
@@ -359,9 +359,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
     // --- Regular backend UUID ---
     await this.getSessionList();
-    const fromList = this.sessionList.find(
-      (s) => s.id === sessionId,
-    ) as ExtendedSession | undefined;
+    const fromList = this.sessionList.find((s) => s.id === sessionId) as
+      | ExtendedSession
+      | undefined;
 
     const chatHistory = await api.getChat(sessionId);
     const session: ExtendedSession = {
@@ -423,9 +423,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     if (!session.id) return [...this.sessionList];
 
     const { id: sessionId } = session;
-    const existing = this.sessionList.find(
-      (s) => s.id === sessionId,
-    ) as ExtendedSession | undefined;
+    const existing = this.sessionList.find((s) => s.id === sessionId) as
+      | ExtendedSession
+      | undefined;
 
     // Use realId (UUID) when available; skip backend call for pure local sessions
     const deleteId =
