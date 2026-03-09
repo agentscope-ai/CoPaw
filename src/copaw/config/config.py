@@ -159,7 +159,7 @@ class AgentsRunningConfig(BaseModel):
         description="Ratio of memory to compact when memory is full",
     )
 
-    memory_reserve_ratio: int = Field(
+    memory_reserve_ratio: float = Field(
         default=0.1,
         ge=0.01,
         description="Ratio of memory to reserve when compact memory",
