@@ -23,6 +23,22 @@ import re
 logger = logging.getLogger(__name__)
 
 
+def _bold_repl(m: "re.Match[str]") -> str:
+    return f"<b>{escape_html(m.group(1))}</b>"
+
+
+def _italic_repl(m: "re.Match[str]") -> str:
+    return f"<i>{escape_html(m.group(1))}</i>"
+
+
+def _strike_repl(m: "re.Match[str]") -> str:
+    return f"<s>{escape_html(m.group(1))}</s>"
+
+
+def _code_repl(m: "re.Match[str]") -> str:
+    return f"<code>{escape_html(m.group(1))}</code>"
+
+
 # pylint: disable=too-many-branches,too-many-statements
 def convert_markdown_to_telegram_html(text: str) -> str:
     """
@@ -37,7 +53,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
     if not text:
         return text
 
-    logger.debug(f"[FORMAT] Input: {mask_text(text, 100)}")
+    logger.debug("[FORMAT] Input: %s", mask_text(text, 100))
 
     lines = text.split("\n")
     converted_lines = []
@@ -74,16 +90,17 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         nonlocal table_header_pending
         if table_header_pending and converted_lines:
             prev = converted_lines[-1]
-            if not prev.startswith("<"):
-                # Support single-column tables (no tabs)
-                if "\t" in prev:
-                    cells = prev.split("\t")
-                    converted_lines[-1] = "\t".join(
-                        f"<b>{cell}</b>" for cell in cells
-                    )
-                else:
-                    # Single column case
-                    converted_lines[-1] = f"<b>{prev}</b>"
+            # Bold per-cell so headers containing HTML tags are handled
+            cells = prev.split("\t") if "\t" in prev else [prev]
+
+            def _bold_cell(cell: str) -> str:
+                """Wrap cell in <b> unless it is already fully bold."""
+                stripped = cell.strip()
+                if stripped.startswith("<b>") and stripped.endswith("</b>"):
+                    return cell
+                return f"<b>{cell}</b>"
+
+            converted_lines[-1] = "\t".join(_bold_cell(c) for c in cells)
         table_header_pending = False
 
     for line in lines:
@@ -117,27 +134,27 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                     if "~~" in processed_before:
                         processed_before = re.sub(
                             r"~~(.+?)~~",
-                            r"<s>\1</s>",
+                            _strike_repl,
                             processed_before,
                         )
                     # Bold
                     if "**" in processed_before:
                         processed_before = re.sub(
                             r"\*\*(.+?)\*\*",
-                            r"<b>\1</b>",
+                            _bold_repl,
                             processed_before,
                         )
                     # Italic
                     processed_before = re.sub(
                         r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
-                        r"<i>\1</i>",
+                        _italic_repl,
                         processed_before,
                     )
                     # Inline code
                     if "`" in processed_before:
                         processed_before = re.sub(
                             r"`(.+?)`",
-                            r"<code>\1</code>",
+                            _code_repl,
                             processed_before,
                         )
 
@@ -186,8 +203,8 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         if title_match:
             flush_blockquote()
             process_table_header()
-            prefix = line[: title_match.start()].strip()
-            title = title_match.group(2).strip()
+            prefix = escape_html(line[: title_match.start()].strip())
+            title = escape_html(title_match.group(2).strip())
             if prefix:
                 converted_lines.append(f"{prefix} <b>{title}</b>")
             else:
@@ -221,38 +238,38 @@ def convert_markdown_to_telegram_html(text: str) -> str:
                     if "~~" in cell_line:
                         cell_line = re.sub(
                             r"~~(.+?)~~",
-                            r"<s>\1</s>",
+                            _strike_repl,
                             cell_line,
                         )
                     # Bold
                     if "**" in cell_line:
                         cell_line = re.sub(
                             r"\*\*(.+?)\*\*",
-                            r"<b>\1</b>",
+                            _bold_repl,
                             cell_line,
                         )
                     if "__" in cell_line:
                         cell_line = re.sub(
                             r"__(.+?)__",
-                            r"<b>\1</b>",
+                            _bold_repl,
                             cell_line,
                         )
                     # Italic
                     cell_line = re.sub(
                         r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
-                        r"<i>\1</i>",
+                        _italic_repl,
                         cell_line,
                     )
                     cell_line = re.sub(
                         r"(?<![a-zA-Z0-9_])_(.+?)_(?![a-zA-Z0-9_])",
-                        r"<i>\1</i>",
+                        _italic_repl,
                         cell_line,
                     )
                     # Inline code
                     if "`" in cell_line:
                         cell_line = re.sub(
                             r"`(.+?)`",
-                            r"<code>\1</code>",
+                            _code_repl,
                             cell_line,
                         )
 
@@ -290,29 +307,29 @@ def convert_markdown_to_telegram_html(text: str) -> str:
         # 7. Inline style processing (order matters!)
         # 7.1 Strikethrough
         if "~~" in line:
-            line = re.sub(r"~~(.+?)~~", r"<s>\1</s>", line)
+            line = re.sub(r"~~(.+?)~~", _strike_repl, line)
 
         # 7.2 Bold
         if "**" in line:
-            line = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", line)
+            line = re.sub(r"\*\*(.+?)\*\*", _bold_repl, line)
         if "__" in line:
-            line = re.sub(r"__(.+?)__", r"<b>\1</b>", line)
+            line = re.sub(r"__(.+?)__", _bold_repl, line)
 
         # 7.3 Italic (after Bold to avoid conflicts)
         line = re.sub(
             r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)",
-            r"<i>\1</i>",
+            _italic_repl,
             line,
         )
         line = re.sub(
             r"(?<![a-zA-Z0-9_])_(.+?)_(?![a-zA-Z0-9_])",
-            r"<i>\1</i>",
+            _italic_repl,
             line,
         )
 
         # 7.4 Inline code
         if "`" in line:
-            line = re.sub(r"`(.+?)`", r"<code>\1</code>", line)
+            line = re.sub(r"`(.+?)`", _code_repl, line)
 
         # 7.5 Link
         def _replace_link_v3(match):
@@ -331,7 +348,7 @@ def convert_markdown_to_telegram_html(text: str) -> str:
     process_table_header()
 
     converted_text = "\n".join(converted_lines)
-    logger.debug(f"[FORMAT] Output: {mask_text(converted_text, 100)}")
+    logger.debug("[FORMAT] Output: %s", mask_text(converted_text, 100))
     return converted_text
 
 
