@@ -58,20 +58,6 @@ def _is_command(query: str | None) -> bool:
     return _is_conversation_command(query)
 
 
-class _LightweightSessionAgent:
-    """Minimal agent-like object for session load/save (memory only)."""
-
-    def __init__(self, memory: ReMeInMemoryMemory) -> None:
-        self.memory = memory
-
-    def state_dict(self) -> dict:
-        return {"memory": self.memory.state_dict()}
-
-    def load_state_dict(self, state_dict: dict, strict: bool = True) -> None:
-        mem = state_dict.get("memory", state_dict)
-        self.memory.load_state_dict(mem, strict=strict)
-
-
 async def run_command_path(
     request,
     msgs,
@@ -132,20 +118,18 @@ async def run_command_path(
 
     # Conversation path: lightweight memory + CommandHandler
     memory = ReMeInMemoryMemory(token_counter=_get_token_counter())
-    light = _LightweightSessionAgent(memory=memory)
-    if session_id and user_id:
-        try:
-            await runner.session.load_session_state(
-                session_id=session_id,
-                user_id=user_id,
-                agent=light,
-            )
-        except ValueError:
-            pass  # No session file yet
+
+    # Update memory key with session_id & user_id to session
+    runner.session.update_session_state(
+        session_id=session_id,
+        key="memory",
+        value=memory.state_dict(),
+        user_id=user_id,
+    )
 
     conv_handler = CommandHandler(
         agent_name="Friday",
-        memory=light.memory,
+        memory=memory,
         memory_manager=runner.memory_manager,
         enable_memory_manager=runner.memory_manager is not None,
     )
@@ -158,10 +142,3 @@ async def run_command_path(
             content=[TextBlock(type="text", text=str(e))],
         )
     yield response_msg, True
-
-    if session_id and user_id:
-        await runner.session.save_session_state(
-            session_id=session_id,
-            user_id=user_id,
-            agent=light,
-        )
