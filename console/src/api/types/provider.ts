@@ -16,8 +16,11 @@ export interface ProviderInfo {
   is_local: boolean;
   /** True when the base_url should be frozen (not editable). */
   freeze_url: boolean;
-  api_key: string;
-  base_url: string;
+  api_key?: string;
+  base_url?: string;
+  current_api_key?: string;
+  current_base_url?: string;
+  needs_base_url?: boolean;
 }
 
 export interface ProviderConfigRequest {

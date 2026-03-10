@@ -284,35 +284,80 @@ def _filter_routing_local_candidates(
     ]
 
 
-def _resolve_routing_local_slot(
+def _filter_routing_remote_candidates(
     all_providers: list[Provider],
+) -> list[Provider]:
+    return [
+        d
+        for d in all_providers
+        if not _is_local_like_provider(d)
+        and _is_configured(d)
+        and _has_provider_models(d)
+    ]
+
+
+def _build_routing_slot_options(
+    providers: list[Provider],
+) -> list[tuple[str, ModelSlotConfig]]:
+    options: list[tuple[str, ModelSlotConfig]] = []
+    for provider in providers:
+        models = list(provider.models) + list(provider.extra_models)
+        for model in models:
+            options.append(
+                (
+                    f"{provider.name} / {model.name}",
+                    ModelSlotConfig(provider_id=provider.id, model=model.id),
+                ),
+            )
+    return options
+
+
+def _resolve_routing_slot(
+    slot_options: list[tuple[str, ModelSlotConfig]],
     current_slot: ModelSlotConfig | None,
 ) -> ModelSlotConfig | None:
-    local_candidates = _filter_routing_local_candidates(all_providers)
     if current_slot and current_slot.provider_id and current_slot.model:
-        for provider in local_candidates:
-            if provider.id != current_slot.provider_id:
-                continue
-            models = list(provider.models) + list(provider.extra_models)
-            if any(model.id == current_slot.model for model in models):
-                return ModelSlotConfig(
-                    provider_id=current_slot.provider_id,
-                    model=current_slot.model,
-                )
+        for _, slot in slot_options:
+            if (
+                slot.provider_id == current_slot.provider_id
+                and slot.model == current_slot.model
+            ):
+                return slot
 
-    if not local_candidates:
+    if not slot_options:
         return None
 
-    first_provider = local_candidates[0]
-    first_models = list(first_provider.models) + list(
-        first_provider.extra_models,
-    )
-    if not first_models:
+    return slot_options[0][1]
+
+
+def _select_routing_slot_interactive(
+    prompt_text: str,
+    slot_options: list[tuple[str, ModelSlotConfig]],
+    current_slot: ModelSlotConfig | None,
+) -> ModelSlotConfig | None:
+    resolved_slot = _resolve_routing_slot(slot_options, current_slot)
+    if not slot_options:
         return None
-    return ModelSlotConfig(
-        provider_id=first_provider.id,
-        model=first_models[0].id,
+    if len(slot_options) == 1:
+        return resolved_slot
+
+    labels = [label for label, _ in slot_options]
+    default_label: Optional[str] = None
+    if resolved_slot is not None:
+        for label, slot in slot_options:
+            if (
+                slot.provider_id == resolved_slot.provider_id
+                and slot.model == resolved_slot.model
+            ):
+                default_label = label
+                break
+
+    chosen_label = prompt_choice(
+        prompt_text,
+        options=labels,
+        default=default_label,
     )
+    return slot_options[labels.index(chosen_label)][1]
 
 
 def _load_app_config() -> tuple[Config, Path]:
@@ -334,6 +379,14 @@ def show_llm_routing_config() -> None:
     manager = _manager()
     routing_cfg = cfg.agents.llm_routing
     active_llm = manager.get_active_model()
+    active_provider = (
+        manager.get_provider(active_llm.provider_id)
+        if active_llm and active_llm.provider_id
+        else None
+    )
+    active_is_local_like = bool(
+        active_provider and _is_local_like_provider(active_provider),
+    )
     status = (
         click.style("enabled", fg="green")
         if routing_cfg.enabled
@@ -345,13 +398,19 @@ def show_llm_routing_config() -> None:
     click.echo(f"{'═' * 44}")
     click.echo(f"  {'status':16s}: {status}")
     click.echo(f"  {'mode':16s}: {routing_cfg.mode}")
-    click.echo(f"  {'local':16s}: {_format_model_slot(routing_cfg.local)}")
-    click.echo(
-        "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
-    )
     click.echo(
         f"  {'active_llm':16s}: {_format_model_slot(active_llm)}",
     )
+    if active_is_local_like:
+        click.echo(
+            "  local(active_llm): " f"{_format_model_slot(active_llm)}",
+        )
+        click.echo(f"  {'cloud':16s}: {_format_model_slot(routing_cfg.cloud)}")
+    else:
+        click.echo(f"  {'local':16s}: {_format_model_slot(routing_cfg.local)}")
+        click.echo(
+            "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
+        )
     click.echo(f"  {'config_path':16s}: {get_config_path()}")
     click.echo()
 
@@ -362,6 +421,11 @@ def configure_llm_routing_interactive() -> None:
     manager = _manager()
     all_providers = _all_provider_objects(manager)
     active_llm = manager.get_active_model()
+    active_provider = (
+        manager.get_provider(active_llm.provider_id)
+        if active_llm and active_llm.provider_id
+        else None
+    )
 
     click.echo("\n--- LLM Routing Configuration ---")
     routing_cfg.enabled = prompt_confirm(
@@ -398,29 +462,68 @@ def configure_llm_routing_interactive() -> None:
         )
         raise SystemExit(1)
 
-    local_slot = _resolve_routing_local_slot(all_providers, routing_cfg.local)
-    if local_slot is None:
+    if active_provider is None:
         click.echo(
             click.style(
-                "Error: no local providers with models are configured yet. "
-                "Add a local model first.",
+                "Error: the current active LLM provider could not be found.",
                 fg="red",
             ),
         )
         raise SystemExit(1)
 
-    routing_cfg.local = local_slot
-    routing_cfg.cloud = None
+    if _is_local_like_provider(active_provider):
+        remote_slot = _select_routing_slot_interactive(
+            "Select cloud model for routing:",
+            _build_routing_slot_options(
+                _filter_routing_remote_candidates(all_providers),
+            ),
+            routing_cfg.cloud,
+        )
+        if remote_slot is None:
+            click.echo(
+                click.style(
+                    "Error: no remote providers with models are configured "
+                    "yet. Add a remote model first.",
+                    fg="red",
+                ),
+            )
+            raise SystemExit(1)
+        routing_cfg.local = active_llm
+        routing_cfg.cloud = remote_slot
+    else:
+        local_slot = _select_routing_slot_interactive(
+            "Select local model for routing:",
+            _build_routing_slot_options(
+                _filter_routing_local_candidates(all_providers),
+            ),
+            routing_cfg.local,
+        )
+        if local_slot is None:
+            click.echo(
+                click.style(
+                    "Error: no local providers with models are configured "
+                    "yet. Add a local model first.",
+                    fg="red",
+                ),
+            )
+            raise SystemExit(1)
+        routing_cfg.local = local_slot
+        routing_cfg.cloud = None
 
     cfg.agents.llm_routing = routing_cfg
     save_config(cfg, config_path)
 
     click.echo(f"✓ LLM routing saved to {config_path}")
     click.echo(f"  mode: {routing_cfg.mode}")
-    click.echo(f"  local: {_format_model_slot(routing_cfg.local)}")
-    click.echo(
-        "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
-    )
+    click.echo(f"  active_llm: {_format_model_slot(active_llm)}")
+    if _is_local_like_provider(active_provider):
+        click.echo(f"  local(active_llm): {_format_model_slot(active_llm)}")
+        click.echo(f"  cloud: {_format_model_slot(routing_cfg.cloud)}")
+    else:
+        click.echo(f"  local: {_format_model_slot(routing_cfg.local)}")
+        click.echo(
+            "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
+        )
 
 
 def _select_llm_model(defn, pid, current_slot, *, use_defaults):
@@ -638,14 +741,28 @@ def list_cmd() -> None:
 
     routing_cfg = load_config().agents.llm_routing
     routing_status = "enabled" if routing_cfg.enabled else "disabled"
+    active_provider = (
+        manager.get_provider(llm.provider_id) if llm and llm.provider_id else None
+    )
+    active_is_local_like = bool(
+        active_provider and _is_local_like_provider(active_provider),
+    )
     click.echo(f"  {'Routing':16s}: {routing_status}")
     click.echo(f"  {'Routing mode':16s}: {routing_cfg.mode}")
-    click.echo(
-        f"  {'Routing local':16s}: {_format_model_slot(routing_cfg.local)}",
-    )
-    click.echo(
-        f"  {'Routing cloud':16s}: {_format_model_slot(llm)} (active_llm)",
-    )
+    if active_is_local_like:
+        click.echo(
+            f"  {'Routing local':16s}: {_format_model_slot(llm)} (active_llm)",
+        )
+        click.echo(
+            f"  {'Routing cloud':16s}: {_format_model_slot(routing_cfg.cloud)}",
+        )
+    else:
+        click.echo(
+            f"  {'Routing local':16s}: {_format_model_slot(routing_cfg.local)}",
+        )
+        click.echo(
+            f"  {'Routing cloud':16s}: {_format_model_slot(llm)} (active_llm)",
+        )
     click.echo()
 
 

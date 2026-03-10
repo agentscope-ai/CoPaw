@@ -8,22 +8,16 @@ import {
   Select,
 } from "@agentscope-ai/design";
 import { ApiOutlined } from "@ant-design/icons";
-import type { ProviderConfigRequest } from "../../../../../api/types";
+import type {
+  ProviderConfigRequest,
+  ProviderInfo,
+} from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
 
 interface ProviderConfigModalProps {
-  provider: {
-    id: string;
-    name: string;
-    api_key?: string;
-    api_key_prefix?: string;
-    base_url?: string;
-    is_custom: boolean;
-    freeze_url: boolean;
-    chat_model: string;
-  };
+  provider: ProviderInfo;
   activeModels: any;
   open: boolean;
   onClose: () => void;
@@ -44,6 +38,8 @@ export function ProviderConfigModal({
   const [form] = Form.useForm<ProviderConfigRequest>();
   const selectedChatModel = Form.useWatch("chat_model", form);
   const canEditBaseUrl = !provider.freeze_url;
+  const currentApiKey = provider.current_api_key ?? provider.api_key ?? "";
+  const currentBaseUrl = provider.current_base_url ?? provider.base_url ?? "";
 
   const effectiveChatModel = useMemo(() => {
     if (!provider.is_custom) {
@@ -53,14 +49,14 @@ export function ProviderConfigModal({
   }, [provider.chat_model, provider.is_custom, selectedChatModel]);
 
   const apiKeyPlaceholder = useMemo(() => {
-    if (provider.api_key) {
+    if (currentApiKey) {
       return t("models.leaveBlankKeep");
     }
     if (provider.api_key_prefix) {
       return t("models.enterApiKey", { prefix: provider.api_key_prefix });
     }
     return t("models.enterApiKeyOptional");
-  }, [provider.api_key, provider.api_key_prefix, t]);
+  }, [currentApiKey, provider.api_key_prefix, t]);
 
   const baseUrlExtra = useMemo(() => {
     if (!canEditBaseUrl) {
@@ -113,12 +109,12 @@ export function ProviderConfigModal({
     if (open) {
       form.setFieldsValue({
         api_key: undefined,
-        base_url: provider.base_url || undefined,
+        base_url: currentBaseUrl || undefined,
         chat_model: provider.chat_model || "OpenAIChatModel",
       });
       setFormDirty(false);
     }
-  }, [provider, form, open]);
+  }, [currentBaseUrl, provider, form, open]);
 
   const handleSubmit = async () => {
     try {
@@ -258,7 +254,7 @@ export function ProviderConfigModal({
       footer={
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterLeft}>
-            {provider.api_key && (
+            {currentApiKey && (
               <Button danger size="small" onClick={handleRevoke}>
                 {t("models.revokeAuthorization")}
               </Button>
@@ -291,7 +287,7 @@ export function ProviderConfigModal({
         form={form}
         layout="vertical"
         initialValues={{
-          base_url: provider.base_url || undefined,
+          base_url: currentBaseUrl || undefined,
           chat_model: provider.chat_model || "OpenAIChatModel",
         }}
         onValuesChange={() => setFormDirty(true)}

@@ -32,6 +32,8 @@ export function RemoteProviderCard({
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [modelManageOpen, setModelManageOpen] = useState(false);
+  const currentApiKey = provider.current_api_key ?? provider.api_key ?? "";
+  const currentBaseUrl = provider.current_base_url ?? provider.base_url ?? "";
 
   const handleDeleteProvider = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,8 +63,8 @@ export function RemoteProviderCard({
 
   const isConfigured =
     provider.is_local ||
-    (provider.is_custom && provider.base_url) ||
-    provider.api_key;
+    (provider.is_custom && currentBaseUrl) ||
+    (provider.needs_base_url ? currentApiKey && currentBaseUrl : currentApiKey);
   const hasModels = totalCount > 0;
   const isAvailable = isConfigured && hasModels;
 
@@ -139,9 +141,9 @@ export function RemoteProviderCard({
         <div className={styles.cardInfo}>
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>{t("models.baseURL")}:</span>
-            {provider.base_url ? (
-              <span className={styles.infoValue} title={provider.base_url}>
-                {provider.base_url}
+            {currentBaseUrl ? (
+              <span className={styles.infoValue} title={currentBaseUrl}>
+                {currentBaseUrl}
               </span>
             ) : (
               <span className={styles.infoEmpty}>{t("models.notSet")}</span>
@@ -149,8 +151,8 @@ export function RemoteProviderCard({
           </div>
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>{t("models.apiKey")}:</span>
-            {provider.api_key ? (
-              <span className={styles.infoValue}>{provider.api_key}</span>
+            {currentApiKey ? (
+              <span className={styles.infoValue}>{currentApiKey}</span>
             ) : (
               <span className={styles.infoEmpty}>{t("models.notSet")}</span>
             )}

@@ -19,6 +19,10 @@ interface ModelsSectionProps {
   onSaved: () => void;
 }
 
+interface RoutingSlotOption extends ModelSlotConfig {
+  label: string;
+}
+
 const EMPTY_SLOT: ModelSlotConfig = {
   provider_id: "",
   model: "",
@@ -35,15 +39,28 @@ function getProviderModels(provider?: ProviderInfo) {
   return [...(provider?.models ?? []), ...(provider?.extra_models ?? [])];
 }
 
+function getProviderApiKey(provider: ProviderInfo) {
+  return provider.current_api_key ?? provider.api_key ?? "";
+}
+
+function getProviderBaseUrl(provider: ProviderInfo) {
+  return provider.current_base_url ?? provider.base_url ?? "";
+}
+
 function isLocalLikeProvider(provider: ProviderInfo) {
   return provider.is_local || provider.id === "ollama";
 }
 
 function isConfiguredProvider(provider: ProviderInfo) {
   if (provider.is_local) return true;
-  if (provider.id === "ollama") return Boolean(provider.base_url);
-  if (provider.is_custom) return Boolean(provider.base_url);
-  return Boolean(provider.api_key);
+  const currentApiKey = getProviderApiKey(provider);
+  const currentBaseUrl = getProviderBaseUrl(provider);
+  if (provider.id === "ollama") return Boolean(currentBaseUrl);
+  if (provider.is_custom) return Boolean(currentBaseUrl);
+  if (provider.needs_base_url) {
+    return Boolean(currentApiKey) && Boolean(currentBaseUrl);
+  }
+  return Boolean(currentApiKey);
 }
 
 function normalizeRoutingConfig(
@@ -57,42 +74,82 @@ function normalizeRoutingConfig(
       provider_id: config.local?.provider_id ?? "",
       model: config.local?.model ?? "",
     },
-    cloud: null,
+    cloud: config.cloud
+      ? {
+          provider_id: config.cloud.provider_id ?? "",
+          model: config.cloud.model ?? "",
+        }
+      : null,
   };
 }
 
-function resolveRoutingLocalSlot(
-  providers: ProviderInfo[],
-  currentLocal: ModelSlotConfig,
-): ModelSlotConfig | null {
-  const candidates = providers.filter(
-    (provider) =>
-      isLocalLikeProvider(provider) &&
-      isConfiguredProvider(provider) &&
-      getProviderModels(provider).length > 0,
-  );
-
-  if (currentLocal.provider_id && currentLocal.model) {
-    const currentProvider = candidates.find(
-      (provider) => provider.id === currentLocal.provider_id,
-    );
+function buildLocalSlotOptions(providers: ProviderInfo[]): RoutingSlotOption[] {
+  return providers.flatMap((provider) => {
     if (
-      currentProvider &&
-      getProviderModels(currentProvider).some(
-        (model) => model.id === currentLocal.model,
-      )
+      !isLocalLikeProvider(provider) ||
+      !isConfiguredProvider(provider) ||
+      getProviderModels(provider).length === 0
     ) {
-      return currentLocal;
+      return [];
     }
-  }
+    return getProviderModels(provider).map((model) => ({
+      provider_id: provider.id,
+      model: model.id,
+      label: `${provider.name} / ${model.name}`,
+    }));
+  });
+}
 
-  const firstProvider = candidates[0];
-  const firstModel = getProviderModels(firstProvider)[0];
-  if (!firstProvider || !firstModel) return null;
-  return {
-    provider_id: firstProvider.id,
-    model: firstModel.id,
-  };
+function buildRemoteSlotOptions(
+  providers: ProviderInfo[],
+): RoutingSlotOption[] {
+  return providers.flatMap((provider) => {
+    if (
+      isLocalLikeProvider(provider) ||
+      !isConfiguredProvider(provider) ||
+      getProviderModels(provider).length === 0
+    ) {
+      return [];
+    }
+    return getProviderModels(provider).map((model) => ({
+      provider_id: provider.id,
+      model: model.id,
+      label: `${provider.name} / ${model.name}`,
+    }));
+  });
+}
+
+function slotKey(slot: ModelSlotConfig | null | undefined) {
+  if (!slot?.provider_id || !slot.model) return "";
+  return `${slot.provider_id}::${slot.model}`;
+}
+
+function resolveRoutingLocalSlot(
+  options: RoutingSlotOption[],
+  currentLocal: ModelSlotConfig,
+): RoutingSlotOption | null {
+  const currentKey = slotKey(currentLocal);
+  if (currentKey) {
+    const currentOption = options.find(
+      (option) => slotKey(option) === currentKey,
+    );
+    if (currentOption) return currentOption;
+  }
+  return options[0] ?? null;
+}
+
+function resolveRoutingCloudSlot(
+  options: RoutingSlotOption[],
+  currentCloud: ModelSlotConfig | null,
+): RoutingSlotOption | null {
+  const currentKey = slotKey(currentCloud);
+  if (currentKey) {
+    const currentOption = options.find(
+      (option) => slotKey(option) === currentKey,
+    );
+    if (currentOption) return currentOption;
+  }
+  return options[0] ?? null;
 }
 
 function formatSlotLabel(
@@ -128,6 +185,8 @@ export function ModelsSection({
   const [routingEnabled, setRoutingEnabled] = useState(false);
   const [routingMode, setRoutingMode] =
     useState<AgentsLLMRoutingConfig["mode"]>("local_first");
+  const [selectedLocalSlotKey, setSelectedLocalSlotKey] = useState("");
+  const [selectedCloudSlotKey, setSelectedCloudSlotKey] = useState("");
 
   const currentSlot = activeModels?.active_llm;
   const savedRoutingConfig = useMemo(
@@ -140,10 +199,7 @@ export function ModelsSection({
       providers.filter((p) => {
         const hasModels = getProviderModels(p).length > 0;
         if (!hasModels) return false;
-        if (p.is_local) return true;
-        if (p.id === "ollama") return !!p.base_url;
-        if (p.is_custom) return !!p.base_url;
-        return !!p.api_key;
+        return isConfiguredProvider(p);
       }),
     [providers],
   );
@@ -164,28 +220,104 @@ export function ModelsSection({
   const chosenProvider = providers.find((p) => p.id === selectedProviderId);
   const modelOptions = getProviderModels(chosenProvider);
   const hasModels = modelOptions.length > 0;
-  const resolvedLocalSlot = useMemo(
-    () => resolveRoutingLocalSlot(providers, savedRoutingConfig.local),
-    [providers, savedRoutingConfig.local],
+  const savedPrimarySlot =
+    currentSlot?.provider_id && currentSlot?.model ? currentSlot : null;
+  const currentPrimarySlot =
+    selectedProviderId && selectedModel
+      ? {
+          provider_id: selectedProviderId,
+          model: selectedModel,
+        }
+      : savedPrimarySlot;
+  const activeProvider = providers.find(
+    (p) => p.id === currentPrimarySlot?.provider_id,
   );
-  const routingLocalChanged =
-    savedRoutingConfig.local.provider_id !==
-      (resolvedLocalSlot?.provider_id ?? "") ||
-    savedRoutingConfig.local.model !== (resolvedLocalSlot?.model ?? "");
+  const activeIsLocalLike = Boolean(
+    activeProvider && isLocalLikeProvider(activeProvider),
+  );
+  const localSlotOptions = useMemo(
+    () => buildLocalSlotOptions(providers),
+    [providers],
+  );
+  const remoteSlotOptions = useMemo(
+    () => buildRemoteSlotOptions(providers),
+    [providers],
+  );
+  const resolvedLocalSlot = useMemo(
+    () => resolveRoutingLocalSlot(localSlotOptions, savedRoutingConfig.local),
+    [localSlotOptions, savedRoutingConfig.local],
+  );
+  const selectedLocalSlot = useMemo(
+    () =>
+      localSlotOptions.find(
+        (option) => slotKey(option) === selectedLocalSlotKey,
+      ) ?? resolvedLocalSlot,
+    [localSlotOptions, resolvedLocalSlot, selectedLocalSlotKey],
+  );
+  const resolvedCloudSlot = useMemo(
+    () => resolveRoutingCloudSlot(remoteSlotOptions, savedRoutingConfig.cloud),
+    [remoteSlotOptions, savedRoutingConfig.cloud],
+  );
+  const selectedCloudSlot = useMemo(
+    () =>
+      remoteSlotOptions.find(
+        (option) => slotKey(option) === selectedCloudSlotKey,
+      ) ?? resolvedCloudSlot,
+    [remoteSlotOptions, resolvedCloudSlot, selectedCloudSlotKey],
+  );
+  const counterpartIsCloud = activeIsLocalLike;
+  const selectedCounterpartSlot = counterpartIsCloud
+    ? selectedCloudSlot
+    : selectedLocalSlot;
+  const counterpartOptions = counterpartIsCloud
+    ? remoteSlotOptions
+    : localSlotOptions;
+
+  useEffect(() => {
+    setSelectedLocalSlotKey(slotKey(resolvedLocalSlot));
+  }, [resolvedLocalSlot]);
+
+  useEffect(() => {
+    setSelectedCloudSlotKey(slotKey(resolvedCloudSlot));
+  }, [resolvedCloudSlot]);
+
+  const routingLocalChanged = activeIsLocalLike
+    ? savedRoutingConfig.local.provider_id !==
+        (currentPrimarySlot?.provider_id ?? "") ||
+      savedRoutingConfig.local.model !== (currentPrimarySlot?.model ?? "")
+    : savedRoutingConfig.local.provider_id !==
+        (selectedLocalSlot?.provider_id ?? "") ||
+      savedRoutingConfig.local.model !== (selectedLocalSlot?.model ?? "");
+  const routingCloudChanged = counterpartIsCloud
+    ? savedRoutingConfig.cloud?.provider_id !==
+        (selectedCloudSlot?.provider_id ?? "") ||
+      savedRoutingConfig.cloud?.model !== (selectedCloudSlot?.model ?? "")
+    : Boolean(
+        savedRoutingConfig.cloud?.provider_id ||
+          savedRoutingConfig.cloud?.model,
+      );
   const routingDirty =
     routingEnabled !== savedRoutingConfig.enabled ||
     routingMode !== savedRoutingConfig.mode ||
-    (routingEnabled && routingLocalChanged);
+    (routingEnabled && routingLocalChanged) ||
+    (routingEnabled && routingCloudChanged);
   const routingStatus = routingEnabled
     ? t("models.routingStatusEnabled")
     : t("models.routingStatusDisabled");
-  const localSummary = resolvedLocalSlot
-    ? formatSlotLabel(providers, resolvedLocalSlot)
+  const counterpartSummary = selectedCounterpartSlot
+    ? formatSlotLabel(providers, selectedCounterpartSlot)
+    : counterpartIsCloud
+    ? t("models.routingNoCloudProviders")
     : t("models.routingNoLocalProviders");
-  const remoteFallbackSummary =
-    currentSlot?.provider_id && currentSlot?.model
-      ? formatSlotLabel(providers, currentSlot)
-      : t("models.routingCloudFallbackMissing");
+  const routingCanEnable = Boolean(
+    currentPrimarySlot && selectedCounterpartSlot,
+  );
+  const counterpartLabel = counterpartIsCloud
+    ? t("models.routingCloudModelLabel")
+    : t("models.routingLocalModelLabel");
+  const counterpartPlaceholder = counterpartIsCloud
+    ? t("models.routingSelectCloudModel")
+    : t("models.routingSelectLocalModel");
 
   const handleProviderChange = (pid: string) => {
     setSelectedProviderId(pid);
@@ -222,23 +354,36 @@ export function ModelsSection({
   };
 
   const handleSaveRouting = async () => {
-    if (routingEnabled && !resolvedLocalSlot) {
-      message.error(t("models.routingLocalRequired"));
+    if (routingEnabled && !currentPrimarySlot) {
+      message.error(t("models.routingCloudFallbackRequired"));
       return;
     }
 
-    if (routingEnabled && (!currentSlot?.provider_id || !currentSlot?.model)) {
-      message.error(t("models.routingCloudFallbackRequired"));
+    if (routingEnabled && !selectedCounterpartSlot) {
+      message.error(
+        counterpartIsCloud
+          ? t("models.routingCloudRequired")
+          : t("models.routingLocalRequired"),
+      );
       return;
     }
 
     setRoutingSaving(true);
     try {
+      if (dirty && selectedProviderId && selectedModel) {
+        await api.setActiveLlm({
+          provider_id: selectedProviderId,
+          model: selectedModel,
+        });
+        setDirty(false);
+      }
       await api.updateLlmRoutingConfig({
         enabled: routingEnabled,
         mode: routingMode,
-        local: resolvedLocalSlot ?? EMPTY_SLOT,
-        cloud: null,
+        local: activeIsLocalLike
+          ? currentPrimarySlot ?? EMPTY_SLOT
+          : selectedLocalSlot ?? EMPTY_SLOT,
+        cloud: activeIsLocalLike ? selectedCloudSlot ?? null : null,
       });
       message.success(t("models.routingSaveSuccess"));
       onSaved();
@@ -331,10 +476,6 @@ export function ModelsSection({
           <span className={styles.routingStatus}>{routingStatus}</span>
         </div>
 
-        <p className={styles.routingDescription}>
-          {t("models.routingDescription")}
-        </p>
-
         <div className={styles.slotForm}>
           <div className={styles.slotField}>
             <label className={styles.slotLabel}>
@@ -343,7 +484,7 @@ export function ModelsSection({
             <div className={styles.routingSwitchRow}>
               <Switch
                 checked={routingEnabled}
-                disabled={!routingEnabled && !resolvedLocalSlot}
+                disabled={!routingEnabled && !routingCanEnable}
                 onChange={setRoutingEnabled}
               />
               <div className={styles.routingSwitchMeta}>
@@ -383,19 +524,31 @@ export function ModelsSection({
           </div>
 
           <div className={styles.slotField}>
-            <label className={styles.slotLabel}>
-              {t("models.routingLocalModelLabel")}
-            </label>
-            <span className={styles.routingFieldHint}>{localSummary}</span>
-          </div>
-
-          <div className={styles.slotField}>
-            <label className={styles.slotLabel}>
-              {t("models.routingCloudUsesActive")}
-            </label>
-            <span className={styles.routingFieldHint}>
-              {remoteFallbackSummary}
-            </span>
+            <label className={styles.slotLabel}>{counterpartLabel}</label>
+            {counterpartOptions.length > 1 ? (
+              <Select
+                style={{ width: "100%" }}
+                value={
+                  counterpartIsCloud
+                    ? selectedCloudSlotKey || undefined
+                    : selectedLocalSlotKey || undefined
+                }
+                onChange={(value) =>
+                  counterpartIsCloud
+                    ? setSelectedCloudSlotKey(value)
+                    : setSelectedLocalSlotKey(value)
+                }
+                options={counterpartOptions.map((option) => ({
+                  value: slotKey(option),
+                  label: option.label,
+                }))}
+                placeholder={counterpartPlaceholder}
+              />
+            ) : (
+              <span className={styles.routingFieldHint}>
+                {counterpartSummary}
+              </span>
+            )}
           </div>
 
           <div

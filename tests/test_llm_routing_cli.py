@@ -148,6 +148,59 @@ def test_routing_config_saves_local_slot_and_fallback(monkeypatch) -> None:
     assert routing_cfg.cloud is None
 
 
+def test_routing_config_uses_active_local_as_primary(monkeypatch) -> None:
+    saved: dict[str, Config] = {}
+    config_path = Path("/tmp/copaw-routing-config-local-primary.json")
+    cfg = Config()
+    cfg.agents.llm_routing.cloud = ModelSlotConfig(
+        provider_id="openai",
+        model="gpt-5",
+    )
+    fake = FakeManager(
+        [_local_provider(), _remote_provider()],
+        active_model=ModelSlotConfig(provider_id="llamacpp", model="local-1"),
+    )
+    confirm_answers = iter([True])
+    choice_answers = iter(["Cloud first"])
+
+    monkeypatch.setattr(providers_cmd, "_manager", lambda: fake)
+    monkeypatch.setattr(
+        providers_cmd,
+        "_load_app_config",
+        lambda: (cfg, config_path),
+    )
+    monkeypatch.setattr(
+        providers_cmd,
+        "prompt_confirm",
+        lambda *_args, **_kwargs: next(confirm_answers),
+    )
+    monkeypatch.setattr(
+        providers_cmd,
+        "prompt_choice",
+        lambda *_args, **_kwargs: next(choice_answers),
+    )
+    monkeypatch.setattr(
+        providers_cmd,
+        "save_config",
+        lambda config, *_args, **_kwargs: saved.setdefault("config", config),
+    )
+
+    result = _runner().invoke(
+        providers_cmd.models_group,
+        ["routing", "config"],
+    )
+
+    assert result.exit_code == 0
+    routing_cfg = saved["config"].agents.llm_routing
+    assert routing_cfg.enabled is True
+    assert routing_cfg.mode == "cloud_first"
+    assert routing_cfg.local.provider_id == "llamacpp"
+    assert routing_cfg.local.model == "local-1"
+    assert routing_cfg.cloud is not None
+    assert routing_cfg.cloud.provider_id == "openai"
+    assert routing_cfg.cloud.model == "gpt-5"
+
+
 def test_routing_disable_preserves_slots(monkeypatch) -> None:
     saved: dict[str, Config] = {}
     config_path = Path("/tmp/copaw-routing-disable.json")
