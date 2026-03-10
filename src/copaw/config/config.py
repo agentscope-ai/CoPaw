@@ -69,6 +69,22 @@ class TelegramConfig(BaseChannelConfig):
     show_typing: Optional[bool] = None
 
 
+class MQTTConfig(BaseChannelConfig):
+    host: str = ""
+    port: Optional[int] = None
+    transport: str = ""
+    clean_session: bool = True
+    qos: int = 2
+    username: Optional[str] = None
+    password: Optional[str] = None
+    subscribe_topic: str = ""
+    publish_topic: str = ""
+    tls_enabled: bool = False
+    tls_ca_certs: Optional[str] = None
+    tls_certfile: Optional[str] = None
+    tls_keyfile: Optional[str] = None
+
+
 class ConsoleConfig(BaseChannelConfig):
     """Console channel: prints agent responses to stdout."""
 
@@ -100,6 +116,7 @@ class ChannelConfig(BaseModel):
     feishu: FeishuConfig = FeishuConfig()
     qq: QQConfig = QQConfig()
     telegram: TelegramConfig = TelegramConfig()
+    mqtt: MQTTConfig = MQTTConfig()
     console: ConsoleConfig = ConsoleConfig()
     voice: VoiceChannelConfig = VoiceChannelConfig()
 
@@ -152,6 +169,42 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    memory_compact_ratio: float = Field(
+        default=0.75,
+        ge=0.01,
+        le=0.99,
+        description="Ratio of memory to compact when memory is full",
+    )
+
+    memory_reserve_ratio: float = Field(
+        default=0.1,
+        ge=0.01,
+        description="Ratio of memory to reserve when compact memory",
+    )
+
+    enable_tool_result_compact: bool = Field(
+        default=False,
+        description="Whether to compact tool result messages in memory",
+    )
+
+    tool_result_compact_keep_n: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Number of tool result messages to keep in memory when compacting"
+        ),
+    )
+
+    @property
+    def memory_compact_reserve(self) -> int:
+        """Memory compact reserve size (tokens)."""
+        return int(self.max_input_length * self.memory_reserve_ratio)
+
+    @property
+    def memory_compact_threshold(self) -> int:
+        """Memory compact threshold size (tokens)."""
+        return int(self.max_input_length * self.memory_compact_ratio)
+
 
 class AgentsLLMRoutingConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -196,6 +249,10 @@ class AgentsConfig(BaseModel):
     installed_md_files_language: Optional[str] = Field(
         default=None,
         description="Language of currently installed md files",
+    )
+    system_prompt_files: List[str] = Field(
+        default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
+        description="List of markdown files to load into system prompt",
     )
 
 
@@ -338,11 +395,69 @@ class MCPConfig(BaseModel):
     )
 
 
+class BuiltinToolConfig(BaseModel):
+    """Configuration for a single built-in tool."""
+
+    name: str = Field(..., description="Tool function name")
+    enabled: bool = Field(True, description="Whether the tool is enabled")
+    description: str = Field(default="", description="Tool description")
+
+
+class ToolsConfig(BaseModel):
+    """Built-in tools management configuration."""
+
+    builtin_tools: Dict[str, BuiltinToolConfig] = Field(
+        default_factory=lambda: {
+            "execute_shell_command": BuiltinToolConfig(
+                name="execute_shell_command",
+                enabled=True,
+                description="Execute shell commands",
+            ),
+            "read_file": BuiltinToolConfig(
+                name="read_file",
+                enabled=True,
+                description="Read file contents",
+            ),
+            "write_file": BuiltinToolConfig(
+                name="write_file",
+                enabled=True,
+                description="Write content to file",
+            ),
+            "edit_file": BuiltinToolConfig(
+                name="edit_file",
+                enabled=True,
+                description="Edit file using find-and-replace",
+            ),
+            "browser_use": BuiltinToolConfig(
+                name="browser_use",
+                enabled=True,
+                description="Browser automation and web interaction",
+            ),
+            "desktop_screenshot": BuiltinToolConfig(
+                name="desktop_screenshot",
+                enabled=True,
+                description="Capture desktop screenshots",
+            ),
+            "send_file_to_user": BuiltinToolConfig(
+                name="send_file_to_user",
+                enabled=True,
+                description="Send files to user",
+            ),
+            "get_current_time": BuiltinToolConfig(
+                name="get_current_time",
+                enabled=True,
+                description="Get current date and time",
+            ),
+        },
+    )
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
     channels: ChannelConfig = ChannelConfig()
     mcp: MCPConfig = MCPConfig()
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     last_api: LastApiConfig = LastApiConfig()
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
@@ -357,6 +472,7 @@ ChannelConfigUnion = Union[
     FeishuConfig,
     QQConfig,
     TelegramConfig,
+    MQTTConfig,
     ConsoleConfig,
     VoiceChannelConfig,
 ]

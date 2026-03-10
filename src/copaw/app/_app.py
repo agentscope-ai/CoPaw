@@ -34,6 +34,7 @@ from .runner.manager import ChatManager
 from .routers import router as api_router
 from .routers.voice import voice_router
 from ..envs import load_envs_into_environ
+from ..providers.provider_manager import ProviderManager
 
 # Apply log level on load so reload child process gets same level as CLI.
 logger = setup_logger(os.environ.get(LOG_LEVEL_ENV, "info"))
@@ -141,6 +142,8 @@ async def lifespan(
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
                 raise
             logger.exception("Failed to start MCP token refresher")
+    # --- Model provider manager (non-reloadable, in-memory) ---
+    provider_manager = ProviderManager.get_instance()
 
     # expose to endpoints
     app.state.runner = runner
@@ -151,6 +154,7 @@ async def lifespan(
     app.state.mcp_manager = mcp_manager
     app.state.mcp_watcher = mcp_watcher
     app.state.mcp_token_refresher = mcp_token_refresher
+    app.state.provider_manager = provider_manager
 
     _restart_task: asyncio.Task | None = None
 

@@ -54,13 +54,15 @@
 
 ## 新闻
 
-[2026-03-06] 我们发布了 v0.0.5！完整更新说明见 [v0.0.5 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
+[2026-03-09] 我们发布了 v0.0.6！完整更新说明见 [v0.0.6 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
-- **[v0.0.5]** **新增：** Daemon 模式；Twilio 语音频道；DeepSeek Reasoner 支持；智能体中断 API；版本更新提醒；思考/工具调用选择性显示。
-- **[v0.0.5]** **优化：** 记忆系统升级；控制台界面改进；可选频道懒加载；Windows 一键安装脚本。
-- **[v0.0.5]** **修复：** Docker 配置持久化；Ollama base URL；频道修复；Windows 兼容性；MCP 客户端稳定性。
-- **[v0.0.5]** **文档：** 增添更新日志；优化模型、频道配置指南；Docker + Ollama 连接指南。
-- **[v0.0.5]** **贡献者：** 感谢新贡献者：[@qoli](https://github.com/qoli)、[@qbc2016](https://github.com/qbc2016)、[@yunlzheng](https://github.com/yunlzheng)、[@BlueSkyXN](https://github.com/BlueSkyXN)、[@sidonsoft](https://github.com/sidonsoft)、[@lishengzxc](https://github.com/lishengzxc)、[@pikaxinge](https://github.com/pikaxinge)、[@linshengli](https://github.com/linshengli)、[@eltociear](https://github.com/eltociear)、[@liuxiaopai-ai](https://github.com/liuxiaopai-ai)、[@Leirunlin](https://github.com/Leirunlin)、[@pan-x-c](https://github.com/pan-x-c)、[@garyzhang99](https://github.com/garyzhang99)、[@celestialhorse51D](https://github.com/celestialhorse51D)、[@wwx814](https://github.com/wwx814)、[@nszhsl](https://github.com/nszhsl)、[@DavdGao](https://github.com/DavdGao)、[@zhangckcup](https://github.com/zhangckcup)。
+- **[v0.0.6]** **新增：** 原生桌面安装包，一键安装（Windows/macOS）；俄语和日语支持覆盖界面和智能体配置；Telegram 访问控制和白名单；QQ Markdown 和富媒体支持；Discord/飞书/钉钉媒体增强；MQTT 频道支持物联网集成；Gemini 思考模型和 MLX 后端支持；内置工具管理页面；从工作区文件自定义系统提示词；ReMeLight 记忆系统带智能截断。
+- **[v0.0.6]** **优化：** 动态记忆压缩配置；使用 PyPI 时间戳的版本检测；基于 LESS 的样式重构；UTC 时区标准化；模块化 Provider 架构及生命周期管理。
+- **[v0.0.6]** **修复：** Windows 文件路径和 Shell 编码；钉钉 Office 文件检测；技能导入 UTF-8 处理；适配 Docker 的 URL 验证；版本徽章定位；语言感知的文件通知。
+- **[v0.0.6]** **文档：** 新 logo 和社交媒体集成；桌面应用安装指南；记忆压缩和命令文档；更新路线图；增强网站呈现。
+- **[v0.0.6]** **贡献者：** 感谢新贡献者：[@Osier-Yi](https://github.com/Osier-Yi)、[@muchenhen](https://github.com/muchenhen)、[@hongxicheng](https://github.com/hongxicheng)、[@YingchaoX](https://github.com/YingchaoX)、[@seoeaa](https://github.com/seoeaa)、[@Chiytako](https://github.com/Chiytako)、[@eviaaaaa](https://github.com/eviaaaaa)、[@vvv214](https://github.com/vvv214)、[@baijunty](https://github.com/baijunty)、[@p8rtop](https://github.com/p8rtop)、[@yifanli-intel](https://github.com/yifanli-intel)、[@Eduiskss](https://github.com/Eduiskss)、[@snai1557](https://github.com/snai1557)。
+
+[2026-03-06] 我们发布了 v0.0.5！完整更新说明见 [v0.0.5 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
 [2026-03-02] 我们发布了 v0.0.4！完整更新说明见 [v0.0.4 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
@@ -72,7 +74,7 @@
 >
 > - **我想三条命令跑起来**： [快速开始](#快速开始) → 浏览器打开控制台。
 > - **我想在钉钉 / 飞书 / QQ 里聊**：在控制台中进行 [频道配置](https://copaw.agentscope.io/docs/channels)。
-> - **我不想装 Python**：[一键安装](#一键安装beta持续完善中) 自动管理 Python，或使用 [魔搭一键配置](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 云端部署。
+> - **我不想装 Python**：[脚本安装](#脚本安装) 自动管理 Python，或使用 [魔搭一键配置](https://modelscope.cn/studios/fork?target=AgentScope/CoPaw) 云端部署。
 
 - [新闻](#新闻)
 - [快速开始](#快速开始)
@@ -91,7 +93,7 @@
 
 ## 快速开始
 
-### pip 安装 (推荐)
+### pip 安装
 
 如果你习惯自行管理 Python 环境：
 
@@ -105,9 +107,9 @@ copaw app
 
 ![Console](https://img.alicdn.com/imgextra/i4/O1CN01kUEGsC1XolpzIWdsu_!!6000000002971-2-tps-3822-2064.png)
 
-### 一键安装（beta，持续完善中）
+### 脚本安装
 
-无需预装 Python — 安装脚本自动处理一切：
+无需手动配置 Python，一行命令自动完成安装。脚本会自动下载 uv（Python 包管理器）、创建虚拟环境、安装 CoPaw 及其依赖（含 Node.js 和前端资源）。注意：部分网络环境或企业权限管控下可能无法使用。
 
 **macOS / Linux：**
 
@@ -220,6 +222,51 @@ copaw uninstall --purge  # 删除所有内容
 
 </details>
 
+### 桌面应用（Beta）
+
+> **Beta 版本说明**：桌面应用目前处于 Beta 测试阶段，存在以下已知限制：
+> - **兼容性测试不完整**：未在所有系统版本和硬件配置上进行充分测试
+> - **性能可能存在缺陷**：启动速度、内存占用等方面可能需要进一步优化
+> - **功能持续完善中**：部分功能可能不稳定或缺失
+
+如果你不习惯使用命令行，可以下载并使用 CoPaw 的桌面应用版本，无需手动配置 Python 环境或执行命令。
+
+#### 下载
+
+从 [GitHub Releases](https://github.com/agentscope-ai/CoPaw/releases) 下载桌面应用：
+- **Windows**: `CoPaw-Setup-<version>.exe`
+- **macOS**: `CoPaw-<version>-macOS.zip` (推荐 Apple Silicon)
+
+#### 特点
+
+- ✅ **零配置**：下载后双击即可运行，无需安装 Python 或配置环境变量
+- ✅ **跨平台**：支持 Windows 10+ 和 macOS 14+
+- ✅ **可视化**：自动打开浏览器界面，无需手动输入地址
+- ⚠️ **Beta 阶段**：功能持续完善中，欢迎反馈问题
+
+#### 首次启动
+
+**重要提示**：首次启动可能需要 10-60 秒（取决于您的系统配置）。应用需要初始化 Python 环境和加载依赖，请耐心等待浏览器窗口自动打开。
+
+#### macOS：绕过系统安全限制
+
+当你从 Releases 下载 CoPaw macOS 应用时，macOS 可能显示：*"Apple 无法验证 'CoPaw' 不包含恶意软件"*。这是因为应用未经过公证。你仍然可以通过以下方式打开：
+
+- **右键打开（推荐）**
+  右键点击（或 Control + 点击）CoPaw 应用 → **"打开"** → 在对话框中再次点击 **"打开"**。这会告诉 Gatekeeper 你信任该应用；之后可以像往常一样双击启动。
+
+- **在系统设置中允许**
+  如果仍被阻止，进入 **系统设置 → 隐私与安全性**，向下滚动找到类似 *"已阻止 'CoPaw'，因为无法验证开发者"* 的提示，点击 **"仍要打开"** 或 **"允许"**。
+
+- **移除隔离属性（不推荐大多数用户）**
+  在终端运行：
+  `xattr -cr /Applications/CoPaw.app`
+  （或使用解压后的 `.app` 路径）。这会清除"从互联网下载"的隔离标志，使警告通常不会出现，但不如使用 **右键 → 打开** 安全和可控。
+
+详细使用说明、故障排除和常见问题，请参见 [桌面应用指南](https://copaw.agentscope.io/docs/desktop)。
+
+---
+
 ### 使用 Docker
 
 镜像在 **Docker Hub**（`agentscope/copaw`）。镜像 tag：`latest`（稳定版）；`pre`（PyPI 预发布版）。
@@ -311,7 +358,7 @@ copaw app # 启动服务
 | [模型](https://copaw.agentscope.io/docs/models)        | 配置云/本地/自定义提供商          |
 | [频道配置](https://copaw.agentscope.io/docs/channels)     | 钉钉、飞书、QQ、Discord、iMessage 等 |
 | [Skills](https://copaw.agentscope.io/docs/skills)         | 扩展与自定义能力                     |
-| [MCP](https://copaw.agentscope.io/docs/skills)         | 管理 MCP 客户端                     |
+| [MCP](https://copaw.agentscope.io/docs/mcp)               | 管理 MCP 客户端                     |
 | [记忆](https://copaw.agentscope.io/docs/memory)           | 上下文管理与长期记忆                 |
 | [魔法命令](https://copaw.agentscope.io/docs/commands)           | 控制对话状态，无需等待AI理解        |
 | [心跳](https://copaw.agentscope.io/docs/heartbeat)        | 定时自检与摘要                       |
