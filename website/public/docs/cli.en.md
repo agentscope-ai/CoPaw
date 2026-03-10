@@ -450,17 +450,17 @@ See [Config & Working Directory](./config) for full details.
 
 ## Command overview
 
-| Command          | Subcommands                                                                                                                            | Requires server? |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :--------------: |
-| `copaw init`     | —                                                                                                                                      |        No        |
-| `copaw app`      | —                                                                                                                                      |  — (starts it)   |
+| Command          | Subcommands                                                                                                                                                                                    | Requires server? |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------: |
+| `copaw init`     | —                                                                                                                                                                                              |        No        |
+| `copaw app`      | —                                                                                                                                                                                              |  — (starts it)   |
 | `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `routing show` · `routing config` · `routing disable` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        No        |
-| `copaw env`      | `list` · `set` · `delete`                                                                                                              |        No        |
-| `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        No        |
-| `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |     **Yes**      |
-| `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                        |     **Yes**      |
-| `copaw skills`   | `list` · `config`                                                                                                                      |        No        |
-| `copaw clean`    | —                                                                                                                                      |        No        |
+| `copaw env`      | `list` · `set` · `delete`                                                                                                                                                                      |        No        |
+| `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                                                                               |        No        |
+| `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                                                                                    |     **Yes**      |
+| `copaw chats`    | `list` · `get` · `create` · `update` · `delete`                                                                                                                                                |     **Yes**      |
+| `copaw skills`   | `list` · `config`                                                                                                                                                                              |        No        |
+| `copaw clean`    | —                                                                                                                                                                                              |        No        |
 
 ---
 

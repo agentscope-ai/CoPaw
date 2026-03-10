@@ -101,7 +101,9 @@ function formatSlotLabel(
 ) {
   if (!slot?.provider_id || !slot.model) return "";
   const provider = providers.find((item) => item.id === slot.provider_id);
-  const model = getProviderModels(provider).find((item) => item.id === slot.model);
+  const model = getProviderModels(provider).find(
+    (item) => item.id === slot.model,
+  );
   const providerLabel = provider?.name ?? slot.provider_id;
   const modelLabel = model?.name ?? slot.model;
   return `${providerLabel} / ${modelLabel}`;
@@ -124,9 +126,8 @@ export function ModelsSection({
   );
   const [dirty, setDirty] = useState(false);
   const [routingEnabled, setRoutingEnabled] = useState(false);
-  const [routingMode, setRoutingMode] = useState<
-    AgentsLLMRoutingConfig["mode"]
-  >("local_first");
+  const [routingMode, setRoutingMode] =
+    useState<AgentsLLMRoutingConfig["mode"]>("local_first");
 
   const currentSlot = activeModels?.active_llm;
   const savedRoutingConfig = useMemo(
@@ -401,7 +402,10 @@ export function ModelsSection({
             className={styles.slotField}
             style={{ flex: "0 0 auto", minWidth: "120px" }}
           >
-            <label className={styles.slotLabel} style={{ visibility: "hidden" }}>
+            <label
+              className={styles.slotLabel}
+              style={{ visibility: "hidden" }}
+            >
               {t("models.actions")}
             </label>
             <Button

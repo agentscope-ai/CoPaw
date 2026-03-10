@@ -6,7 +6,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-import copaw.cli.providers_cmd as providers_cmd
+from copaw.cli import providers_cmd
 from copaw.config.config import Config
 from copaw.providers.provider import ModelInfo
 from copaw.providers.provider_manager import ModelSlotConfig
@@ -37,7 +37,10 @@ class FakeManager:
         self._active = active_model
 
     async def list_provider_info(self):
-        return [type("Info", (), {"id": provider_id}) for provider_id in self._providers]
+        return [
+            type("Info", (), {"id": provider_id})
+            for provider_id in self._providers
+        ]
 
     def get_provider(self, provider_id: str):
         return self._providers.get(provider_id)
@@ -131,7 +134,10 @@ def test_routing_config_saves_local_slot_and_fallback(monkeypatch) -> None:
         lambda config, *_args, **_kwargs: saved.setdefault("config", config),
     )
 
-    result = _runner().invoke(providers_cmd.models_group, ["routing", "config"])
+    result = _runner().invoke(
+        providers_cmd.models_group,
+        ["routing", "config"],
+    )
 
     assert result.exit_code == 0
     routing_cfg = saved["config"].agents.llm_routing
@@ -168,7 +174,10 @@ def test_routing_disable_preserves_slots(monkeypatch) -> None:
         lambda config, *_args, **_kwargs: saved.setdefault("config", config),
     )
 
-    result = _runner().invoke(providers_cmd.models_group, ["routing", "disable"])
+    result = _runner().invoke(
+        providers_cmd.models_group,
+        ["routing", "disable"],
+    )
 
     assert result.exit_code == 0
     routing_cfg = saved["config"].agents.llm_routing

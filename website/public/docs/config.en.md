@@ -236,12 +236,12 @@ Each channel has a common base and channel-specific fields.
 
 **`agents.llm_routing`** — Local/cloud routing
 
-| Field   | Type           | Default         | Description                                                                                   |
-| ------- | -------------- | --------------- | --------------------------------------------------------------------------------------------- |
-| `enabled` | bool         | `false`         | Turns the local/cloud router on or off                                                        |
-| `mode`  | string         | `"local_first"` | Default route preference: `"local_first"` or `"cloud_first"`                                 |
-| `local` | object         | empty slot      | Explicit local slot (`provider_id` + `model`); required for effective routing when enabled   |
-| `cloud` | object \| null | `null`          | Legacy field. CoPaw's current configuration surfaces use `providers.json.active_llm` as the remote fallback |
+| Field     | Type           | Default         | Description                                                                                                 |
+| --------- | -------------- | --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `enabled` | bool           | `false`         | Turns the local/cloud router on or off                                                                      |
+| `mode`    | string         | `"local_first"` | Default route preference: `"local_first"` or `"cloud_first"`                                                |
+| `local`   | object         | empty slot      | Explicit local slot (`provider_id` + `model`); required for effective routing when enabled                  |
+| `cloud`   | object \| null | `null`          | Legacy field. CoPaw's current configuration surfaces use `providers.json.active_llm` as the remote fallback |
 
 **`agents.llm_routing.local`**:
 

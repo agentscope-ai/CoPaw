@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI commands for managing LLM providers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -303,7 +304,9 @@ def _resolve_routing_local_slot(
         return None
 
     first_provider = local_candidates[0]
-    first_models = list(first_provider.models) + list(first_provider.extra_models)
+    first_models = list(first_provider.models) + list(
+        first_provider.extra_models,
+    )
     if not first_models:
         return None
     return ModelSlotConfig(
@@ -344,8 +347,7 @@ def show_llm_routing_config() -> None:
     click.echo(f"  {'mode':16s}: {routing_cfg.mode}")
     click.echo(f"  {'local':16s}: {_format_model_slot(routing_cfg.local)}")
     click.echo(
-        "  cloud(active_llm): "
-        f"{_format_model_slot(active_llm)}",
+        "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
     )
     click.echo(
         f"  {'active_llm':16s}: {_format_model_slot(active_llm)}",
@@ -417,8 +419,7 @@ def configure_llm_routing_interactive() -> None:
     click.echo(f"  mode: {routing_cfg.mode}")
     click.echo(f"  local: {_format_model_slot(routing_cfg.local)}")
     click.echo(
-        "  cloud(active_llm): "
-        f"{_format_model_slot(active_llm)}",
+        "  cloud(active_llm): " f"{_format_model_slot(active_llm)}",
     )
 
 

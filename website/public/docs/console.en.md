@@ -375,18 +375,18 @@ Select rows → click **Delete** in the toolbar → confirm.
 
 ## Quick Reference
 
-| Page                  | Sidebar path                     | What you can do                                      |
-| --------------------- | -------------------------------- | ---------------------------------------------------- |
-| Chat                  | Chat → Chat                      | Talk with CoPaw, manage sessions                     |
-| Channels              | Control → Channels               | Enable/disable channels, configure credentials       |
-| Sessions              | Control → Sessions               | Filter, rename, delete sessions                      |
-| Cron Jobs             | Control → Cron Jobs              | Create/edit/delete jobs, run immediately             |
-| Workspace             | Agent → Workspace                | Edit persona files, view memory, upload/download     |
-| Skills                | Agent → Skills                   | Enable/disable/create/delete skills                  |
-| MCP                   | Agent → MCP                      | Enable/disable/create/delete MCP clients             |
-| Runtime Config        | Agent → Runtime Config           | Modify runtime configuration                         |
+| Page                  | Sidebar path                     | What you can do                                                                                                      |
+| --------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Chat                  | Chat → Chat                      | Talk with CoPaw, manage sessions                                                                                     |
+| Channels              | Control → Channels               | Enable/disable channels, configure credentials                                                                       |
+| Sessions              | Control → Sessions               | Filter, rename, delete sessions                                                                                      |
+| Cron Jobs             | Control → Cron Jobs              | Create/edit/delete jobs, run immediately                                                                             |
+| Workspace             | Agent → Workspace                | Edit persona files, view memory, upload/download                                                                     |
+| Skills                | Agent → Skills                   | Enable/disable/create/delete skills                                                                                  |
+| MCP                   | Agent → MCP                      | Enable/disable/create/delete MCP clients                                                                             |
+| Runtime Config        | Agent → Runtime Config           | Modify runtime configuration                                                                                         |
 | Models                | Settings → Models                | Configure providers, manage local/Ollama, pick model, and edit local routing with the current active LLM as fallback |
-| Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                |
+| Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                                                                                |
 
 ---
 

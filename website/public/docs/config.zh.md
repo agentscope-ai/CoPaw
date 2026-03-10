@@ -229,19 +229,19 @@ copaw app
 
 **`agents.llm_routing`** — 本地/云路由
 
-| 字段      | 类型           | 默认值          | 说明                                                                 |
-| --------- | -------------- | --------------- | -------------------------------------------------------------------- |
-| `enabled` | bool           | `false`         | 是否启用本地/云路由器                                                |
-| `mode`    | string         | `"local_first"` | 默认优先级，可选 `"local_first"` 或 `"cloud_first"`                  |
-| `local`   | object         | 空槽位          | 显式本地槽位（`provider_id` + `model`）；启用路由后要生效通常需要配置 |
+| 字段      | 类型           | 默认值          | 说明                                                                                   |
+| --------- | -------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `enabled` | bool           | `false`         | 是否启用本地/云路由器                                                                  |
+| `mode`    | string         | `"local_first"` | 默认优先级，可选 `"local_first"` 或 `"cloud_first"`                                    |
+| `local`   | object         | 空槽位          | 显式本地槽位（`provider_id` + `model`）；启用路由后要生效通常需要配置                  |
 | `cloud`   | object \| null | `null`          | 兼容保留字段。当前 CoPaw 的配置入口会统一使用 `providers.json.active_llm` 作为远程回退 |
 
 **`agents.llm_routing.local`**：
 
-| 字段          | 类型   | 默认值 | 说明         |
-| ------------- | ------ | ------ | ------------ |
-| `provider_id` | string | `""`   | 提供商 ID    |
-| `model`       | string | `""`   | 模型 ID      |
+| 字段          | 类型   | 默认值 | 说明      |
+| ------------- | ------ | ------ | --------- |
+| `provider_id` | string | `""`   | 提供商 ID |
+| `model`       | string | `""`   | 模型 ID   |
 
 **`agents.defaults.heartbeat`** — 心跳定时任务
 
