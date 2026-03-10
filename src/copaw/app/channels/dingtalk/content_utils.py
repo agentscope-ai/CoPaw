@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import re
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
@@ -22,6 +23,8 @@ from .constants import (
     DINGTALK_SESSION_ID_SUFFIX_LEN,
     DINGTALK_TYPE_MAPPING,
 )
+
+logger = logging.getLogger(__name__)
 
 
 _DATA_URL_RE = re.compile(
@@ -135,6 +138,21 @@ def session_param_from_webhook_url(url: str) -> Optional[str]:
     )
 
 
-def get_type_mapping() -> dict:
+def get_type_mapping() -> Dict[str, str]:
     """Return DingTalk type mapping (for handler use)."""
     return dict(DINGTALK_TYPE_MAPPING)
+
+
+def get_msg_key_for_media_type(media_type: str) -> str:
+    """Get msgKey for DingTalk OpenAPI based on media type."""
+    logger.debug(
+        "dingtalk get_msg_key_for_media_type: media_type=%s",
+        media_type,
+    )
+    mapping = {
+        "image": "sampleImageMsg",
+        "voice": "sampleAudio",
+        "video": "sampleVideo",
+        "file": "sampleFile",
+    }
+    return mapping.get(media_type, "sampleFile")

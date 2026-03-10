@@ -40,6 +40,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
     """Internal handler: convert DingTalk message to native dict, enqueue via
     manager (thread-safe), await reply_future, then reply."""
 
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         main_loop: asyncio.AbstractEventLoop,
@@ -124,7 +125,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     content.append(
                         TextContent(
                             type=ContentType.TEXT,
-                            text=(item_text or "").strip(),
+                            text=str(item_text or "").strip(),
                         ),
                     )
                 # Picture items may use pictureDownloadCode or downloadCode.
@@ -141,6 +142,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     item.get("type", "file"),
                 )
                 filename_hint = self._extract_filename_hint(item)
+                assert mapped is not None
                 part_content = self._fetch_download_url_and_content(
                     dl_code,
                     robot_code,
@@ -249,6 +251,8 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             conversation_type = conversation_type_from_chatbot_message(
                 incoming_message,
             )
+            # Extract sender_staff_id for DingTalk OpenAPI sending
+            sender_staff_id = callback.data.get("senderStaffId") or ""
             loop = asyncio.get_running_loop()
             reply_future: asyncio.Future[str] = loop.create_future()
             meta: Dict[str, Any] = {
@@ -256,7 +260,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 "reply_future": reply_future,
                 "reply_loop": loop,
                 "conversation_type": conversation_type,
-                "is_group": conversation_type == "group",
+                "sender_staff_id": sender_staff_id,
             }
             if conversation_id:
                 meta["conversation_id"] = conversation_id
@@ -270,7 +274,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             logger.debug(
                 "dingtalk request: has_session_webhook=%s sender=%s",
                 bool(sw),
-                sender,
+                sender[:20],
             )
             if sw:
                 meta["session_webhook"] = sw
@@ -302,10 +306,21 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 logger.info(
                     "dingtalk duplicate ignored: raw_msg_id=%r from=%s",
                     raw_msg_id,
-                    sender,
+                    sender[:20],
                 )
                 self.reply_text(" ", incoming_message)
                 return dingtalk_stream.AckMessage.STATUS_OK, "ok"
+
+            # Send ACK confirmation after dedup check
+            if sw:
+                txt = text[:20]
+                preview = (
+                    (txt + "…" if len(text) > 20 else txt).strip()
+                    if text
+                    else "[消息]"
+                )
+                ack_msg = f'✅ 收到\n"{preview}"\n🌀正在处理中……'
+                self.reply_text(ack_msg, incoming_message)
 
             logger.info(
                 "dingtalk accept: raw_msg_id=%r",
