@@ -283,20 +283,20 @@ def _strip_empty_text_blocks(
             sanitized.append(message)
             continue
 
-        filtered = []
-        for block in content:
-            if (
+        filtered = [
+            block
+            for block in content
+            if not (
                 isinstance(block, dict)
                 and block.get("type") == "text"
                 and not str(block.get("text") or "").strip()
-            ):
-                continue
-            filtered.append(block)
+            )
+        ]
 
         if not filtered and not message.get("tool_calls"):
             continue
 
-        if filtered != content:
+        if len(filtered) != len(content):
             message = {**message, "content": filtered}
         sanitized.append(message)
     return sanitized
