@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 
-def file_url_to_local_path(url: str) -> Optional[str]:
+def file_url_to_local_path(url: Optional[str]) -> Optional[str]:
     """Convert file:// URL or plain local path to local path string.
 
     Supports:
