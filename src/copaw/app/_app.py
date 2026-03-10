@@ -477,8 +477,7 @@ app.add_middleware(
 
 # --- Token auth middleware ---
 _auth_enabled = (
-    os.environ.get("COPAW_AUTH_ENABLED", "").lower()
-    in ("true", "1", "yes")
+    os.environ.get("COPAW_AUTH_ENABLED", "").lower() in ("true", "1", "yes")
     or load_config().auth.enabled
 )
 _token_store = TokenStore(path=WORKING_DIR / TOKENS_FILE)
