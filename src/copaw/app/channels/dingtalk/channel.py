@@ -785,7 +785,8 @@ class DingTalkChannel(BaseChannel):
         part: OutgoingContentPart,
         meta: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Upload and send one media part via session webhook or Dingtalk openapi."""
+        """Upload and send one media part via session webhook or
+        Dingtalk openapi."""
         ptype = getattr(part, "type", None)
         upload_type = self._map_upload_type(part)
 
@@ -867,7 +868,9 @@ class DingTalkChannel(BaseChannel):
                     },
                 }
                 if await self._try_send_media_via_openapi(
-                    payload, meta, original_media_type="image"
+                    payload,
+                    meta,
+                    original_media_type="image",
                 ):
                     return True
                 return await self._send_payload_via_session_webhook(
@@ -911,7 +914,8 @@ class DingTalkChannel(BaseChannel):
                     }
                     # Try OpenAPI first for better preview support
                     if await self._try_send_media_via_openapi(
-                        payload, meta
+                        payload,
+                        meta,
                     ):
                         return True
                     return await self._send_payload_via_session_webhook(
@@ -929,7 +933,9 @@ class DingTalkChannel(BaseChannel):
                 }
                 # Try OpenAPI first for better preview support
                 if await self._try_send_media_via_openapi(
-                    payload, meta, original_media_type="video"
+                    payload,
+                    meta,
+                    original_media_type="video",
                 ):
                     return True
                 return await self._send_payload_via_session_webhook(
@@ -1034,8 +1040,10 @@ class DingTalkChannel(BaseChannel):
             }
             # Try OpenAPI first for better preview support
             if await self._try_send_media_via_openapi(
-                    payload, meta, original_media_type="image"
-                ):
+                payload,
+                meta,
+                original_media_type="image",
+            ):
                 return True
             return await self._send_payload_via_session_webhook(
                 session_webhook,
@@ -1077,7 +1085,8 @@ class DingTalkChannel(BaseChannel):
                 }
                 # Try OpenAPI first for better preview support
                 if await self._try_send_media_via_openapi(
-                    payload, meta
+                    payload,
+                    meta,
                 ):
                     return True
                 return await self._send_payload_via_session_webhook(
@@ -1095,7 +1104,9 @@ class DingTalkChannel(BaseChannel):
             }
             # Try OpenAPI first for better preview support
             if await self._try_send_media_via_openapi(
-                payload, meta, original_media_type="video"
+                payload,
+                meta,
+                original_media_type="video",
             ):
                 return True
             return await self._send_payload_via_session_webhook(
@@ -1325,12 +1336,13 @@ class DingTalkChannel(BaseChannel):
                 self.bot_prefix + f"Error: {err_msg}",
             )
             raise
+
     # pylint: disable=too-many-branches
     async def _process_one_request(
         self,
         request: Any,
         reply_meta: Optional[Dict[str, Any]] = None,
-    ) -> None:  
+    ) -> None:
         meta = getattr(request, "channel_meta", None) or {}
         reply_meta = reply_meta or meta
         session_webhook = self._get_session_webhook(meta)
@@ -2034,14 +2046,20 @@ class DingTalkChannel(BaseChannel):
             发送成功返回 True，失败返回 False
         """
         logger.info(
-            "dingtalk send_media_via_openapi: type=%s conversation_type=%s sender_staff_id=%s",
+            "dingtalk send_media_via_openapi: type=%s "
+            "conversation_type=%s sender_staff_id=%s",
             media_type,
             conversation_type,
             sender_staff_id if sender_staff_id else "none",
         )
         token = await self._get_access_token()
         msg_key = get_msg_key_for_media_type(media_type)
-        msg_param = self._build_media_msg_param(media_id, media_type, duration, pic_media_id)
+        msg_param = self._build_media_msg_param(
+            media_id,
+            media_type,
+            duration,
+            pic_media_id,
+        )
 
         if conversation_type == "group":
             url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
@@ -2055,7 +2073,7 @@ class DingTalkChannel(BaseChannel):
             url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
             payload = {
                 "robotCode": self.client_id,
-                "userIds": [sender_staff_id],
+                "userIds": [sender_staff_id],  # type: ignore[dict-item]
                 "msgKey": msg_key,
                 "msgParam": msg_param,
             }
@@ -2073,7 +2091,8 @@ class DingTalkChannel(BaseChannel):
                 body_text = await resp.text()
                 if resp.status >= 400:
                     logger.warning(
-                        "dingtalk openapi media send failed: type=%s status=%s body=%s",
+                        "dingtalk openapi media send failed: "
+                        "type=%s status=%s body=%s",
                         media_type,
                         resp.status,
                         body_text[:500],
@@ -2084,7 +2103,8 @@ class DingTalkChannel(BaseChannel):
                     invalid_users = result.get("invalidStaffIdList") or []
                     if invalid_users:
                         logger.warning(
-                            "dingtalk openapi media send: invalid user IDs: %s",
+                            "dingtalk openapi media send: "
+                            "invalid user IDs: %s",
                             invalid_users,
                         )
                         return False
@@ -2131,7 +2151,9 @@ class DingTalkChannel(BaseChannel):
         if msgtype == "file":
             file_data = payload.get("file", {})
             media_id = file_data.get("mediaId")
-            media_type = original_media_type if original_media_type else "image"
+            media_type = (
+                original_media_type if original_media_type else "image"
+            )
             pic_media_id = None
         elif msgtype == "video":
             video_data = payload.get("video", {})
@@ -2165,7 +2187,8 @@ class DingTalkChannel(BaseChannel):
                 )
                 return True
             logger.warning(
-                f"dingtalk OpenAPI {media_type} send failed, falling back to sessionWebhook",
+                f"dingtalk OpenAPI {media_type} send failed, "
+                f"falling back to sessionWebhook",
             )
 
         return False

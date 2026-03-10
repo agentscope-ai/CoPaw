@@ -142,6 +142,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     item.get("type", "file"),
                 )
                 filename_hint = self._extract_filename_hint(item)
+                assert mapped is not None
                 part_content = self._fetch_download_url_and_content(
                     dl_code,
                     robot_code,
@@ -259,7 +260,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 "reply_future": reply_future,
                 "reply_loop": loop,
                 "conversation_type": conversation_type,
-                "sender_staff_id": sender_staff_id
+                "sender_staff_id": sender_staff_id,
             }
             if conversation_id:
                 meta["conversation_id"] = conversation_id
