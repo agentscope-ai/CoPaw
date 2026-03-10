@@ -106,7 +106,9 @@ class ToolGuardResult:
     guard_duration_seconds: float = 0.0
     guardians_used: list[str] = field(default_factory=list)
     guardians_failed: list[dict[str, str]] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
 
     # ------------------------------------------------------------------
     # Convenience properties
@@ -141,10 +143,16 @@ class ToolGuardResult:
     def findings_count(self) -> int:
         return len(self.findings)
 
-    def get_findings_by_severity(self, severity: GuardSeverity) -> list[GuardFinding]:
+    def get_findings_by_severity(
+        self,
+        severity: GuardSeverity,
+    ) -> list[GuardFinding]:
         return [f for f in self.findings if f.severity == severity]
 
-    def get_findings_by_category(self, category: GuardThreatCategory) -> list[GuardFinding]:
+    def get_findings_by_category(
+        self,
+        category: GuardThreatCategory,
+    ) -> list[GuardFinding]:
         return [f for f in self.findings if f.category == category]
 
     def to_dict(self) -> dict[str, Any]:

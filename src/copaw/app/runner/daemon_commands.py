@@ -172,7 +172,7 @@ def run_daemon_logs(context: DaemonContext, lines: int = 100) -> str:
 
 
 async def run_daemon_approve(
-    context: DaemonContext,
+    _context: DaemonContext,
     session_id: str = "",
 ) -> str:
     """Resolve the pending tool-guard approval for *session_id*.
