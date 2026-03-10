@@ -51,6 +51,7 @@ export function ModelsSection({
         if (!hasModels) return false;
         if (p.is_local) return true;
         if (p.id === "ollama") return !!p.base_url;
+        if (p.id === "lmstudio") return !!p.base_url;
         if (p.is_custom) return !!p.base_url;
         return !!p.api_key;
       }),

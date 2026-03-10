@@ -19,6 +19,7 @@ from copaw.providers.provider import (
     ProviderInfo,
 )
 from copaw.providers.openai_provider import OpenAIProvider
+from copaw.providers.lm_studio_provider import LMStudioProvider
 from copaw.providers.anthropic_provider import AnthropicProvider
 from copaw.providers.ollama_provider import OllamaProvider
 from copaw.constant import SECRET_DIR
@@ -159,6 +160,15 @@ PROVIDER_OLLAMA = OllamaProvider(
     require_api_key=False,
 )
 
+PROVIDER_LMSTUDIO = LMStudioProvider(
+    id="lmstudio",
+    name="LM Studio",
+    base_url="http://localhost:1234/v1",
+    require_api_key=False,
+    api_key_prefix="",
+    models=[],
+)
+
 
 class ModelSlotConfig(BaseModel):
     provider_id: str = Field(
@@ -216,6 +226,7 @@ class ProviderManager:
         self._add_builtin(PROVIDER_AZURE_OPENAI)
         self._add_builtin(PROVIDER_ANTHROPIC)
         self._add_builtin(PROVIDER_OLLAMA)
+        self._add_builtin(PROVIDER_LMSTUDIO)
         self._add_builtin(PROVIDER_LLAMACPP)
         self._add_builtin(PROVIDER_MLX)
 
@@ -419,6 +430,8 @@ class ProviderManager:
             return AnthropicProvider.model_validate(data)
         if provider_id == "ollama" or chat_model == "OllamaChatModel":
             return OllamaProvider.model_validate(data)
+        if provider_id == "lmstudio":
+            return LMStudioProvider.model_validate(data)
         if data.get("is_local", False):
             return DefaultProvider.model_validate(data)
         return OpenAIProvider.model_validate(data)

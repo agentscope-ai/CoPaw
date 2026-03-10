@@ -346,6 +346,7 @@
     "azureEndpointHint": "Azure OpenAI endpoint, e.g. https://<resource>.openai.azure.com/openai/v1",
     "anthropicEndpointHint": "Anthropic endpoint, e.g. https://api.anthropic.com",
     "ollamaEndpointHint": "Ollama endpoint, e.g. http://localhost:11434",
+    "lmstudioEndpointHint": "LM Studio endpoint, e.g. http://localhost:1234/v1",
     "apiEndpointHint": "API endpoint, e.g. https://api.example.com",
     "pleaseEnterBaseURL": "Please enter the API base URL",
     "pleaseEnterValidURL": "Please enter a valid URL",
