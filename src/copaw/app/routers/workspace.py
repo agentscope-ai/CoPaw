@@ -99,6 +99,12 @@ def _extract_and_merge_zip(data: bytes) -> None:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _validate_and_extract_zip(data: bytes) -> None:
+    """Validate and extract zip data (blocking operation)."""
+    _validate_zip_data(data)
+    _extract_and_merge_zip(data)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -173,10 +179,9 @@ async def upload_workspace(
         )
 
     data = await file.read()
-    _validate_zip_data(data)
 
     try:
-        await asyncio.to_thread(_extract_and_merge_zip, data)
+        await asyncio.to_thread(_validate_and_extract_zip, data)
         return {"success": True}
     except HTTPException:
         raise
