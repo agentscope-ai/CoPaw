@@ -5,8 +5,6 @@
 .pnp.js
 node_modules/
 sessions_mount_dir/
-package-lock.json
-console/package-lock.json
 
 # testing
 /coverage
