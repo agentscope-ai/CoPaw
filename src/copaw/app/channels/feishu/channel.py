@@ -648,8 +648,6 @@ class FeishuChannel(BaseChannel):
                         if key:
                             bot_mention_keys.append(key)
 
-            await self._add_reaction(message_id, "Typing")
-
             content_parts: List[Any] = []
             text_parts: List[str] = []
 
@@ -796,6 +794,8 @@ class FeishuChannel(BaseChannel):
 
             if not self._check_group_mention(is_group, meta):
                 return
+
+            await self._add_reaction(message_id, "Typing")
 
             session_id = self.resolve_session_id(sender_id, meta)
             native = {
