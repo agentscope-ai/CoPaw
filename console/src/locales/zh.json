@@ -344,8 +344,8 @@
     "openAIEndpoint": "OpenAI 端点，例如 https://api.openai.com/v1",
     "openAICompatibleEndpoint": "OpenAI 兼容端点，例如 https://api.example.com（仅在你的服务要求时再追加 /v1）",
     "azureEndpointHint": "Azure OpenAI 端点，例如 https://<resource>.openai.azure.com/openai/v1",
-    "anthropicEndpointHint": "Anthropic 端点，例如 https://api.anthropic.com（仅在部署要求时再追加 /v1）",
-    "ollamaEndpointHint": "Ollama OpenAI 兼容端点，例如 http://localhost:11434/v1",
+    "anthropicEndpointHint": "Anthropic 端点，例如 https://api.anthropic.com",
+    "ollamaEndpointHint": "Ollama 端点，例如 http://localhost:11434",
     "apiEndpointHint": "API 端点，例如 https://api.example.com",
     "pleaseEnterBaseURL": "请输入 API 基础 URL",
     "pleaseEnterValidURL": "请输入有效的 URL",
@@ -481,7 +481,13 @@
     "loadError": "加载工具失败",
     "enableSuccess": "工具启用成功",
     "disableSuccess": "工具禁用成功",
-    "toggleError": "切换工具状态失败"
+    "toggleError": "切换工具状态失败",
+    "enableAll": "全部启用",
+    "disableAll": "全部禁用",
+    "enableAllSuccess": "全部工具已启用",
+    "disableAllSuccess": "全部工具已禁用",
+    "allEnabled": "所有工具已处于启用状态",
+    "allDisabled": "所有工具已处于禁用状态"
   },
   "modelConfig": {
     "promptTitle": "需要配置 LLM 模型",
