@@ -190,7 +190,8 @@ export function ChannelDrawer({
                       rules={[
                         {
                           required: true,
-                          message: "Please input card template id when message_type=card",
+                          message:
+                            "Please input card template id when message_type=card",
                         },
                       ]}
                     >

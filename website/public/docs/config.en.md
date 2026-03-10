@@ -178,8 +178,8 @@ Each channel has a common base and channel-specific fields.
 | ------------------- | ------ | ------------ | -------------------------------------------------------------------------- |
 | `client_id`         | string | `""`         | DingTalk app Client ID                                                     |
 | `client_secret`     | string | `""`         | DingTalk app Client Secret                                                 |
-| `message_type`      | string | `"markdown"` | Message mode: `markdown` (default) or `card` (AI interactive card)        |
-| `card_template_id`  | string | `""`         | DingTalk AI Card template ID (required when `message_type` is `card`)     |
+| `message_type`      | string | `"markdown"` | Message mode: `markdown` (default) or `card` (AI interactive card)         |
+| `card_template_id`  | string | `""`         | DingTalk AI Card template ID (required when `message_type` is `card`)      |
 | `card_template_key` | string | `"content"`  | AI Card variable key; must exactly match your template variable name       |
 | `robot_code`        | string | `""`         | Robot code (recommended explicit config for group card delivery scenarios) |
 

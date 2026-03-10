@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 
 import json
 
@@ -33,13 +34,18 @@ class _FakeSession:
         self._responses = list(responses)
         self.posts = []
 
-    def post(self, url, json=None, headers=None):
+    def post(  # pylint: disable=redefined-outer-name
+        self,
+        url,
+        json=None,
+        headers=None,
+    ):
         self.posts.append({"url": url, "json": json, "headers": headers})
         return self._responses.pop(0)
 
 
 async def _noop_process(_request):
-    if False:
+    if False:  # pylint: disable=using-constant-test
         yield None
 
 
@@ -90,8 +96,13 @@ async def test_create_ai_card_uses_sender_staff_id_for_dm(monkeypatch) -> None:
     channel._http = _FakeSession(
         [
             _FakeResponse(200, '{"success":true}'),
-            _FakeResponse(200, '{"result":[{"spaceId":"staff123","spaceType":"IM_ROBOT","success":true}],"success":true}'),
-        ]
+            _FakeResponse(
+                200,
+                '{"result":[{"spaceId":"staff123",'
+                '"spaceType":"IM_ROBOT","success":true}],'
+                '"success":true}',
+            ),
+        ],
     )
 
     async def _fake_get_access_token():
@@ -109,20 +120,27 @@ async def test_create_ai_card_uses_sender_staff_id_for_dm(monkeypatch) -> None:
     assert len(channel._http.posts) == 2
     deliver_payload = channel._http.posts[1]["json"]
     assert deliver_payload["openSpaceId"] == "dtv1.card//IM_ROBOT.staff123"
-    assert deliver_payload["imRobotOpenDeliverModel"] == {"spaceType": "IM_ROBOT"}
+    assert deliver_payload["imRobotOpenDeliverModel"] == {
+        "spaceType": "IM_ROBOT",
+    }
 
 
 @pytest.mark.asyncio
-async def test_create_ai_card_raises_when_deliver_result_fails(monkeypatch) -> None:
+async def test_create_ai_card_raises_when_deliver_result_fails(
+    monkeypatch,
+) -> None:
     channel = _build_channel()
     channel._http = _FakeSession(
         [
             _FakeResponse(200, '{"success":true}'),
             _FakeResponse(
                 200,
-                '{"result":[{"spaceId":"cid123","spaceType":"IM_GROUP","success":false,"errorMsg":"chatbot not exist"}],"success":true}',
+                '{"result":[{"spaceId":"cid123",'
+                '"spaceType":"IM_GROUP","success":false,'
+                '"errorMsg":"chatbot not exist"}],'
+                '"success":true}',
             ),
-        ]
+        ],
     )
 
     async def _fake_get_access_token():

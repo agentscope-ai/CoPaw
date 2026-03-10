@@ -583,15 +583,15 @@ JSON消息格式
 
 ### 配置总览
 
-| 频道     | 配置键   | 必填/主要字段                                                       |
-| -------- | -------- | ------------------------------------------------------------------- |
-| 钉钉     | dingtalk | client_id, client_secret, message_type, card_template_id, card_template_key, robot_code |
-| 飞书     | feishu   | app_id, app_secret；可选 encrypt_key, verification_token, media_dir |
-| iMessage | imessage | db_path, poll_sec（仅 macOS）                                       |
-| Discord  | discord  | bot_token；可选 http_proxy, http_proxy_auth                         |
-| QQ       | qq       | app_id, client_secret                                               |
-| Telegram | telegram | bot_token；可选 http_proxy, http_proxy_auth                         |
-| Mattermost | mattermost | url, bot_token; 可选 show_typing, dm_policy, allow_from             |
+| 频道       | 配置键     | 必填/主要字段                                                                           |
+| ---------- | ---------- | --------------------------------------------------------------------------------------- |
+| 钉钉       | dingtalk   | client_id, client_secret, message_type, card_template_id, card_template_key, robot_code |
+| 飞书       | feishu     | app_id, app_secret；可选 encrypt_key, verification_token, media_dir                     |
+| iMessage   | imessage   | db_path, poll_sec（仅 macOS）                                                           |
+| Discord    | discord    | bot_token；可选 http_proxy, http_proxy_auth                                             |
+| QQ         | qq         | app_id, client_secret                                                                   |
+| Telegram   | telegram   | bot_token；可选 http_proxy, http_proxy_auth                                             |
+| Mattermost | mattermost | url, bot_token; 可选 show_typing, dm_policy, allow_from                                 |
 
 各频道字段与完整结构见上文表格及 [配置与工作目录](./config)。
 

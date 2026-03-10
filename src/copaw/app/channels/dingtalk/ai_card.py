@@ -45,7 +45,9 @@ class AICardPendingStore:
             return []
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
-            pending = data.get("pending_cards") if isinstance(data, dict) else []
+            pending = (
+                data.get("pending_cards") if isinstance(data, dict) else []
+            )
             return pending if isinstance(pending, list) else []
         except Exception:
             return []
