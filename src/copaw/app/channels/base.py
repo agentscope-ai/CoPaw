@@ -595,8 +595,6 @@ class BaseChannel(ABC):
         """
         Send task status notification to the user.
         """
-        from agentscope_runtime.engine.schemas.agent_schemas import TextContent, ContentType
-        
         await self.send_content_parts(
             to_handle,
             [TextContent(type=ContentType.TEXT, text=status_text)],

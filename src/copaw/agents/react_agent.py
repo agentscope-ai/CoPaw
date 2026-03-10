@@ -7,6 +7,7 @@ with integrated tools, skills, and memory management.
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, List, Literal, Optional, Type
 
 from agentscope.agent import ReActAgent
@@ -46,6 +47,15 @@ from ..constant import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ProgressEvent:
+    """Progress event for task status updates."""
+    progress: str
+    object: str = "message"
+    status: str = "in_progress"
+
 
 # Valid namesake strategies for tool registration
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
@@ -503,13 +513,6 @@ class CoPawAgent(ReActAgent):
         
         # Send progress update before reasoning
         if hasattr(self, "_process"):
-            # Create a progress event and send it
-            class ProgressEvent:
-                def __init__(self, progress):
-                    self.object = "message"
-                    self.status = "in_progress"
-                    self.progress = progress
-            
             # Send initial progress
             progress_event = ProgressEvent("Starting to process your request...")
             if hasattr(self, "_event_handlers"):

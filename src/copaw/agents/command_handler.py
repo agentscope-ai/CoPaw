@@ -303,7 +303,6 @@ class CommandHandler(ConversationCommandHandlerMixin):
                     f"- Use /await_summary to wait for completion",
                 )
         
-        # Check if there are any recent messages indicating task progress
         return await self._make_system_msg(
             "**Current Task Status**\n\n"
             "- No active tasks detected\n"
