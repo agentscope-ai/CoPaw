@@ -177,7 +177,7 @@ async def test_update_config_updates_non_none_values_and_get_info() -> None:
     assert info.generate_kwargs == {"temperature": 0.2, "top_p": 0.9}
 
 
-async def test_update_config_skips_none_values_and_masks_api_key_in_get_info() -> None:
+async def test_update_config_skips_none_values() -> None:  # noqa: E501
     provider = _make_provider()
     provider.api_key_prefix = "sk-"
     provider.generate_kwargs = {"temperature": 0.1}
@@ -209,7 +209,7 @@ async def test_update_config_skips_none_values_and_masks_api_key_in_get_info() -
     assert info.generate_kwargs == {"temperature": 0.1}
 
 
-async def test_update_config_does_not_update_chat_model_for_non_custom_provider() -> None:
+async def test_update_config_does_not_update_chat_model() -> None:
     provider = _make_provider()
 
     provider.update_config(
