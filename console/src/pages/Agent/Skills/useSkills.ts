@@ -128,8 +128,9 @@ export function useSkills() {
         await fetchSkills();
         return true;
       }
-      message.error(t("skills.uploadFailed"));
-      return false;
+      message.warning(t("skills.uploadNoChange"));
+      await fetchSkills();
+      return true;
     } catch (error) {
       console.error("Failed to upload skill", error);
       message.error(t("skills.uploadFailed"));

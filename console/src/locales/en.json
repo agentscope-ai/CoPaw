@@ -94,6 +94,7 @@
     "uploadSkill": "Upload Skill",
     "uploadSuccess": "Skill uploaded successfully",
     "uploadFailed": "Skill upload failed",
+    "uploadNoChange": "No new skills were imported. They may already exist.",
     "zipOnly": "Only .zip files are supported for upload",
     "fileSizeExceeded": "File size exceeds 100MB limit. Current file: {{size}}MB"
   },

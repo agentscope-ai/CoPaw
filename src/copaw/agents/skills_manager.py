@@ -546,7 +546,11 @@ def _import_skill_dir(
     try:
         if target_dir.exists():
             shutil.rmtree(target_dir)
-        shutil.copytree(src_dir, target_dir)
+        shutil.copytree(
+            src_dir,
+            target_dir,
+            ignore=shutil.ignore_patterns("__MACOSX", ".*"),
+        )
         logger.info("Imported skill '%s' from zip.", skill_name)
         return True
     except Exception as e:
