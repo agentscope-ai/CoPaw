@@ -14,15 +14,17 @@ from copaw.providers.provider import ModelInfo, Provider
 class OpenRouterProvider(Provider):
     """OpenRouter provider with required HTTP-Referer and X-Title headers."""
 
+    _DEFAULT_HEADERS = {
+        "HTTP-Referer": "https://copaw.ai",
+        "X-Title": "CoPaw",
+    }
+
     def _client(self, timeout: float = 30) -> AsyncOpenAI:
         return AsyncOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
             timeout=timeout,
-            default_headers={
-                "HTTP-Referer": "https://copaw.ai",
-                "X-Title": "CoPaw",
-            },
+            default_headers=self._DEFAULT_HEADERS,
         )
 
     @staticmethod
@@ -91,9 +93,6 @@ class OpenRouterProvider(Provider):
             api_key=self.api_key,
             client_kwargs={
                 "base_url": self.base_url,
-                "default_headers": {
-                    "HTTP-Referer": "https://copaw.ai",
-                    "X-Title": "CoPaw",
-                },
+                "default_headers": self._DEFAULT_HEADERS,
             },
         )
