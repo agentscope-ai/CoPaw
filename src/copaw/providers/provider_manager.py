@@ -84,6 +84,13 @@ AZURE_OPENAI_MODELS: List[ModelInfo] = [
     ModelInfo(id="gpt-4o-mini", name="GPT-4o Mini"),
 ]
 
+VENICE_MODELS: List[ModelInfo] = [
+    ModelInfo(id="venice-uncensored", name="Venice Uncensored"),
+    ModelInfo(id="deepseek-r1-671b", name="DeepSeek-R1-671B"),
+    ModelInfo(id="llama-3.3-70b", name="Llama 3.3 70B"),
+    ModelInfo(id="qwen-2.5-coder-32b", name="Qwen 2.5 Coder 32B"),
+]
+
 ANTHROPIC_MODELS: List[ModelInfo] = []
 
 PROVIDER_MODELSCOPE = OpenAIProvider(
@@ -141,6 +148,15 @@ PROVIDER_AZURE_OPENAI = OpenAIProvider(
     name="Azure OpenAI",
     api_key_prefix="",
     models=AZURE_OPENAI_MODELS,
+)
+
+PROVIDER_VENICE = OpenAIProvider(
+    id="venice",
+    name="Venice.ai",
+    base_url="https://api.venice.ai/api/v1",
+    api_key_prefix="",
+    models=VENICE_MODELS,
+    freeze_url=True,
 )
 
 PROVIDER_ANTHROPIC = AnthropicProvider(
@@ -215,6 +231,7 @@ class ProviderManager:
         self._add_builtin(PROVIDER_OPENAI)
         self._add_builtin(PROVIDER_AZURE_OPENAI)
         self._add_builtin(PROVIDER_ANTHROPIC)
+        self._add_builtin(PROVIDER_VENICE)
         self._add_builtin(PROVIDER_OLLAMA)
         self._add_builtin(PROVIDER_LLAMACPP)
         self._add_builtin(PROVIDER_MLX)
