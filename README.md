@@ -354,6 +354,7 @@ copaw app # start the server
 | [Skills](https://copaw.agentscope.io/docs/skills)                      | Extend and customize capabilities               |
 | [MCP](https://copaw.agentscope.io/docs/mcp)                            | Manage MCP clients                               |
 | [Memory](https://copaw.agentscope.io/docs/memory)                     | Context and long-term memory                     |
+| [Context](https://copaw.agentscope.io/docs/context)                   | Context management mechanism                     |
 | [Magic commands](https://copaw.agentscope.io/docs/commands)           | Control conversation state without waiting for the AI |
 | [Heartbeat](https://copaw.agentscope.io/docs/heartbeat)                | Scheduled check-in and digest                    |
 | [Config & working dir](https://copaw.agentscope.io/docs/config) | Working directory and config file                |

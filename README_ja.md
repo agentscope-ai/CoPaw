@@ -354,6 +354,7 @@ copaw app    # サーバーを起動
 | [スキル](https://copaw.agentscope.io/docs/skills)                          | 機能の拡張とカスタマイズ                             |
 | [MCP](https://copaw.agentscope.io/docs/mcp)                                | MCPクライアントの管理                               |
 | [メモリ](https://copaw.agentscope.io/docs/memory)                          | コンテキストと長期記憶                              |
+| [コンテキスト](https://copaw.agentscope.io/docs/context)                  | コンテキスト管理メカニズム                          |
 | [魔法コマンド](https://copaw.agentscope.io/docs/commands)                 | AIの応答を待たずに会話状態を制御                     |
 | [ハートビート](https://copaw.agentscope.io/docs/heartbeat)                 | スケジュールされたチェックインとダイジェスト        |
 | [設定とワーキングディレクトリ](https://copaw.agentscope.io/docs/config)   | ワーキングディレクトリと設定ファイル                 |
