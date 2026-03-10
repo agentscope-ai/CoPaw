@@ -295,10 +295,10 @@ CoPaw needs an LLM provider to work. You can set it up in three ways:
 
 For each provider you need to set:
 
-| Setting    | Description                                      |
-| ---------- | ------------------------------------------------ |
-| `base_url` | API base URL (pre-filled for built-in providers) |
-| `api_key`  | Your API key                                     |
+| Setting      | Description                                                                           |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `base_url`   | API base URL (pre-filled for built-in providers)                                      |
+| `api_key`    | Your API key                                                                          |
 | `extra_body` | Optional JSON object forwarded into OpenAI-compatible `chat.completions` request body |
 
 Then choose which provider + model to activate:
