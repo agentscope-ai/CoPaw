@@ -6,6 +6,7 @@ paired and ordered to prevent API errors.
 """
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,78 @@ def _remove_invalid_tool_blocks(msgs: list) -> list:
     return result if changed else msgs
 
 
+def _fuzzy_repair_json(raw: str) -> dict | None:
+    """Attempt to repair malformed JSON from LLM tool call arguments.
+
+    Some LLMs (especially smaller ones) produce syntactically incorrect
+    JSON for tool call arguments — e.g. single quotes, unquoted keys,
+    trailing commas, or text wrapped around the JSON object.  This
+    function tries several inexpensive string fixes and returns the first
+    successfully parsed dict.
+
+    Strategies tried in order:
+
+    1. **BOM / whitespace strip** — removes leading ``\\ufeff`` and
+       surrounding whitespace that occasionally appear in Windows
+       environments.
+    2. **Single-quote substitution** — replaces ``'`` with ``"``
+       (``{'cmd': 'ls'}`` → ``{"cmd": "ls"}``).
+    3. **Unquoted key quoting** — wraps bare identifiers in double quotes
+       (``{cmd: "ls"}`` → ``{"cmd": "ls"}``).
+    4. **Trailing-comma removal** — strips dangling commas before ``}``
+       or ``]`` (``{"a": 1,}`` → ``{"a": 1}``).
+    5. **Brace extraction** — pulls the first ``{...}`` block out of
+       surrounding prose (useful when the model adds narration around the
+       JSON object).
+
+    Args:
+        raw: The ``raw_input`` string that ``json.loads`` rejected.
+
+    Returns:
+        A parsed dict on success, or ``None`` if all strategies fail.
+    """
+    if not raw or not raw.strip():
+        return None
+
+    strategies: list[str] = []
+
+    # Strategy 1: strip BOM / whitespace
+    cleaned = raw.strip().lstrip("\ufeff")
+    strategies.append(cleaned)
+
+    # Strategy 2: replace single quotes with double quotes
+    single_to_double = cleaned.replace("'", '"')
+    strategies.append(single_to_double)
+
+    # Strategy 3: quote unquoted keys  ({key: "val"} -> {"key": "val"})
+    quoted_keys = re.sub(
+        r"(\{|,)\s*([A-Za-z_][A-Za-z0-9_]*)\s*:",
+        r'\1"\2":',
+        single_to_double,
+    )
+    strategies.append(quoted_keys)
+
+    # Strategy 4: remove trailing commas  ({"a": 1,} -> {"a": 1})
+    no_trailing = re.sub(r",\s*([}\]])", r"\1", quoted_keys)
+    strategies.append(no_trailing)
+
+    # Strategy 5: extract the first { ... } block if junk surrounds it
+    brace_match = re.search(r"\{[^{}]*\}", cleaned, re.DOTALL)
+    if brace_match:
+        strategies.append(brace_match.group(0))
+
+    # Try each strategy in order
+    for candidate in strategies:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    return None
+
+
 def _repair_empty_tool_inputs(
     msgs: list,
 ) -> list:
@@ -255,6 +328,20 @@ def _repair_empty_tool_inputs(
     This fixes a bug in AgentScope 1.0.16dev where stream_tool_parsing
     may fail to parse arguments correctly, leaving input={} while
     raw_input contains valid JSON.
+
+    The repair pipeline is:
+
+    1. **Strict parse** — tries ``json.loads(raw_input)`` as-is.
+    2. **Fuzzy repair** — calls :func:`_fuzzy_repair_json` which applies
+       several lightweight fixes (single quotes, unquoted keys, trailing
+       commas, brace extraction) to recover from common LLM output
+       formatting mistakes.
+    3. **Error feedback injection** — when both steps above fail, sets
+       ``input`` to a sentinel dict ``{"_parse_error": True,
+       "_error_message": "..."}`` so that the tool executor returns a
+       human-readable error message.  The model can read this error in
+       the next reasoning step and retry with correctly formatted JSON,
+       rather than silently executing with an empty argument dict.
 
     Args:
         msgs: List of Msg objects to repair.
@@ -286,10 +373,10 @@ def _repair_empty_tool_inputs(
 
                 # If input is empty but raw_input has content, try to parse
                 if not input_field and raw_input and raw_input != "{}":
+                    # --- Step 1: strict JSON parse ---
                     try:
                         parsed = json.loads(raw_input)
                         if isinstance(parsed, dict) and parsed:
-                            # Success! Update the input field
                             block["input"] = parsed
                             repaired = True
                             logger.info(
@@ -299,14 +386,52 @@ def _repair_empty_tool_inputs(
                                 block.get("name"),
                                 list(parsed.keys()),
                             )
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(
-                            "Failed to repair tool_use input from raw_input: "
-                            "id=%s, name=%s, error=%s",
+                            new_blocks.append(block)
+                            continue
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                    # --- Step 2: fuzzy JSON repair ---
+                    fuzzy_parsed = _fuzzy_repair_json(raw_input)
+                    if fuzzy_parsed:
+                        block["input"] = fuzzy_parsed
+                        repaired = True
+                        logger.info(
+                            "Fuzzy-repaired tool_use input: "
+                            "id=%s, name=%s, keys=%s",
                             block.get("id"),
                             block.get("name"),
-                            e,
+                            list(fuzzy_parsed.keys()),
                         )
+                        new_blocks.append(block)
+                        continue
+
+                    # --- Step 3: inject error feedback ---
+                    # Truncate raw_input for the error message to avoid
+                    # bloating memory with huge malformed strings.
+                    preview = (
+                        raw_input[:200] + "..."
+                        if len(raw_input) > 200
+                        else raw_input
+                    )
+                    block["input"] = {
+                        "_parse_error": True,
+                        "_error_message": (
+                            "Your previous tool call had malformed JSON "
+                            "arguments that could not be parsed. "
+                            f"raw_input was: {preview!r}. "
+                            "Please retry with properly formatted JSON."
+                        ),
+                    }
+                    repaired = True
+                    logger.warning(
+                        "Injected error feedback for unparseable "
+                        "tool_use input: id=%s, name=%s, "
+                        "raw_input_preview=%r",
+                        block.get("id"),
+                        block.get("name"),
+                        preview,
+                    )
 
             new_blocks.append(block)
 
