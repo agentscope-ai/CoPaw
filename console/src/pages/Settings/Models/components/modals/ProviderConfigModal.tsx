@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import type { ReactNode, UIEvent } from "react";
+import type { KeyboardEvent, ReactNode, UIEvent } from "react";
 import {
   Form,
   Input,
@@ -15,8 +15,8 @@ import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
 
 interface ProviderConfigFormValues
-  extends Omit<ProviderConfigRequest, "extra_config"> {
-  extra_config_text?: string;
+  extends Omit<ProviderConfigRequest, "generate_kwargs"> {
+  generate_kwargs_text?: string;
 }
 
 interface JsonCodeEditorProps {
@@ -106,7 +106,9 @@ function JsonCodeEditor({
   placeholder,
   rows = 8,
 }: JsonCodeEditorProps) {
+  const indentUnit = "  ";
   const highlightRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleScroll = (event: UIEvent<HTMLTextAreaElement>) => {
     if (!highlightRef.current) {
@@ -115,6 +117,100 @@ function JsonCodeEditor({
 
     highlightRef.current.scrollTop = event.currentTarget.scrollTop;
     highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    event.preventDefault();
+
+    const textarea = event.currentTarget;
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    const hasSelection = selectionStart !== selectionEnd;
+    const selectedText = value.slice(selectionStart, selectionEnd);
+
+    if (!hasSelection || !selectedText.includes("\n")) {
+      if (event.shiftKey) {
+        const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+        const linePrefix = value.slice(lineStart, selectionStart);
+
+        if (!linePrefix.endsWith(indentUnit)) {
+          return;
+        }
+
+        const nextValue =
+          value.slice(0, selectionStart - indentUnit.length) +
+          value.slice(selectionStart);
+
+        onChange?.(nextValue);
+
+        requestAnimationFrame(() => {
+          textareaRef.current?.setSelectionRange(
+            selectionStart - indentUnit.length,
+            selectionStart - indentUnit.length,
+          );
+        });
+        return;
+      }
+
+      const nextValue =
+        value.slice(0, selectionStart) + indentUnit + value.slice(selectionEnd);
+
+      onChange?.(nextValue);
+
+      requestAnimationFrame(() => {
+        const nextCursor = selectionStart + indentUnit.length;
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+      return;
+    }
+
+    const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+    const block = value.slice(lineStart, selectionEnd);
+    const lines = block.split("\n");
+
+    if (event.shiftKey) {
+      const updatedLines = lines.map((line) =>
+        line.startsWith(indentUnit) ? line.slice(indentUnit.length) : line,
+      );
+      const removedFromFirstLine = lines[0].startsWith(indentUnit)
+        ? indentUnit.length
+        : 0;
+      const removedTotal = lines.reduce(
+        (total, line) => total + (line.startsWith(indentUnit) ? indentUnit.length : 0),
+        0,
+      );
+      const nextValue =
+        value.slice(0, lineStart) +
+        updatedLines.join("\n") +
+        value.slice(selectionEnd);
+
+      onChange?.(nextValue);
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.setSelectionRange(
+          selectionStart - removedFromFirstLine,
+          selectionEnd - removedTotal,
+        );
+      });
+      return;
+    }
+
+    const updatedLines = lines.map((line) => `${indentUnit}${line}`);
+    const nextValue =
+      value.slice(0, lineStart) + updatedLines.join("\n") + value.slice(selectionEnd);
+
+    onChange?.(nextValue);
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(
+        selectionStart + indentUnit.length,
+        selectionEnd + indentUnit.length * lines.length,
+      );
+    });
   };
 
   return (
@@ -128,9 +224,11 @@ function JsonCodeEditor({
         {!value && <span>{"\n"}</span>}
       </div>
       <textarea
+        ref={textareaRef}
         rows={rows}
         value={value}
         onChange={(event) => onChange?.(event.target.value)}
+        onKeyDown={handleKeyDown}
         onScroll={handleScroll}
         placeholder={placeholder}
         spellCheck={false}
@@ -150,7 +248,7 @@ interface ProviderConfigModalProps {
     is_custom: boolean;
     freeze_url: boolean;
     chat_model: string;
-    extra_config: Record<string, unknown>;
+    generate_kwargs: Record<string, unknown>;
   };
   activeModels: any;
   open: boolean;
@@ -174,7 +272,7 @@ export function ProviderConfigModal({
   const selectedChatModel = Form.useWatch("chat_model", form);
   const canEditBaseUrl = !provider.freeze_url;
 
-  const parseExtraConfig = (value?: string) => {
+  const parseGenerateConfig = (value?: string) => {
     const trimmed = value?.trim();
     if (!trimmed) {
       return undefined;
@@ -184,11 +282,11 @@ export function ProviderConfigModal({
     try {
       parsed = JSON.parse(trimmed);
     } catch {
-      throw new Error(t("models.extraConfigInvalidJson"));
+      throw new Error(t("models.generateConfigInvalidJson"));
     }
 
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error(t("models.extraConfigMustBeObject"));
+      throw new Error(t("models.generateConfigMustBeObject"));
     }
 
     return parsed as Record<string, unknown>;
@@ -264,9 +362,9 @@ export function ProviderConfigModal({
         api_key: undefined,
         base_url: provider.base_url || undefined,
         chat_model: provider.chat_model || "OpenAIChatModel",
-        extra_config_text:
-          provider.extra_config && Object.keys(provider.extra_config).length > 0
-            ? JSON.stringify(provider.extra_config, null, 2)
+        generate_kwargs_text:
+          provider.generate_kwargs && Object.keys(provider.generate_kwargs).length > 0
+            ? JSON.stringify(provider.generate_kwargs, null, 2)
             : undefined,
       });
       setAdvancedOpen(false);
@@ -278,8 +376,8 @@ export function ProviderConfigModal({
     try {
       const values = await form.validateFields();
       setSaving(true);
-      const extraConfig = parseExtraConfig(values.extra_config_text);
-      const hasExtraConfigInput = Boolean(values.extra_config_text?.trim());
+      const generateConfig = parseGenerateConfig(values.generate_kwargs_text);
+      const hasGenerateConfigInput = Boolean(values.generate_kwargs_text?.trim());
 
       // Validate connection before saving
       // For local providers, we might skip this or just check if models exist (which the backend does)
@@ -301,7 +399,7 @@ export function ProviderConfigModal({
         api_key: values.api_key,
         base_url: values.base_url,
         chat_model: values.chat_model,
-        extra_config: hasExtraConfigInput ? extraConfig : {},
+        generate_kwargs: hasGenerateConfigInput ? generateConfig : {},
       });
 
       await onSaved();
@@ -428,9 +526,9 @@ export function ProviderConfigModal({
         initialValues={{
           base_url: provider.base_url || undefined,
           chat_model: provider.chat_model || "OpenAIChatModel",
-          extra_config_text:
-            provider.extra_config && Object.keys(provider.extra_config).length > 0
-              ? JSON.stringify(provider.extra_config, null, 2)
+          generate_kwargs_text:
+            provider.generate_kwargs && Object.keys(provider.generate_kwargs).length > 0
+              ? JSON.stringify(provider.generate_kwargs, null, 2)
               : undefined,
         }}
         onValuesChange={() => setFormDirty(true)}
@@ -545,20 +643,20 @@ export function ProviderConfigModal({
 
           <Form.Item
             hidden={!advancedOpen}
-            name="extra_config_text"
-            label={t("models.extraConfig")}
-            extra={t("models.extraConfigHint")}
+            name="generate_kwargs_text"
+            label={t("models.generateConfig")}
+            extra={t("models.generateConfigHint")}
             rules={[
               {
                 validator: (_: unknown, value?: string) => {
                   try {
-                    parseExtraConfig(value);
+                    parseGenerateConfig(value);
                     return Promise.resolve();
                   } catch (error) {
                     return Promise.reject(
                       error instanceof Error
                         ? error
-                        : new Error(t("models.extraConfigInvalidJson")),
+                        : new Error(t("models.generateConfigInvalidJson")),
                     );
                   }
                 },

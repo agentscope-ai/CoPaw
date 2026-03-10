@@ -18,14 +18,14 @@ export interface ProviderInfo {
   freeze_url: boolean;
   api_key: string;
   base_url: string;
-  extra_config: Record<string, unknown>;
+  generate_kwargs: Record<string, unknown>;
 }
 
 export interface ProviderConfigRequest {
   api_key?: string;
   base_url?: string;
   chat_model?: string;
-  extra_config?: Record<string, unknown>;
+  generate_kwargs?: Record<string, unknown>;
 }
 
 export interface ModelSlotConfig {
@@ -121,7 +121,7 @@ export interface TestProviderRequest {
   api_key?: string;
   base_url?: string;
   chat_model?: string;
-  extra_config?: Record<string, unknown>;
+  generate_kwargs?: Record<string, unknown>;
 }
 
 export interface TestModelRequest {

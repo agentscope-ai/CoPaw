@@ -50,9 +50,9 @@ class ProviderInfo(BaseModel):
         default=False,
         description=("Whether this provider is user-created (not built-in)."),
     )
-    extra_config: Dict = Field(
+    generate_kwargs: Dict = Field(
         default_factory=dict,
-        description="Extra configuration in json format."
+        description="Generation parameters for agentscope chat models.",
     )
 
 
@@ -125,8 +125,11 @@ class Provider(ProviderInfo, ABC):
             self.chat_model = str(config["chat_model"])
         if "api_key_prefix" in config and config["api_key_prefix"] is not None:
             self.api_key_prefix = str(config["api_key_prefix"])
-        if "extra_config" in config and config["extra_config"] is not None:
-            self.extra_config = config["extra_config"]
+        if (
+            "generate_kwargs" in config
+            and config["generate_kwargs"] is not None
+        ):
+            self.generate_kwargs = config["generate_kwargs"]
 
     def get_chat_model_cls(self) -> Type[ChatModelBase]:
         """Return the chat model class associated with this provider."""
@@ -175,7 +178,7 @@ class Provider(ProviderInfo, ABC):
             is_custom=self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
-            extra_config=self.extra_config,
+            generate_kwargs=self.generate_kwargs,
         )
 
 

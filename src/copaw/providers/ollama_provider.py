@@ -171,6 +171,7 @@ class OllamaProvider(Provider):
             stream=True,
             api_key=self.api_key,
             client_kwargs={"base_url": openai_compatible_url},
+            generate_kwargs=self.generate_kwargs,
         )
 
     async def get_info(self, mock_secret: bool = True) -> ProviderInfo:
@@ -183,9 +184,7 @@ class OllamaProvider(Provider):
             id=self.id,
             name=self.name,
             base_url=self.base_url,
-            api_key=self.api_key_prefix + "*" * 6
-            if mock_secret
-            else self.api_key,
+            api_key="",  # Ollama does not use API Keys
             chat_model=self.chat_model,
             models=models,
             extra_models=self.extra_models,
@@ -194,4 +193,5 @@ class OllamaProvider(Provider):
             is_custom=self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
+            generate_kwargs=self.generate_kwargs,
         )
