@@ -122,13 +122,25 @@ export function ChannelDrawer({
       case "matrix":
         return (
           <>
-            <Form.Item name="homeserver" label="Homeserver URL" rules={[{ required: true }]}>
+            <Form.Item
+              name="homeserver"
+              label="Homeserver URL"
+              rules={[{ required: true }]}
+            >
               <Input placeholder="https://matrix.org" />
             </Form.Item>
-            <Form.Item name="user_id" label="User ID" rules={[{ required: true }]}>
+            <Form.Item
+              name="user_id"
+              label="User ID"
+              rules={[{ required: true }]}
+            >
               <Input placeholder="@bot:matrix.org" />
             </Form.Item>
-            <Form.Item name="access_token" label="Access Token" rules={[{ required: true }]}>
+            <Form.Item
+              name="access_token"
+              label="Access Token"
+              rules={[{ required: true }]}
+            >
               <Input.Password placeholder="syt_..." />
             </Form.Item>
           </>

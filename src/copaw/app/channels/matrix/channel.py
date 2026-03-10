@@ -38,22 +38,26 @@ class MatrixChannel(BaseChannel):
         group_policy: str = "open",
         allow_from: Optional[list] = None,
         deny_message: str = "",
+        require_mention: bool = False,
         **_kwargs: Any,
     ) -> None:
         super().__init__(
             process=process,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
+            filter_tool_messages=filter_tool_messages,
+            filter_thinking=filter_thinking,
+            dm_policy=dm_policy,
+            group_policy=group_policy,
+            allow_from=allow_from,
+            deny_message=deny_message,
+            require_mention=require_mention,
         )
         self.enabled = enabled
         self.homeserver = homeserver
         self.user_id = user_id
         self.access_token = access_token
         self.bot_prefix = bot_prefix
-        self.dm_policy = dm_policy
-        self.group_policy = group_policy
-        self.allow_from = allow_from or []
-        self.deny_message = deny_message
         self.client: Optional[AsyncClient] = None
         self._sync_task: Optional[asyncio.Task] = None
 
@@ -104,6 +108,7 @@ class MatrixChannel(BaseChannel):
             group_policy=config.group_policy,
             allow_from=config.allow_from,
             deny_message=config.deny_message,
+            require_mention=config.require_mention,
         )
 
     def build_agent_request_from_native(
