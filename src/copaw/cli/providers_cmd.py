@@ -374,6 +374,87 @@ def _format_model_slot(slot: ModelSlotConfig | None) -> str:
     return "(not set)"
 
 
+def _print_provider_summary(defn: Provider) -> None:
+    cur_url, cur_key = defn.base_url, defn.api_key
+    tag = (
+        " [custom]" if defn.is_custom else " [local]" if defn.is_local else ""
+    )
+    click.echo(f"\n{'─' * 44}")
+    click.echo(f"  {defn.name} ({defn.id}){tag}")
+    click.echo(f"{'─' * 44}")
+
+    if defn.is_local:
+        all_models = list(defn.models)
+        if all_models:
+            click.echo(f"  {'models':16s}:")
+            for model in all_models:
+                click.echo(f"    - {model.name}")
+            return
+        click.echo("  No models downloaded.")
+        click.echo("  Use 'copaw models download' to add models.")
+        return
+
+    click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
+    click.echo(
+        f"  {'api_key':16s}: " f"{_mask_api_key(cur_key) or '(not set)'}",
+    )
+    if defn.api_key_prefix:
+        click.echo(
+            f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
+        )
+
+    extra = list(defn.extra_models)
+    all_models = list(defn.models) + extra
+    if all_models:
+        click.echo(f"  {'models':16s}:")
+        extra_ids = {model.id for model in extra}
+        for model in all_models:
+            label = " [user-added]" if model.id in extra_ids else ""
+            click.echo(f"    - {model.name} ({model.id}){label}")
+
+
+def _print_model_slot_summary(
+    manager: ProviderManager,
+    llm: ModelSlotConfig | None,
+) -> None:
+    if llm and llm.provider_id and llm.model:
+        click.echo(f"  {'LLM':16s}: {llm.provider_id} / {llm.model}")
+    else:
+        click.echo(f"  {'LLM':16s}: (not configured)")
+
+    routing_cfg = load_config().agents.llm_routing
+    routing_status = "enabled" if routing_cfg.enabled else "disabled"
+    active_provider = (
+        manager.get_provider(llm.provider_id)
+        if llm and llm.provider_id
+        else None
+    )
+    active_is_local_like = bool(
+        active_provider and _is_local_like_provider(active_provider),
+    )
+
+    click.echo(f"  {'Routing':16s}: {routing_status}")
+    click.echo(f"  {'Routing mode':16s}: {routing_cfg.mode}")
+    if active_is_local_like:
+        click.echo(
+            f"  {'Routing local':16s}: "
+            f"{_format_model_slot(llm)} (active_llm)",
+        )
+        click.echo(
+            f"  {'Routing cloud':16s}: "
+            f"{_format_model_slot(routing_cfg.cloud)}",
+        )
+        return
+
+    click.echo(
+        f"  {'Routing local':16s}: "
+        f"{_format_model_slot(routing_cfg.local)}",
+    )
+    click.echo(
+        f"  {'Routing cloud':16s}: " f"{_format_model_slot(llm)} (active_llm)",
+    )
+
+
 def show_llm_routing_config() -> None:
     cfg = load_config()
     manager = _manager()
@@ -687,82 +768,14 @@ def list_cmd() -> None:
 
     click.echo("\n=== Providers ===")
     for defn in _all_provider_objects(manager):
-        cur_url, cur_key = defn.base_url, defn.api_key
-
-        tag = (
-            " [custom]"
-            if defn.is_custom
-            else " [local]"
-            if defn.is_local
-            else ""
-        )
-        click.echo(f"\n{'─' * 44}")
-        click.echo(f"  {defn.name} ({defn.id}){tag}")
-        click.echo(f"{'─' * 44}")
-
-        if defn.is_local:
-            all_models = list(defn.models)
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                for m in all_models:
-                    click.echo(f"    - {m.name}")
-            else:
-                click.echo("  No models downloaded.")
-                click.echo("  Use 'copaw models download' to add models.")
-        else:
-            click.echo(f"  {'base_url':16s}: {cur_url or '(not set)'}")
-            click.echo(
-                f"  {'api_key':16s}: "
-                f"{_mask_api_key(cur_key) or '(not set)'}",
-            )
-            if defn.api_key_prefix:
-                click.echo(
-                    f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
-                )
-
-            extra = list(defn.extra_models)
-            all_models = list(defn.models) + extra
-            if all_models:
-                click.echo(f"  {'models':16s}:")
-                extra_ids = {m.id for m in extra}
-                for m in all_models:
-                    label = " [user-added]" if m.id in extra_ids else ""
-                    click.echo(f"    - {m.name} ({m.id}){label}")
+        _print_provider_summary(defn)
 
     click.echo(f"\n{'═' * 44}")
     click.echo("  Active Model Slot")
     click.echo(f"{'═' * 44}")
 
     llm = manager.get_active_model()
-    if llm and llm.provider_id and llm.model:
-        click.echo(f"  {'LLM':16s}: {llm.provider_id} / {llm.model}")
-    else:
-        click.echo(f"  {'LLM':16s}: (not configured)")
-
-    routing_cfg = load_config().agents.llm_routing
-    routing_status = "enabled" if routing_cfg.enabled else "disabled"
-    active_provider = (
-        manager.get_provider(llm.provider_id) if llm and llm.provider_id else None
-    )
-    active_is_local_like = bool(
-        active_provider and _is_local_like_provider(active_provider),
-    )
-    click.echo(f"  {'Routing':16s}: {routing_status}")
-    click.echo(f"  {'Routing mode':16s}: {routing_cfg.mode}")
-    if active_is_local_like:
-        click.echo(
-            f"  {'Routing local':16s}: {_format_model_slot(llm)} (active_llm)",
-        )
-        click.echo(
-            f"  {'Routing cloud':16s}: {_format_model_slot(routing_cfg.cloud)}",
-        )
-    else:
-        click.echo(
-            f"  {'Routing local':16s}: {_format_model_slot(routing_cfg.local)}",
-        )
-        click.echo(
-            f"  {'Routing cloud':16s}: {_format_model_slot(llm)} (active_llm)",
-        )
+    _print_model_slot_summary(manager, llm)
     click.echo()
 
 
