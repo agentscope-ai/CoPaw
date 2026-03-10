@@ -118,13 +118,11 @@ async def run_command_path(
 
     # Conversation path: lightweight memory + CommandHandler
     memory = ReMeInMemoryMemory(token_counter=_get_token_counter())
-
-    # Update memory key with session_id & user_id to session
-    runner.session.update_session_state(
-        session_id=session_id,
-        key="memory",
-        value=memory.state_dict(),
-        user_id=user_id,
+    memory.load_state_dict(
+        runner.session.get_session_state_dict(
+            session_id=session_id,
+            user_id=user_id,
+        ),
     )
 
     conv_handler = CommandHandler(
@@ -142,3 +140,21 @@ async def run_command_path(
             content=[TextBlock(type="text", text=str(e))],
         )
     yield response_msg, True
+
+    # Update memory key with session_id & user_id to session,
+    # but only if identifiers are present
+    if session_id and user_id:
+        await runner.session.update_session_state(
+            session_id=session_id,
+            key="memory",
+            value=memory.state_dict(),
+            user_id=user_id,
+        )
+    else:
+        logger.warning(
+            "Skipping session_state update for conversation"
+            " memory due to missing session_id or user_id (session_id=%r, "
+            "user_id=%r)",
+            session_id,
+            user_id,
+        )

@@ -95,3 +95,54 @@ class SafeJSONSession(JSONSession):
             key,
             session_save_path,
         )
+
+    async def get_session_state_dict(
+        self,
+        session_id: str,
+        user_id: str = "",
+        allow_not_exist: bool = True,
+    ) -> dict:
+        """Return the session state dict from the JSON file.
+
+        Args:
+            session_id (`str`):
+                The session id.
+            user_id (`str`, default to `""`):
+                The user ID for the storage.
+            allow_not_exist (`bool`, defaults to `True`):
+                Whether to allow the session to not exist. If `False`, raises
+                an error if the session does not exist.
+
+        Returns:
+            `dict`:
+                The session state dict loaded from the JSON file. Returns an
+                empty dict if the file does not exist and
+                `allow_not_exist=True`.
+        """
+        session_save_path = self._get_save_path(session_id, user_id=user_id)
+        if os.path.exists(session_save_path):
+            with open(
+                session_save_path,
+                "r",
+                encoding="utf-8",
+                errors="surrogatepass",
+            ) as file:
+                states = json.load(file)
+
+            logger.info(
+                "Get session state dict from %s successfully.",
+                session_save_path,
+            )
+            return states
+
+        if allow_not_exist:
+            logger.info(
+                "Session file %s does not exist. Return empty state dict.",
+                session_save_path,
+            )
+            return {}
+
+        raise ValueError(
+            f"Failed to get session state for file {session_save_path} "
+            "because it does not exist.",
+        )
