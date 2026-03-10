@@ -34,10 +34,10 @@ logger = logging.getLogger(__name__)
 
 MODELSCOPE_MODELS: List[ModelInfo] = [
     ModelInfo(
-        id="Qwen/Qwen3-235B-A22B-Instruct-2507",
-        name="Qwen3-235B-A22B-Instruct-2507",
+        id="Qwen/Qwen3.5-122B-A10B",
+        name="Qwen3.5-122B-A10B",
     ),
-    ModelInfo(id="deepseek-ai/DeepSeek-V3.2", name="DeepSeek-V3.2"),
+    ModelInfo(id="ZhipuAI/GLM-5", name="GLM-5"),
 ]
 
 DASHSCOPE_MODELS: List[ModelInfo] = [
@@ -292,7 +292,6 @@ class ProviderManager:
                 await provider.add_model(
                     model,
                     target=update_target,
-                    ignore_duplicates=True,
                 )
             self._save_provider(
                 provider,
