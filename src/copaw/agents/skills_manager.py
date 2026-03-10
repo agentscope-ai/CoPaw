@@ -164,7 +164,9 @@ def sync_skills_to_working_dir(
     # Filter by skill_names if specified
     if skill_names is not None:
         skills_to_sync = {
-            name: path for name, path in skills_to_sync.items() if name in skill_names
+            name: path
+            for name, path in skills_to_sync.items()
+            if name in skill_names
         }
 
     if not skills_to_sync:
@@ -236,7 +238,12 @@ def _is_directory_same(dir1: Path, dir2: Path) -> bool:
 
 def _compare_dircmp(dcmp: "filecmp.dircmp") -> bool:
     """Helper to recursively compare dircmp objects."""
-    if dcmp.left_only or dcmp.right_only or dcmp.funny_files or dcmp.diff_files:
+    if (
+        dcmp.left_only
+        or dcmp.right_only
+        or dcmp.funny_files
+        or dcmp.diff_files
+    ):
         return False
     for sub_dcmp in dcmp.subdirs.values():
         if not _compare_dircmp(sub_dcmp):
@@ -517,7 +524,10 @@ def _import_skill_dir(
             (src_dir / "SKILL.md").read_text(encoding="utf-8"),
         )
         if not post.get("name") or not post.get("description"):
-            logger.warning("Skipping '%s': missing name/description.", skill_name)
+            logger.warning(
+                "Skipping '%s': missing name/description.",
+                skill_name,
+            )
             return False
     except Exception as e:
         logger.warning("Skipping '%s': bad SKILL.md: %s", skill_name, e)
@@ -556,12 +566,14 @@ class SkillService:
             synced, _ = sync_skills_from_active_to_customized()
             if synced > 0:
                 logger.debug(
-                    "Synced %d skill(s) from active_skills to " "customized_skills",
+                    "Synced %d skill(s) from active_skills to "
+                    "customized_skills",
                     synced,
                 )
         except Exception as e:
             logger.debug(
-                "Failed to sync skills from active_skills to " "customized_skills: %s",
+                "Failed to sync skills from active_skills to "
+                "customized_skills: %s",
                 e,
             )
 
@@ -860,12 +872,19 @@ class SkillService:
 
             # Unwrap single wrapper directory
             real = [e for e in tmp_dir.iterdir() if not _is_hidden(e.name)]
-            extract_root = real[0] if len(real) == 1 and real[0].is_dir() else tmp_dir
+            extract_root = (
+                real[0] if len(real) == 1 and real[0].is_dir() else tmp_dir
+            )
 
             imported = [
                 name
                 for skill_dir, name in _find_skill_dirs(extract_root)
-                if _import_skill_dir(skill_dir, customized_dir, name, overwrite)
+                if _import_skill_dir(
+                    skill_dir,
+                    customized_dir,
+                    name,
+                    overwrite,
+                )
             ]
             if not imported:
                 raise ValueError(
@@ -930,7 +949,8 @@ class SkillService:
 
         # Validate file_path starts with references/ or scripts/
         if not (
-            normalized.startswith("references/") or normalized.startswith("scripts/")
+            normalized.startswith("references/")
+            or normalized.startswith("scripts/")
         ):
             logger.error(
                 "Invalid file_path '%s'. "

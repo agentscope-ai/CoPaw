@@ -217,7 +217,10 @@ async def upload_skill(
     ):
         raise HTTPException(
             status_code=400,
-            detail=("Expected a zip file, " f"got content-type: {file.content_type}"),
+            detail=(
+                "Expected a zip file, "
+                f"got content-type: {file.content_type}"
+            ),
         )
 
     data = await file.read()
