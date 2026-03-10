@@ -164,9 +164,7 @@ def sync_skills_to_working_dir(
     # Filter by skill_names if specified
     if skill_names is not None:
         skills_to_sync = {
-            name: path
-            for name, path in skills_to_sync.items()
-            if name in skill_names
+            name: path for name, path in skills_to_sync.items() if name in skill_names
         }
 
     if not skills_to_sync:
@@ -238,12 +236,7 @@ def _is_directory_same(dir1: Path, dir2: Path) -> bool:
 
 def _compare_dircmp(dcmp: "filecmp.dircmp") -> bool:
     """Helper to recursively compare dircmp objects."""
-    if (
-        dcmp.left_only
-        or dcmp.right_only
-        or dcmp.funny_files
-        or dcmp.diff_files
-    ):
+    if dcmp.left_only or dcmp.right_only or dcmp.funny_files or dcmp.diff_files:
         return False
     for sub_dcmp in dcmp.subdirs.values():
         if not _compare_dircmp(sub_dcmp):
@@ -465,9 +458,33 @@ def _create_files_from_tree(
             )
 
 
+def _extract_and_validate_zip(data: bytes, tmp_dir: Path) -> None:
+    """Extract zip to *tmp_dir* after path-traversal validation."""
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        for name in zf.namelist():
+            if not str((tmp_dir / name).resolve()).startswith(str(tmp_dir.resolve())):
+                raise ValueError(f"Zip contains unsafe path: {name}")
+        zf.extractall(tmp_dir)
+
+
+def _find_skill_dirs(extract_root: Path) -> list[tuple[Path, str]]:
+    """Return list of (skill_dir, skill_name) found under *extract_root*."""
+    if (extract_root / "SKILL.md").exists():
+        return [(extract_root, extract_root.name)]
+    results: list[tuple[Path, str]] = []
+    for child in sorted(extract_root.iterdir()):
+        if child.name.startswith("__MACOSX"):
+            continue
+        if child.is_dir() and (child / "SKILL.md").exists():
+            results.append((child, child.name))
+    return results
+
+
 def _import_skill_dir(
-    src_dir: Path, customized_dir: Path,
-    skill_name: str, overwrite: bool,
+    src_dir: Path,
+    customized_dir: Path,
+    skill_name: str,
+    overwrite: bool,
 ) -> bool:
     """Validate SKILL.md and copy *src_dir* into *customized_dir*."""
     try:
@@ -514,14 +531,12 @@ class SkillService:
             synced, _ = sync_skills_from_active_to_customized()
             if synced > 0:
                 logger.debug(
-                    "Synced %d skill(s) from active_skills to "
-                    "customized_skills",
+                    "Synced %d skill(s) from active_skills to " "customized_skills",
                     synced,
                 )
         except Exception as e:
             logger.debug(
-                "Failed to sync skills from active_skills to "
-                "customized_skills: %s",
+                "Failed to sync skills from active_skills to " "customized_skills: %s",
                 e,
             )
 
@@ -816,36 +831,21 @@ class SkillService:
         tmp_dir: Path | None = None
         try:
             tmp_dir = Path(tempfile.mkdtemp(prefix="copaw_skill_upload_"))
-            with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                for name in zf.namelist():
-                    if not str((tmp_dir / name).resolve()).startswith(
-                        str(tmp_dir.resolve())
-                    ):
-                        raise ValueError(f"Zip contains unsafe path: {name}")
-                zf.extractall(tmp_dir)
+            _extract_and_validate_zip(data, tmp_dir)
 
             # Unwrap single wrapper directory
-            extract_root = tmp_dir
             real = [e for e in tmp_dir.iterdir() if not e.name.startswith("__MACOSX")]
-            if len(real) == 1 and real[0].is_dir():
-                extract_root = real[0]
+            extract_root = real[0] if len(real) == 1 and real[0].is_dir() else tmp_dir
 
-            imported: list[str] = []
-            if (extract_root / "SKILL.md").exists():
-                if _import_skill_dir(extract_root, customized_dir, extract_root.name, overwrite):
-                    imported.append(extract_root.name)
-            else:
-                for child in sorted(extract_root.iterdir()):
-                    if child.name.startswith("__MACOSX"):
-                        continue
-                    if child.is_dir() and (child / "SKILL.md").exists():
-                        if _import_skill_dir(child, customized_dir, child.name, overwrite):
-                            imported.append(child.name)
-
+            imported = [
+                name
+                for skill_dir, name in _find_skill_dirs(extract_root)
+                if _import_skill_dir(skill_dir, customized_dir, name, overwrite)
+            ]
             if not imported:
                 raise ValueError(
                     "No valid skills found in zip. Each skill directory must "
-                    "contain a SKILL.md with valid YAML frontmatter."
+                    "contain a SKILL.md with valid YAML frontmatter.",
                 )
             if enable:
                 for name in imported:
@@ -905,8 +905,7 @@ class SkillService:
 
         # Validate file_path starts with references/ or scripts/
         if not (
-            normalized.startswith("references/")
-            or normalized.startswith("scripts/")
+            normalized.startswith("references/") or normalized.startswith("scripts/")
         ):
             logger.error(
                 "Invalid file_path '%s'. "
