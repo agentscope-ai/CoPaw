@@ -1547,6 +1547,44 @@ class FeishuChannel(BaseChannel):
         prefix = (meta or {}).get("bot_prefix", "") or self.bot_prefix or ""
         text_parts: List[str] = []
         media_parts: List[OutgoingContentPart] = []
+
+        def process_table_content(p):
+            """Process table content and return markdown text."""
+            # Extract table content and convert to markdown
+            table_content = getattr(p, "content", None) or (
+                p.get("content") if isinstance(p, dict) else None
+            )
+            if not table_content:
+                return None
+
+            # If table_content is a string, assume it's already
+            # in markdown format
+            if isinstance(table_content, str):
+                return table_content
+
+            # If table_content is a dict, convert it to markdown table
+            elif isinstance(table_content, dict):
+                headers = table_content.get("headers", [])
+                rows = table_content.get("rows", [])
+                if not (headers and rows):
+                    return None
+
+                # Build markdown table
+                table_md = []
+                # Add headers
+                table_md.append("| " + " | ".join(headers) + " |")
+                # Add separator
+                table_md.append(
+                    "| " + " | ".join(["---"] * len(headers)) + " |",
+                )
+                # Add rows
+                for row in rows:
+                    table_md.append("| " + " | ".join(row) + " |")
+                # Return table as markdown
+                return "\n" + "\n".join(table_md) + "\n"
+
+            return None
+
         for p in parts:
             t = getattr(p, "type", None) or (
                 p.get("type") if isinstance(p, dict) else None
@@ -1568,32 +1606,14 @@ class FeishuChannel(BaseChannel):
                 ContentType.AUDIO,
             ):
                 media_parts.append(p)
-            # Handle table content - treat as text since it's likely in markdown format
-            elif t == "table" or (isinstance(p, dict) and p.get("type") == "table"):
-                # Extract table content and convert to markdown
-                table_content = getattr(p, "content", None) or (
-                    p.get("content") if isinstance(p, dict) else None
-                )
-                if table_content:
-                    # If table_content is a string, assume it's already in markdown format
-                    if isinstance(table_content, str):
-                        text_parts.append(table_content)
-                    # If table_content is a dict, convert it to markdown table
-                    elif isinstance(table_content, dict):
-                        headers = table_content.get("headers", [])
-                        rows = table_content.get("rows", [])
-                        if headers and rows:
-                            # Build markdown table
-                            table_md = []
-                            # Add headers
-                            table_md.append("| " + " | ".join(headers) + " |")
-                            # Add separator
-                            table_md.append("| " + " | ".join(["---"] * len(headers)) + " |")
-                            # Add rows
-                            for row in rows:
-                                table_md.append("| " + " | ".join(row) + " |")
-                            # Add table to text parts
-                            text_parts.append("\n" + "\n".join(table_md) + "\n")
+            # Handle table content - treat as text since it's likely
+            # in markdown format
+            elif t == "table" or (
+                isinstance(p, dict) and p.get("type") == "table"
+            ):
+                table_text = process_table_content(p)
+                if table_text:
+                    text_parts.append(table_text)
         body = "\n".join(text_parts).strip()
         logger.info(
             "feishu send_content_parts: to_handle=%s text_parts=%s "

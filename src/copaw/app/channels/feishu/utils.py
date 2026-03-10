@@ -129,27 +129,30 @@ def normalize_feishu_md(text: str) -> str:
         return text
     # Ensure newline before code fence so Feishu parses it
     text = re.sub(r"([^\n])(```)", r"\1\n\2", text)
-    
+
     # Format markdown tables for Feishu
     # Match table blocks: consecutive lines starting and ending with |
-    # A table block starts with a header row, followed by a separator row (with ---),
-    # and then optional data rows
+    # A table block starts with a header row, followed by a separator row
+    # (with ---) and then optional data rows
     def format_table_block(match):
         table_block = match.group(0)
         # Ensure table block has proper spacing (blank lines before and after)
         return f"\n\n{table_block}\n\n"
-    
-    # Match table blocks: one or more lines where each line starts and ends with |
+
+    # Match table blocks: one or more lines where each line starts
+    # and ends with |
     # The second line should contain '---' (separator row)
     # This pattern matches the entire table block as a unit
-    table_pattern = r'(\|[^\n]+\|\n)+(\|[\s\-:]+\|\n)(\|[^\n]+\|\n)*(\|[^\n]+\|)'
-    
+    table_pattern = (
+        r"(\|[^\n]+\|\n)+(\|[\s\-:]+\|\n)(\|[^\n]+\|\n)*(\|[^\n]+\|)"
+    )
+
     # Apply formatting to all table blocks
     text = re.sub(table_pattern, format_table_block, text)
-    
+
     # Clean up multiple consecutive blank lines
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
     return text
 
 

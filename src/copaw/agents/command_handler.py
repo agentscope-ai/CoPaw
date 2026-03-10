@@ -286,7 +286,7 @@ class CommandHandler(ConversationCommandHandlerMixin):
             f"- **Role:** {msg.role}\n"
             f"- **Content:**\n{msg.content}",
         )
-    
+
     async def _process_status(
         self,
         _messages: list[Msg],
@@ -302,13 +302,13 @@ class CommandHandler(ConversationCommandHandlerMixin):
                     f"- Pending summary tasks: {task_count}\n"
                     f"- Use /await_summary to wait for completion",
                 )
-        
+
         return await self._make_system_msg(
             "**Current Task Status**\n\n"
             "- No active tasks detected\n"
             "- Ready for new requests",
         )
-    
+
     async def _process_cancel(
         self,
         _messages: list[Msg],
@@ -329,7 +329,7 @@ class CommandHandler(ConversationCommandHandlerMixin):
                     f"- Cancelled {task_count} pending task(s)\n"
                     "- Ready for new requests",
                 )
-        
+
         return await self._make_system_msg(
             "**No Tasks to Cancel**\n\n"
             "- No active tasks detected\n"
