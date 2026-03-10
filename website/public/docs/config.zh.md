@@ -124,6 +124,15 @@ copaw app
       "max_iters": 50,
       "max_input_length": 131072
     },
+    "llm_routing": {
+      "enabled": false,
+      "mode": "local_first",
+      "local": {
+        "provider_id": "",
+        "model": ""
+      },
+      "cloud": null
+    },
     "language": "zh",
     "installed_md_files_language": "zh"
   },
@@ -207,6 +216,7 @@ copaw app
 | ------------------------------------ | -------------- | ------ | ------------------------------------------------------ |
 | `agents.defaults.heartbeat`          | object \| null | 见下方 | 心跳配置                                               |
 | `agents.running`                     | object         | 见下方 | Agent 运行时行为配置                                   |
+| `agents.llm_routing`                 | object         | 见下方 | 本地/云双槽路由配置                                    |
 | `agents.language`                    | string         | `"zh"` | Agent 提示词 MD 文件的语言（`"en"` 或 `"zh"`）         |
 | `agents.installed_md_files_language` | string \| null | `null` | 记录当前已安装的 MD 文件语言；由 `copaw init` 自动管理 |
 
@@ -216,6 +226,22 @@ copaw app
 | ------------------ | ---- | --------------- | ------------------------------------------------------------------------------------------ |
 | `max_iters`        | int  | `50`            | ReAct Agent 推理-执行循环的最大轮数（必须 ≥ 1）                                            |
 | `max_input_length` | int  | `131072` (128K) | 模型上下文窗口的最大输入长度（token 数）。记忆压缩将在达到此值的 80% 时触发（必须 ≥ 1000） |
+
+**`agents.llm_routing`** — 本地/云路由
+
+| 字段      | 类型           | 默认值          | 说明                                                                 |
+| --------- | -------------- | --------------- | -------------------------------------------------------------------- |
+| `enabled` | bool           | `false`         | 是否启用本地/云路由器                                                |
+| `mode`    | string         | `"local_first"` | 默认优先级，可选 `"local_first"` 或 `"cloud_first"`                  |
+| `local`   | object         | 空槽位          | 显式本地槽位（`provider_id` + `model`）；启用路由后要生效通常需要配置 |
+| `cloud`   | object \| null | `null`          | 兼容保留字段。当前 CoPaw 的配置入口会统一使用 `providers.json.active_llm` 作为远程回退 |
+
+**`agents.llm_routing.local`**：
+
+| 字段          | 类型   | 默认值 | 说明         |
+| ------------- | ------ | ------ | ------------ |
+| `provider_id` | string | `""`   | 提供商 ID    |
+| `model`       | string | `""`   | 模型 ID      |
 
 **`agents.defaults.heartbeat`** — 心跳定时任务
 

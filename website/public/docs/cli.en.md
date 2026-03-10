@@ -99,7 +99,7 @@ variables power many built-in tools (e.g. web search).
 
 ### copaw models
 
-Manage LLM providers and the active model.
+Manage LLM providers, the active model, and optional local/cloud routing.
 
 | Command                                | What it does                                         |
 | -------------------------------------- | ---------------------------------------------------- |
@@ -107,6 +107,9 @@ Manage LLM providers and the active model.
 | `copaw models config`                  | Full interactive setup: API keys → active model      |
 | `copaw models config-key [provider]`   | Configure a single provider's API key                |
 | `copaw models set-llm`                 | Switch the active model (API keys unchanged)         |
+| `copaw models routing show`            | Show the current local/cloud routing config          |
+| `copaw models routing config`          | Interactively configure local/cloud routing          |
+| `copaw models routing disable`         | Disable local/cloud routing without clearing slots   |
 | `copaw models download <repo_id>`      | Download a local model (llama.cpp / MLX)             |
 | `copaw models local`                   | List downloaded local models                         |
 | `copaw models remove-local <model_id>` | Delete a downloaded local model                      |
@@ -121,7 +124,23 @@ copaw models config-key modelscope   # Just set ModelScope's API key
 copaw models config-key dashscope    # Just set DashScope's API key
 copaw models config-key custom       # Set custom provider (Base URL + key)
 copaw models set-llm                 # Change active model only
+copaw models routing show            # Inspect routing config
+copaw models routing config          # Configure local routing
 ```
+
+#### Local/cloud routing
+
+Use a dedicated routing subcommand when you want CoPaw to prefer a local slot
+while keeping the current active LLM as the remote fallback.
+
+- `copaw models routing config` asks for:
+  whether routing is enabled and the default routing mode; the local slot stays
+  on the saved local model when present, or falls back to the first available
+  local model
+- `copaw models routing show` prints the effective routing config and the
+  current `active_llm` fallback
+- `copaw models routing disable` turns routing off but keeps the configured
+  slots in `config.json`
 
 #### Local models
 
@@ -435,7 +454,7 @@ See [Config & Working Directory](./config) for full details.
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :--------------: |
 | `copaw init`     | —                                                                                                                                      |        No        |
 | `copaw app`      | —                                                                                                                                      |  — (starts it)   |
-| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        No        |
+| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `routing show` · `routing config` · `routing disable` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        No        |
 | `copaw env`      | `list` · `set` · `delete`                                                                                                              |        No        |
 | `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        No        |
 | `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |     **Yes**      |

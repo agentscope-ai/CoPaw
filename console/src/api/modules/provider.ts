@@ -3,6 +3,7 @@ import type {
   ProviderInfo,
   ProviderConfigRequest,
   ActiveModelsInfo,
+  AgentsLLMRoutingConfig,
   ModelSlotRequest,
   CreateCustomProviderRequest,
   AddModelRequest,
@@ -27,6 +28,15 @@ export const providerApi = {
     request<ActiveModelsInfo>("/models/active", {
       method: "PUT",
       body: JSON.stringify(body),
+    }),
+
+  getLlmRoutingConfig: () =>
+    request<AgentsLLMRoutingConfig>("/config/agents/llm-routing"),
+
+  updateLlmRoutingConfig: (config: AgentsLLMRoutingConfig) =>
+    request<AgentsLLMRoutingConfig>("/config/agents/llm-routing", {
+      method: "PUT",
+      body: JSON.stringify(config),
     }),
 
   /* ---- Custom provider CRUD ---- */

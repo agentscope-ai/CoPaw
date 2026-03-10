@@ -90,7 +90,7 @@ copaw daemon logs -n 50
 
 ### copaw models
 
-管理 LLM 提供商和活跃模型。
+管理 LLM 提供商、活跃模型，以及可选的本地/云路由。
 
 | 命令                                   | 说明                                   |
 | -------------------------------------- | -------------------------------------- |
@@ -98,6 +98,9 @@ copaw daemon logs -n 50
 | `copaw models config`                  | 完整交互式配置：API Key → 选择模型     |
 | `copaw models config-key [provider]`   | 单独配置某个提供商的 API Key           |
 | `copaw models set-llm`                 | 只切换活跃模型（不改 API Key）         |
+| `copaw models routing show`            | 查看当前本地/云路由配置                |
+| `copaw models routing config`          | 交互式配置本地/云路由                  |
+| `copaw models routing disable`         | 禁用本地/云路由，但保留已配置槽位      |
 | `copaw models download <repo_id>`      | 下载本地模型（llama.cpp / MLX）        |
 | `copaw models local`                   | 查看已下载的本地模型                   |
 | `copaw models remove-local <model_id>` | 删除已下载的本地模型                   |
@@ -112,7 +115,17 @@ copaw models config-key modelscope   # 只配 ModelScope 的 API Key
 copaw models config-key dashscope    # 只配 DashScope 的 API Key
 copaw models config-key custom       # 配置自定义提供商（Base URL + Key）
 copaw models set-llm                 # 只切换模型
+copaw models routing show            # 查看 routing 配置
+copaw models routing config          # 配置本地/云路由
 ```
+
+#### 本地/云路由
+
+如果你希望 CoPaw 在本地槽位和云槽位之间切换，请使用专门的 routing 子命令。
+
+- `copaw models routing config` 会询问是否启用 routing 和默认路由模式；如果已经保存过本地槽位就沿用，没有的话会自动选择第一个可用本地模型。远程回退固定使用当前 `active_llm`
+- `copaw models routing show` 会打印当前 routing 配置，以及当前 `active_llm` 回退目标
+- `copaw models routing disable` 会关闭 routing，但保留 `config.json` 中已填写的槽位
 
 #### 本地模型
 
@@ -421,7 +434,7 @@ copaw --host 0.0.0.0 --port 9090 cron list
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :---------------: |
 | `copaw init`     | —                                                                                                                                      |        否         |
 | `copaw app`      | —                                                                                                                                      | —（启动服务本身） |
-| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        否         |
+| `copaw models`   | `list` · `config` · `config-key` · `set-llm` · `routing show` · `routing config` · `routing disable` · `download` · `local` · `remove-local` · `ollama-pull` · `ollama-list` · `ollama-remove` |        否         |
 | `copaw env`      | `list` · `set` · `delete`                                                                                                              |        否         |
 | `copaw channels` | `list` · `install` · `add` · `remove` · `config`                                                                                       |        否         |
 | `copaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`                                                            |      **是**       |

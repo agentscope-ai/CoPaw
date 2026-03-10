@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import click
 
+from ..config import get_config_path, load_config, save_config
+from ..config.config import Config
 from ..providers.ollama_manager import OllamaModelManager
 from ..providers.provider import ModelInfo, Provider, ProviderInfo
-from ..providers.provider_manager import ProviderManager
-from .utils import prompt_choice
+from ..providers.provider_manager import ModelSlotConfig, ProviderManager
+from .utils import prompt_choice, prompt_confirm
 
 
 def _manager() -> ProviderManager:
@@ -252,6 +255,173 @@ def _filter_eligible(all_providers: list[Provider]) -> list[Provider]:
     return [d for d in all_providers if _is_configured(d)]
 
 
+def _is_local_like_provider(defn: Provider) -> bool:
+    return defn.is_local or defn.id == "ollama"
+
+
+def _has_provider_models(defn: Provider) -> bool:
+    return bool(defn.models or defn.extra_models)
+
+
+def _is_routing_configured(defn: Provider) -> bool:
+    if defn.is_local:
+        return True
+    if defn.id == "ollama":
+        return bool(defn.base_url)
+    return _is_configured(defn)
+
+
+def _filter_routing_local_candidates(
+    all_providers: list[Provider],
+) -> list[Provider]:
+    return [
+        d
+        for d in all_providers
+        if _is_local_like_provider(d)
+        and _is_routing_configured(d)
+        and _has_provider_models(d)
+    ]
+
+
+def _resolve_routing_local_slot(
+    all_providers: list[Provider],
+    current_slot: ModelSlotConfig | None,
+) -> ModelSlotConfig | None:
+    local_candidates = _filter_routing_local_candidates(all_providers)
+    if current_slot and current_slot.provider_id and current_slot.model:
+        for provider in local_candidates:
+            if provider.id != current_slot.provider_id:
+                continue
+            models = list(provider.models) + list(provider.extra_models)
+            if any(model.id == current_slot.model for model in models):
+                return ModelSlotConfig(
+                    provider_id=current_slot.provider_id,
+                    model=current_slot.model,
+                )
+
+    if not local_candidates:
+        return None
+
+    first_provider = local_candidates[0]
+    first_models = list(first_provider.models) + list(first_provider.extra_models)
+    if not first_models:
+        return None
+    return ModelSlotConfig(
+        provider_id=first_provider.id,
+        model=first_models[0].id,
+    )
+
+
+def _load_app_config() -> tuple[Config, Path]:
+    config_path = get_config_path()
+    cfg = load_config(config_path) if config_path.is_file() else Config()
+    return cfg, config_path
+
+
+def _format_model_slot(slot: ModelSlotConfig | None) -> str:
+    if slot is None:
+        return "(not set)"
+    if slot.provider_id and slot.model:
+        return f"{slot.provider_id} / {slot.model}"
+    return "(not set)"
+
+
+def show_llm_routing_config() -> None:
+    cfg = load_config()
+    manager = _manager()
+    routing_cfg = cfg.agents.llm_routing
+    active_llm = manager.get_active_model()
+    status = (
+        click.style("enabled", fg="green")
+        if routing_cfg.enabled
+        else click.style("disabled", fg="red")
+    )
+
+    click.echo(f"\n{'═' * 44}")
+    click.echo("  LLM Routing")
+    click.echo(f"{'═' * 44}")
+    click.echo(f"  {'status':16s}: {status}")
+    click.echo(f"  {'mode':16s}: {routing_cfg.mode}")
+    click.echo(f"  {'local':16s}: {_format_model_slot(routing_cfg.local)}")
+    click.echo(
+        "  cloud(active_llm): "
+        f"{_format_model_slot(active_llm)}",
+    )
+    click.echo(
+        f"  {'active_llm':16s}: {_format_model_slot(active_llm)}",
+    )
+    click.echo(f"  {'config_path':16s}: {get_config_path()}")
+    click.echo()
+
+
+def configure_llm_routing_interactive() -> None:
+    cfg, config_path = _load_app_config()
+    routing_cfg = cfg.agents.llm_routing.model_copy(deep=True)
+    manager = _manager()
+    all_providers = _all_provider_objects(manager)
+    active_llm = manager.get_active_model()
+
+    click.echo("\n--- LLM Routing Configuration ---")
+    routing_cfg.enabled = prompt_confirm(
+        "Enable local/cloud LLM routing?",
+        default=routing_cfg.enabled,
+    )
+
+    if not routing_cfg.enabled:
+        cfg.agents.llm_routing = routing_cfg
+        save_config(cfg, config_path)
+        click.echo(f"✓ LLM routing disabled in {config_path}")
+        return
+
+    mode_label = prompt_choice(
+        "Default routing mode:",
+        options=["Local first", "Cloud first"],
+        default=(
+            "Cloud first"
+            if routing_cfg.mode == "cloud_first"
+            else "Local first"
+        ),
+    )
+    routing_cfg.mode = (
+        "cloud_first" if mode_label == "Cloud first" else "local_first"
+    )
+
+    if not (active_llm and active_llm.provider_id and active_llm.model):
+        click.echo(
+            click.style(
+                "Error: no active LLM is configured. "
+                "Run 'copaw models set-llm' first.",
+                fg="red",
+            ),
+        )
+        raise SystemExit(1)
+
+    local_slot = _resolve_routing_local_slot(all_providers, routing_cfg.local)
+    if local_slot is None:
+        click.echo(
+            click.style(
+                "Error: no local providers with models are configured yet. "
+                "Add a local model first.",
+                fg="red",
+            ),
+        )
+        raise SystemExit(1)
+
+    routing_cfg.local = local_slot
+    routing_cfg.cloud = None
+
+    cfg.agents.llm_routing = routing_cfg
+    save_config(cfg, config_path)
+
+    click.echo(f"✓ LLM routing saved to {config_path}")
+    click.echo(f"  mode: {routing_cfg.mode}")
+    click.echo(f"  local: {_format_model_slot(routing_cfg.local)}")
+    click.echo(
+        "  cloud(active_llm): "
+        f"{_format_model_slot(active_llm)}",
+    )
+
+
 def _select_llm_model(defn, pid, current_slot, *, use_defaults):
     """Pick a model for the given provider. Returns model id."""
     cur = (
@@ -464,6 +634,17 @@ def list_cmd() -> None:
         click.echo(f"  {'LLM':16s}: {llm.provider_id} / {llm.model}")
     else:
         click.echo(f"  {'LLM':16s}: (not configured)")
+
+    routing_cfg = load_config().agents.llm_routing
+    routing_status = "enabled" if routing_cfg.enabled else "disabled"
+    click.echo(f"  {'Routing':16s}: {routing_status}")
+    click.echo(f"  {'Routing mode':16s}: {routing_cfg.mode}")
+    click.echo(
+        f"  {'Routing local':16s}: {_format_model_slot(routing_cfg.local)}",
+    )
+    click.echo(
+        f"  {'Routing cloud':16s}: {_format_model_slot(llm)} (active_llm)",
+    )
     click.echo()
 
 
@@ -484,6 +665,34 @@ def config_key_cmd(provider_id: str | None) -> None:
 def set_llm_cmd() -> None:
     """Interactively set the active LLM model."""
     configure_llm_slot_interactive()
+
+
+@models_group.group("routing")
+def routing_group() -> None:
+    """Manage local/cloud LLM routing configuration."""
+
+
+@routing_group.command("show")
+def routing_show_cmd() -> None:
+    """Show the current LLM routing configuration."""
+    show_llm_routing_config()
+
+
+@routing_group.command("config")
+def routing_config_cmd() -> None:
+    """Interactively configure local/cloud LLM routing."""
+    configure_llm_routing_interactive()
+
+
+@routing_group.command("disable")
+def routing_disable_cmd() -> None:
+    """Disable local/cloud LLM routing without clearing slots."""
+    cfg, config_path = _load_app_config()
+    routing_cfg = cfg.agents.llm_routing.model_copy(deep=True)
+    routing_cfg.enabled = False
+    cfg.agents.llm_routing = routing_cfg
+    save_config(cfg, config_path)
+    click.echo(f"✓ LLM routing disabled in {config_path}")
 
 
 @models_group.command("add-provider")

@@ -130,6 +130,15 @@ automatically use defaults.
       "max_iters": 50,
       "max_input_length": 131072
     },
+    "llm_routing": {
+      "enabled": false,
+      "mode": "local_first",
+      "local": {
+        "provider_id": "",
+        "model": ""
+      },
+      "cloud": null
+    },
     "language": "zh",
     "installed_md_files_language": "zh"
   },
@@ -214,6 +223,7 @@ Each channel has a common base and channel-specific fields.
 | ------------------------------------ | -------------- | --------- | ----------------------------------------------------------------------- |
 | `agents.defaults.heartbeat`          | object \| null | See below | Heartbeat configuration                                                 |
 | `agents.running`                     | object         | See below | Agent runtime behavior configuration                                    |
+| `agents.llm_routing`                 | object         | See below | Local/cloud dual-slot routing configuration                             |
 | `agents.language`                    | string         | `"zh"`    | Language for agent MD files (`"en"` or `"zh"`)                          |
 | `agents.installed_md_files_language` | string \| null | `null`    | Tracks which language's MD files are installed; managed by `copaw init` |
 
@@ -223,6 +233,22 @@ Each channel has a common base and channel-specific fields.
 | ------------------ | ---- | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `max_iters`        | int  | `50`            | Maximum number of reasoning-acting iterations for ReAct agent (must be ≥ 1)                                              |
 | `max_input_length` | int  | `131072` (128K) | Maximum input length (tokens) for model context window. Memory compaction triggers at 80% of this value (must be ≥ 1000) |
+
+**`agents.llm_routing`** — Local/cloud routing
+
+| Field   | Type           | Default         | Description                                                                                   |
+| ------- | -------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| `enabled` | bool         | `false`         | Turns the local/cloud router on or off                                                        |
+| `mode`  | string         | `"local_first"` | Default route preference: `"local_first"` or `"cloud_first"`                                 |
+| `local` | object         | empty slot      | Explicit local slot (`provider_id` + `model`); required for effective routing when enabled   |
+| `cloud` | object \| null | `null`          | Legacy field. CoPaw's current configuration surfaces use `providers.json.active_llm` as the remote fallback |
+
+**`agents.llm_routing.local`**:
+
+| Field         | Type   | Default | Description         |
+| ------------- | ------ | ------- | ------------------- |
+| `provider_id` | string | `""`    | Provider identifier |
+| `model`       | string | `""`    | Model identifier    |
 
 **`agents.defaults.heartbeat`** — Heartbeat scheduling
 

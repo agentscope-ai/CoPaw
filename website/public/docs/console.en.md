@@ -385,7 +385,7 @@ Select rows → click **Delete** in the toolbar → confirm.
 | Skills                | Agent → Skills                   | Enable/disable/create/delete skills                  |
 | MCP                   | Agent → MCP                      | Enable/disable/create/delete MCP clients             |
 | Runtime Config        | Agent → Runtime Config           | Modify runtime configuration                         |
-| Models                | Settings → Models                | Configure providers, manage local/Ollama, pick model |
+| Models                | Settings → Models                | Configure providers, manage local/Ollama, pick model, and edit local routing with the current active LLM as fallback |
 | Environment Variables | Settings → Environment Variables | Add/edit/delete environment variables                |
 
 ---

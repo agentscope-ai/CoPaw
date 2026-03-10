@@ -31,6 +31,13 @@ export interface ModelSlotConfig {
   model: string;
 }
 
+export interface AgentsLLMRoutingConfig {
+  enabled: boolean;
+  mode: "local_first" | "cloud_first";
+  local: ModelSlotConfig;
+  cloud: ModelSlotConfig | null;
+}
+
 export interface ActiveModelsInfo {
   active_llm?: ModelSlotConfig;
 }
