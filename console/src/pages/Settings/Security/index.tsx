@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from "@agentscope-ai/design";
 import { Space } from "antd";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import type {
@@ -76,6 +76,7 @@ function SecurityPage() {
   const [editModal, setEditModal] = useState(false);
   const [editingRule, setEditingRule] = useState<ToolGuardRule | null>(null);
   const [editForm] = Form.useForm();
+  const [previewRule, setPreviewRule] = useState<ToolGuardRule | null>(null);
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
@@ -269,9 +270,16 @@ function SecurityPage() {
       title: t("security.rules.descriptionCol"),
       dataIndex: "description",
       key: "description",
-      ellipsis: true,
       render: (text: string, record: MergedRule) => (
-        <span style={{ opacity: record.disabled ? 0.4 : 1 }}>{text}</span>
+        <span
+          style={{
+            opacity: record.disabled ? 0.4 : 1,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {text}
+        </span>
       ),
     },
     {
@@ -309,6 +317,16 @@ function SecurityPage() {
               onChange={() => toggleRule(record.id, record.disabled)}
             />
           </Tooltip>
+          {record.source === "builtin" && (
+            <Tooltip title={t("security.rules.preview")}>
+              <Button
+                type="text"
+                size="small"
+                icon={<Eye size={14} />}
+                onClick={() => setPreviewRule(record)}
+              />
+            </Tooltip>
+          )}
           {record.source === "custom" && (
             <>
               <Tooltip title={t("security.rules.edit")}>
@@ -420,7 +438,6 @@ function SecurityPage() {
             {t("security.rules.add")}
           </Button>
         </div>
-        <p className={styles.sectionDesc}>{t("security.rules.description")}</p>
 
         <Card className={styles.tableCard}>
           <Table
@@ -534,6 +551,92 @@ function SecurityPage() {
             <Input placeholder={t("security.rules.remediationPlaceholder")} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={t("security.rules.previewTitle")}
+        open={!!previewRule}
+        onCancel={() => setPreviewRule(null)}
+        footer={
+          <Button onClick={() => setPreviewRule(null)}>
+            {t("common.close")}
+          </Button>
+        }
+        width={640}
+      >
+        {previewRule && (
+          <div style={{ marginTop: 16 }}>
+            <p>
+              <strong>{t("security.rules.ruleId")}:</strong> {previewRule.id}
+            </p>
+            <p>
+              <strong>{t("security.rules.severityLabel")}:</strong>{" "}
+              <Tag color={SEVERITY_COLORS[previewRule.severity] ?? "default"}>
+                {previewRule.severity}
+              </Tag>
+            </p>
+            <p>
+              <strong>{t("security.rules.categoryLabel")}:</strong>{" "}
+              {previewRule.category}
+            </p>
+            <p>
+              <strong>{t("security.rules.tools")}:</strong>{" "}
+              {previewRule.tools.length > 0
+                ? previewRule.tools.join(", ")
+                : t("security.rules.allTools")}
+            </p>
+            <p>
+              <strong>{t("security.rules.params")}:</strong>{" "}
+              {previewRule.params.length > 0
+                ? previewRule.params.join(", ")
+                : t("security.rules.allParams")}
+            </p>
+            <p>
+              <strong>{t("security.rules.actionLabel")}:</strong>{" "}
+              <Tag color="orange">{t("security.rules.actionApproval")}</Tag>
+            </p>
+            <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              <strong>{t("security.rules.descriptionLabel")}:</strong>{" "}
+              {previewRule.description}
+            </p>
+            <p>
+              <strong>{t("security.rules.patterns")}:</strong>
+            </p>
+            <pre
+              style={{
+                background: "#f5f5f5",
+                padding: 12,
+                borderRadius: 6,
+                fontSize: 13,
+              }}
+            >
+              {previewRule.patterns.join("\n")}
+            </pre>
+            {previewRule.exclude_patterns.length > 0 && (
+              <>
+                <p>
+                  <strong>{t("security.rules.excludePatterns")}:</strong>
+                </p>
+                <pre
+                  style={{
+                    background: "#f5f5f5",
+                    padding: 12,
+                    borderRadius: 6,
+                    fontSize: 13,
+                  }}
+                >
+                  {previewRule.exclude_patterns.join("\n")}
+                </pre>
+              </>
+            )}
+            {previewRule.remediation && (
+              <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <strong>{t("security.rules.remediationLabel")}:</strong>{" "}
+                {previewRule.remediation}
+              </p>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

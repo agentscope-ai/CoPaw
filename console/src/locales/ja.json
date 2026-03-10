@@ -19,7 +19,8 @@
     "loading": "読み込み中...",
     "copied": "クリップボードにコピーしました",
     "copyFailed": "クリップボードへのコピーに失敗しました",
-    "contentPlaceholder": "内容を入力してください..."
+    "contentPlaceholder": "内容を入力してください...",
+    "close": "閉じる"
   },
   "nav": {
     "chat": "チャット",
@@ -574,7 +575,13 @@
       "descriptionLabel": "説明",
       "descriptionPlaceholder": "このルールは何を検出しますか？",
       "remediationLabel": "修正提案",
-      "remediationPlaceholder": "ルールがトリガーされた場合の推奨アクション"
+      "remediationPlaceholder": "ルールがトリガーされた場合の推奨アクション",
+      "preview": "プレビュー",
+      "previewTitle": "ルール詳細",
+      "actionLabel": "アクション",
+      "actionApproval": "承認待ち",
+      "allTools": "すべてのツール",
+      "allParams": "すべてのパラメータ"
     }
   }
 }

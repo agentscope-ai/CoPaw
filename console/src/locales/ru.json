@@ -19,7 +19,8 @@
     "loading": "Загрузка...",
     "copied": "Скопировано в буфер обмена",
     "copyFailed": "Не удалось скопировать в буфер обмена",
-    "contentPlaceholder": "Введите содержимое..."
+    "contentPlaceholder": "Введите содержимое...",
+    "close": "Закрыть"
   },
   "nav": {
     "chat": "Чат",
@@ -577,7 +578,13 @@
       "descriptionLabel": "Описание",
       "descriptionPlaceholder": "Что обнаруживает это правило?",
       "remediationLabel": "Рекомендация",
-      "remediationPlaceholder": "Рекомендуемое действие при срабатывании правила"
+      "remediationPlaceholder": "Рекомендуемое действие при срабатывании правила",
+      "preview": "Просмотр",
+      "previewTitle": "Детали правила",
+      "actionLabel": "Действие",
+      "actionApproval": "Требуется одобрение",
+      "allTools": "Все инструменты",
+      "allParams": "Все параметры"
     }
   }
 }

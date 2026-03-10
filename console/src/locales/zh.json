@@ -19,7 +19,8 @@
     "loading": "加载中...",
     "copied": "已复制到剪贴板",
     "copyFailed": "复制到剪贴板失败",
-    "contentPlaceholder": "输入内容..."
+    "contentPlaceholder": "输入内容...",
+    "close": "关闭"
   },
   "nav": {
     "chat": "聊天",
@@ -577,7 +578,13 @@
       "descriptionLabel": "描述",
       "descriptionPlaceholder": "该规则检测什么？",
       "remediationLabel": "修复建议",
-      "remediationPlaceholder": "触发规则时建议的操作"
+      "remediationPlaceholder": "触发规则时建议的操作",
+      "preview": "预览",
+      "previewTitle": "规则详情",
+      "actionLabel": "触发行为",
+      "actionApproval": "等待审批",
+      "allTools": "所有工具",
+      "allParams": "所有参数"
     }
   }
 }

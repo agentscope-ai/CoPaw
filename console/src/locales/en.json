@@ -19,7 +19,8 @@
     "loading": "Loading...",
     "copied": "Copied to clipboard",
     "copyFailed": "Failed to copy to clipboard",
-    "contentPlaceholder": "Enter content..."
+    "contentPlaceholder": "Enter content...",
+    "close": "Close"
   },
   "nav": {
     "chat": "Chat",
@@ -577,7 +578,13 @@
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "What does this rule detect?",
       "remediationLabel": "Remediation",
-      "remediationPlaceholder": "Suggested action when this rule triggers"
+      "remediationPlaceholder": "Suggested action when this rule triggers",
+      "preview": "Preview",
+      "previewTitle": "Rule Details",
+      "actionLabel": "Action",
+      "actionApproval": "Require Approval",
+      "allTools": "All tools",
+      "allParams": "All parameters"
     }
   }
 }
