@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from telegram.constants import ParseMode
+from telegram.error import BadRequest
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
     TextContent,
@@ -23,7 +24,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 )
 
 from ....config.config import TelegramConfig as TelegramChannelConfig
-from .format_html import markdown_to_telegram_html, strip_markdown
+from .format_html import markdown_to_telegram_html
 from ..base import (
     BaseChannel,
     OnReplySent,
@@ -181,8 +182,13 @@ async def _build_content_parts_from_message(
                 filename_hint="photo.jpg",
             )
             if local_path:
+                file_url = (
+                    f"file://{local_path}"
+                    if not local_path.startswith("file://")
+                    else local_path
+                )
                 content_parts.append(
-                    ImageContent(type=ContentType.IMAGE, image_url=local_path),
+                    ImageContent(type=ContentType.IMAGE, image_url=file_url),
                 )
 
     for attr_name, content_cls, content_type, url_field in _MEDIA_ATTRS:
@@ -200,8 +206,13 @@ async def _build_content_parts_from_message(
             filename_hint=file_name,
         )
         if local_path:
+            file_url = (
+                f"file://{local_path}"
+                if not local_path.startswith("file://")
+                else local_path
+            )
             content_parts.append(
-                content_cls(type=content_type, **{url_field: local_path}),
+                content_cls(type=content_type, **{url_field: file_url}),
             )
 
     if not content_parts:
@@ -230,11 +241,11 @@ def _message_meta(update: Any) -> dict:
         "username": username,
         "message_id": str(getattr(message, "message_id", "")),
         "is_group": chat_type in ("group", "supergroup", "channel"),
+        "message_thread_id": getattr(message, "message_thread_id", None),
     }
 
 
 class TelegramChannel(BaseChannel):
-
     """Telegram channel: Bot API polling; session_id = telegram:{chat_id}."""
 
     channel = "telegram"
@@ -560,26 +571,39 @@ class TelegramChannel(BaseChannel):
         bot = self._application.bot
         if not bot:
             return
+        message_thread_id = meta.get("message_thread_id")
         self._stop_typing(chat_id)
-        chunks = self._chunk_text(text)
+        html_text = markdown_to_telegram_html(text)
+        chunks = self._chunk_text(html_text)
         for chunk in chunks:
-            html_chunk = markdown_to_telegram_html(chunk)
             try:
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=html_chunk,
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
+                kwargs = {
+                    "chat_id": chat_id,
+                    "text": chunk,
+                    "parse_mode": ParseMode.HTML,
+                }
+                if message_thread_id:
+                    kwargs["message_thread_id"] = message_thread_id
+                await bot.send_message(**kwargs)
+            except BadRequest as exc:
                 logger.warning(
-                    "telegram HTML send failed, trying plain text",
+                    "telegram HTML send failed, trying plain text: %s",
+                    exc,
                 )
                 try:
-                    plain = strip_markdown(chunk)
-                    await bot.send_message(chat_id=chat_id, text=plain)
+                    kwargs = {
+                        "chat_id": chat_id,
+                        "text": chunk,
+                    }
+                    if message_thread_id:
+                        kwargs["message_thread_id"] = message_thread_id
+                    await bot.send_message(**kwargs)
                 except Exception:
                     logger.exception("telegram send_message fallback failed")
                     return
+            except Exception:
+                logger.exception("telegram send_message failed")
+                return
 
     async def send_media(
         self,
@@ -600,40 +624,108 @@ class TelegramChannel(BaseChannel):
         bot = self._application.bot
         if not bot:
             return
+        message_thread_id = meta.get("message_thread_id")
         self._stop_typing(chat_id)
 
         part_type = getattr(part, "type", None)
         try:
             if part_type == ContentType.IMAGE:
                 image_url = getattr(part, "image_url", None)
-                if image_url and image_url.startswith("file://"):
-                    local_path = image_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        await bot.send_photo(chat_id=chat_id, photo=f)
-                elif image_url:
-                    await bot.send_photo(chat_id=chat_id, photo=image_url)
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=image_url,
+                    method_name="send_photo",
+                    payload_name="photo",
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.VIDEO:
                 video_url = getattr(part, "video_url", None)
-                if video_url and video_url.startswith("file://"):
-                    local_path = video_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        await bot.send_video(chat_id=chat_id, video=f)
-                elif video_url:
-                    await bot.send_video(chat_id=chat_id, video=video_url)
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=video_url,
+                    method_name="send_video",
+                    payload_name="video",
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.AUDIO:
                 data = getattr(part, "data", None)
-                if data:
-                    await bot.send_audio(chat_id=chat_id, audio=data)
+                await self._send_media_payload(
+                    bot=bot,
+                    chat_id=chat_id,
+                    method_name="send_audio",
+                    payload_name="audio",
+                    payload=data,
+                    message_thread_id=message_thread_id,
+                )
             elif part_type == ContentType.FILE:
                 file_url = getattr(part, "file_url", None)
-                if file_url and file_url.startswith("file://"):
-                    local_path = file_url.replace("file://", "")
-                    with open(local_path, "rb") as f:
-                        await bot.send_document(chat_id=chat_id, document=f)
-                elif file_url:
-                    await bot.send_document(chat_id=chat_id, document=file_url)
+                await self._send_media_value(
+                    bot=bot,
+                    chat_id=chat_id,
+                    value=file_url,
+                    method_name="send_document",
+                    payload_name="document",
+                    message_thread_id=message_thread_id,
+                )
         except Exception:
             logger.exception("telegram send_media failed")
+
+    async def _send_media_value(
+        self,
+        *,
+        bot: Any,
+        chat_id: str,
+        value: Any,
+        method_name: str,
+        payload_name: str,
+        message_thread_id: Optional[int],
+    ) -> None:
+        """Send media from URL or local file path."""
+        if not value:
+            return
+        if isinstance(value, str) and value.startswith("file://"):
+            local_path = value.replace("file://", "")
+            with open(local_path, "rb") as media_file:
+                await self._send_media_payload(
+                    bot=bot,
+                    chat_id=chat_id,
+                    method_name=method_name,
+                    payload_name=payload_name,
+                    payload=media_file,
+                    message_thread_id=message_thread_id,
+                )
+            return
+        await self._send_media_payload(
+            bot=bot,
+            chat_id=chat_id,
+            method_name=method_name,
+            payload_name=payload_name,
+            payload=value,
+            message_thread_id=message_thread_id,
+        )
+
+    async def _send_media_payload(
+        self,
+        *,
+        bot: Any,
+        chat_id: str,
+        method_name: str,
+        payload_name: str,
+        payload: Any,
+        message_thread_id: Optional[int],
+    ) -> None:
+        """Send a prepared Telegram media payload."""
+        if not payload:
+            return
+        kwargs = {
+            "chat_id": chat_id,
+            payload_name: payload,
+        }
+        if message_thread_id:
+            kwargs["message_thread_id"] = message_thread_id
+        await getattr(bot, method_name)(**kwargs)
 
     async def _run_polling(self) -> None:
         """Run Telegram bot in existing event loop (FastAPI/uvicorn).
