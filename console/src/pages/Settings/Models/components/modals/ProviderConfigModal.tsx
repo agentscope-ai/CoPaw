@@ -180,7 +180,8 @@ function JsonCodeEditor({
         ? indentUnit.length
         : 0;
       const removedTotal = lines.reduce(
-        (total, line) => total + (line.startsWith(indentUnit) ? indentUnit.length : 0),
+        (total, line) =>
+          total + (line.startsWith(indentUnit) ? indentUnit.length : 0),
         0,
       );
       const nextValue =
@@ -201,7 +202,9 @@ function JsonCodeEditor({
 
     const updatedLines = lines.map((line) => `${indentUnit}${line}`);
     const nextValue =
-      value.slice(0, lineStart) + updatedLines.join("\n") + value.slice(selectionEnd);
+      value.slice(0, lineStart) +
+      updatedLines.join("\n") +
+      value.slice(selectionEnd);
 
     onChange?.(nextValue);
 
@@ -363,7 +366,8 @@ export function ProviderConfigModal({
         base_url: provider.base_url || undefined,
         chat_model: provider.chat_model || "OpenAIChatModel",
         generate_kwargs_text:
-          provider.generate_kwargs && Object.keys(provider.generate_kwargs).length > 0
+          provider.generate_kwargs &&
+          Object.keys(provider.generate_kwargs).length > 0
             ? JSON.stringify(provider.generate_kwargs, null, 2)
             : undefined,
       });
@@ -377,7 +381,9 @@ export function ProviderConfigModal({
       const values = await form.validateFields();
       setSaving(true);
       const generateConfig = parseGenerateConfig(values.generate_kwargs_text);
-      const hasGenerateConfigInput = Boolean(values.generate_kwargs_text?.trim());
+      const hasGenerateConfigInput = Boolean(
+        values.generate_kwargs_text?.trim(),
+      );
 
       // Validate connection before saving
       // For local providers, we might skip this or just check if models exist (which the backend does)
@@ -527,7 +533,8 @@ export function ProviderConfigModal({
           base_url: provider.base_url || undefined,
           chat_model: provider.chat_model || "OpenAIChatModel",
           generate_kwargs_text:
-            provider.generate_kwargs && Object.keys(provider.generate_kwargs).length > 0
+            provider.generate_kwargs &&
+            Object.keys(provider.generate_kwargs).length > 0
               ? JSON.stringify(provider.generate_kwargs, null, 2)
               : undefined,
         }}
