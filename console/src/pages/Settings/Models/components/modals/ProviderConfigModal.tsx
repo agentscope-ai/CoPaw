@@ -13,6 +13,13 @@ import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
 
+interface ProviderConfigFormValues {
+  api_key?: string;
+  base_url?: string;
+  extra_body?: string;
+  chat_model?: string;
+}
+
 interface ProviderConfigModalProps {
   provider: {
     id: string;
@@ -20,6 +27,7 @@ interface ProviderConfigModalProps {
     api_key?: string;
     api_key_prefix?: string;
     base_url?: string;
+    extra_body?: Record<string, unknown>;
     is_custom: boolean;
     freeze_url: boolean;
     chat_model: string;
@@ -41,7 +49,7 @@ export function ProviderConfigModal({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
-  const [form] = Form.useForm<ProviderConfigRequest>();
+  const [form] = Form.useForm<ProviderConfigFormValues>();
   const selectedChatModel = Form.useWatch("chat_model", form);
   const canEditBaseUrl = !provider.freeze_url;
 
@@ -51,6 +59,12 @@ export function ProviderConfigModal({
     }
     return selectedChatModel || provider.chat_model || "OpenAIChatModel";
   }, [provider.chat_model, provider.is_custom, selectedChatModel]);
+
+  const supportsExtraBody = useMemo(() => {
+    return (
+      provider.id !== "anthropic" && effectiveChatModel !== "AnthropicChatModel"
+    );
+  }, [effectiveChatModel, provider.id]);
 
   const apiKeyPlaceholder = useMemo(() => {
     if (provider.api_key) {
@@ -108,30 +122,57 @@ export function ProviderConfigModal({
     return "https://api.example.com";
   }, [canEditBaseUrl, provider.id, provider.is_custom, effectiveChatModel]);
 
+  const extraBodyInitialValue = useMemo(() => {
+    if (!supportsExtraBody) {
+      return undefined;
+    }
+    if (!provider.extra_body || Object.keys(provider.extra_body).length === 0) {
+      return undefined;
+    }
+    return JSON.stringify(provider.extra_body, null, 2);
+  }, [provider.extra_body, supportsExtraBody]);
+
+  const normalizeExtraBody = (
+    rawValue: string | undefined,
+  ): ProviderConfigRequest["extra_body"] => {
+    const trimmed = (rawValue || "").trim();
+    if (!supportsExtraBody) {
+      return undefined;
+    }
+    if (!trimmed) {
+      return {};
+    }
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  };
+
   // Sync form when modal opens or provider data changes
   useEffect(() => {
     if (open) {
       form.setFieldsValue({
         api_key: undefined,
         base_url: provider.base_url || undefined,
+        extra_body: extraBodyInitialValue,
         chat_model: provider.chat_model || "OpenAIChatModel",
       });
       setFormDirty(false);
     }
-  }, [provider, form, open]);
+  }, [provider, form, open, extraBodyInitialValue]);
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
+      const extraBody = normalizeExtraBody(values.extra_body);
+      const requestBody: ProviderConfigRequest = {
+        api_key: values.api_key,
+        base_url: values.base_url,
+        extra_body: extraBody,
+        chat_model: values.chat_model,
+      };
 
       // Validate connection before saving
       // For local providers, we might skip this or just check if models exist (which the backend does)
-      const result = await api.testProviderConnection(provider.id, {
-        api_key: values.api_key,
-        base_url: values.base_url,
-        chat_model: values.chat_model,
-      });
+      const result = await api.testProviderConnection(provider.id, requestBody);
 
       if (!result.success) {
         message.error(result.message || t("models.testConnectionFailed"));
@@ -141,7 +182,7 @@ export function ProviderConfigModal({
         }
       }
 
-      await api.configureProvider(provider.id, values);
+      await api.configureProvider(provider.id, requestBody);
 
       // Auto-discover models from /models endpoint so users don't need
       // to enter model IDs manually.
@@ -194,6 +235,7 @@ export function ProviderConfigModal({
       const result = await api.testProviderConnection(provider.id, {
         api_key: values.api_key,
         base_url: values.base_url,
+        extra_body: normalizeExtraBody(values.extra_body),
         chat_model: values.chat_model,
       });
       if (result.success) {
@@ -292,6 +334,7 @@ export function ProviderConfigModal({
         layout="vertical"
         initialValues={{
           base_url: provider.base_url || undefined,
+          extra_body: extraBodyInitialValue,
           chat_model: provider.chat_model || "OpenAIChatModel",
         }}
         onValuesChange={() => setFormDirty(true)}
@@ -391,6 +434,46 @@ export function ProviderConfigModal({
         >
           <Input.Password placeholder={apiKeyPlaceholder} />
         </Form.Item>
+
+        {supportsExtraBody && (
+          <Form.Item
+            name="extra_body"
+            label={t("models.extraBody")}
+            extra={t("models.extraBodyHint")}
+            rules={[
+              {
+                validator: (_: unknown, value: string | undefined) => {
+                  const trimmed = (value || "").trim();
+                  if (!trimmed) {
+                    return Promise.resolve();
+                  }
+                  try {
+                    const parsed = JSON.parse(trimmed);
+                    if (
+                      parsed === null ||
+                      Array.isArray(parsed) ||
+                      typeof parsed !== "object"
+                    ) {
+                      return Promise.reject(
+                        new Error(t("models.extraBodyObjectRequired")),
+                      );
+                    }
+                    return Promise.resolve();
+                  } catch {
+                    return Promise.reject(
+                      new Error(t("models.invalidJsonFormat")),
+                    );
+                  }
+                },
+              },
+            ]}
+          >
+            <Input.TextArea
+              rows={6}
+              placeholder={t("models.extraBodyPlaceholder")}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );

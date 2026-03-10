@@ -2,7 +2,7 @@
 """Definition of Provider."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Type
+from typing import Any, Dict, List, Type
 from pydantic import BaseModel, Field
 
 from agentscope.model import ChatModelBase
@@ -49,6 +49,12 @@ class ProviderInfo(BaseModel):
     is_custom: bool = Field(
         default=False,
         description=("Whether this provider is user-created (not built-in)."),
+    )
+    extra_body: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Extra JSON body merged into OpenAI-compatible chat requests"
+        ),
     )
 
 
@@ -124,6 +130,11 @@ class Provider(ProviderInfo, ABC):
             self.chat_model = str(config["chat_model"])
         if "api_key_prefix" in config and config["api_key_prefix"] is not None:
             self.api_key_prefix = str(config["api_key_prefix"])
+        if "extra_body" in config and config["extra_body"] is not None:
+            extra_body = config["extra_body"]
+            if not isinstance(extra_body, dict):
+                raise ValueError("extra_body must be a JSON object")
+            self.extra_body = extra_body
 
     def get_chat_model_cls(self) -> Type[ChatModelBase]:
         """Return the chat model class associated with this provider."""
@@ -172,6 +183,7 @@ class Provider(ProviderInfo, ABC):
             is_custom=self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
+            extra_body=self.extra_body,
         )
 
 

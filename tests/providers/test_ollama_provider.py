@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import copaw.providers.ollama_provider as ollama_provider_module
+import copaw.providers.openai_chat_model_compat as compat_module
 from copaw.providers.ollama_provider import OllamaProvider
 from copaw.providers.provider import ModelInfo
 
@@ -164,6 +165,7 @@ async def test_update_config_updates_only_non_none_values() -> None:
             "name": "Ollama Local",
             "base_url": "http://127.0.0.1:11434",
             "api_key": "EMPTY-NEW",
+            "extra_body": {"cache_prompt": True},
             "chat_model": "OllamaChatModel",
             "api_key_prefix": "",
         },
@@ -172,8 +174,31 @@ async def test_update_config_updates_only_non_none_values() -> None:
     assert provider.name == "Ollama Local"
     assert provider.base_url == "http://127.0.0.1:11434"
     assert provider.api_key == "EMPTY-NEW"
+    assert provider.extra_body == {"cache_prompt": True}
     assert provider.chat_model == "OllamaChatModel"
     assert provider.api_key_prefix == ""
+
+
+def test_get_chat_model_instance_passes_extra_body(monkeypatch) -> None:
+    provider = _make_provider()
+    provider.extra_body = {"cache_prompt": True}
+    captured: dict = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(compat_module, "OpenAIChatModelCompat", FakeModel)
+
+    provider.get_chat_model_instance("qwen2:7b")
+
+    assert captured["model_name"] == "qwen2:7b"
+    assert captured["client_kwargs"] == {
+        "base_url": "http://localhost:11434/v1",
+    }
+    assert captured["generate_kwargs"] == {
+        "extra_body": {"cache_prompt": True},
+    }
 
 
 async def test_add_model_calls_pull(monkeypatch) -> None:

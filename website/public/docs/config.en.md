@@ -299,6 +299,7 @@ For each provider you need to set:
 | ---------- | ------------------------------------------------ |
 | `base_url` | API base URL (pre-filled for built-in providers) |
 | `api_key`  | Your API key                                     |
+| `extra_body` | Optional JSON object forwarded into OpenAI-compatible `chat.completions` request body |
 
 Then choose which provider + model to activate:
 

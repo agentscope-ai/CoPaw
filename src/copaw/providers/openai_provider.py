@@ -112,9 +112,14 @@ class OpenAIProvider(Provider):
                 ),
             }
 
+        generate_kwargs = (
+            {"extra_body": self.extra_body} if self.extra_body else None
+        )
+
         return OpenAIChatModelCompat(
             model_name=model_id,
             stream=True,
             api_key=self.api_key,
             client_kwargs=client_kwargs,
+            generate_kwargs=generate_kwargs,
         )

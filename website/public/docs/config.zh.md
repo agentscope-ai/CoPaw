@@ -289,6 +289,7 @@ CoPaw 需要 LLM 提供商才能运行。有三种设置方式：
 | ---------- | -------------------------------- |
 | `base_url` | API 地址（内置提供商已自动填好） |
 | `api_key`  | 你的 API Key                     |
+| `extra_body` | 可选，额外透传给 OpenAI 兼容 `chat.completions` 请求体的 JSON 对象 |
 
 然后选择激活哪个提供商和模型：
 

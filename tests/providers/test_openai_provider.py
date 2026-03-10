@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import copaw.providers.openai_provider as openai_provider_module
+import copaw.providers.openai_chat_model_compat as compat_module
 from copaw.providers.openai_provider import OpenAIProvider
 
 
@@ -151,6 +152,7 @@ async def test_update_config_updates_only_non_none_values() -> None:
             "name": "OpenAI Custom",
             "base_url": "https://new.example/v1",
             "api_key": "sk-new",
+            "extra_body": {"thinking": {"type": "disabled"}},
             "chat_model": "OpenAIChatModel",
             "api_key_prefix": "sk-",
         },
@@ -159,5 +161,25 @@ async def test_update_config_updates_only_non_none_values() -> None:
     assert provider.name == "OpenAI Custom"
     assert provider.base_url == "https://new.example/v1"
     assert provider.api_key == "sk-new"
+    assert provider.extra_body == {"thinking": {"type": "disabled"}}
     assert provider.chat_model == "OpenAIChatModel"
     assert provider.api_key_prefix == "sk-"
+
+
+def test_get_chat_model_instance_passes_extra_body(monkeypatch) -> None:
+    provider = _make_provider()
+    provider.extra_body = {"thinking": {"type": "disabled"}}
+    captured: dict = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(compat_module, "OpenAIChatModelCompat", FakeModel)
+
+    provider.get_chat_model_instance("gpt-4o-mini")
+
+    assert captured["model_name"] == "gpt-4o-mini"
+    assert captured["generate_kwargs"] == {
+        "extra_body": {"thinking": {"type": "disabled"}},
+    }

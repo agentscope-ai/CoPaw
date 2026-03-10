@@ -152,6 +152,7 @@ async def test_update_config_updates_only_non_none_values() -> None:
             "name": "Anthropic Custom",
             "base_url": "https://new.example",
             "api_key": "ant-new",
+            "extra_body": {"thinking": {"type": "disabled"}},
             "chat_model": "AnthropicChatModel",
             "api_key_prefix": "sk-ant-",
         },
@@ -160,5 +161,6 @@ async def test_update_config_updates_only_non_none_values() -> None:
     assert provider.name == "Anthropic Custom"
     assert provider.base_url == "https://new.example"
     assert provider.api_key == "ant-new"
+    assert provider.extra_body == {"thinking": {"type": "disabled"}}
     assert provider.chat_model == "AnthropicChatModel"
     assert provider.api_key_prefix == "sk-ant-"

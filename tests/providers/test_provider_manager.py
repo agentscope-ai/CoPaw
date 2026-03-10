@@ -92,6 +92,7 @@ async def test_add_custom_provider_and_reload_from_storage(
         name="Custom OpenAI",
         base_url="https://custom.example/v1",
         api_key="sk-custom",
+        extra_body={"thinking": {"type": "disabled"}},
         models=[ModelInfo(id="custom-model", name="Custom Model")],
     )
 
@@ -118,6 +119,7 @@ async def test_add_custom_provider_and_reload_from_storage(
     assert loaded.is_custom is True
     assert loaded.base_url == "https://custom.example/v1"
     assert loaded.api_key == "sk-custom"
+    assert loaded.extra_body == {"thinking": {"type": "disabled"}}
     assert [m.id for m in loaded.models] == ["custom-model"]
 
 
@@ -245,6 +247,7 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
         {
             "base_url": "https://updated.example/v1",  # not taken effect
             "api_key": "sk-updated",
+            "extra_body": {"thinking": {"type": "disabled"}},
         },
     )
 
@@ -254,12 +257,14 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     assert isinstance(persisted, OpenAIProvider)
     assert persisted.base_url == "https://api.openai.com/v1"
     assert persisted.api_key == "sk-updated"
+    assert persisted.extra_body == {"thinking": {"type": "disabled"}}
 
     ok = manager.update_provider(
         "azure-openai",
         {
             "base_url": "https://azure-updated.example/v1",
             "api_key": "sk-azure-updated",
+            "extra_body": {"thinking": {"type": "disabled"}},
         },
     )
     assert ok is True
@@ -268,6 +273,7 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     assert isinstance(persisted_azure, OpenAIProvider)
     assert persisted_azure.base_url == "https://azure-updated.example/v1"
     assert persisted_azure.api_key == "sk-azure-updated"
+    assert persisted_azure.extra_body == {"thinking": {"type": "disabled"}}
 
 
 def test_update_provider_for_unknown_returns_false(

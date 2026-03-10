@@ -15,7 +15,7 @@ Cloud providers (including ModelScope, DashScope, Aliyun Coding Plan, OpenAI, an
 **In the console:**
 
 1. Open the console and go to **Settings → Models**.
-2. Find the target cloud provider card (e.g. DashScope) and click **Settings**. Enter your **API key** and click **Save**.
+2. Find the target cloud provider card (e.g. DashScope) and click **Settings**. Enter your **API key**. If needed, also provide an **Extra Body (`extra_body`)** JSON object, then click **Save**.
 
    ![save](https://img.alicdn.com/imgextra/i1/O1CN01zHAE1Z26w6jXl2xbr_!!6000000007725-2-tps-3802-1968.png)
 
@@ -130,7 +130,7 @@ The Ollama provider uses the **Ollama daemon** installed on your machine. Models
 
    ![card](https://img.alicdn.com/imgextra/i3/O1CN01BFghrw1ZFcfpyzIL7_!!6000000003165-2-tps-3802-1968.png)
 
-4. Click **Settings**, enter **Base URL** and **API Key**, then click **Save**.
+4. Click **Settings**, enter **Base URL** and **API Key**. If your OpenAI-compatible service requires additional request-body fields such as `thinking` or `cache_prompt`, you can also fill in **Extra Body (`extra_body`)** as JSON, then click **Save**.
 
    ![save](https://img.alicdn.com/imgextra/i4/O1CN01R5ZTQ321ymyQ8psEY_!!6000000007054-2-tps-3802-1968.png)
 

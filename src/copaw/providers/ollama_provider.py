@@ -151,11 +151,15 @@ class OllamaProvider(Provider):
             openai_compatible_url = self.base_url[:-1] + "/v1"
         else:
             openai_compatible_url = self.base_url + "/v1"
+        generate_kwargs = (
+            {"extra_body": self.extra_body} if self.extra_body else None
+        )
         return OpenAIChatModelCompat(
             model_name=model_id,
             stream=True,
             api_key=self.api_key,
             client_kwargs={"base_url": openai_compatible_url},
+            generate_kwargs=generate_kwargs,
         )
 
     async def get_info(self, mock_secret: bool = True) -> ProviderInfo:

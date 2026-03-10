@@ -18,11 +18,13 @@ export interface ProviderInfo {
   freeze_url: boolean;
   api_key: string;
   base_url: string;
+  extra_body: Record<string, unknown>;
 }
 
 export interface ProviderConfigRequest {
   api_key?: string;
   base_url?: string;
+  extra_body?: Record<string, unknown>;
   chat_model?: string;
 }
 
@@ -118,6 +120,7 @@ export interface TestConnectionResponse {
 export interface TestProviderRequest {
   api_key?: string;
   base_url?: string;
+  extra_body?: Record<string, unknown>;
   chat_model?: string;
 }
 
