@@ -593,12 +593,7 @@ class DingTalkChannel(BaseChannel):
             "https://oapi.dingtalk.com/media/upload"
             f"?access_token={token}&type={media_type}"
         )
-        if media_type == "image":
-            ext = "jpg"
-        elif media_type == "video":
-            ext = "mp4"
-        else:
-            ext = "bin"
+        ext = {"image": "jpg", "video": "mp4"}.get(media_type, "bin")
         name = filename or f"upload.{ext}"
         logger.info(f"dingtalk upload_media: name={name}")
         form = aiohttp.FormData()
@@ -2171,24 +2166,32 @@ class DingTalkChannel(BaseChannel):
         conversation_id = meta.get("conversation_id") or ""
         conversation_type = meta.get("conversation_type") or "dm"
 
-        if sender_staff_id and conversation_id and conversation_type:
-            if await self._send_media_via_openapi(
-                sender_staff_id=sender_staff_id,
-                conversation_id=conversation_id,
-                conversation_type=conversation_type,
-                media_id=media_id,
-                media_type=media_type,
-                duration=duration,
-                pic_media_id=pic_media_id,
-            ):
-                logger.info(
-                    f"dingtalk {media_type} sent via OpenAPI: media_id=%s",
-                    media_id[:32] + "..." if len(media_id) > 32 else media_id,
-                )
-                return True
+        if not (conversation_id and conversation_type):
+            return False
+
+        # For private chats (DMs), sender_staff_id is required.
+        if conversation_type != "group" and not sender_staff_id:
             logger.warning(
-                f"dingtalk OpenAPI {media_type} send failed, "
-                f"falling back to sessionWebhook",
+                "dingtalk OpenAPI send failed: sender_staff_id is required for private chats",
             )
+            return False
+        if await self._send_media_via_openapi(
+            sender_staff_id=sender_staff_id,
+            conversation_id=conversation_id,
+            conversation_type=conversation_type,
+            media_id=media_id,
+            media_type=media_type,
+            duration=duration,
+            pic_media_id=pic_media_id,
+        ):
+            logger.info(
+                f"dingtalk {media_type} sent via OpenAPI: media_id=%s",
+                media_id[:32] + "..." if len(media_id) > 32 else media_id,
+            )
+            return True
+        logger.warning(
+            f"dingtalk OpenAPI {media_type} send failed, "
+            f"falling back to sessionWebhook",
+        )
 
         return False
