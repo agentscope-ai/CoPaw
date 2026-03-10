@@ -57,7 +57,7 @@ function SkillsPage() {
     // Reset input so the same file can be re-selected
     e.target.value = "";
 
-    if (!file.name.endsWith(".zip")) {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
       message.warning(t("skills.zipOnly"));
       return;
     }

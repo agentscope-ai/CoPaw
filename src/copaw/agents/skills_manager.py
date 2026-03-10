@@ -3,6 +3,7 @@
 import filecmp
 import io
 import logging
+import re
 import shutil
 import tempfile
 import zipfile
@@ -479,9 +480,10 @@ def _extract_and_validate_zip(data: bytes, tmp_dir: Path) -> None:
         if total > _MAX_ZIP_BYTES:
             mb = _MAX_ZIP_BYTES // 1024 // 1024
             raise ValueError(f"Uncompressed size exceeds {mb}MB limit")
-        root_s = str(tmp_dir.resolve())
+        root_path = tmp_dir.resolve()
         for info in zf.infolist():
-            if not str((tmp_dir / info.filename).resolve()).startswith(root_s):
+            target = (tmp_dir / info.filename).resolve()
+            if not target.is_relative_to(root_path):
                 raise ValueError(f"Unsafe path: {info.filename}")
             if info.external_attr >> 16 & 0o120000 == 0o120000:
                 raise ValueError(f"Symlink not allowed: {info.filename}")
@@ -495,10 +497,15 @@ def _resolve_skill_name(skill_dir: Path) -> str:
             (skill_dir / "SKILL.md").read_text(encoding="utf-8"),
         ).get("name", "")
         if name and isinstance(name, str):
-            return name.strip()
+            name = name.strip()
+            # Sanitize: only allow safe directory name chars
+            if re.fullmatch(r"[a-zA-Z0-9_\-]+", name):
+                return name
     except Exception:
         pass
-    return skill_dir.name
+    fallback = skill_dir.name
+    fallback = re.sub(r"[^a-zA-Z0-9_\-]", "_", fallback)
+    return fallback or "unnamed_skill"
 
 
 def _find_skill_dirs(root: Path) -> list[tuple[Path, str]]:
@@ -506,7 +513,7 @@ def _find_skill_dirs(root: Path) -> list[tuple[Path, str]]:
     if (root / "SKILL.md").exists():
         return [(root, _resolve_skill_name(root))]
     return [
-        (c, c.name)
+        (c, _resolve_skill_name(c))
         for c in sorted(root.iterdir())
         if not _is_hidden(c.name) and c.is_dir() and (c / "SKILL.md").exists()
     ]
@@ -876,9 +883,16 @@ class SkillService:
                 real[0] if len(real) == 1 and real[0].is_dir() else tmp_dir
             )
 
+            found = _find_skill_dirs(extract_root)
+            if not found:
+                raise ValueError(
+                    "No valid skills found in zip. Each skill "
+                    "directory must contain a SKILL.md with "
+                    "valid YAML frontmatter.",
+                )
             imported = [
                 name
-                for skill_dir, name in _find_skill_dirs(extract_root)
+                for skill_dir, name in found
                 if _import_skill_dir(
                     skill_dir,
                     customized_dir,
@@ -886,11 +900,6 @@ class SkillService:
                     overwrite,
                 )
             ]
-            if not imported:
-                raise ValueError(
-                    "No valid skills found in zip. Each skill directory must "
-                    "contain a SKILL.md with valid YAML frontmatter.",
-                )
             if enable:
                 for name in imported:
                     try:
