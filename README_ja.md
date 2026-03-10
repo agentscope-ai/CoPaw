@@ -54,13 +54,15 @@
 
 ## ニュース
 
-[2026-03-06] v0.0.5をリリースしました！詳細は[v0.0.5リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
+[2026-03-09] v0.0.6をリリースしました！詳細は[v0.0.6リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
 
-- **[v0.0.5] 追加:** デーモンモード; Twilio音声チャネル; DeepSeek Reasonerサポート; エージェント中断API; バージョン更新通知; 思考・ツール呼び出しの表示オプション。
-- **[v0.0.5] 改善:** メモリシステムのアップグレード; コンソールUIの改善; オプショナルチャネルの遅延読み込み; Windowsワンクリックインストールスクリプト。
-- **[v0.0.5] 修正:** Docker設定の永続化; Ollama base URL; チャネル関連の修正; Windows互換性; MCPクライアントの安定性。
-- **[v0.0.5] ドキュメント:** リリースノート; モデル・チャネル設定ガイドの改善; Docker + Ollama接続ガイド。
-- **[v0.0.5] 貢献者:** 新規貢献者の皆さんに感謝します: [@qoli](https://github.com/qoli), [@qbc2016](https://github.com/qbc2016), [@yunlzheng](https://github.com/yunlzheng), [@BlueSkyXN](https://github.com/BlueSkyXN), [@sidonsoft](https://github.com/sidonsoft), [@lishengzxc](https://github.com/lishengzxc), [@pikaxinge](https://github.com/pikaxinge), [@linshengli](https://github.com/linshengli), [@eltociear](https://github.com/eltociear), [@liuxiaopai-ai](https://github.com/liuxiaopai-ai), [@Leirunlin](https://github.com/Leirunlin), [@pan-x-c](https://github.com/pan-x-c), [@garyzhang99](https://github.com/garyzhang99), [@celestialhorse51D](https://github.com/celestialhorse51D), [@wwx814](https://github.com/wwx814), [@nszhsl](https://github.com/nszhsl), [@DavdGao](https://github.com/DavdGao), [@zhangckcup](https://github.com/zhangckcup)。
+- **[v0.0.6] 追加:** ワンクリックセットアップのネイティブデスクトップインストーラー（Windows/macOS）; UIとエージェント設定全体でのロシア語と日本語サポート; 許可リスト付きTelegramアクセス制御; QQ Markdownとリッチメディアサポート; Discord/Feishu/DingTalkメディア機能強化; IoT統合用MQTTチャネル; Gemini思考モデルとMLXバックエンドサポート; 組み込みツール管理ページ; ワークスペースファイルからのカスタムシステムプロンプト; スマート切り詰め機能付きReMeLightメモリシステム。
+- **[v0.0.6] 改善:** 動的メモリ圧縮設定; PyPIタイムスタンプを使用したバージョン検出; LESSベースのスタイルリファクタリング; UTCタイムゾーン標準化; ライフサイクル管理を備えたモジュール型Providerアーキテクチャ。
+- **[v0.0.6] 修正:** Windowsファイルパスとシェルエンコーディング; DingTalk Officeファイル検出; スキルインポートUTF-8処理; Docker対応URL検証; バージョンバッジの配置; 言語対応ファイル通知。
+- **[v0.0.6] ドキュメント:** 新しいロゴとソーシャルメディア統合; デスクトップアプリインストールガイド; メモリ圧縮とコマンドドキュメント; ロードマップ更新; ウェブサイトプレゼンテーション強化。
+- **[v0.0.6] 貢献者:** 新規貢献者の皆さんに感謝します: [@Osier-Yi](https://github.com/Osier-Yi), [@muchenhen](https://github.com/muchenhen), [@hongxicheng](https://github.com/hongxicheng), [@YingchaoX](https://github.com/YingchaoX), [@seoeaa](https://github.com/seoeaa), [@Chiytako](https://github.com/Chiytako), [@eviaaaaa](https://github.com/eviaaaaa), [@vvv214](https://github.com/vvv214), [@baijunty](https://github.com/baijunty), [@p8rtop](https://github.com/p8rtop), [@yifanli-intel](https://github.com/yifanli-intel), [@Eduiskss](https://github.com/Eduiskss), [@snai1557](https://github.com/snai1557)。
+
+[2026-03-06] v0.0.5をリリースしました！詳細は[v0.0.5リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
 
 [2026-03-02] v0.0.4をリリースしました！詳細は[v0.0.4リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
 
@@ -350,7 +352,7 @@ copaw app    # サーバーを起動
 | [モデル](https://copaw.agentscope.io/docs/models)                         | クラウド・ローカル・カスタムプロバイダーの設定       |
 | [チャネル](https://copaw.agentscope.io/docs/channels)                      | DingTalk、Feishu、QQ、Discord、iMessageなど         |
 | [スキル](https://copaw.agentscope.io/docs/skills)                          | 機能の拡張とカスタマイズ                             |
-| [MCP](https://copaw.agentscope.io/docs/skills)                             | MCPクライアントの管理                               |
+| [MCP](https://copaw.agentscope.io/docs/mcp)                                | MCPクライアントの管理                               |
 | [メモリ](https://copaw.agentscope.io/docs/memory)                          | コンテキストと長期記憶                              |
 | [魔法コマンド](https://copaw.agentscope.io/docs/commands)                 | AIの応答を待たずに会話状態を制御                     |
 | [ハートビート](https://copaw.agentscope.io/docs/heartbeat)                 | スケジュールされたチェックインとダイジェスト        |

@@ -54,13 +54,15 @@
 
 ## 新闻
 
-[2026-03-06] 我们发布了 v0.0.5！完整更新说明见 [v0.0.5 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
+[2026-03-09] 我们发布了 v0.0.6！完整更新说明见 [v0.0.6 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
-- **[v0.0.5]** **新增：** Daemon 模式；Twilio 语音频道；DeepSeek Reasoner 支持；智能体中断 API；版本更新提醒；思考/工具调用选择性显示。
-- **[v0.0.5]** **优化：** 记忆系统升级；控制台界面改进；可选频道懒加载；Windows 一键安装脚本。
-- **[v0.0.5]** **修复：** Docker 配置持久化；Ollama base URL；频道修复；Windows 兼容性；MCP 客户端稳定性。
-- **[v0.0.5]** **文档：** 增添更新日志；优化模型、频道配置指南；Docker + Ollama 连接指南。
-- **[v0.0.5]** **贡献者：** 感谢新贡献者：[@qoli](https://github.com/qoli)、[@qbc2016](https://github.com/qbc2016)、[@yunlzheng](https://github.com/yunlzheng)、[@BlueSkyXN](https://github.com/BlueSkyXN)、[@sidonsoft](https://github.com/sidonsoft)、[@lishengzxc](https://github.com/lishengzxc)、[@pikaxinge](https://github.com/pikaxinge)、[@linshengli](https://github.com/linshengli)、[@eltociear](https://github.com/eltociear)、[@liuxiaopai-ai](https://github.com/liuxiaopai-ai)、[@Leirunlin](https://github.com/Leirunlin)、[@pan-x-c](https://github.com/pan-x-c)、[@garyzhang99](https://github.com/garyzhang99)、[@celestialhorse51D](https://github.com/celestialhorse51D)、[@wwx814](https://github.com/wwx814)、[@nszhsl](https://github.com/nszhsl)、[@DavdGao](https://github.com/DavdGao)、[@zhangckcup](https://github.com/zhangckcup)。
+- **[v0.0.6]** **新增：** 原生桌面安装包，一键安装（Windows/macOS）；俄语和日语支持覆盖界面和智能体配置；Telegram 访问控制和白名单；QQ Markdown 和富媒体支持；Discord/飞书/钉钉媒体增强；MQTT 频道支持物联网集成；Gemini 思考模型和 MLX 后端支持；内置工具管理页面；从工作区文件自定义系统提示词；ReMeLight 记忆系统带智能截断。
+- **[v0.0.6]** **优化：** 动态记忆压缩配置；使用 PyPI 时间戳的版本检测；基于 LESS 的样式重构；UTC 时区标准化；模块化 Provider 架构及生命周期管理。
+- **[v0.0.6]** **修复：** Windows 文件路径和 Shell 编码；钉钉 Office 文件检测；技能导入 UTF-8 处理；适配 Docker 的 URL 验证；版本徽章定位；语言感知的文件通知。
+- **[v0.0.6]** **文档：** 新 logo 和社交媒体集成；桌面应用安装指南；记忆压缩和命令文档；更新路线图；增强网站呈现。
+- **[v0.0.6]** **贡献者：** 感谢新贡献者：[@Osier-Yi](https://github.com/Osier-Yi)、[@muchenhen](https://github.com/muchenhen)、[@hongxicheng](https://github.com/hongxicheng)、[@YingchaoX](https://github.com/YingchaoX)、[@seoeaa](https://github.com/seoeaa)、[@Chiytako](https://github.com/Chiytako)、[@eviaaaaa](https://github.com/eviaaaaa)、[@vvv214](https://github.com/vvv214)、[@baijunty](https://github.com/baijunty)、[@p8rtop](https://github.com/p8rtop)、[@yifanli-intel](https://github.com/yifanli-intel)、[@Eduiskss](https://github.com/Eduiskss)、[@snai1557](https://github.com/snai1557)。
+
+[2026-03-06] 我们发布了 v0.0.5！完整更新说明见 [v0.0.5 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
 [2026-03-02] 我们发布了 v0.0.4！完整更新说明见 [v0.0.4 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
@@ -356,7 +358,7 @@ copaw app # 启动服务
 | [模型](https://copaw.agentscope.io/docs/models)        | 配置云/本地/自定义提供商          |
 | [频道配置](https://copaw.agentscope.io/docs/channels)     | 钉钉、飞书、QQ、Discord、iMessage 等 |
 | [Skills](https://copaw.agentscope.io/docs/skills)         | 扩展与自定义能力                     |
-| [MCP](https://copaw.agentscope.io/docs/skills)         | 管理 MCP 客户端                     |
+| [MCP](https://copaw.agentscope.io/docs/mcp)               | 管理 MCP 客户端                     |
 | [记忆](https://copaw.agentscope.io/docs/memory)           | 上下文管理与长期记忆                 |
 | [魔法命令](https://copaw.agentscope.io/docs/commands)           | 控制对话状态，无需等待AI理解        |
 | [心跳](https://copaw.agentscope.io/docs/heartbeat)        | 定时自检与摘要                       |
