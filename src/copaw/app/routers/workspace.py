@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import shutil
 import tempfile
@@ -70,6 +71,34 @@ def _validate_zip_data(data: bytes) -> None:
                 )
 
 
+def _extract_and_merge_zip(data: bytes) -> None:
+    """Extract zip data and merge into WORKING_DIR (blocking operation)."""
+    tmp_dir = None
+    try:
+        tmp_dir = Path(tempfile.mkdtemp(prefix="copaw_upload_"))
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            zf.extractall(tmp_dir)
+
+        top_entries = list(tmp_dir.iterdir())
+        extract_root = tmp_dir
+        if len(top_entries) == 1 and top_entries[0].is_dir():
+            extract_root = top_entries[0]
+
+        WORKING_DIR.mkdir(parents=True, exist_ok=True)
+
+        for item in extract_root.iterdir():
+            dest = WORKING_DIR / item.name
+            if item.is_file():
+                shutil.copy2(item, dest)
+            else:
+                if dest.exists() and dest.is_file():
+                    dest.unlink()
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+    finally:
+        if tmp_dir and tmp_dir.is_dir():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -97,7 +126,7 @@ async def download_workspace():
             detail=f"WORKING_DIR does not exist: {WORKING_DIR}",
         )
 
-    buf = _zip_directory(WORKING_DIR)
+    buf = await asyncio.to_thread(_zip_directory, WORKING_DIR)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"copaw_workspace_{timestamp}.zip"
@@ -122,7 +151,7 @@ async def download_workspace():
         "the entire WORKING_DIR; upload only overwrites/merges zip contents."
     ),
 )
-async def upload_workspace(  # pylint: disable=too-many-branches
+async def upload_workspace(
     file: UploadFile = File(
         ...,
         description="Zip archive to merge into WORKING_DIR",
@@ -131,8 +160,6 @@ async def upload_workspace(  # pylint: disable=too-many-branches
     """
     Merge uploaded zip contents into WORKING_DIR (overwrite, do not clear).
     """
-
-    # --- validate uploaded file ---
     if file.content_type and file.content_type not in (
         "application/zip",
         "application/x-zip-compressed",
@@ -148,34 +175,9 @@ async def upload_workspace(  # pylint: disable=too-many-branches
     data = await file.read()
     _validate_zip_data(data)
 
-    tmp_dir = None
     try:
-        tmp_dir = Path(tempfile.mkdtemp(prefix="copaw_upload_"))
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            zf.extractall(tmp_dir)
-
-        # If the zip contains a single top-level directory, use its contents
-        top_entries = list(tmp_dir.iterdir())
-        extract_root = tmp_dir
-        if len(top_entries) == 1 and top_entries[0].is_dir():
-            extract_root = top_entries[0]
-
-        WORKING_DIR.mkdir(parents=True, exist_ok=True)
-
-        # Merge: overwrite paths present in zip; leave others untouched
-        for item in extract_root.iterdir():
-            dest = WORKING_DIR / item.name
-            if item.is_file():
-                shutil.copy2(item, dest)
-            else:
-                if dest.exists() and dest.is_file():
-                    dest.unlink()
-                shutil.copytree(item, dest, dirs_exist_ok=True)
-
-        return {
-            "success": True,
-        }
-
+        await asyncio.to_thread(_extract_and_merge_zip, data)
+        return {"success": True}
     except HTTPException:
         raise
     except Exception as exc:
@@ -183,6 +185,3 @@ async def upload_workspace(  # pylint: disable=too-many-branches
             status_code=500,
             detail=f"Failed to merge workspace: {exc}",
         ) from exc
-    finally:
-        if tmp_dir and tmp_dir.is_dir():
-            shutil.rmtree(tmp_dir, ignore_errors=True)
