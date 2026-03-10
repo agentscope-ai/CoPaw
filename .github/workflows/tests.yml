@@ -1,0 +1,184 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master, dev, develop]
+  pull_request:
+    branches: [main, master, dev, develop]
+  workflow_dispatch:
+
+jobs:
+  discover-unit-test-dirs:
+    name: Discover Unit Test Directories
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Discover unit test subdirectories
+        id: set-matrix
+        run: |
+          cd tests/unit
+          dirs=$(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R -s -c 'split("\n")[:-1]')
+          echo "matrix=$dirs" >> $GITHUB_OUTPUT
+          echo "Found unit test directories: $dirs"
+
+  unit-tests:
+    name: Unit Tests - ${{ matrix.subdir }} - ${{ matrix.os }}
+    needs: discover-unit-test-dirs
+    if: needs.discover-unit-test-dirs.outputs.matrix != '[]'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        subdir: ${{ fromJson(needs.discover-unit-test-dirs.outputs.matrix) }}
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,full]"
+
+      - name: Run unit tests for ${{ matrix.subdir }}
+        run: |
+          pytest tests/unit/${{ matrix.subdir }} \
+            -v \
+            --cov=src/copaw \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests-${{ matrix.subdir }}
+          name: unit-${{ matrix.subdir }}-${{ matrix.os }}-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  integrated-tests:
+    name: Integrated Tests - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,full]"
+
+      - name: Check if integrated tests exist
+        id: check-integrated
+        shell: bash
+        run: |
+          if [ -d "tests/integrated" ] && [ "$(ls -A tests/integrated/*.py 2>/dev/null)" ]; then
+            echo "has_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run integrated tests
+        if: steps.check-integrated.outputs.has_tests == 'true'
+        run: |
+          pytest tests/integrated \
+            -v \
+            --cov=src/copaw \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        if: steps.check-integrated.outputs.has_tests == 'true'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: integrated
+          name: integrated-${{ matrix.os }}-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,full]"
+
+      - name: Run all tests with coverage
+        run: |
+          pytest tests/ \
+            -v \
+            --cov=src/copaw \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-report=html
+
+      - name: Generate coverage comment on PR
+        uses: orgoro/coverage@v3.2
+        with:
+          coverageFile: coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          thresholdAll: 0.0
+          thresholdNew: 0.0
+          thresholdModified: 0.0
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: all-tests
+          name: coverage-report
+          fail_ci_if_error: false
+
+  test-summary:
+    name: Test Summary
+    needs: [unit-tests, integrated-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test results
+        run: |
+          echo "Unit tests: ${{ needs.unit-tests.result }}"
+          echo "Integrated tests: ${{ needs.integrated-tests.result }}"
+
+          if [ "${{ needs.unit-tests.result }}" == "failure" ] || \
+             [ "${{ needs.integrated-tests.result }}" == "failure" ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          else
+            echo "✅ All tests passed"
+          fi

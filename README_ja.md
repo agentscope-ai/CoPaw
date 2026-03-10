@@ -428,7 +428,7 @@ cp -R console/dist/. src/copaw/console/
 pip install -e .
 ```
 
-- **開発**（テスト、フォーマット）: `pip install -e ".[dev]"`
+- **開発**（テスト、フォーマット）: `pip install -e ".[dev,full]"`
 - **その後**: `copaw init --defaults` を実行し、次に `copaw app` を実行。
 
 ---
