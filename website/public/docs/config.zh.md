@@ -281,7 +281,7 @@ CoPaw 需要 LLM 提供商才能运行。有三种设置方式：
 | ------------------ | ------------------ | --------------------------------------------------- | ------------ |
 | ModelScope（魔搭） | `modelscope`       | `https://api-inference.modelscope.cn/v1`            | `ms`         |
 | DashScope（灵积）  | `dashscope`        | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `sk`         |
-| Aliyun Coding Plan | `aliyun-codingplan`| `https://coding.dashscope.aliyuncs.com/v1`          | `sk-sp`      |
+| Aliyun Coding Plan | `aliyun-codingplan` | `https://coding.dashscope.aliyuncs.com/v1`          | `sk-sp`      |
 | OpenAI             | `openai`           | `https://api.openai.com/v1`                         | `sk-`        |
 | Azure OpenAI       | `azure-openai`     | _（你自己填）_                                      |              |
 | Anthropic          | `anthropic`        | `https://api.anthropic.com`                         | `sk-ant-`    |
