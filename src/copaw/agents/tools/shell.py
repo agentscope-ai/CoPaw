@@ -5,6 +5,7 @@
 
 import asyncio
 import locale
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ def _execute_subprocess_sync(
     cmd: str,
     cwd: str,
     timeout: int,
+    env: dict | None = None,
 ) -> tuple[int, str, str]:
     """Execute subprocess synchronously in a thread.
 
@@ -34,6 +36,8 @@ def _execute_subprocess_sync(
             The working directory for the command execution.
         timeout (`int`):
             The maximum time (in seconds) allowed for the command to run.
+        env (`dict | None`):
+            Environment variables for the subprocess.
 
     Returns:
         `tuple[int, str, str]`:
@@ -49,6 +53,7 @@ def _execute_subprocess_sync(
             text=True,
             cwd=cwd,
             timeout=timeout,
+            env=env,
             encoding=locale.getpreferredencoding(False) or "utf-8",
             errors="replace",
             check=True,
@@ -100,6 +105,11 @@ async def execute_shell_command(
     # Set working directory
     working_dir = cwd if cwd is not None else WORKING_DIR
 
+    # Ensure the venv Python is on PATH for subprocesses
+    env = os.environ.copy()
+    python_bin_dir = str(Path(sys.executable).parent)
+    env["PATH"] = python_bin_dir + os.pathsep + env.get("PATH", "")
+
     try:
         if sys.platform == "win32":
             # Windows: use thread pool to avoid asyncio subprocess limitations
@@ -108,6 +118,7 @@ async def execute_shell_command(
                 cmd,
                 str(working_dir),
                 timeout,
+                env,
             )
         else:
             proc = await asyncio.create_subprocess_shell(
@@ -116,6 +127,7 @@ async def execute_shell_command(
                 stderr=asyncio.subprocess.PIPE,
                 bufsize=0,
                 cwd=str(working_dir),
+                env=env,
             )
 
             try:

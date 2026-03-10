@@ -4,12 +4,17 @@ description: "Use this skill any time a .pptx file is involved in any way — as
 license: Proprietary. LICENSE.txt has complete terms
 ---
 
+> **Important:** All `scripts/` paths are relative to this skill directory.
+> Run with: `cd {this_skill_dir} && python scripts/...`
+> Or use the `cwd` parameter of `execute_shell_command`.
+
 # PPTX Skill
 
-## Runtime Dependencies
+## Prerequisites
 
-- Requires LibreOffice (`soffice`) for presentation-to-PDF conversion.
-- Requires Poppler (`pdftoppm`) for PDF-to-image conversion used by thumbnail/visual workflows.
+- **Python**: markitdown[pptx], Pillow
+- **npm**: pptxgenjs (`npm install -g pptxgenjs`) for creating from scratch
+- **System**: LibreOffice (`soffice`) for presentation-to-PDF conversion; pdftoppm (poppler-utils) for PDF-to-image conversion used by thumbnail/visual workflows
 - If `pdftoppm` is unavailable, a Python fallback path may use `pdf2image`.
 - On Windows, dependencies must be installed and available in `PATH`; if missing, report the dependency issue and stop (do not keep retrying).
 
@@ -232,8 +237,4 @@ pdftoppm -jpeg -r 150 -f N -l N output.pdf slide-fixed
 
 ## Dependencies
 
-- `pip install "markitdown[pptx]"` - text extraction
-- `pip install Pillow` - thumbnail grids
-- `npm install -g pptxgenjs` - creating from scratch
-- LibreOffice (`soffice`) - PDF conversion (auto-configured for sandboxed environments via `scripts/office/soffice.py`)
-- Poppler (`pdftoppm`) - PDF to images
+See [Prerequisites](#prerequisites) above for the full list.

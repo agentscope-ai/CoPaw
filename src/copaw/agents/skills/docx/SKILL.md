@@ -4,12 +4,16 @@ description: "Use this skill whenever the user wants to create, read, edit, or m
 license: Proprietary. LICENSE.txt has complete terms
 ---
 
+> **Important:** All `scripts/` paths are relative to this skill directory.
+> Run with: `cd {this_skill_dir} && python scripts/...`
+> Or use the `cwd` parameter of `execute_shell_command`.
+
 # DOCX creation, editing, and analysis
 
-## Runtime Dependencies
+## Prerequisites
 
-- Requires LibreOffice (`soffice`) for `.doc` -> `.docx` conversion, tracked-changes acceptance, and PDF export.
-- Requires Poppler (`pdftoppm`) for document-to-image workflows.
+- **npm**: docx (`npm install -g docx`) for new document creation
+- **System**: LibreOffice (`soffice`) for `.doc` -> `.docx` conversion, tracked-changes acceptance, and PDF export; pandoc for text extraction; pdftoppm (poppler-utils) for document-to-image workflows
 - If `pdftoppm` is unavailable, a Python fallback path may use `pdf2image`.
 - On Windows, dependencies must be installed and available in `PATH`; if missing, report the dependency issue and stop (do not keep retrying).
 
@@ -482,7 +486,4 @@ After running `comment.py` (see Step 2), add markers to document.xml. For replie
 
 ## Dependencies
 
-- **pandoc**: Text extraction
-- **docx**: `npm install -g docx` (new documents)
-- **LibreOffice**: PDF conversion (auto-configured for sandboxed environments via `scripts/office/soffice.py`)
-- **Poppler**: `pdftoppm` for images
+See [Prerequisites](#prerequisites) above for the full list.

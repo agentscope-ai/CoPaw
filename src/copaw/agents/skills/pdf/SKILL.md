@@ -4,7 +4,16 @@ description: Use this skill whenever the user wants to do anything with PDF file
 license: Proprietary. LICENSE.txt has complete terms
 ---
 
+> **Important:** All `scripts/` paths are relative to this skill directory.
+> Run with: `cd {this_skill_dir} && python scripts/...`
+> Or use the `cwd` parameter of `execute_shell_command`.
+
 # PDF Processing Guide
+
+## Prerequisites
+
+- **Python**: pypdf, pdfplumber, reportlab
+- **System**: pdftotext, pdftoppm (poppler-utils), qpdf
 
 ## Overview
 
