@@ -118,12 +118,12 @@ async def run_command_path(
 
     # Conversation path: lightweight memory + CommandHandler
     memory = ReMeInMemoryMemory(token_counter=_get_token_counter())
-    memory.load_state_dict(
-        runner.session.get_session_state_dict(
-            session_id=session_id,
-            user_id=user_id,
-        ),
+    session_state = await runner.session.get_session_state_dict(
+        session_id=session_id,
+        user_id=user_id,
     )
+    memory_state = session_state.get("agent", {}).get("memory")
+    memory.load_state_dict(memory_state)
 
     conv_handler = CommandHandler(
         agent_name="Friday",
