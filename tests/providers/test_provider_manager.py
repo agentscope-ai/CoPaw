@@ -276,6 +276,29 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     assert persisted_azure.extra_body == {"thinking": {"type": "disabled"}}
 
 
+def test_init_from_storage_restores_builtin_extra_body(
+    isolated_secret_dir,
+) -> None:
+    manager = ProviderManager()
+
+    ok = manager.update_provider(
+        "openai",
+        {
+            "api_key": "sk-extra-body",
+            "extra_body": {"thinking": {"type": "disabled"}},
+        },
+    )
+
+    assert ok is True
+
+    reloaded = ProviderManager()
+    provider = reloaded.get_provider("openai")
+
+    assert provider is not None
+    assert isinstance(provider, OpenAIProvider)
+    assert provider.extra_body == {"thinking": {"type": "disabled"}}
+
+
 def test_update_provider_for_unknown_returns_false(
     isolated_secret_dir,
 ) -> None:

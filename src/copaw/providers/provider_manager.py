@@ -526,6 +526,7 @@ class ProviderManager:
             if provider:
                 builtin.base_url = provider.base_url
                 builtin.api_key = provider.api_key
+                builtin.extra_body = provider.extra_body
                 builtin.extra_models = provider.extra_models
         # Load custom providers
         for provider_file in self.custom_path.glob("*.json"):

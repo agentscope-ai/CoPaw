@@ -256,3 +256,22 @@ async def test_delete_model_calls_delete(monkeypatch) -> None:
         "model": "qwen2:7b",
         "list_count": 1,
     }
+
+
+async def test_get_info_includes_extra_body(monkeypatch) -> None:
+    provider = _make_provider()
+    provider.extra_body = {"cache_prompt": True}
+
+    async def _fake_fetch_models(timeout=5):
+        _ = timeout
+        return []
+
+    monkeypatch.setattr(
+        OllamaProvider,
+        "fetch_models",
+        staticmethod(_fake_fetch_models),
+    )
+
+    info = await provider.get_info()
+
+    assert info.extra_body == {"cache_prompt": True}
