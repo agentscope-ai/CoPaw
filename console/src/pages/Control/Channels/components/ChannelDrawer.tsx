@@ -21,6 +21,7 @@ const CHANNELS_WITH_ACCESS_CONTROL: ChannelKey[] = [
   "feishu",
   "mattermost",
   "matrix",
+  "wecom",
 ];
 
 interface ChannelDrawerProps {
@@ -380,6 +381,28 @@ export function ChannelDrawer({
               valuePropName="checked"
             >
               <Switch />
+            </Form.Item>
+          </>
+        );
+      case "wecom":
+        return (
+          <>
+            <Form.Item
+              name="bot_id"
+              label="Bot ID"
+              rules={[{ required: true, message: "Please input Bot ID" }]}
+            >
+              <Input placeholder="Enterprise WeChat Bot ID" />
+            </Form.Item>
+            <Form.Item
+              name="secret"
+              label="Secret"
+              rules={[{ required: true, message: "Please input Secret" }]}
+            >
+              <Input.Password placeholder="Long connection secret key" />
+            </Form.Item>
+            <Form.Item name="media_dir" label="Media Dir">
+              <Input placeholder="~/.copaw/media" />
             </Form.Item>
           </>
         );

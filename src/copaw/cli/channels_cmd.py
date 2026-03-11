@@ -21,6 +21,7 @@ from ..config.config import (
     IMessageChannelConfig,
     QQConfig,
     VoiceChannelConfig,
+    WecomConfig,
 )
 from .utils import prompt_confirm, prompt_path, prompt_select
 from ..config import get_available_channels
@@ -37,6 +38,7 @@ _SECRET_FIELDS = {
     "app_secret",
     "http_proxy_auth",
     "twilio_auth_token",
+    "secret",
 }
 
 _ALL_CHANNEL_NAMES = {
@@ -48,6 +50,7 @@ _ALL_CHANNEL_NAMES = {
     "qq": "QQ",
     "console": "Console",
     "voice": "Twilio",
+    "wecom": "WeCom",
 }
 # Public alias for tests and external use.
 CHANNEL_NAMES = _ALL_CHANNEL_NAMES
@@ -601,6 +604,39 @@ def configure_console(current_config: ConsoleConfig) -> ConsoleConfig:
     return current_config
 
 
+def configure_wecom(current_config: WecomConfig) -> WecomConfig:
+    """Configure WeCom AI Bot channel interactively."""
+    click.echo("\n=== Configure WeCom Channel ===")
+
+    enabled = prompt_confirm(
+        "Enable WeCom channel?",
+        default=current_config.enabled,
+    )
+
+    if not enabled:
+        current_config.enabled = False
+        return current_config
+
+    current_config.enabled = True
+
+    bot_id = click.prompt(
+        "WeCom Bot ID",
+        default=current_config.bot_id or "",
+        type=str,
+    )
+    current_config.bot_id = bot_id
+
+    secret = click.prompt(
+        "WeCom Bot Secret",
+        default=current_config.secret or "",
+        hide_input=True,
+        type=str,
+    )
+    current_config.secret = secret
+
+    return current_config
+
+
 # ── reusable channel configuration flow (used by init_cmd too) ─────
 
 # Full registry — filtered at runtime by get_channel_configurators().
@@ -613,6 +649,7 @@ _ALL_CHANNEL_CONFIGURATORS = {
     "qq": ("QQ", configure_qq),
     "console": ("Console", configure_console),
     "voice": ("Twilio", configure_voice),
+    "wecom": ("WeCom", configure_wecom),
 }
 
 

@@ -153,7 +153,8 @@ async def download_file_from_base64(
 
     Args:
         base64_data: Base64-encoded file content.
-        filename: The filename to save. If not provided, will generate one.
+        filename: The filename to save. If not provided, will generate one
+            with extension detected from file magic bytes.
         download_dir: The directory to save files. Defaults to "downloads".
 
     Returns:
@@ -167,7 +168,13 @@ async def download_file_from_base64(
 
         if not filename:
             file_hash = hashlib.md5(file_content).hexdigest()
-            filename = f"file_{file_hash}"
+            # Detect extension from magic bytes so formatters can read the file
+            suffix = ""
+            for magic, ext in _MAGIC_SUFFIX:
+                if file_content[:len(magic)].startswith(magic):
+                    suffix = ext
+                    break
+            filename = f"file_{file_hash}{suffix}"
 
         local_file_path = download_path / filename
         with open(local_file_path, "wb") as f:

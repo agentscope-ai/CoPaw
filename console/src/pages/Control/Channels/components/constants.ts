@@ -14,6 +14,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   matrix: "Matrix",
   console: "Console",
   voice: "Twilio",
+  wecom: "WeCom",
 };
 
 // Get channel label - returns built-in label or formatted custom name

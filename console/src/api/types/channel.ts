@@ -81,6 +81,12 @@ export interface VoiceChannelConfig extends BaseChannelConfig {
   welcome_greeting: string;
 }
 
+export interface WecomConfig extends BaseChannelConfig {
+  bot_id: string;
+  secret: string;
+  media_dir: string;
+}
+
 export interface ChannelConfig {
   imessage: IMessageChannelConfig;
   discord: DiscordConfig;
@@ -92,6 +98,7 @@ export interface ChannelConfig {
   matrix: MatrixConfig;
   console: ConsoleConfig;
   voice: VoiceChannelConfig;
+  wecom: WecomConfig;
 }
 
 export type SingleChannelConfig =
@@ -100,8 +107,9 @@ export type SingleChannelConfig =
   | DingTalkConfig
   | FeishuConfig
   | QQConfig
-  | ConsoleConfig
   | TelegramConfig
   | MQTTConfig
   | MatrixConfig
-  | VoiceChannelConfig;
+  | ConsoleConfig
+  | VoiceChannelConfig
+  | WecomConfig;

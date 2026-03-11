@@ -124,6 +124,14 @@ class VoiceChannelConfig(BaseChannelConfig):
     welcome_greeting: str = "Hi! This is CoPaw. How can I help you?"
 
 
+class WecomConfig(BaseChannelConfig):
+    """企业微信智能机器人长连接配置."""
+
+    bot_id: str = ""
+    secret: str = ""
+    media_dir: str = "~/.copaw/media"
+
+
 class ChannelConfig(BaseModel):
     """Built-in channel configs; extra keys allowed for plugin channels."""
 
@@ -140,6 +148,7 @@ class ChannelConfig(BaseModel):
     console: ConsoleConfig = ConsoleConfig()
     matrix: MatrixConfig = MatrixConfig()
     voice: VoiceChannelConfig = VoiceChannelConfig()
+    wecom: WecomConfig = WecomConfig()
 
 
 class LastApiConfig(BaseModel):
@@ -459,4 +468,5 @@ ChannelConfigUnion = Union[
     MQTTConfig,
     ConsoleConfig,
     VoiceChannelConfig,
+    WecomConfig,
 ]
