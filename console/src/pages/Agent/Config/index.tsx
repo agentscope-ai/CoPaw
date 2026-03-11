@@ -86,8 +86,14 @@ function AgentConfigPage() {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      // Remove computed fields that should not be saved
+      const {
+        memory_compact_reserve,
+        memory_compact_threshold,
+        ...configToSave
+      } = values;
       setSaving(true);
-      await api.updateAgentRunningConfig(values as AgentsRunningConfig);
+      await api.updateAgentRunningConfig(configToSave as AgentsRunningConfig);
       message.success(t("agentConfig.saveSuccess"));
     } catch (err) {
       if (err instanceof Error && "errorFields" in err) {
