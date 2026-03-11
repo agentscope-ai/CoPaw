@@ -67,6 +67,11 @@ class ApprovalService:
         self._lock = asyncio.Lock()
         self._pending: dict[str, PendingApproval] = {}
         self._completed: dict[str, PendingApproval] = {}
+        self._channel_manager: Any | None = None
+
+    def set_channel_manager(self, channel_manager: Any) -> None:
+        """Store a reference to the channel manager for push notifications."""
+        self._channel_manager = channel_manager
 
     # ------------------------------------------------------------------
     # Core approval lifecycle
