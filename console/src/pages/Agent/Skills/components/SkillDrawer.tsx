@@ -215,7 +215,7 @@ export function SkillDrawer({
       const env = parseJsonRecord(values.envJson || "", "env");
       const config = parseJsonRecord(values.configJson || "", "config");
       const payload: SkillConfigUpdatePayload = {
-        enabled: values.enabledOverride ? (values.skillEnabled ?? false) : null,
+        enabled: values.enabledOverride ? values.skillEnabled ?? false : null,
         clearApiKey: values.clearApiKey || false,
         env: Object.fromEntries(
           Object.entries(env).map(([key, value]) => [key, String(value ?? "")]),
@@ -401,10 +401,10 @@ export function SkillDrawer({
             <Form.Item shouldUpdate noStyle>
               {({ getFieldValue }) => (
                 <Form.Item
-              name="skillEnabled"
-              label={t("skills.skillEnabled")}
-              valuePropName="checked"
-            >
+                  name="skillEnabled"
+                  label={t("skills.skillEnabled")}
+                  valuePropName="checked"
+                >
                   <Switch disabled={!getFieldValue("enabledOverride")} />
                 </Form.Item>
               )}
