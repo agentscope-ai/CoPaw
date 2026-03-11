@@ -17,6 +17,15 @@ from ...agents.utils.file_handling import (
 )
 
 
+def _convert_media_url_to_base64(url: str) -> str:
+    """Convert media file URL to base64 data URL if applicable."""
+    if is_media_file_url(url):
+        base64_url = load_media_as_base64(url)
+        if base64_url:
+            return base64_url
+    return url
+
+
 def build_env_context(
     session_id: Optional[str] = None,
     user_id: Optional[str] = None,
@@ -259,15 +268,7 @@ def agentscope_msg_to_message(
                 ):
                     url = block.get("source", {}).get("url")
                     # For media directory files, convert to base64 for frontend
-                    if is_media_file_url(url):
-                        base64_url = load_media_as_base64(url)
-                        if base64_url:
-                            cb.set_image_url(base64_url)
-                        else:
-                            # Keep original URL if conversion fails
-                            cb.set_image_url(url)
-                    else:
-                        cb.set_image_url(url)
+                    cb.set_image_url(_convert_media_url_to_base64(url))
 
                 elif (
                     isinstance(block.get("source"), dict)
