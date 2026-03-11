@@ -249,6 +249,8 @@
     "dmPolicyTooltip": "Control who can interact with the bot via direct message. Open: everyone; Allowlist: authorized users only",
     "groupPolicy": "Group Policy",
     "groupPolicyTooltip": "Control who can interact with the bot in group chats. Open: everyone; Allowlist: authorized users only",
+    "requireMention": "Require @Mention",
+    "requireMentionTooltip": "When enabled, bot only responds in group chats when explicitly @mentioned",
     "policyOpen": "Open",
     "policyAllowlist": "Allowlist",
     "allowFrom": "Allowlist Users",
@@ -347,6 +349,11 @@
     "configureProvider": "Configure {{name}}",
     "baseURL": "Base URL",
     "apiKey": "API Key",
+    "advancedConfig": "Advanced Configuration",
+    "generateConfig": "Generation Parameters",
+    "generateConfigHint": "Generation parameters expressed as a JSON object. They will be expanded and passed into the generation request (`openai.chat.completions` or `anthropic.messages`).",
+    "generateConfigInvalidJson": "Please enter valid JSON",
+    "generateConfigMustBeObject": "Generation parameters must be a JSON object",
     "protocol": "Protocol",
     "protocolHint": "Choose the provider API protocol for this configuration.",
     "selectProtocol": "Please select a protocol",
@@ -363,6 +370,7 @@
     "azureEndpointHint": "Azure OpenAI endpoint, e.g. https://<resource>.openai.azure.com/openai/v1",
     "anthropicEndpointHint": "Anthropic endpoint, e.g. https://api.anthropic.com",
     "ollamaEndpointHint": "Ollama endpoint, e.g. http://localhost:11434",
+    "lmstudioEndpointHint": "LM Studio endpoint, e.g. http://localhost:1234/v1",
     "apiEndpointHint": "API endpoint, e.g. https://api.example.com",
     "pleaseEnterBaseURL": "Please enter the API base URL",
     "pleaseEnterValidURL": "Please enter a valid URL",
@@ -530,5 +538,12 @@
       "viewReleases": "View Releases",
       "close": "Close"
     }
+  },
+  "chat": {
+    "disclaimer": "Works for you, grows with you",
+    "greeting": "Hello, how can I help you today?",
+    "description": "I am a helpful assistant that can help you with your questions.",
+    "prompt1": "Let's start a new journey!",
+    "prompt2": "Can you tell me what skills you have?"
   }
 }

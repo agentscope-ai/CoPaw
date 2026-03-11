@@ -135,5 +135,6 @@ class OpenAIProvider(Provider):
             stream=True,
             api_key=self.api_key,
             client_kwargs=client_kwargs,
+            generate_kwargs=self.generate_kwargs,
         )
         return TokenRecordingModelWrapper(self.id, model_instance)

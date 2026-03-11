@@ -166,12 +166,10 @@ If you're not comfortable with command-line tools, you can download and use CoPa
 
 1. **Download the installer**
    Go to [GitHub Releases](https://github.com/agentscope-ai/CoPaw/releases) to download the version for your system:
-
    - Windows: `CoPaw-Setup-<version>.exe`
    - macOS: `CoPaw-<version>-macOS.zip`
 
 2. **Install and Launch**
-
    - **Windows**: Double-click the `.exe` file to install following the wizard, then double-click the desktop shortcut to launch
    - **macOS**: Extract the `.zip` to get `CoPaw.app`, first time requires right-click and select "Open" to bypass system security restrictions
 
@@ -209,10 +207,13 @@ Pull and run:
 
 ```bash
 docker pull agentscope/copaw:latest
-docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working agentscope/copaw:latest
+docker run -p 127.0.0.1:8088:8088 \
+  -v copaw-data:/app/working \
+  -v copaw-secrets:/app/working.secret \
+  agentscope/copaw:latest
 ```
 
-Then open **http://127.0.0.1:8088/** in your browser for the Console. Config, memory, and skills are stored in the `copaw-data` volume. To pass API keys, add `-e DASHSCOPE_API_KEY=xxx` or `--env-file .env` to `docker run`.
+Then open **http://127.0.0.1:8088/** in your browser for the Console. Config, memory, and skills are stored in the `copaw-data` volume; model provider settings and API keys are in the `copaw-secrets` volume. To pass API keys, add `-e DASHSCOPE_API_KEY=xxx` or `--env-file .env` to `docker run`.
 
 ---
 
