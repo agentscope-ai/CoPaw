@@ -91,6 +91,15 @@ class ConsoleConfig(BaseChannelConfig):
     enabled: bool = True
 
 
+class WecomConfig(BaseChannelConfig):
+    """WeCom (Enterprise WeChat) AI Bot channel config."""
+
+    bot_id: str = ""
+    secret: str = ""
+    media_dir: str = "~/.copaw/media"
+    max_reconnect_attempts: int = -1
+
+
 class VoiceChannelConfig(BaseChannelConfig):
     """Voice channel: Twilio ConversationRelay + Cloudflare Tunnel."""
 
@@ -119,6 +128,7 @@ class ChannelConfig(BaseModel):
     mqtt: MQTTConfig = MQTTConfig()
     console: ConsoleConfig = ConsoleConfig()
     voice: VoiceChannelConfig = VoiceChannelConfig()
+    wecom: WecomConfig = WecomConfig()
 
 
 class LastApiConfig(BaseModel):
@@ -437,4 +447,5 @@ ChannelConfigUnion = Union[
     MQTTConfig,
     ConsoleConfig,
     VoiceChannelConfig,
+    WecomConfig,
 ]

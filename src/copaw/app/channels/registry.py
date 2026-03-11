@@ -26,6 +26,7 @@ _BUILTIN_SPECS: dict[str, tuple[str, str]] = {
     "mqtt": (".mqtt", "MQTTChannel"),
     "console": (".console", "ConsoleChannel"),
     "voice": (".voice", "VoiceChannel"),
+    "wecom": (".wecom", "WecomChannel"),
 }
 
 # Required channels must load; failures are raised, not skipped.

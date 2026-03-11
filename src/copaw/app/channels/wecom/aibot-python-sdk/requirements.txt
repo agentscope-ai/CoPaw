@@ -1,0 +1,5 @@
+websockets>=12.0
+aiohttp>=3.9
+pyee>=11.0
+cryptography>=42.0
+certifi>=2023.0

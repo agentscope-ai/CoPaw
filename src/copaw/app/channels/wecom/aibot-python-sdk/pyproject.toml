@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "wecom-aibot-sdk"
+version = "1.0.0"
+description = "企业微信智能机器人 Python SDK —— 基于 WebSocket 长连接通道，提供消息收发、流式回复、模板卡片、事件回调、文件下载解密等核心能力。"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "WeCom", email = "wecom@tencent.com"},
+]
+keywords = ["wecom", "wechat-work", "aibot", "websocket", "sdk"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "websockets>=12.0",
+    "aiohttp>=3.9",
+    "pyee>=11.0",
+    "cryptography>=42.0",
+    "certifi>=2023.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nicognaW/aibot-node-sdk"
+
+[tool.setuptools.packages.find]
+include = ["aibot*"]
