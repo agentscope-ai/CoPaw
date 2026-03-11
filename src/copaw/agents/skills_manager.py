@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Skills management: sync skills from code to working_dir."""
+
 import filecmp
 import logging
 import shutil
@@ -40,6 +41,7 @@ class SkillInfo(BaseModel):
     """
 
     name: str
+    description: str = ""
     content: str
     source: str  # "builtin", "customized", or "active"
     path: str
@@ -161,9 +163,7 @@ def sync_skills_to_working_dir(
     # Filter by skill_names if specified
     if skill_names is not None:
         skills_to_sync = {
-            name: path
-            for name, path in skills_to_sync.items()
-            if name in skill_names
+            name: path for name, path in skills_to_sync.items() if name in skill_names
         }
 
     if not skills_to_sync:
@@ -235,12 +235,7 @@ def _is_directory_same(dir1: Path, dir2: Path) -> bool:
 
 def _compare_dircmp(dcmp: "filecmp.dircmp") -> bool:
     """Helper to recursively compare dircmp objects."""
-    if (
-        dcmp.left_only
-        or dcmp.right_only
-        or dcmp.funny_files
-        or dcmp.diff_files
-    ):
+    if dcmp.left_only or dcmp.right_only or dcmp.funny_files or dcmp.diff_files:
         return False
     for sub_dcmp in dcmp.subdirs.values():
         if not _compare_dircmp(sub_dcmp):
@@ -299,8 +294,7 @@ def sync_skills_from_active_to_customized(
             synced_count += 1
         except Exception as e:
             logger.debug(
-                "Failed to sync skill '%s' from active_skills to "
-                "customized_skills: %s",
+                "Failed to sync skill '%s' from active_skills to customized_skills: %s",
                 skill_name,
                 e,
             )
@@ -381,6 +375,12 @@ def _read_skills_from_dir(
 
         try:
             content = skill_md.read_text(encoding="utf-8")
+            description = ""
+            try:
+                post = frontmatter.loads(content)
+                description = str(post.get("description", "") or "")
+            except Exception:
+                description = ""
 
             # Build references directory tree
             references = {}
@@ -397,6 +397,7 @@ def _read_skills_from_dir(
             skills.append(
                 SkillInfo(
                     name=skill_dir.name,
+                    description=description,
                     content=content,
                     source=source,
                     path=str(skill_dir),
@@ -481,14 +482,12 @@ class SkillService:
             synced, _ = sync_skills_from_active_to_customized()
             if synced > 0:
                 logger.debug(
-                    "Synced %d skill(s) from active_skills to "
-                    "customized_skills",
+                    "Synced %d skill(s) from active_skills to customized_skills",
                     synced,
                 )
         except Exception as e:
             logger.debug(
-                "Failed to sync skills from active_skills to "
-                "customized_skills: %s",
+                "Failed to sync skills from active_skills to customized_skills: %s",
                 e,
             )
 
@@ -809,12 +808,10 @@ class SkillService:
 
         # Validate file_path starts with references/ or scripts/
         if not (
-            normalized.startswith("references/")
-            or normalized.startswith("scripts/")
+            normalized.startswith("references/") or normalized.startswith("scripts/")
         ):
             logger.error(
-                "Invalid file_path '%s'. "
-                "Must start with 'references/' or 'scripts/'.",
+                "Invalid file_path '%s'. Must start with 'references/' or 'scripts/'.",
                 file_path,
             )
             return None

@@ -69,6 +69,7 @@
     "invalidSkillUrlSource": "技能 URL 当前需要以 https://skills.sh/、https://clawhub.ai/、https://skillsmp.com/ 或 https://github.com/ 开头",
     "source": "来源",
     "path": "路径",
+    "skillDescription": "描述",
     "createSkill": "创建技能",
     "viewSkill": "查看技能",
     "editSkill": "编辑技能",

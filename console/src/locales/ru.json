@@ -69,6 +69,7 @@
     "invalidSkillUrlSource": "URL навыка должен начинаться с https://skills.sh/, https://clawhub.ai/, https://skillsmp.com/ или https://github.com/",
     "source": "Источник",
     "path": "Путь",
+    "skillDescription": "Описание",
     "createSkill": "Создать навык",
     "viewSkill": "Просмотреть навык",
     "editSkill": "Редактировать навык",

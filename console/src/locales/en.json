@@ -69,6 +69,7 @@
     "invalidSkillUrlSource": "Skill URL currently needs to start with https://skills.sh/, https://clawhub.ai/, https://skillsmp.com/, or https://github.com/",
     "source": "Source",
     "path": "Path",
+    "skillDescription": "Description",
     "createSkill": "Create Skill",
     "viewSkill": "View Skill",
     "editSkill": "Edit Skill",
