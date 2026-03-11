@@ -14,7 +14,7 @@ export interface CronParts {
 }
 
 const CRON_RE = /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/;
-const INTEGER_RE = /^(?:0|[1-9]\d*)$/;
+const INTEGER_RE = /^\d+$/;
 
 /**
  * Parse cron expression to CronParts
@@ -137,7 +137,7 @@ function parseDaysOfWeek(dayOfWeek: string): number[] {
       const end = parsePlainCronNumber(endText, 0, 6);
       if (start !== null && end !== null && start <= end) {
         for (let i = start; i <= end; i++) {
-          if (i >= 0 && i <= 6 && !days.includes(i)) {
+          if (!days.includes(i)) {
             days.push(i);
           }
         }

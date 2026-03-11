@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseCron, serializeCron } from "./parseCron.ts";
+import { parseCron, serializeCron } from "./parseCron";
+
+test("parseCron accepts leading-zero hour and minute fields", () => {
+  const parsed = parseCron("05 08 * * *");
+
+  assert.equal(parsed.type, "daily");
+  assert.equal(parsed.hour, 8);
+  assert.equal(parsed.minute, 5);
+  assert.equal(serializeCron(parsed), "5 8 * * *");
+});
 
 test("parseCron keeps plain daily schedules as structured daily", () => {
   const parsed = parseCron("0 9 * * *");
