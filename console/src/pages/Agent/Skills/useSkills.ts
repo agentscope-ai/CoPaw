@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { message, Modal } from "@agentscope-ai/design";
+import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import type { SkillSpec } from "../../../api/types";
 
 export function useSkills() {
+  const { t } = useTranslation();
   const [skills, setSkills] = useState<SkillSpec[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const fetchSkills = async () => {
     setLoading(true);
@@ -111,6 +114,32 @@ export function useSkills() {
     }
   };
 
+  const uploadSkill = async (file: File) => {
+    try {
+      setUploading(true);
+      const result = await api.uploadSkill(file, {
+        enable: true,
+        overwrite: false,
+      });
+      if (result?.count > 0) {
+        message.success(
+          t("skills.uploadSuccess") + `: ${result.imported.join(", ")}`,
+        );
+        await fetchSkills();
+        return true;
+      }
+      message.warning(t("skills.uploadNoChange"));
+      await fetchSkills();
+      return true;
+    } catch (error) {
+      console.error("Failed to upload skill", error);
+      message.error(t("skills.uploadFailed"));
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const deleteSkill = async (skill: SkillSpec) => {
     const confirmed = await new Promise<boolean>((resolve) => {
       Modal.confirm({
@@ -147,8 +176,10 @@ export function useSkills() {
     skills,
     loading,
     importing,
+    uploading,
     createSkill,
     importFromHub,
+    uploadSkill,
     toggleEnabled,
     deleteSkill,
   };
