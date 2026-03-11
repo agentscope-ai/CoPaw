@@ -65,6 +65,10 @@ unset PYTHONPATH
 export PYTHONHOME="$ENV_DIR"
 export COPAW_DESKTOP_APP=1
 
+# Preserve system PATH for accessing system commands (e.g. imsg, brew)
+# Prepend packaged env/bin so packaged Python takes precedence
+export PATH="$ENV_DIR/bin:$PATH"
+
 # Set SSL certificate paths for packaged environment
 # Query certifi path from the packaged Python interpreter
 if [ -x "$ENV_DIR/bin/python" ]; then
@@ -83,6 +87,7 @@ if [ ! -t 2 ]; then
   { echo "=== $(date) CoPaw starting ==="
     echo "ENV_DIR=$ENV_DIR"
     echo "Python: $ENV_DIR/bin/python (exists=$([ -x "$ENV_DIR/bin/python" ] && echo yes || echo no))"
+    echo "PATH=$PATH"
     echo "SSL_CERT_FILE=${SSL_CERT_FILE:-not set}"
     if [ -n "$SSL_CERT_FILE" ] && [ -f "$SSL_CERT_FILE" ]; then
       echo "SSL certificate file found at $SSL_CERT_FILE"
