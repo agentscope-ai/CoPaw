@@ -24,20 +24,4 @@ class LMStudioProvider(OpenAIProvider):
             self.models = models
         except Exception as exc:
             logger.debug("LM Studio model discovery failed: %s", exc)
-            models = self.models
-        return ProviderInfo(
-            id=self.id,
-            name=self.name,
-            base_url=self.base_url,
-            api_key=self.api_key_prefix + "*" * 6
-            if mock_secret and self.api_key
-            else self.api_key,
-            chat_model=self.chat_model,
-            models=models,
-            extra_models=self.extra_models,
-            api_key_prefix=self.api_key_prefix,
-            is_local=self.is_local,
-            is_custom=self.is_custom,
-            freeze_url=self.freeze_url,
-            require_api_key=self.require_api_key,
-        )
+        return await super().get_info(mock_secret=mock_secret)
