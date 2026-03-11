@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
-import { Drawer, Form, Input, Button, message } from "@agentscope-ai/design";
+import {
+  Drawer,
+  Form,
+  Input,
+  Button,
+  message,
+  Switch,
+} from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
-import type { SkillSpec } from "../../../../api/types";
+import type {
+  SkillConfigView,
+  SkillConfigUpdatePayload,
+  SkillSpec,
+} from "../../../../api/types";
 import { MarkdownCopy } from "../../../../components/MarkdownCopy/MarkdownCopy";
+import styles from "../index.module.less";
 
-/**
- * Parse frontmatter from content string.
- * Returns an object with parsed key-value pairs, or null if no valid frontmatter found.
- */
 function parseFrontmatter(content: string): Record<string, string> | null {
   const trimmed = content.trim();
   if (!trimmed.startsWith("---")) return null;
@@ -31,13 +39,47 @@ function parseFrontmatter(content: string): Record<string, string> | null {
   return result;
 }
 
+type SkillDrawerFormValues = SkillSpec & {
+  skillEnabled?: boolean;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  envJson?: string;
+  configJson?: string;
+};
+
 interface SkillDrawerProps {
   open: boolean;
   editingSkill: SkillSpec | null;
-  form: FormInstance<SkillSpec>;
+  form: FormInstance<SkillDrawerFormValues>;
   onClose: () => void;
   onSubmit: (values: SkillSpec) => void;
+  onSaveConfig: (
+    skillName: string,
+    payload: SkillConfigUpdatePayload,
+  ) => Promise<boolean>;
+  onLoadConfig: (skillName: string) => Promise<SkillConfigView | null>;
+  savingConfig?: boolean;
   onContentChange?: (content: string) => void;
+}
+
+function parseJsonRecord(
+  rawValue: string,
+  fieldName: string,
+): Record<string, unknown> {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return {};
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    throw new Error(`${fieldName} JSON invalid`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${fieldName} must be a JSON object`);
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export function SkillDrawer({
@@ -46,11 +88,15 @@ export function SkillDrawer({
   form,
   onClose,
   onSubmit,
+  onSaveConfig,
+  onLoadConfig,
+  savingConfig = false,
   onContentChange,
 }: SkillDrawerProps) {
   const { t } = useTranslation();
   const [showMarkdown, setShowMarkdown] = useState(true);
   const [contentValue, setContentValue] = useState("");
+  const [loadingConfig, setLoadingConfig] = useState(false);
 
   const validateFrontmatter = useCallback(
     (_: unknown, value: string) => {
@@ -76,57 +122,130 @@ export function SkillDrawer({
   );
 
   useEffect(() => {
-    if (editingSkill) {
+    let cancelled = false;
+
+    const loadConfig = async () => {
+      if (!editingSkill) {
+        setContentValue("");
+        form.resetFields();
+        return;
+      }
+
       setContentValue(editingSkill.content);
       form.setFieldsValue({
         name: editingSkill.name,
         content: editingSkill.content,
+        source: editingSkill.source,
+        path: editingSkill.path,
+        skillEnabled:
+          editingSkill.config_status?.enabled ?? editingSkill.enabled ?? false,
+        apiKey: "",
+        clearApiKey: false,
+        envJson: "",
+        configJson: "",
       });
-    } else {
-      setContentValue("");
-      form.resetFields();
-    }
-  }, [editingSkill, form]);
 
-  const handleSubmit = (values: { name: string; content: string }) => {
-    if (editingSkill) {
-      message.warning(t("skills.editNotSupported"));
-      onClose();
-    } else {
-      onSubmit({
-        ...values,
-        content: contentValue || values.content,
-        source: "",
-        path: "",
+      setLoadingConfig(true);
+      const configView = await onLoadConfig(editingSkill.name);
+      if (cancelled || !configView) {
+        setLoadingConfig(false);
+        return;
+      }
+
+      form.setFieldsValue({
+        skillEnabled: configView.enabled ?? editingSkill.enabled ?? false,
+        apiKey: "",
+        clearApiKey: false,
+        envJson: JSON.stringify(configView.env || {}, null, 2),
+        configJson: JSON.stringify(configView.config || {}, null, 2),
       });
+      setLoadingConfig(false);
+    };
+
+    loadConfig().catch(() => {
+      if (!cancelled) {
+        setLoadingConfig(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editingSkill, form, onLoadConfig]);
+
+  const handleCreateSubmit = (values: { name: string; content: string }) => {
+    onSubmit({
+      ...values,
+      content: contentValue || values.content,
+      source: "",
+      path: "",
+    });
+  };
+
+  const handleSaveConfig = async () => {
+    if (!editingSkill) {
+      return;
+    }
+    try {
+      const values = await form.validateFields([
+        "skillEnabled",
+        "apiKey",
+        "envJson",
+        "configJson",
+      ]);
+
+      const env = parseJsonRecord(values.envJson || "", "env");
+      const config = parseJsonRecord(values.configJson || "", "config");
+      const payload: SkillConfigUpdatePayload = {
+        enabled: values.skillEnabled ?? null,
+        clearApiKey: values.clearApiKey || false,
+        env: Object.fromEntries(
+          Object.entries(env).map(([key, value]) => [key, String(value ?? "")]),
+        ),
+        config,
+      };
+      if (values.apiKey?.trim()) {
+        payload.apiKey = values.apiKey.trim();
+      }
+
+      const success = await onSaveConfig(editingSkill.name, payload);
+      if (success) {
+        onClose();
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message);
+      }
     }
   };
 
   const handleContentChange = (content: string) => {
     setContentValue(content);
     form.setFieldsValue({ content });
-    // Re-validate the content field to give real-time feedback
     form.validateFields(["content"]).catch(() => {});
     if (onContentChange) {
       onContentChange(content);
     }
   };
 
+  const requirements = editingSkill?.metadata?.requires;
+  const missing = editingSkill?.eligibility;
+
   return (
     <Drawer
-      width={520}
+      width={640}
       placement="right"
       title={editingSkill ? t("skills.viewSkill") : t("skills.createSkill")}
       open={open}
       onClose={onClose}
       destroyOnClose
     >
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      <Form form={form} layout="vertical" onFinish={handleCreateSubmit}>
         {!editingSkill && (
           <>
             <Form.Item
               name="name"
-              label="Name"
+              label={t("skills.skillName")}
               rules={[{ required: true, message: t("skills.pleaseInputName") }]}
             >
               <Input placeholder={t("skills.skillNamePlaceholder")} />
@@ -134,7 +253,7 @@ export function SkillDrawer({
 
             <Form.Item
               name="content"
-              label="Content"
+              label={t("skills.skillContent")}
               rules={[{ required: true, validator: validateFrontmatter }]}
             >
               <MarkdownCopy
@@ -151,14 +270,7 @@ export function SkillDrawer({
             </Form.Item>
 
             <Form.Item>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 8,
-                  marginTop: 16,
-                }}
-              >
+              <div className={styles.drawerActions}>
                 <Button onClick={onClose}>{t("common.cancel")}</Button>
                 <Button type="primary" htmlType="submit">
                   {t("skills.create")}
@@ -170,11 +282,75 @@ export function SkillDrawer({
 
         {editingSkill && (
           <>
-            <Form.Item name="name" label="name">
-              <Input disabled />
-            </Form.Item>
+            <div className={styles.detailHeader}>
+              <div>
+                <div className={styles.detailTitle}>
+                  {editingSkill.metadata?.emoji || "🧩"} {editingSkill.name}
+                </div>
+                <div className={styles.detailSubTitle}>
+                  key: {editingSkill.resolved_skill_key || editingSkill.name}
+                </div>
+              </div>
+              <div
+                className={`${styles.eligibilityBadge} ${
+                  editingSkill.eligibility?.eligible
+                    ? styles.eligible
+                    : styles.ineligible
+                }`}
+              >
+                {editingSkill.eligibility?.eligible
+                  ? t("skills.eligible")
+                  : t("skills.ineligible")}
+              </div>
+            </div>
 
-            <Form.Item name="content" label="Content">
+            <div className={styles.metaGrid}>
+              <div className={styles.metaBlock}>
+                <div className={styles.metaLabel}>{t("skills.source")}</div>
+                <code className={styles.metaCode}>{editingSkill.source}</code>
+              </div>
+              <div className={styles.metaBlock}>
+                <div className={styles.metaLabel}>{t("skills.primaryEnv")}</div>
+                <code className={styles.metaCode}>
+                  {editingSkill.metadata?.primary_env || "-"}
+                </code>
+              </div>
+            </div>
+
+            <div className={styles.metaBlock}>
+              <div className={styles.metaLabel}>{t("skills.path")}</div>
+              <code className={`${styles.metaCode} ${styles.metaPath}`}>
+                {editingSkill.path}
+              </code>
+            </div>
+
+            <div className={styles.requirementsPanel}>
+              <div className={styles.sectionTitle}>{t("skills.requirements")}</div>
+              <div className={styles.requirementRow}>
+                <span>{t("skills.requiredEnv")}</span>
+                <code>{requirements?.env?.join(", ") || "-"}</code>
+              </div>
+              <div className={styles.requirementRow}>
+                <span>{t("skills.requiredConfig")}</span>
+                <code>{requirements?.config?.join(", ") || "-"}</code>
+              </div>
+              <div className={styles.requirementRow}>
+                <span>{t("skills.requiredBins")}</span>
+                <code>{requirements?.bins?.join(", ") || "-"}</code>
+              </div>
+              <div className={styles.requirementRow}>
+                <span>{t("skills.missing")}</span>
+                <code>
+                  {[
+                    ...(missing?.missing_env || []),
+                    ...(missing?.missing_config || []),
+                    ...(missing?.missing_bins || []),
+                  ].join(", ") || "-"}
+                </code>
+              </div>
+            </div>
+
+            <Form.Item name="content" label={t("skills.skillContent")}>
               <MarkdownCopy
                 content={editingSkill.content}
                 showMarkdown={showMarkdown}
@@ -186,26 +362,78 @@ export function SkillDrawer({
               />
             </Form.Item>
 
-            <Form.Item name="source" label="Source">
-              <Input disabled />
-            </Form.Item>
+            <div className={styles.sectionTitle}>{t("skills.runtimeConfig")}</div>
 
-            <Form.Item name="path" label="Path">
-              <Input disabled />
-            </Form.Item>
-
-            <div
-              style={{
-                padding: 12,
-                backgroundColor: "#fffbe6",
-                border: "1px solid #ffe58f",
-                borderRadius: 4,
-                marginTop: 16,
-              }}
+            <Form.Item
+              name="skillEnabled"
+              label={t("skills.skillEnabled")}
+              valuePropName="checked"
             >
-              <p style={{ margin: 0, fontSize: 12, color: "#8c8c8c" }}>
-                {t("skills.editNote")}
-              </p>
+              <Switch />
+            </Form.Item>
+
+            <Form.Item
+              name="apiKey"
+              label={t("skills.apiKey")}
+              extra={t("skills.apiKeyHint")}
+            >
+              <Input.Password
+                placeholder={t("skills.apiKeyPlaceholder")}
+                autoComplete="new-password"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="clearApiKey"
+              label={t("skills.clearApiKey")}
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+
+            <Form.Item
+              name="envJson"
+              label={t("skills.envConfig")}
+              extra={t("skills.envConfigHint")}
+            >
+              <Input.TextArea
+                rows={6}
+                placeholder='{\n  "DEMO_REGION": "cn"\n}'
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="configJson"
+              label={t("skills.extraConfig")}
+              extra={t("skills.extraConfigHint")}
+            >
+              <Input.TextArea
+                rows={6}
+                placeholder='{\n  "endpoint": "https://example.com"\n}'
+              />
+            </Form.Item>
+
+            <div className={styles.hintBox}>
+              {t("skills.configStatusHint", {
+                envKeys:
+                  editingSkill.config_status?.env_keys.join(", ") || "-",
+                configKeys:
+                  editingSkill.config_status?.config_keys.join(", ") || "-",
+                hasApiKey: editingSkill.config_status?.has_api_key
+                  ? t("common.enabled")
+                  : t("common.disabled"),
+              })}
+            </div>
+
+            <div className={styles.drawerActions}>
+              <Button onClick={onClose}>{t("common.cancel")}</Button>
+              <Button
+                type="primary"
+                onClick={handleSaveConfig}
+                loading={savingConfig || loadingConfig}
+              >
+                {t("common.save")}
+              </Button>
             </div>
           </>
         )}

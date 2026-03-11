@@ -13,10 +13,13 @@ function SkillsPage() {
     skills,
     loading,
     importing,
+    savingConfig,
     createSkill,
     importFromHub,
     toggleEnabled,
     deleteSkill,
+    saveSkillConfig,
+    loadSkillConfig,
   } = useSkills();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -232,6 +235,9 @@ function SkillsPage() {
         form={form}
         onClose={handleDrawerClose}
         onSubmit={handleSubmit}
+        onSaveConfig={saveSkillConfig}
+        onLoadConfig={loadSkillConfig}
+        savingConfig={savingConfig}
       />
     </div>
   );

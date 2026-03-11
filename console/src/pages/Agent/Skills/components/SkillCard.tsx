@@ -85,6 +85,7 @@ export function SkillCard({
 }: SkillCardProps) {
   const { t } = useTranslation();
   const isCustomized = skill.source === "customized";
+  const isEligible = skill.eligibility?.eligible ?? true;
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -101,7 +102,9 @@ export function SkillCard({
       onMouseLeave={onMouseLeave}
       className={`${styles.skillCard} ${
         skill.enabled ? styles.enabledCard : ""
-      } ${isHover ? styles.hover : styles.normal}`}
+      } ${!isEligible ? styles.ineligibleCard : ""} ${
+        isHover ? styles.hover : styles.normal
+      }`}
     >
       <div
         style={{
@@ -113,7 +116,9 @@ export function SkillCard({
       >
         <div className={styles.cardHeader}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className={styles.fileIcon}>{getFileIcon(skill.name)}</span>
+            <span className={styles.fileIcon}>
+              {skill.metadata?.emoji || getFileIcon(skill.name)}
+            </span>
             <h3 className={styles.skillTitle}>{skill.name}</h3>
           </div>
           <div className={styles.statusContainer}>
@@ -138,9 +143,16 @@ export function SkillCard({
         </div>
 
         <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.path")}</div>
+          <div className={styles.infoLabel}>{t("skills.runtimeStatus")}</div>
+          <code className={styles.infoCode}>
+            {isEligible ? t("skills.eligible") : t("skills.ineligible")}
+          </code>
+        </div>
+
+        <div className={styles.infoSection}>
+          <div className={styles.infoLabel}>{t("skills.skillKey")}</div>
           <code className={`${styles.infoCode} ${styles.path}`}>
-            {skill.path}
+            {skill.resolved_skill_key || skill.path}
           </code>
         </div>
       </div>

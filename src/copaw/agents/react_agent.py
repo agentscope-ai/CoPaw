@@ -24,8 +24,9 @@ from .prompt import build_system_prompt_from_working_dir
 from .skills_manager import (
     ensure_skills_initialized,
     get_working_skills_dir,
-    list_available_skills,
+    SkillService,
 )
+from .skill_runtime import apply_skill_env_overrides
 from .tools import (
     browser_use,
     desktop_screenshot,
@@ -209,22 +210,42 @@ class CoPawAgent(ReActAgent):
         """
         # Check skills initialization
         ensure_skills_initialized()
+        self._sync_registered_skills(toolkit)
 
+    def _sync_registered_skills(self, toolkit: Toolkit) -> list:
+        """Synchronize toolkit skills with current active+eligible skills."""
         working_skills_dir = get_working_skills_dir()
-        available_skills = list_available_skills()
+        available_skills = SkillService.list_available_skills()
+        eligible_skills = [
+            skill
+            for skill in available_skills
+            if skill.eligibility is None or skill.eligibility.eligible
+        ]
 
-        for skill_name in available_skills:
-            skill_dir = working_skills_dir / skill_name
-            if skill_dir.exists():
-                try:
-                    toolkit.register_agent_skill(str(skill_dir))
-                    logger.debug("Registered skill: %s", skill_name)
-                except Exception as e:
-                    logger.error(
-                        "Failed to register skill '%s': %s",
-                        skill_name,
-                        e,
-                    )
+        desired_names = {skill.name for skill in eligible_skills}
+        registered_names = set(toolkit.skills.keys())
+
+        for skill_name in sorted(registered_names - desired_names):
+            toolkit.remove_agent_skill(skill_name)
+            logger.debug("Removed ineligible skill: %s", skill_name)
+
+        for skill in eligible_skills:
+            if skill.name in registered_names:
+                continue
+            skill_dir = working_skills_dir / skill.name
+            if not skill_dir.exists():
+                continue
+            try:
+                toolkit.register_agent_skill(str(skill_dir))
+                logger.debug("Registered skill: %s", skill.name)
+            except Exception as e:
+                logger.error(
+                    "Failed to register skill '%s': %s",
+                    skill.name,
+                    e,
+                )
+
+        return eligible_skills
 
     def _build_sys_prompt(self) -> str:
         """Build system prompt from working dir files and env context.
@@ -534,7 +555,15 @@ class CoPawAgent(ReActAgent):
             return msg
 
         # Normal message processing
-        return await super().reply(msg=msg, structured_model=structured_model)
+        eligible_skills = self._sync_registered_skills(self.toolkit)
+        with apply_skill_env_overrides(
+            skills=eligible_skills,
+            config=load_config(),
+        ):
+            return await super().reply(
+                msg=msg,
+                structured_model=structured_model,
+            )
 
     async def interrupt(self, msg: Msg | list[Msg] | None = None) -> None:
         """Interrupt the current reply process and wait for cleanup."""

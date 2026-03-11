@@ -1,12 +1,17 @@
 import { useState, useEffect } from "react";
 import { message, Modal } from "@agentscope-ai/design";
 import api from "../../../api";
-import type { SkillSpec } from "../../../api/types";
+import type {
+  SkillConfigUpdatePayload,
+  SkillConfigView,
+  SkillSpec,
+} from "../../../api/types";
 
 export function useSkills() {
   const [skills, setSkills] = useState<SkillSpec[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const fetchSkills = async () => {
     setLoading(true);
@@ -143,13 +148,47 @@ export function useSkills() {
     }
   };
 
+  const saveSkillConfig = async (
+    skillName: string,
+    payload: SkillConfigUpdatePayload,
+  ) => {
+    try {
+      setSavingConfig(true);
+      await api.updateSkillConfig(skillName, payload);
+      message.success("Saved successfully");
+      await fetchSkills();
+      return true;
+    } catch (error) {
+      console.error("Failed to save skill config", error);
+      message.error("Failed to save");
+      return false;
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const loadSkillConfig = async (
+    skillName: string,
+  ): Promise<SkillConfigView | null> => {
+    try {
+      return await api.getSkillConfig(skillName);
+    } catch (error) {
+      console.error("Failed to load skill config", error);
+      message.error("Failed to load skill config");
+      return null;
+    }
+  };
+
   return {
     skills,
     loading,
     importing,
+    savingConfig,
     createSkill,
     importFromHub,
     toggleEnabled,
     deleteSkill,
+    saveSkillConfig,
+    loadSkillConfig,
   };
 }

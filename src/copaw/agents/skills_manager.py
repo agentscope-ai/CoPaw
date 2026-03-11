@@ -5,10 +5,22 @@ import logging
 import shutil
 from pathlib import Path
 from typing import Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import frontmatter
 
+from ..config import load_config, Config
 from ..constant import ACTIVE_SKILLS_DIR, CUSTOMIZED_SKILLS_DIR
+from .skill_metadata import (
+    SkillMetadata,
+    parse_skill_metadata_from_content,
+    resolve_skill_key,
+)
+from .skill_runtime import (
+    SkillConfigStatus,
+    SkillEligibilityStatus,
+    build_skill_config_status,
+    compute_skill_eligibility,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +55,12 @@ class SkillInfo(BaseModel):
     content: str
     source: str  # "builtin", "customized", or "active"
     path: str
-    references: dict[str, Any] = {}
-    scripts: dict[str, Any] = {}
+    references: dict[str, Any] = Field(default_factory=dict)
+    scripts: dict[str, Any] = Field(default_factory=dict)
+    metadata: SkillMetadata | None = None
+    resolved_skill_key: str = ""
+    eligibility: SkillEligibilityStatus | None = None
+    config_status: SkillConfigStatus | None = None
 
 
 def get_builtin_skills_dir() -> Path:
@@ -355,6 +371,7 @@ def ensure_skills_initialized() -> None:
 def _read_skills_from_dir(
     directory: Path,
     source: str,
+    config: Config | None = None,
 ) -> list[SkillInfo]:
     """
     Read skills from a directory and return SkillInfo list.
@@ -381,6 +398,18 @@ def _read_skills_from_dir(
 
         try:
             content = skill_md.read_text(encoding="utf-8")
+            metadata = parse_skill_metadata_from_content(content)
+            resolved_skill_key = resolve_skill_key(skill_dir.name, metadata)
+            eligibility = compute_skill_eligibility(
+                config=config,
+                skill_name=skill_dir.name,
+                metadata=metadata,
+            )
+            config_status = build_skill_config_status(
+                config=config,
+                skill_name=skill_dir.name,
+                metadata=metadata,
+            )
 
             # Build references directory tree
             references = {}
@@ -402,6 +431,10 @@ def _read_skills_from_dir(
                     path=str(skill_dir),
                     references=references,
                     scripts=scripts,
+                    metadata=metadata,
+                    resolved_skill_key=resolved_skill_key,
+                    eligibility=eligibility,
+                    config_status=config_status,
                 ),
             )
         except Exception as e:
@@ -478,6 +511,7 @@ class SkillService:
             List of SkillInfo with name, content, source, and path.
         """
         try:
+            config = load_config()
             synced, _ = sync_skills_from_active_to_customized()
             if synced > 0:
                 logger.debug(
@@ -491,15 +525,24 @@ class SkillService:
                 "customized_skills: %s",
                 e,
             )
+            config = load_config()
 
         skills: list[SkillInfo] = []
 
         # Collect from builtin and customized skills
         skills.extend(
-            _read_skills_from_dir(get_builtin_skills_dir(), "builtin"),
+            _read_skills_from_dir(
+                get_builtin_skills_dir(),
+                "builtin",
+                config=config,
+            ),
         )
         skills.extend(
-            _read_skills_from_dir(get_customized_skills_dir(), "customized"),
+            _read_skills_from_dir(
+                get_customized_skills_dir(),
+                "customized",
+                config=config,
+            ),
         )
 
         return skills
@@ -512,7 +555,30 @@ class SkillService:
         Returns:
             List of SkillInfo with name, content, source, and path.
         """
-        return _read_skills_from_dir(get_active_skills_dir(), "active")
+        return _read_skills_from_dir(
+            get_active_skills_dir(),
+            "active",
+            config=load_config(),
+        )
+
+    @staticmethod
+    def get_skill(name: str) -> SkillInfo | None:
+        """Return one skill, preferring active over customized over builtin."""
+        search_order = [
+            (get_active_skills_dir(), "active"),
+            (get_customized_skills_dir(), "customized"),
+            (get_builtin_skills_dir(), "builtin"),
+        ]
+        config = load_config()
+        for directory, source in search_order:
+            for skill in _read_skills_from_dir(
+                directory,
+                source,
+                config=config,
+            ):
+                if skill.name == name:
+                    return skill
+        return None
 
     @staticmethod
     def create_skill(

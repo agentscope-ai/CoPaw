@@ -1,5 +1,10 @@
 import { request } from "../request";
-import type { HubSkillSpec, SkillSpec } from "../types";
+import type {
+  HubSkillSpec,
+  SkillConfigUpdatePayload,
+  SkillConfigView,
+  SkillSpec,
+} from "../types";
 
 export const skillApi = {
   listSkills: () => request<SkillSpec[]>("/skills"),
@@ -32,6 +37,20 @@ export const skillApi = {
   deleteSkill: (skillName: string) =>
     request<{ deleted: boolean }>(`/skills/${encodeURIComponent(skillName)}`, {
       method: "DELETE",
+    }),
+
+  getSkillConfig: (skillName: string) =>
+    request<SkillConfigView>(
+      `/skills/${encodeURIComponent(skillName)}/config`,
+    ),
+
+  updateSkillConfig: (
+    skillName: string,
+    payload: SkillConfigUpdatePayload,
+  ) =>
+    request<SkillConfigView>(`/skills/${encodeURIComponent(skillName)}/config`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
     }),
 
   searchHubSkills: (query: string, limit = 20) =>

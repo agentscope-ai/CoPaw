@@ -3,6 +3,8 @@ import logging
 from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from ...config import load_config, save_config
+from ...config.config import SkillEntryConfig
 from ...agents.skills_manager import (
     SkillService,
     SkillInfo,
@@ -19,6 +21,24 @@ logger = logging.getLogger(__name__)
 
 class SkillSpec(SkillInfo):
     enabled: bool = False
+
+
+class SkillConfigView(BaseModel):
+    key: str
+    enabled: bool | None = None
+    has_api_key: bool = False
+    env: dict[str, str] = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict)
+    env_keys: list[str] = Field(default_factory=list)
+    config_keys: list[str] = Field(default_factory=list)
+
+
+class SkillConfigUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    api_key: str | None = Field(default=None, alias="apiKey")
+    clear_api_key: bool | None = Field(default=None, alias="clearApiKey")
+    env: dict[str, str] | None = None
+    config: dict[str, Any] | None = None
 
 
 class CreateSkillRequest(BaseModel):
@@ -59,44 +79,52 @@ class HubInstallRequest(BaseModel):
 router = APIRouter(prefix="/skills", tags=["skills"])
 
 
+def _build_skill_spec(skill: SkillInfo, enabled_skills: set[str]) -> SkillSpec:
+    return SkillSpec(
+        name=skill.name,
+        content=skill.content,
+        source=skill.source,
+        path=skill.path,
+        references=skill.references,
+        scripts=skill.scripts,
+        metadata=skill.metadata,
+        resolved_skill_key=skill.resolved_skill_key,
+        eligibility=skill.eligibility,
+        config_status=skill.config_status,
+        enabled=skill.name in enabled_skills,
+    )
+
+
+def _build_skill_config_view(
+    skill_key: str,
+    entry: SkillEntryConfig | None,
+) -> SkillConfigView:
+    entry = entry or SkillEntryConfig()
+    return SkillConfigView(
+        key=skill_key,
+        enabled=entry.enabled,
+        has_api_key=bool(entry.api_key),
+        env=dict(entry.env or {}),
+        config=dict(entry.config or {}),
+        env_keys=sorted((entry.env or {}).keys()),
+        config_keys=sorted((entry.config or {}).keys()),
+    )
+
+
 @router.get("")
 async def list_skills() -> list[SkillSpec]:
     all_skills = SkillService.list_all_skills()
 
-    available_skills = list_available_skills()
-    skills_spec = []
-    for skill in all_skills:
-        skills_spec.append(
-            SkillSpec(
-                name=skill.name,
-                content=skill.content,
-                source=skill.source,
-                path=skill.path,
-                references=skill.references,
-                scripts=skill.scripts,
-                enabled=skill.name in available_skills,
-            ),
-        )
-    return skills_spec
+    available_skills = set(list_available_skills())
+    return [_build_skill_spec(skill, available_skills) for skill in all_skills]
 
 
 @router.get("/available")
 async def get_available_skills() -> list[SkillSpec]:
     available_skills = SkillService.list_available_skills()
-    skills_spec = []
-    for skill in available_skills:
-        skills_spec.append(
-            SkillSpec(
-                name=skill.name,
-                content=skill.content,
-                source=skill.source,
-                path=skill.path,
-                references=skill.references,
-                scripts=skill.scripts,
-                enabled=True,
-            ),
-        )
-    return skills_spec
+    return [
+        _build_skill_spec(skill, {skill.name}) for skill in available_skills
+    ]
 
 
 @router.get("/hub/search")
@@ -187,6 +215,67 @@ async def create_skill(request: CreateSkillRequest):
         scripts=request.scripts,
     )
     return {"created": result}
+
+
+@router.get("/{skill_name}/config")
+async def get_skill_config(skill_name: str) -> SkillConfigView:
+    skill = SkillService.get_skill(skill_name)
+    if skill is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill '{skill_name}' not found",
+        )
+    config = load_config()
+    skill_key = skill.resolved_skill_key or skill.name
+    entry = config.skills.entries.get(skill_key)
+    return _build_skill_config_view(skill_key, entry)
+
+
+@router.put("/{skill_name}/config")
+async def put_skill_config(
+    skill_name: str,
+    request: SkillConfigUpdateRequest,
+) -> SkillConfigView:
+    skill = SkillService.get_skill(skill_name)
+    if skill is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill '{skill_name}' not found",
+        )
+
+    config = load_config()
+    skill_key = skill.resolved_skill_key or skill.name
+    existing = config.skills.entries.get(skill_key, SkillEntryConfig())
+    update_data = request.model_dump(exclude_unset=True, by_alias=False)
+
+    if "enabled" in update_data:
+        existing.enabled = update_data["enabled"]
+    if update_data.get("clear_api_key"):
+        existing.api_key = ""
+    elif update_data.get("api_key"):
+        existing.api_key = update_data["api_key"] or ""
+    if "env" in update_data:
+        existing.env = update_data["env"] or {}
+    if "config" in update_data:
+        existing.config = update_data["config"] or {}
+
+    if (
+        existing.enabled is None
+        and not existing.api_key
+        and not existing.env
+        and not existing.config
+    ):
+        config.skills.entries.pop(skill_key, None)
+    else:
+        config.skills.entries[skill_key] = existing
+    save_config(config)
+
+    refreshed = SkillService.get_skill(skill_name)
+    refreshed_key = refreshed.resolved_skill_key if refreshed else skill_key
+    return _build_skill_config_view(
+        refreshed_key or skill_key,
+        config.skills.entries.get(refreshed_key or skill_key),
+    )
 
 
 @router.post("/{skill_name}/disable")
