@@ -233,7 +233,7 @@ const DOC_TITLES: Record<Lang, Record<string, string>> = {
   zh: {
     "docs.intro": "项目介绍",
     "docs.quickstart": "快速开始",
-    "docs.desktop": "桌面版",
+    "docs.desktop": "桌面应用",
     "docs.console": "控制台",
     "docs.models": "模型",
     "docs.channels": "频道配置",
