@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   // Empty = same-origin; frontend and backend served together, no hardcoded host.
   const apiBaseUrl = env.BASE_URL ?? "";
   // Base path for serving behind a reverse proxy URL prefix (e.g. "/copaw/").
-  const basePath = env.VITE_BASE_PATH ?? "/";
+  const basePath = (env.VITE_BASE_PATH || "/").replace(/\/?$/, "/");
 
   return {
     base: basePath,
