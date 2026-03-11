@@ -369,7 +369,7 @@ copaw app # 启动服务
 | [频道配置](https://copaw.agentscope.io/docs/channels)     | 钉钉、飞书、QQ、Discord、iMessage 等 |
 | [Skills](https://copaw.agentscope.io/docs/skills)         | 扩展与自定义能力                     |
 | [MCP](https://copaw.agentscope.io/docs/mcp)               | 管理 MCP 客户端                     |
-| [记忆](https://copaw.agentscope.io/docs/memory)           | 上下文管理与长期记忆                 |
+| [记忆](https://copaw.agentscope.io/docs/memory)           | 长期记忆                 |
 | [上下文](https://copaw.agentscope.io/docs/context)       | 上下文管理机制                       |
 | [魔法命令](https://copaw.agentscope.io/docs/commands)           | 控制对话状态，无需等待AI理解        |
 | [心跳](https://copaw.agentscope.io/docs/heartbeat)        | 定时自检与摘要                       |

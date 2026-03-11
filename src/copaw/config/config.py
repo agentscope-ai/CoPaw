@@ -192,14 +192,15 @@ class AgentsRunningConfig(BaseModel):
 
     memory_compact_ratio: float = Field(
         default=0.75,
-        ge=0.01,
-        le=0.99,
+        ge=0.3,
+        le=0.9,
         description="Ratio of memory to compact when memory is full",
     )
 
     memory_reserve_ratio: float = Field(
         default=0.1,
-        ge=0.01,
+        ge=0.05,
+        le=0.3,
         description="Ratio of memory to reserve when compact memory",
     )
 
@@ -211,6 +212,7 @@ class AgentsRunningConfig(BaseModel):
     tool_result_compact_keep_n: int = Field(
         default=5,
         ge=1,
+        le=10,
         description=(
             "Number of tool result messages to keep in memory when compacting"
         ),

@@ -363,7 +363,7 @@ copaw app # start the server
 | [Channels](https://copaw.agentscope.io/docs/channels)                  | DingTalk, Feishu, QQ, Discord, iMessage, and more |
 | [Skills](https://copaw.agentscope.io/docs/skills)                      | Extend and customize capabilities               |
 | [MCP](https://copaw.agentscope.io/docs/mcp)                            | Manage MCP clients                               |
-| [Memory](https://copaw.agentscope.io/docs/memory)                     | Context and long-term memory                     |
+| [Memory](https://copaw.agentscope.io/docs/memory)                     | Long-term memory                     |
 | [Context](https://copaw.agentscope.io/docs/context)                   | Context management mechanism                     |
 | [Magic commands](https://copaw.agentscope.io/docs/commands)           | Control conversation state without waiting for the AI |
 | [Heartbeat](https://copaw.agentscope.io/docs/heartbeat)                | Scheduled check-in and digest                    |
