@@ -99,3 +99,53 @@ def test_normalize_file_scheme_file_block() -> None:
             "text": "[Local file omitted for model call: report.csv]",
         },
     ]
+
+
+def test_normalize_plain_local_path_image_block() -> None:
+    msg = Msg(
+        name="assistant",
+        content=[
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "/tmp/plain-path.png",
+                },
+            },
+        ],
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "[Local media omitted for model call: /tmp/plain-path.png]",
+        },
+    ]
+
+
+def test_normalize_plain_windows_path_image_block() -> None:
+    msg = Msg(
+        name="assistant",
+        content=[
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "C:/tmp/plain-path.png",
+                },
+            },
+        ],
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "[Local media omitted for model call: C:/tmp/plain-path.png]",
+        },
+    ]

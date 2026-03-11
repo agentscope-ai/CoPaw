@@ -10,10 +10,11 @@ Example:
 """
 
 import logging
+import os
+import re
 from copy import deepcopy
 from typing import Sequence, Tuple, Type, Any
 from functools import wraps
-from urllib.parse import urlparse
 
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
 from agentscope.model import ChatModelBase, OpenAIChatModel
@@ -267,78 +268,90 @@ def _strip_top_level_message_name(
     return messages
 
 
+_WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def _extract_local_path_from_url(url: Any) -> str | None:
+    """Return a local filesystem path if url points to local file."""
+    if not isinstance(url, str) or not url:
+        return None
+
+    if url.startswith("file://"):
+        return _file_url_to_path(url)
+
+    if url.startswith(("http://", "https://", "data:")):
+        return None
+
+    if _WINDOWS_ABS_PATH_RE.match(url):
+        return url
+
+    if url.startswith(("/", "\\")):
+        return url
+
+    if "://" in url:
+        return None
+
+    return None
+
+
 def _normalize_messages_for_model(msgs: list[Msg]) -> list[Msg]:
     """Normalize messages before formatting for model APIs."""
     normalized: list[Msg] = []
 
-    for msg in deepcopy(msgs):
+    for msg in msgs:
+        new_content = None
         content = msg.content
 
         if isinstance(content, str):
-            msg.content = [{"type": "text", "text": content}]
-            normalized.append(msg)
-            continue
+            new_content = [{"type": "text", "text": content}]
+        elif not isinstance(content, list):
+            new_content = [{"type": "text", "text": str(content)}]
+        else:
+            fixed_blocks: list[dict] = []
+            changed = False
+            for block in content:
+                if not isinstance(block, dict):
+                    fixed_blocks.append({"type": "text", "text": str(block)})
+                    changed = True
+                    continue
 
-        if not isinstance(content, list):
-            msg.content = [{"type": "text", "text": str(content)}]
-            normalized.append(msg)
-            continue
-
-        fixed_blocks: list[dict] = []
-        for block in content:
-            if not isinstance(block, dict):
-                fixed_blocks.append({"type": "text", "text": str(block)})
-                continue
-
-            block_type = block.get("type")
-            if block_type in {"image", "audio", "video"}:
-                source = block.get("source")
-                if isinstance(source, dict):
-                    url = source.get("url")
-                    if isinstance(url, str) and url.startswith("file://"):
-                        local_path = _file_url_to_path(url)
-                        fixed_blocks.append(
-                            {
-                                "type": "text",
-                                "text": (
-                                    "[Local media omitted for model call: "
-                                    f"{local_path}]"
-                                ),
-                            },
-                        )
+                block_type = block.get("type")
+                if block_type in {"image", "audio", "video", "file"}:
+                    source = block.get("source")
+                    local_path = None
+                    if isinstance(source, dict):
+                        local_path = _extract_local_path_from_url(source.get("url"))
+                    if local_path:
+                        if block_type == "file":
+                            filename = block.get("filename") or os.path.basename(
+                                local_path.replace("\\", "/"),
+                            )
+                            text = (
+                                "[Local file omitted for model call: "
+                                f"{filename or local_path}]"
+                            )
+                        else:
+                            text = f"[Local media omitted for model call: {local_path}]"
+                        fixed_blocks.append({"type": "text", "text": text})
+                        changed = True
                         continue
 
-            if block_type == "file":
-                source = block.get("source")
-                if isinstance(source, dict):
-                    url = source.get("url")
-                    if isinstance(url, str) and url.startswith("file://"):
-                        local_path = _file_url_to_path(url)
-                        filename = (
-                            block.get("filename")
-                            or urlparse(
-                                local_path,
-                            ).path.split("/")[-1]
-                        )
-                        fixed_blocks.append(
-                            {
-                                "type": "text",
-                                "text": (
-                                    "[Local file omitted for model call: "
-                                    f"{filename or local_path}]"
-                                ),
-                            },
-                        )
-                        continue
+                if not isinstance(block_type, str):
+                    fixed_blocks.append({"type": "text", "text": str(block)})
+                    changed = True
+                    continue
 
-            if not isinstance(block_type, str):
-                fixed_blocks.append({"type": "text", "text": str(block)})
-                continue
+                fixed_blocks.append(block)
 
-            fixed_blocks.append(block)
+            if changed:
+                new_content = fixed_blocks
 
-        msg.content = fixed_blocks
-        normalized.append(msg)
+        if new_content is None:
+            normalized.append(msg)
+        else:
+            msg_copy = deepcopy(msg)
+            msg_copy.content = new_content
+            normalized.append(msg_copy)
 
     return normalized
 
