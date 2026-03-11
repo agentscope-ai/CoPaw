@@ -432,6 +432,19 @@ class DingTalkChannel(BaseChannel):
                 len(self._processing_message_ids),
             )
 
+    @staticmethod
+    def _safe_set_future_result(
+        future: "asyncio.Future[str]",
+        text: str,
+    ) -> None:
+        """Set future result only if not already done (idempotent).
+
+        Guards against InvalidStateError when _ack_early already resolved
+        the future before _reply_sync_batch is called at stream end.
+        """
+        if not future.done():
+            future.set_result(text)
+
     def _reply_sync(self, meta: Dict[str, Any], text: str) -> None:
         """Resolve reply_future on the stream thread's loop so process()
         can continue and reply.
@@ -440,7 +453,11 @@ class DingTalkChannel(BaseChannel):
         reply_future = meta.get("reply_future")
         if reply_loop is None or reply_future is None:
             return
-        reply_loop.call_soon_threadsafe(reply_future.set_result, text)
+        reply_loop.call_soon_threadsafe(
+            self._safe_set_future_result,
+            reply_future,
+            text,
+        )
         if "_message_ids" in meta:
             ids = meta["_message_ids"]
         else:
@@ -456,13 +473,50 @@ class DingTalkChannel(BaseChannel):
             for reply_loop, reply_future in lst:
                 if reply_loop and reply_future:
                     reply_loop.call_soon_threadsafe(
-                        reply_future.set_result,
+                        self._safe_set_future_result,
+                        reply_future,
                         text,
                     )
             ids = meta["_message_ids"] if "_message_ids" in meta else []
             self._release_message_ids(ids)
         else:
             self._reply_sync(meta, text)
+
+    def _ack_early(self, meta: Dict[str, Any], text: str) -> None:
+        """Resolve reply_futures immediately for streaming paths (AI card /
+        sessionWebhook) WITHOUT releasing dedup msg_ids.
+
+        Unblocks the DingTalk stream callback handler so it can return
+        STATUS_OK to the SDK quickly, preventing DingTalk retry storms
+        during long LLM generation. Dedup msg_ids are released later by
+        _reply_sync_batch once streaming fully completes, so any DingTalk
+        re-delivery before that point is still correctly rejected.
+        """
+        lst = meta.get("_reply_futures_list") or []
+        if lst:
+            for reply_loop, reply_future in lst:
+                if reply_loop and reply_future:
+                    reply_loop.call_soon_threadsafe(
+                        self._safe_set_future_result,
+                        reply_future,
+                        text,
+                    )
+            futures_count = len(lst)
+        else:
+            reply_loop = meta.get("reply_loop")
+            reply_future = meta.get("reply_future")
+            if reply_loop and reply_future:
+                reply_loop.call_soon_threadsafe(
+                    self._safe_set_future_result,
+                    reply_future,
+                    text,
+                )
+            futures_count = 1 if meta.get("reply_future") else 0
+        logger.debug(
+            "dingtalk _ack_early: text=%r futures_count=%s",
+            text,
+            futures_count,
+        )
 
     def _get_session_webhook(
         self,
@@ -1359,6 +1413,10 @@ class DingTalkChannel(BaseChannel):
         last_response = None
         accumulated_parts: list = []
         event_count = 0
+        # _acked_early: reply_future already resolved so DingTalk handler
+        # returned STATUS_OK quickly; msg_ids still held for dedup until
+        # streaming fully completes (_reply_sync_batch at the end).
+        _acked_early = False
         conversation_id = str(meta.get("conversation_id") or "")
         use_ai_card = self._ai_card_enabled() and bool(conversation_id)
         logger.info(
@@ -1379,6 +1437,17 @@ class DingTalkChannel(BaseChannel):
                     conversation_id,
                     meta=meta,
                     inbound=True,
+                )
+                # AI card created: ACK DingTalk immediately so the stream
+                # callback handler returns STATUS_OK without waiting for
+                # the full LLM response. This stops DingTalk retry storms
+                # on long-form generations. Dedup msg_ids are kept until
+                # streaming finishes (see _reply_sync_batch below).
+                self._ack_early(reply_meta, SENT_VIA_AI_CARD)
+                _acked_early = True
+                logger.info(
+                    "dingtalk _ack_early: AI card created, "
+                    "handler unblocked early",
                 )
             except Exception:
                 logger.exception(
@@ -1463,6 +1532,16 @@ class DingTalkChannel(BaseChannel):
                             body.strip(),
                             bot_prefix="",
                         )
+                        # First webhook message sent: ACK DingTalk early so
+                        # handler returns STATUS_OK without waiting for the
+                        # full LLM response.
+                        if not _acked_early:
+                            self._ack_early(reply_meta, SENT_VIA_WEBHOOK)
+                            _acked_early = True
+                            logger.info(
+                                "dingtalk _ack_early: first webhook chunk "
+                                "sent, handler unblocked early",
+                            )
                     _media_types = (
                         ContentType.IMAGE,
                         ContentType.FILE,
