@@ -395,7 +395,11 @@ def _read_skills_from_dir(
                     skill_dir.name,
                     e,
                 )
-                logger.debug("Invalid SKILL.md path: %s", skill_md)
+                logger.debug(
+                    "Invalid SKILL.md frontmatter/content in '%s': %r",
+                    skill_md,
+                    e,
+                )
                 description = ""
 
             # Build references directory tree
@@ -827,7 +831,7 @@ class SkillService:
         is_scripts = normalized.startswith("scripts/")
         if not (is_references or is_scripts):
             logger.error(
-                "Invalid file_path '%s'. Must start with refs/scripts.",
+                "Invalid file_path '%s'. Must start with refs or scripts.",
                 file_path,
             )
             return None
@@ -847,7 +851,7 @@ class SkillService:
             base_dir = get_builtin_skills_dir()
 
         skill_dir = base_dir / skill_name
-        full_path = skill_dir / file_path
+        full_path = skill_dir / normalized
 
         # Check if skill exists
         if not skill_dir.exists():
