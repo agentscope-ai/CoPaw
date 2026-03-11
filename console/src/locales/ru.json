@@ -467,8 +467,8 @@
   "agentConfig": {
     "title": "Конфигурация",
     "description": "Настройка параметров выполнения агента",
-    "reactAgentTitle": "ReAct Agent",
-    "contextManagementTitle": "Context Management",
+    "reactAgentTitle": "Агент ReAct",
+    "contextManagementTitle": "Управление контекстом",
     "maxIters": "Макс. итераций",
     "maxItersTooltip": "Максимальное число итераций рассуждение-действие для агента ReAct",
     "maxItersPlaceholder": "Введите макс. число итераций",
