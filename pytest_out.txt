@@ -1,0 +1,59 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\Administrator\Downloads\Antigravity\项目\CoPaw
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+______________ ERROR collecting tests/test_tool_message_utils.py ______________
+C:\Python314\Lib\site-packages\_pytest\python.py:507: in importtestmodule
+    mod = import_path(
+C:\Python314\Lib\site-packages\_pytest\pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+C:\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1398: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1371: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1342: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:938: in _load_unlocked
+    ???
+C:\Python314\Lib\site-packages\_pytest\assertion\rewrite.py:197: in exec_module
+    exec(co, module.__dict__)
+tests\test_tool_message_utils.py:36: in <module>
+    _mod = _load_module()
+           ^^^^^^^^^^^^^^
+tests\test_tool_message_utils.py:32: in _load_module
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:758: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:896: in get_code
+    ???
+<frozen importlib._bootstrap_external>:826: in source_to_code
+    ???
+<frozen importlib._bootstrap>:491: in _call_with_frames_removed
+    ???
+E     File "C:\Users\Administrator\Downloads\Antigravity\项目\CoPaw\src\copaw\agents\utils\tool_message_utils.py", line 374
+E       This fixes a bug in AgentScope 1.0.16dev where stream_tool_parsing
+E                                           ^
+E   SyntaxError: invalid decimal literal
+============================== warnings summary ===============================
+..\..\..\..\..\..\Python314\Lib\site-packages\_pytest\config\__init__.py:1428
+  C:\Python314\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_default_fixture_loop_scope
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+..\..\..\..\..\..\Python314\Lib\site-packages\_pytest\config\__init__.py:1428
+  C:\Python314\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/test_tool_message_utils.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+======================== 2 warnings, 1 error in 0.15s =========================
