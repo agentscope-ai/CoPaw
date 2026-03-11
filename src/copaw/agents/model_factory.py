@@ -294,6 +294,29 @@ def _extract_local_path_from_url(url: Any) -> str | None:
     return None
 
 
+def _sanitize_local_media_block(block: dict) -> tuple[dict, bool]:
+    """Replace local media/file blocks with safe text placeholders."""
+    block_type = block.get("type")
+    if block_type not in {"image", "audio", "video", "file"}:
+        return block, False
+
+    source = block.get("source")
+    local_path = None
+    if isinstance(source, dict):
+        local_path = _extract_local_path_from_url(source.get("url"))
+    if not local_path:
+        return block, False
+
+    if block_type == "file":
+        filename = block.get("filename") or os.path.basename(
+            local_path.replace("\\", "/"),
+        )
+        text = f"[Local file omitted for model call: {filename or local_path}]"
+    else:
+        text = f"[Local media omitted for model call: {local_path}]"
+    return {"type": "text", "text": text}, True
+
+
 def _normalize_messages_for_model(msgs: list[Msg]) -> list[Msg]:
     """Normalize messages before formatting for model APIs."""
     normalized: list[Msg] = []
@@ -315,26 +338,31 @@ def _normalize_messages_for_model(msgs: list[Msg]) -> list[Msg]:
                     changed = True
                     continue
 
+                sanitized_block, replaced = _sanitize_local_media_block(block)
+                if replaced:
+                    fixed_blocks.append(sanitized_block)
+                    changed = True
+                    continue
+
                 block_type = block.get("type")
-                if block_type in {"image", "audio", "video", "file"}:
-                    source = block.get("source")
-                    local_path = None
-                    if isinstance(source, dict):
-                        local_path = _extract_local_path_from_url(source.get("url"))
-                    if local_path:
-                        if block_type == "file":
-                            filename = block.get("filename") or os.path.basename(
-                                local_path.replace("\\", "/"),
-                            )
-                            text = (
-                                "[Local file omitted for model call: "
-                                f"{filename or local_path}]"
-                            )
-                        else:
-                            text = f"[Local media omitted for model call: {local_path}]"
-                        fixed_blocks.append({"type": "text", "text": text})
-                        changed = True
-                        continue
+                if block_type == "tool_result":
+                    output = block.get("output")
+                    if isinstance(output, list):
+                        output_fixed = []
+                        output_changed = False
+                        for out_block in output:
+                            if isinstance(out_block, dict):
+                                new_out, out_replaced = _sanitize_local_media_block(
+                                    out_block,
+                                )
+                                output_fixed.append(new_out)
+                                output_changed = output_changed or out_replaced
+                            else:
+                                output_fixed.append(out_block)
+                        if output_changed:
+                            block = dict(block)
+                            block["output"] = output_fixed
+                            changed = True
 
                 if not isinstance(block_type, str):
                     fixed_blocks.append({"type": "text", "text": str(block)})

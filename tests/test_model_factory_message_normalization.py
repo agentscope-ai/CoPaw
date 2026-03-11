@@ -149,3 +149,47 @@ def test_normalize_plain_windows_path_image_block() -> None:
             "text": "[Local media omitted for model call: C:/tmp/plain-path.png]",
         },
     ]
+
+
+def test_normalize_local_media_in_tool_result_output() -> None:
+    msg = Msg(
+        name="system",
+        content=[
+            {
+                "type": "tool_result",
+                "id": "tool_123",
+                "name": "send_file_to_user",
+                "output": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "url",
+                            "url": "file:///home/lcy/page-1773199016.png",
+                        },
+                    },
+                    {"type": "text", "text": "已成功发送文件"},
+                ],
+            },
+        ],
+        role="system",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "tool_result",
+            "id": "tool_123",
+            "name": "send_file_to_user",
+            "output": [
+                {
+                    "type": "text",
+                    "text": (
+                        "[Local media omitted for model call: "
+                        "/home/lcy/page-1773199016.png]"
+                    ),
+                },
+                {"type": "text", "text": "已成功发送文件"},
+            ],
+        },
+    ]
