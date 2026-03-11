@@ -162,9 +162,11 @@ def sync_skills_to_working_dir(
 
     # Filter by skill_names if specified
     if skill_names is not None:
-        skills_to_sync = {
-            name: path for name, path in skills_to_sync.items() if name in skill_names
-        }
+        filtered_skills: dict[str, Path] = {}
+        for name, path in skills_to_sync.items():
+            if name in skill_names:
+                filtered_skills[name] = path
+        skills_to_sync = filtered_skills
 
     if not skills_to_sync:
         logger.debug("No skills to sync.")
@@ -235,7 +237,15 @@ def _is_directory_same(dir1: Path, dir2: Path) -> bool:
 
 def _compare_dircmp(dcmp: "filecmp.dircmp") -> bool:
     """Helper to recursively compare dircmp objects."""
-    if dcmp.left_only or dcmp.right_only or dcmp.funny_files or dcmp.diff_files:
+    has_diff = any(
+        [
+            dcmp.left_only,
+            dcmp.right_only,
+            dcmp.funny_files,
+            dcmp.diff_files,
+        ],
+    )
+    if has_diff:
         return False
     for sub_dcmp in dcmp.subdirs.values():
         if not _compare_dircmp(sub_dcmp):
@@ -294,7 +304,7 @@ def sync_skills_from_active_to_customized(
             synced_count += 1
         except Exception as e:
             logger.debug(
-                "Failed to sync skill '%s' from active_skills to customized_skills: %s",
+                "Failed to sync skill '%s' to customized_skills: %s",
                 skill_name,
                 e,
             )
@@ -381,11 +391,11 @@ def _read_skills_from_dir(
                 description = str(post.get("description", "") or "")
             except Exception as e:
                 logger.warning(
-                    "Failed to parse SKILL.md frontmatter for skill '%s' at '%s': %s",
+                    "Failed to parse SKILL.md frontmatter for skill '%s': %s",
                     skill_dir.name,
-                    skill_md,
                     e,
                 )
+                logger.debug("Invalid SKILL.md path: %s", skill_md)
                 description = ""
 
             # Build references directory tree
@@ -488,12 +498,12 @@ class SkillService:
             synced, _ = sync_skills_from_active_to_customized()
             if synced > 0:
                 logger.debug(
-                    "Synced %d skill(s) from active_skills to customized_skills",
+                    "Synced %d skill(s) from active_skills",
                     synced,
                 )
         except Exception as e:
             logger.debug(
-                "Failed to sync skills from active_skills to customized_skills: %s",
+                "Failed to sync skills from active_skills: %s",
                 e,
             )
 
@@ -813,11 +823,11 @@ class SkillService:
         normalized = file_path.replace("\\", "/")
 
         # Validate file_path starts with references/ or scripts/
-        if not (
-            normalized.startswith("references/") or normalized.startswith("scripts/")
-        ):
+        is_references = normalized.startswith("references/")
+        is_scripts = normalized.startswith("scripts/")
+        if not (is_references or is_scripts):
             logger.error(
-                "Invalid file_path '%s'. Must start with 'references/' or 'scripts/'.",
+                "Invalid file_path '%s'. Must start with refs/scripts.",
                 file_path,
             )
             return None

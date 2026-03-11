@@ -138,7 +138,10 @@ export function SkillCard({
         <div className={styles.metaStack}>
           <div className={styles.infoSection}>
             <div className={styles.infoLabel}>{t("skills.source")}</div>
-            <div className={`${styles.infoBlock} ${styles.singleLineValue}`} title={skill.source}>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue}`}
+              title={skill.source}
+            >
               {skill.source}
             </div>
           </div>
