@@ -308,12 +308,12 @@ export function SkillDrawer({
               </div>
               <div
                 className={`${styles.eligibilityBadge} ${
-                  (editingSkill.eligibility?.eligible ?? true)
+                  editingSkill.eligibility?.eligible ?? true
                     ? styles.eligible
                     : styles.ineligible
                 }`}
               >
-                {(editingSkill.eligibility?.eligible ?? true)
+                {editingSkill.eligibility?.eligible ?? true
                   ? t("skills.eligible")
                   : t("skills.ineligible")}
               </div>
