@@ -62,8 +62,7 @@ async def get_token_usage(
         for model, stats in summary.by_model.items():
             tokens = stats.prompt_tokens + stats.completion_tokens
             lines.append(
-                f"  - {model}: {tokens:,} tokens "
-                f"({stats.call_count} calls)",
+                f"  - {model}: {tokens:,} tokens ({stats.call_count} calls)",
             )
         lines.append("")
 
@@ -72,7 +71,7 @@ async def get_token_usage(
         for dt, stats in list(summary.by_date.items())[-7:]:
             tokens = stats.prompt_tokens + stats.completion_tokens
             lines.append(
-                f"  - {dt}: {tokens:,} tokens " f"({stats.call_count} calls)",
+                f"  - {dt}: {tokens:,} tokens ({stats.call_count} calls)",
             )
     elif summary.by_date:
         lines.append(
