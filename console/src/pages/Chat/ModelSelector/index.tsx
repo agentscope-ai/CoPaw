@@ -54,7 +54,6 @@ export default function ModelSelector() {
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const savingRef = useRef(false);
-  const keepOpenRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -211,7 +210,6 @@ export default function ModelSelector() {
       !hasConfiguredSlot(effectiveCloudSlot)
     ) {
       message.warning(t("chatModelSelector.configureRoutingFirst"));
-      keepOpenRef.current = true;
       return;
     }
     savingRef.current = true;
@@ -232,7 +230,6 @@ export default function ModelSelector() {
             : "chatModelSelector.routingLocalFirstEnabled",
         ),
       );
-      keepOpenRef.current = true;
     } catch (err) {
       const msg =
         err instanceof Error
@@ -271,7 +268,6 @@ export default function ModelSelector() {
       await providerApi.setLlmRoutingConfig(nextRouting);
       setRoutingConfig(nextRouting);
       message.success(t("chatModelSelector.routingModelUpdated"));
-      keepOpenRef.current = true;
     } catch (err) {
       const msg =
         err instanceof Error
@@ -438,15 +434,9 @@ export default function ModelSelector() {
 
   return (
     <Dropdown
+      menu={{ selectable: true, multiple: true }}
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && keepOpenRef.current) {
-          keepOpenRef.current = false;
-          setOpen(true);
-          return;
-        }
-        setOpen(nextOpen);
-      }}
+      onOpenChange={setOpen}
       dropdownRender={() => dropdownContent}
       trigger={["click"]}
       placement="bottomLeft"
