@@ -11,7 +11,12 @@ from copaw.agents.skill_runtime import (
     has_skill_env_overrides,
 )
 from copaw.agents.skills_manager import SkillInfo
-from copaw.app.routers.skills import _validate_skill_env_payload
+from copaw.app.routers.skills import (
+    MASKED_ENV_VALUE,
+    _build_skill_config_view,
+    _merge_skill_env_payload,
+    _validate_skill_env_payload,
+)
 from copaw.config.config import Config, SkillEntryConfig, SkillsConfig
 
 
@@ -240,3 +245,35 @@ demo
 
     assert exc.value.status_code == 400
     assert "OPENAI_API_KEY" in str(exc.value.detail)
+
+
+def test_build_skill_config_view_masks_env_values() -> None:
+    view = _build_skill_config_view(
+        "demo_skill",
+        SkillEntryConfig(
+            enabled=True,
+            env={"DEMO_REGION": "cn", "EMPTY_VALUE": ""},
+            config={"endpoint": "https://example.com"},
+        ),
+    )
+
+    assert view.env["DEMO_REGION"] == MASKED_ENV_VALUE
+    assert view.env["EMPTY_VALUE"] == ""
+    assert view.env_keys == ["DEMO_REGION", "EMPTY_VALUE"]
+
+
+def test_merge_skill_env_payload_preserves_masked_values() -> None:
+    existing = SkillEntryConfig(
+        env={"DEMO_REGION": "cn", "OTHER_ENV": "kept"},
+    )
+
+    merged = _merge_skill_env_payload(
+        existing,
+        {
+            "DEMO_REGION": MASKED_ENV_VALUE,
+            "OTHER_ENV": "updated",
+        },
+    )
+
+    assert merged["DEMO_REGION"] == "cn"
+    assert merged["OTHER_ENV"] == "updated"

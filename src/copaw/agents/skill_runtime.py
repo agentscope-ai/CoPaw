@@ -67,10 +67,7 @@ def build_skill_config_status(
     )
 
 
-def _resolve_config_path(config: Config | None, path: str) -> Any:
-    current: Any = (
-        config.model_dump(mode="json", by_alias=True) if config else {}
-    )
+def _resolve_config_path(current: dict[str, Any], path: str) -> Any:
     for part in [item for item in path.split(".") if item]:
         if not isinstance(current, dict):
             return None
@@ -102,6 +99,9 @@ def compute_skill_eligibility(
     missing_config: list[str] = []
     missing_bins: list[str] = []
     requirements = metadata.requires if metadata else None
+    config_data: dict[str, Any] = (
+        config.model_dump(mode="json", by_alias=True) if config else {}
+    )
 
     if requirements:
         for env_name in requirements.env:
@@ -118,7 +118,7 @@ def compute_skill_eligibility(
                 missing_env.append(env_name)
 
         for config_path in requirements.config:
-            if not _is_truthy(_resolve_config_path(config, config_path)):
+            if not _is_truthy(_resolve_config_path(config_data, config_path)):
                 missing_config.append(config_path)
 
         for bin_name in requirements.bins:

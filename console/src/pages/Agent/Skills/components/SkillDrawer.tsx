@@ -460,6 +460,8 @@ export function SkillDrawer({
                   ? t("common.enabled")
                   : t("common.disabled"),
               })}
+              <br />
+              {t("skills.envMaskHint")}
             </div>
 
             <div className={styles.drawerActions}>

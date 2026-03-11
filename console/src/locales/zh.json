@@ -110,6 +110,7 @@
     "clearApiKey": "清空已保存 API Key",
     "envConfig": "环境变量(JSON)",
     "envConfigHint": "会在 skill 执行前临时注入，执行后回滚。",
+    "envMaskHint": "带掩码的 env 值会被保留；只有替换或删除对应 key 才会变更。",
     "extraConfig": "扩展配置(JSON)",
     "extraConfigHint": "给 skill 预留的结构化配置，不会自动转成环境变量。",
     "configStatusHint": "当前已配置：API Key={{hasApiKey}}；env keys={{envKeys}}；config keys={{configKeys}}"

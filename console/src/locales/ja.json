@@ -109,6 +109,7 @@
     "clearApiKey": "保存済み API Key を削除",
     "envConfig": "環境変数(JSON)",
     "envConfigHint": "スキル実行時だけ一時注入され、終了後に元へ戻ります。",
+    "envMaskHint": "マスクされた env 値は、そのキーを置き換えるか削除しない限り保持されます。",
     "extraConfig": "追加設定(JSON)",
     "extraConfigHint": "将来の runtime 用に予約された構造化設定です。",
     "configStatusHint": "現在の設定: API Key={{hasApiKey}}; env keys={{envKeys}}; config keys={{configKeys}}"

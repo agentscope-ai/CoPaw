@@ -110,6 +110,7 @@
     "clearApiKey": "Очистить сохранённый API Key",
     "envConfig": "Env JSON",
     "envConfigHint": "Инжектируется только на время выполнения навыка и затем откатывается.",
+    "envMaskHint": "Замаскированные env-значения сохраняются, пока вы не замените или не удалите этот ключ.",
     "extraConfig": "Доп. конфиг JSON",
     "extraConfigHint": "Структурированный конфиг навыка, зарезервированный для будущих runtime-потребителей.",
     "configStatusHint": "Текущий конфиг: API Key={{hasApiKey}}; env keys={{envKeys}}; config keys={{configKeys}}"

@@ -110,6 +110,7 @@
     "clearApiKey": "Clear saved API Key",
     "envConfig": "Environment JSON",
     "envConfigHint": "Injected only for the skill run and restored afterwards.",
+    "envMaskHint": "Masked env values are preserved unless you replace or remove that key.",
     "extraConfig": "Extra Config JSON",
     "extraConfigHint": "Structured skill config reserved for future runtime consumers.",
     "configStatusHint": "Current config: API Key={{hasApiKey}}; env keys={{envKeys}}; config keys={{configKeys}}"

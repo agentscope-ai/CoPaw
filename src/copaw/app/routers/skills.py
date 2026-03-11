@@ -18,6 +18,7 @@ from ...agents.skills_hub import (
 
 
 logger = logging.getLogger(__name__)
+MASKED_ENV_VALUE = "*****"
 
 
 class SkillSpec(SkillInfo):
@@ -101,11 +102,15 @@ def _build_skill_config_view(
     entry: SkillEntryConfig | None,
 ) -> SkillConfigView:
     entry = entry or SkillEntryConfig()
+    masked_env = {
+        key: MASKED_ENV_VALUE if value else value
+        for key, value in (entry.env or {}).items()
+    }
     return SkillConfigView(
         key=skill_key,
         enabled=entry.enabled,
         has_api_key=bool(entry.api_key),
-        env=dict(entry.env or {}),
+        env=masked_env,
         config=dict(entry.config or {}),
         env_keys=sorted((entry.env or {}).keys()),
         config_keys=sorted((entry.config or {}).keys()),
@@ -131,6 +136,20 @@ def _validate_skill_env_payload(
             f"{', '.join(invalid_keys)}"
         ),
     )
+
+
+def _merge_skill_env_payload(
+    existing_entry: SkillEntryConfig,
+    env_payload: dict[str, str] | None,
+) -> dict[str, str]:
+    env_payload = env_payload or {}
+    merged_env: dict[str, str] = {}
+    for key, value in env_payload.items():
+        if value == MASKED_ENV_VALUE and key in existing_entry.env:
+            merged_env[key] = existing_entry.env[key]
+        else:
+            merged_env[key] = value
+    return merged_env
 
 
 @router.get("")
@@ -280,7 +299,7 @@ async def put_skill_config(
     elif update_data.get("api_key"):
         existing.api_key = update_data["api_key"] or ""
     if "env" in update_data:
-        existing.env = update_data["env"] or {}
+        existing.env = _merge_skill_env_payload(existing, update_data["env"])
     if "config" in update_data:
         existing.config = update_data["config"] or {}
 
