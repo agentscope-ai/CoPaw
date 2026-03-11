@@ -464,8 +464,8 @@
   "agentConfig": {
     "title": "設定",
     "description": "エージェントのランタイムパラメーターを設定します",
-    "reactAgentTitle": "ReAct Agent",
-    "contextManagementTitle": "Context Management",
+    "reactAgentTitle": "ReActエージェント",
+    "contextManagementTitle": "コンテキスト管理",
     "maxIters": "最大反復回数",
     "maxItersTooltip": "ReActエージェントの推論・行動サイクルの最大反復回数",
     "maxItersPlaceholder": "最大反復回数を入力",
