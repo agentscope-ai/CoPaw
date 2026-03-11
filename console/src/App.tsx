@@ -14,7 +14,7 @@ const GlobalStyle = createGlobalStyle`
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <GlobalStyle />
       <ConfigProvider {...bailianTheme} prefix="copaw" prefixCls="copaw">
         <MainLayout />
