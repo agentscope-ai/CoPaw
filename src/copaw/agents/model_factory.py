@@ -10,7 +10,6 @@ Example:
 """
 
 import logging
-import os
 import re
 from copy import deepcopy
 from typing import Sequence, Tuple, Type, Any
@@ -312,9 +311,13 @@ def _sanitize_local_media_block(block: dict) -> tuple[dict, bool]:
         return block, False
 
     source = block.get("source")
-    local_path = None
-    if isinstance(source, dict):
-        local_path = _extract_local_path_from_url(source.get("url"))
+    local_path = _extract_local_path_from_url(block.get("path") or block.get("url"))
+    if not local_path and isinstance(source, dict):
+        local_path = _extract_local_path_from_url(
+            source.get("url") or source.get("path"),
+        )
+    elif not local_path and isinstance(source, str):
+        local_path = _extract_local_path_from_url(source)
     if not local_path:
         return block, False
 
@@ -344,6 +347,25 @@ def _sanitize_local_media_in_value(value: Any) -> tuple[Any, bool]:
         new_dict = {}
         changed = False
         for key, item in value.items():
+            if key == "output" and isinstance(item, list):
+                output_list = []
+                output_changed = False
+                for output_item in item:
+                    if isinstance(output_item, dict):
+                        new_item, item_changed = _sanitize_local_media_in_value(
+                            output_item,
+                        )
+                        output_list.append(new_item)
+                        output_changed = output_changed or item_changed
+                    else:
+                        output_list.append(
+                            {"type": "text", "text": str(output_item)},
+                        )
+                        output_changed = True
+                new_dict[key] = output_list
+                changed = changed or output_changed
+                continue
+
             if isinstance(item, (list, dict)):
                 new_item, item_changed = _sanitize_local_media_in_value(item)
                 new_dict[key] = new_item
@@ -355,6 +377,16 @@ def _sanitize_local_media_in_value(value: Any) -> tuple[Any, bool]:
     return value, False
 
 
+_LOCAL_PATH_TEXT_RE = re.compile(
+    r"(?i)(file://\S+|(?:[A-Za-z]:[\\/]|/|\./|\.\./|~/)\S+)",
+)
+
+
+def _sanitize_local_paths_in_text(text: str) -> str:
+    """Redact local path tokens from free-form text."""
+    return _LOCAL_PATH_TEXT_RE.sub("[LOCAL_PATH]", text)
+
+
 def _normalize_messages_for_model(msgs: list[Msg]) -> list[Msg]:
     """Normalize messages before formatting for model APIs."""
     normalized: list[Msg] = []
@@ -364,7 +396,8 @@ def _normalize_messages_for_model(msgs: list[Msg]) -> list[Msg]:
         content = msg.content
 
         if isinstance(content, str):
-            new_content = [{"type": "text", "text": content}]
+            sanitized = _sanitize_local_paths_in_text(content)
+            new_content = [{"type": "text", "text": sanitized}]
         elif not isinstance(content, list):
             new_content = [{"type": "text", "text": str(content)}]
         else:

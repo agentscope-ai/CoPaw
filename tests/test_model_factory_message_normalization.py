@@ -281,3 +281,75 @@ def test_normalize_relative_local_path_url() -> None:
             "text": "[Local media omitted for model call]",
         },
     ]
+
+
+def test_normalize_plain_local_path_file_block() -> None:
+    msg = Msg(
+        name="assistant",
+        content=[
+            {
+                "type": "file",
+                "filename": "report.csv",
+                "source": "/home/lcy/report.csv",
+            },
+        ],
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "[Local file omitted for model call]",
+        },
+    ]
+
+
+def test_normalize_non_dict_in_tool_result_output() -> None:
+    msg = Msg(
+        name="system",
+        content=[
+            {
+                "type": "tool_result",
+                "id": "tool_456",
+                "name": "example_tool",
+                "output": [
+                    {"type": "text", "text": "ok"},
+                    123,
+                ],
+            },
+        ],
+        role="system",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "tool_result",
+            "id": "tool_456",
+            "name": "example_tool",
+            "output": [
+                {"type": "text", "text": "ok"},
+                {"type": "text", "text": "123"},
+            ],
+        },
+    ]
+
+
+def test_normalize_string_content_with_local_path_redacted() -> None:
+    msg = Msg(
+        name="assistant",
+        content="saved at file:///home/lcy/secret.png and /tmp/a.png",
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "saved at [LOCAL_PATH] and [LOCAL_PATH]",
+        },
+    ]
