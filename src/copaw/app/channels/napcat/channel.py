@@ -424,19 +424,33 @@ class NapCatChannel(BaseChannel):
 
         text = text.strip()
         meta = meta or {}
-        message_type = meta.get("message_type", "group")
+
+        # Debug: log what's passed to send
+        print(f"[DEBUG napcat send] to_handle={to_handle}, meta={meta}")
 
         # Determine if this is group or private message
-        is_group = message_type == "group" or (
-            to_handle.startswith("group:") or
-            (meta.get("group_id") is not None)
-        )
+        # Check multiple sources for group_id
+        group_id = meta.get("group_id")
+        session_id = meta.get("session_id", "")
+
+        # If no group_id in meta, try to extract from session_id
+        if not group_id and session_id.startswith("napcat:group:"):
+            group_id = session_id.split(":")[-1]
+            print(f"[DEBUG napcat send] extracted group_id from session_id: {group_id}")
+
+        message_type = meta.get("message_type", "")
+        is_group = bool(group_id) or message_type == "group" or to_handle.startswith("group:")
 
         if is_group:
-            # Extract group_id from to_handle or meta
-            group_id = meta.get("group_id") or (
-                to_handle[6:] if to_handle.startswith("group:") else to_handle
-            )
+            # group_id already extracted above from session_id if needed
+            # Use the extracted group_id, don't overwrite with meta.get("group_id")
+            if not group_id:
+                # Fallback: extract from session_id in session_id field
+                session_id = meta.get("session_id", "")
+                if session_id.startswith("napcat:group:"):
+                    group_id = session_id.split(":")[-1]
+            if not group_id:
+                logger.warning(f"NapCat send: group_id is None, message_type={message_type}, session_id={session_id}")
             try:
                 await _send_group_message(
                     self._http, self.host, self.port, self.access_token,
@@ -458,6 +472,13 @@ class NapCatChannel(BaseChannel):
     def build_agent_request_from_native(self, native_payload: Any) -> Any:
         """Build AgentRequest from NapCat/OneBot 11 event dict."""
         payload = native_payload if isinstance(native_payload, dict) else {}
+
+        # Debug: log to file
+        import os
+        debug_file = os.path.expanduser("~/copaw_napcat_debug.log")
+        with open(debug_file, "a", encoding="utf-8") as f:
+            f.write(f"=== build_agent_request ===\n")
+            f.write(f"payload: {payload}\n\n")
 
         # Extract common fields
         post_type = payload.get("post_type", "")
@@ -529,15 +550,26 @@ class NapCatChannel(BaseChannel):
         try:
             send_meta = getattr(request, "channel_meta", None) or {}
             send_meta.setdefault("bot_prefix", self.bot_prefix)
-            
-            # Debug: log send_meta
-            logger.info(f"napcat send_meta: {send_meta}")
-            
+            # Add session_id to send_meta so send method can access it
+            send_meta["session_id"] = getattr(request, "session_id", "")
+
+            # Debug: log send_meta - use print to ensure visibility
+            print(f"[DEBUG] napcat send_meta: {send_meta}")
+
             # For group messages, use group_id as to_handle; otherwise use user_id
-            message_type = send_meta.get("message_type", "")
             group_id = send_meta.get("group_id")
-            logger.info(f"napcat message_type={message_type}, group_id={group_id}")
-            if message_type == "group" and group_id:
+            message_type = send_meta.get("message_type")
+            print(f"[DEBUG] group_id from send_meta: {group_id}, message_type: {message_type}")
+
+            # 如果没有 group_id 但 message_type 是 group，尝试从 session_id 获取
+            if not group_id and message_type == "group":
+                session_id = getattr(request, "session_id", "") or ""
+                print(f"[DEBUG] trying to extract group_id from session_id: {session_id}")
+                if session_id.startswith("napcat:group:"):
+                    group_id = session_id.split(":")[-1]
+                    print(f"[DEBUG] extracted group_id: {group_id}")
+            print(f"[DEBUG] final group_id: {group_id}, user_id: {request.user_id}")
+            if group_id:
                 to_handle = group_id
             else:
                 to_handle = request.user_id or ""
@@ -772,3 +804,26 @@ class NapCatChannel(BaseChannel):
             self._http = None
 
         logger.info("napcat channel stopped")
+
+    def resolve_session_id(
+        self,
+        sender_id: str,
+        channel_meta: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Resolve session_id based on message type.
+
+        Group messages: use group_id as session key
+        Private messages: use user_id as session key
+        """
+        if channel_meta is None:
+            return f"{self.channel}:{sender_id}"
+
+        message_type = channel_meta.get("message_type", "")
+        group_id = channel_meta.get("group_id")
+
+        if message_type == "group" and group_id:
+            # Group message: session per group
+            return f"{self.channel}:group:{group_id}"
+        else:
+            # Private message: session per user
+            return f"{self.channel}:{sender_id}"
