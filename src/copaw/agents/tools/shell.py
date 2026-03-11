@@ -68,9 +68,6 @@ def _execute_subprocess_sync(
             standard error of the executed command. If timeout occurs, the
             return code will be -1 and stderr will contain timeout information.
     """
-    creationflags = (
-        subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
-    )
     try:
         with subprocess.Popen(
             cmd,
@@ -80,7 +77,7 @@ def _execute_subprocess_sync(
             text=False,
             cwd=cwd,
             env=env,
-            creationflags=creationflags,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
         ) as proc:
             try:
                 stdout, stderr = proc.communicate(timeout=timeout)
@@ -90,12 +87,7 @@ def _execute_subprocess_sync(
                     smart_decode(stderr),
                 )
             except subprocess.TimeoutExpired:
-                # Kill the entire process tree so that grandchild processes
-                # (GUI apps, interactive commands, etc.) are also terminated.
-                if sys.platform == "win32":
-                    _kill_process_tree_win32(proc.pid)
-                else:
-                    proc.kill()
+                _kill_process_tree_win32(proc.pid)
 
                 # Try to drain remaining output after the tree has been killed.
                 # The second communicate() should return quickly now that all
