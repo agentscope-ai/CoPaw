@@ -26,8 +26,7 @@ def _kill_process_tree_win32(pid: int) -> None:
     """
     try:
         subprocess.call(
-            f"taskkill /F /T /PID {pid}",
-            shell=True,
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=10,
