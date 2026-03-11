@@ -19,7 +19,8 @@ import styles from "./index.module.less";
 
 function ModelsPage() {
   const { t } = useTranslation();
-  const { providers, activeModels, loading, error, fetchAll } = useProviders();
+  const { providers, activeModels, routingConfig, loading, error, fetchAll } =
+    useProviders();
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [addProviderOpen, setAddProviderOpen] = useState(false);
 
@@ -72,6 +73,7 @@ function ModelsPage() {
           <ModelsSection
             providers={providers}
             activeModels={activeModels}
+            routingConfig={routingConfig}
             onSaved={fetchAll}
           />
 

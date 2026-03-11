@@ -13,6 +13,11 @@ import Weather from "./Weather";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import ModelSelector from "./ModelSelector";
+import type {
+  ActiveModelsInfo,
+  LLMRoutingConfig,
+  ModelSlotConfig,
+} from "../../api/types/provider";
 import "./index.module.less";
 
 interface CustomWindow extends Window {
@@ -31,6 +36,23 @@ function buildModelError(): Response {
     }),
     { status: 400, headers: { "Content-Type": "application/json" } },
   );
+}
+
+function hasConfiguredSlot(slot?: ModelSlotConfig | null): boolean {
+  return Boolean(slot?.provider_id && slot?.model);
+}
+
+function canSendRequest(
+  activeModels: ActiveModelsInfo | null,
+  routingConfig: LLMRoutingConfig | null,
+): boolean {
+  if (routingConfig?.enabled) {
+    return (
+      hasConfiguredSlot(routingConfig.local) &&
+      hasConfiguredSlot(routingConfig.cloud)
+    );
+  }
+  return hasConfiguredSlot(activeModels?.active_llm);
 }
 
 export default function ChatPage() {
@@ -171,11 +193,12 @@ export default function ChatPage() {
       signal?: AbortSignal;
     }): Promise<Response> => {
       try {
-        const activeModels = await providerApi.getActiveModels();
-        if (
-          !activeModels?.active_llm?.provider_id ||
-          !activeModels?.active_llm?.model
-        ) {
+        const [activeModels, routingConfig] = await Promise.all([
+          providerApi.getActiveModels(),
+          providerApi.getLlmRoutingConfig(),
+        ]);
+
+        if (!canSendRequest(activeModels, routingConfig)) {
           setShowModelPrompt(true);
           return buildModelError();
         }
