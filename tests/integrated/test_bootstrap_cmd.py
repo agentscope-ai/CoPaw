@@ -18,7 +18,9 @@ def _run_bootstrap(
     env["COPAW_SECRET_DIR"] = secret_dir
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
-        f"src:{existing_pythonpath}" if existing_pythonpath else "src"
+        f"src{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else "src"
     )
     return subprocess.run(
         [sys.executable, "-m", "copaw", "bootstrap"],
@@ -45,13 +47,17 @@ def test_bootstrap_cmd_initializes_missing_workspace(tmp_path) -> None:
     assert (working_dir / "HEARTBEAT.md").is_file()
     assert (working_dir / "active_skills").is_dir()
 
-    config = json.loads((working_dir / "config.json").read_text(encoding="utf-8"))
+    config = json.loads(
+        (working_dir / "config.json").read_text(encoding="utf-8"),
+    )
     assert config["agents"]["installed_md_files_language"] == "zh"
     assert config["agents"]["defaults"]["heartbeat"]["every"] == "6h"
     assert config["agents"]["defaults"]["heartbeat"]["target"] == "main"
 
 
-def test_bootstrap_cmd_repairs_partially_initialized_workspace(tmp_path) -> None:
+def test_bootstrap_cmd_repairs_partially_initialized_workspace(
+    tmp_path,
+) -> None:
     working_dir = tmp_path / "working"
     secret_dir = tmp_path / "working.secret"
     working_dir.mkdir()
@@ -78,7 +84,9 @@ def test_bootstrap_cmd_repairs_partially_initialized_workspace(tmp_path) -> None
     result = _run_bootstrap(str(working_dir), str(secret_dir))
 
     assert result.returncode == 0, result.stderr or result.stdout
-    config = json.loads((working_dir / "config.json").read_text(encoding="utf-8"))
+    config = json.loads(
+        (working_dir / "config.json").read_text(encoding="utf-8"),
+    )
     assert config["last_api"] == {"host": "0.0.0.0", "port": 8088}
     assert config["agents"]["installed_md_files_language"] == "zh"
     assert config["agents"]["defaults"]["heartbeat"]["every"] == "6h"

@@ -74,18 +74,5 @@ def ensure_runtime_workspace_initialized() -> WorkspaceBootstrapResult:
     if result.config_updated:
         save_config(config, config_path)
 
-    logger.info(
-        "Workspace bootstrap: config_created=%s config_updated=%s "
-        "heartbeat_initialized=%s md_files_copied=%d "
-        "md_language_initialized=%s skills_initialized=%s "
-        "skills_synced=%d skills_skipped=%d",
-        result.config_created,
-        result.config_updated,
-        result.heartbeat_initialized,
-        result.md_files_copied,
-        result.md_language_initialized,
-        result.skills_initialized,
-        result.skills_synced,
-        result.skills_skipped,
-    )
+    logger.info("Workspace bootstrap: %s", result)
     return result
