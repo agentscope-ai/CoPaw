@@ -5,14 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pydantic import ValidationError
-
-from .runner.models import ChatSpec, ChatsFile
+from .runner.models import ChatSpec
 from .runner.repo.json_repo import JsonChatRepository
-from .crons.models import CronJobSpec, JobsFile
+from .crons.models import CronJobSpec
 from .crons.repo.json_repo import JsonJobRepository
 from ..utils.json_storage import load_json_with_recovery, repair_json_file
 
@@ -33,7 +32,6 @@ def connect_state_db(path: Path) -> sqlite3.Connection:
         isolation_level=None,
     )
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=FULL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=5000")
@@ -42,40 +40,48 @@ def connect_state_db(path: Path) -> sqlite3.Connection:
 
 def ensure_state_db_schema(path: Path) -> None:
     """Create SQLite schema if it does not exist."""
-    with connect_state_db(path) as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS metadata (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
+    for attempt in range(20):
+        try:
+            with connect_state_db(path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS metadata (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
 
-            CREATE TABLE IF NOT EXISTS chats (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                channel TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                UNIQUE(session_id, user_id, channel)
-            );
+                    CREATE TABLE IF NOT EXISTS chats (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        channel TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        UNIQUE(session_id, user_id, channel)
+                    );
 
-            CREATE INDEX IF NOT EXISTS idx_chats_user_channel_created
-            ON chats(user_id, channel, created_at, id);
+                    CREATE INDEX IF NOT EXISTS idx_chats_user_channel_created
+                    ON chats(user_id, channel, created_at, id);
 
-            CREATE TABLE IF NOT EXISTS jobs (
-                id TEXT PRIMARY KEY,
-                payload_json TEXT NOT NULL
-            );
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        id TEXT PRIMARY KEY,
+                        payload_json TEXT NOT NULL
+                    );
 
-            CREATE TABLE IF NOT EXISTS sessions (
-                storage_key TEXT PRIMARY KEY,
-                payload_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            """,
-        )
+                    CREATE TABLE IF NOT EXISTS sessions (
+                        storage_key TEXT PRIMARY KEY,
+                        payload_json TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    """,
+                )
+                return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 19:
+                raise
+            time.sleep(0.1 * (attempt + 1))
 
 
 async def initialize_state_db(
@@ -185,7 +191,11 @@ def _migrate_sessions_if_needed(db_path: Path, sessions_dir: Path) -> None:
                     """,
                     (
                         storage_key,
-                        json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                        json.dumps(
+                            payload,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
                         _utc_now(),
                     ),
                 )
@@ -254,10 +264,7 @@ def _replace_jobs(conn: sqlite3.Connection, jobs: list[CronJobSpec]) -> None:
         INSERT INTO jobs (id, payload_json)
         VALUES (?, ?)
         """,
-        [
-            (job.id, dump_model_payload(job))
-            for job in jobs
-        ],
+        [(job.id, dump_model_payload(job)) for job in jobs],
     )
 
 

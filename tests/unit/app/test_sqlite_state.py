@@ -4,18 +4,11 @@ from __future__ import annotations
 import asyncio
 import multiprocessing
 import random
-import sys
 from pathlib import Path
 
 import pytest
 
-
-ROOT = Path(__file__).resolve().parents[3]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from copaw.app.crons.models import (  # noqa: E402
+from copaw.app.crons.models import (
     CronJobRequest,
     CronJobSpec,
     DispatchSpec,
@@ -23,16 +16,16 @@ from copaw.app.crons.models import (  # noqa: E402
     JobsFile,
     ScheduleSpec,
 )
-from copaw.app.crons.repo.json_repo import JsonJobRepository  # noqa: E402
-from copaw.app.crons.repo.sqlite_repo import SQLiteJobRepository  # noqa: E402
-from copaw.app.runner.models import ChatSpec, ChatsFile  # noqa: E402
-from copaw.app.runner.repo.json_repo import JsonChatRepository  # noqa: E402
-from copaw.app.runner.repo.sqlite_repo import SQLiteChatRepository  # noqa: E402
-from copaw.app.runner.session import (  # noqa: E402
+from copaw.app.crons.repo.json_repo import JsonJobRepository
+from copaw.app.crons.repo.sqlite_repo import SQLiteJobRepository
+from copaw.app.runner.models import ChatSpec, ChatsFile
+from copaw.app.runner.repo.json_repo import JsonChatRepository
+from copaw.app.runner.repo.sqlite_repo import SQLiteChatRepository
+from copaw.app.runner.session import (
     SafeJSONSession,
     SQLiteSession,
 )
-from copaw.app.state_db import initialize_state_db  # noqa: E402
+from copaw.app.state_db import initialize_state_db
 
 
 def _job_spec() -> CronJobSpec:
@@ -197,12 +190,11 @@ async def test_sqlite_chat_repo_reuses_existing_session_mapping(
     assert loaded.chats[0].name == "Renamed Chat"
 
 
-def _sqlite_session_writer(save_dir: str, db_path: str, worker_idx: int) -> None:
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
-
-    from copaw.app.runner.session import SQLiteSession
-
+def _sqlite_session_writer(
+    save_dir: str,
+    db_path: str,
+    worker_idx: int,
+) -> None:
     session = SQLiteSession(save_dir=save_dir, db_path=db_path)
     rng = random.Random(worker_idx)
     for iteration in range(16):
@@ -254,3 +246,44 @@ async def test_sqlite_session_cross_process_update_is_safe(
         "worker-2",
         "worker-3",
     ]
+
+
+def _sqlite_chat_writer(db_path: str, worker_idx: int) -> None:
+    repo = SQLiteChatRepository(db_path)
+    asyncio.run(
+        repo.upsert_chat(
+            ChatSpec(
+                id=f"chat-{worker_idx}",
+                session_id="console:alice",
+                user_id="alice",
+                channel="console",
+                name=f"worker-{worker_idx}",
+            ),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_sqlite_chat_repo_cross_process_same_mapping_is_safe(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "state.sqlite3"
+    ctx = multiprocessing.get_context("spawn")
+    processes = [
+        ctx.Process(
+            target=_sqlite_chat_writer,
+            args=(str(db_path), idx),
+        )
+        for idx in range(4)
+    ]
+
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+
+    loaded = await SQLiteChatRepository(db_path).load()
+    assert len(loaded.chats) == 1
+    assert loaded.chats[0].session_id == "console:alice"

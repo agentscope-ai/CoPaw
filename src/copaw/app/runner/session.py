@@ -12,6 +12,7 @@ import json
 import os
 import re
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from typing import Union, Sequence
@@ -227,14 +228,10 @@ class SQLiteSession(JSONSession):
         ensure_state_db_schema(self._db_path)
 
     def _get_save_path(self, session_id: str, user_id: str) -> str:
-        os.makedirs(self.save_dir, exist_ok=True)
-        safe_sid = sanitize_filename(session_id)
-        safe_uid = sanitize_filename(user_id) if user_id else ""
-        if safe_uid:
-            file_path = f"{safe_uid}_{safe_sid}.json"
-        else:
-            file_path = f"{safe_sid}.json"
-        return os.path.join(self.save_dir, file_path)
+        return os.path.join(
+            self.save_dir,
+            f"{self._storage_key(session_id, user_id)}.json",
+        )
 
     async def save_session_state(
         self,
@@ -392,7 +389,7 @@ class SQLiteSession(JSONSession):
         conn.execute(
             """
             INSERT INTO sessions (storage_key, payload_json, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?)
             ON CONFLICT(storage_key) DO UPDATE SET
                 payload_json = excluded.payload_json,
                 updated_at = excluded.updated_at
@@ -400,8 +397,17 @@ class SQLiteSession(JSONSession):
             (
                 storage_key,
                 json.dumps(states, ensure_ascii=False, sort_keys=True),
+                _utc_now(),
             ),
         )
 
     def _storage_key(self, session_id: str, user_id: str) -> str:
-        return Path(self._get_save_path(session_id, user_id)).stem
+        safe_sid = sanitize_filename(session_id)
+        safe_uid = sanitize_filename(user_id) if user_id else ""
+        if safe_uid:
+            return f"{safe_uid}_{safe_sid}"
+        return safe_sid
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()

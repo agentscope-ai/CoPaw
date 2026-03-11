@@ -5,18 +5,11 @@ import asyncio
 import json
 import multiprocessing
 import random
-import sys
 from pathlib import Path
 
 import pytest
 
-
-ROOT = Path(__file__).resolve().parents[3]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from copaw.app.crons.models import (  # noqa: E402
+from copaw.app.crons.models import (
     CronJobRequest,
     CronJobSpec,
     DispatchSpec,
@@ -24,9 +17,9 @@ from copaw.app.crons.models import (  # noqa: E402
     JobsFile,
     ScheduleSpec,
 )
-from copaw.app.crons.repo.json_repo import JsonJobRepository  # noqa: E402
-from copaw.app.runner.models import ChatsFile  # noqa: E402
-from copaw.app.runner.repo.json_repo import JsonChatRepository  # noqa: E402
+from copaw.app.crons.repo.json_repo import JsonJobRepository
+from copaw.app.runner.models import ChatSpec, ChatsFile
+from copaw.app.runner.repo.json_repo import JsonChatRepository
 
 
 @pytest.mark.asyncio
@@ -80,12 +73,6 @@ async def test_job_repo_recovers_malformed_json(tmp_path: Path) -> None:
 
 
 def _chat_repo_writer_process(path_str: str, worker_idx: int) -> None:
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
-
-    from copaw.app.runner.models import ChatSpec, ChatsFile
-    from copaw.app.runner.repo.json_repo import JsonChatRepository
-
     repo = JsonChatRepository(path_str)
     rng = random.Random(worker_idx)
     for iteration in range(24):

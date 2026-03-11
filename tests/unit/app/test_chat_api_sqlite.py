@@ -1,24 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from types import SimpleNamespace
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
-ROOT = Path(__file__).resolve().parents[3]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from copaw.app.runner.api import router  # noqa: E402
-from copaw.app.runner.manager import ChatManager  # noqa: E402
-from copaw.app.runner.models import ChatSpec  # noqa: E402
-from copaw.app.runner.repo.sqlite_repo import SQLiteChatRepository  # noqa: E402
-from copaw.app.runner.session import SQLiteSession  # noqa: E402
+from copaw.app.runner.api import router
+from copaw.app.runner.manager import ChatManager
+from copaw.app.runner.models import ChatSpec
+from copaw.app.runner.repo.sqlite_repo import SQLiteChatRepository
+from copaw.app.runner.session import SQLiteSession
 
 
 class FakeStateModule:
@@ -29,7 +23,9 @@ class FakeStateModule:
         return self._state
 
 
-def _build_client(tmp_path: Path) -> tuple[TestClient, ChatManager, SQLiteSession]:
+def _build_client(
+    tmp_path: Path,
+) -> tuple[TestClient, ChatManager, SQLiteSession]:
     db_path = tmp_path / "state.sqlite3"
     sessions_dir = tmp_path / "sessions"
     repo = SQLiteChatRepository(db_path)
@@ -62,8 +58,6 @@ def test_chat_api_list_filter_and_detail_with_sqlite_backend(
         user_id="bob",
         channel="discord",
     )
-
-    import asyncio
 
     asyncio.run(manager.create_chat(first))
     asyncio.run(manager.create_chat(second))

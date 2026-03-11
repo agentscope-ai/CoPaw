@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .base import BaseChatRepository
 from ..models import ChatSpec, ChatsFile
+from ...channels.schema import DEFAULT_CHANNEL
 from ...state_db import (
     connect_state_db,
     dump_model_payload,
@@ -88,7 +89,7 @@ class SQLiteChatRepository(BaseChatRepository):
         self,
         session_id: str,
         user_id: str,
-        channel: str,
+        channel: str = DEFAULT_CHANNEL,
     ) -> ChatSpec | None:
         with connect_state_db(self._db_path) as conn:
             row = conn.execute(
@@ -128,36 +129,50 @@ class SQLiteChatRepository(BaseChatRepository):
                     if spec.id != existing.id:
                         spec.id = existing.id
                         spec.created_at = existing.created_at
-
-                conn.execute(
-                    """
-                    INSERT INTO chats (
-                        id,
-                        session_id,
-                        user_id,
-                        channel,
-                        created_at,
-                        updated_at,
-                        payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        session_id = excluded.session_id,
-                        user_id = excluded.user_id,
-                        channel = excluded.channel,
-                        created_at = excluded.created_at,
-                        updated_at = excluded.updated_at,
-                        payload_json = excluded.payload_json
-                    """,
-                    (
-                        spec.id,
-                        spec.session_id,
-                        spec.user_id,
-                        spec.channel,
-                        spec.created_at.isoformat(),
-                        spec.updated_at.isoformat(),
-                        dump_model_payload(spec),
-                    ),
-                )
+                    conn.execute(
+                        """
+                        UPDATE chats
+                        SET session_id = ?,
+                            user_id = ?,
+                            channel = ?,
+                            created_at = ?,
+                            updated_at = ?,
+                            payload_json = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            spec.session_id,
+                            spec.user_id,
+                            spec.channel,
+                            spec.created_at.isoformat(),
+                            spec.updated_at.isoformat(),
+                            dump_model_payload(spec),
+                            spec.id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT INTO chats (
+                            id,
+                            session_id,
+                            user_id,
+                            channel,
+                            created_at,
+                            updated_at,
+                            payload_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            spec.id,
+                            spec.session_id,
+                            spec.user_id,
+                            spec.channel,
+                            spec.created_at.isoformat(),
+                            spec.updated_at.isoformat(),
+                            dump_model_payload(spec),
+                        ),
+                    )
                 conn.commit()
             except Exception:
                 conn.rollback()

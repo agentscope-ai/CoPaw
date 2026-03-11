@@ -5,18 +5,11 @@ import asyncio
 import json
 import multiprocessing
 import random
-import sys
 from pathlib import Path
 
 import pytest
 
-
-ROOT = Path(__file__).resolve().parents[3]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from copaw.app.runner.session import SafeJSONSession  # noqa: E402
+from copaw.app.runner.session import SafeJSONSession, sanitize_filename
 
 
 class FakeStateModule:
@@ -31,10 +24,12 @@ class FakeStateModule:
 
 
 @pytest.mark.asyncio
-async def test_update_session_state_recovers_empty_file(tmp_path: Path) -> None:
+async def test_update_session_state_recovers_empty_file(
+    tmp_path: Path,
+) -> None:
     session = SafeJSONSession(save_dir=str(tmp_path))
-    session_path = Path(
-        session._get_save_path("console:alice", user_id="alice"),
+    session_path = tmp_path / (
+        f"alice_{sanitize_filename('console:alice')}.json"
     )
     session_path.write_text("", encoding="utf-8")
 
@@ -55,8 +50,8 @@ async def test_get_session_state_dict_recovers_non_object_payload(
     tmp_path: Path,
 ) -> None:
     session = SafeJSONSession(save_dir=str(tmp_path))
-    session_path = Path(
-        session._get_save_path("console:alice", user_id="alice"),
+    session_path = tmp_path / (
+        f"alice_{sanitize_filename('console:alice')}.json"
     )
     session_path.write_text(json.dumps(["bad"]), encoding="utf-8")
 
@@ -97,11 +92,6 @@ async def test_save_and_load_session_state_round_trip(tmp_path: Path) -> None:
 
 
 def _session_writer_process(save_dir: str, worker_idx: int) -> None:
-    if str(SRC) not in sys.path:
-        sys.path.insert(0, str(SRC))
-
-    from copaw.app.runner.session import SafeJSONSession
-
     session = SafeJSONSession(save_dir=save_dir)
     rng = random.Random(worker_idx)
     for iteration in range(16):
