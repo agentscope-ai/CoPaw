@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -15,7 +18,8 @@ def test_install_from_hub_returns_conflict_for_existing_skill(
 ) -> None:
     def _raise_exists(**_kwargs):
         raise FileExistsError(
-            "Skill 'find-skills' already exists. Use overwrite=true to replace.",
+            "Skill 'find-skills' already exists. "
+            "Use overwrite=true to replace.",
         )
 
     monkeypatch.setattr(
@@ -43,18 +47,7 @@ def test_install_from_hub_returns_conflict_for_existing_skill(
     }
 
 
-def test_install_from_hub_returns_bad_request_for_invalid_url(
-    monkeypatch,
-) -> None:
-    def _raise_value_error(**_kwargs):
-        raise ValueError("bundle_url must be a valid http(s) URL")
-
-    monkeypatch.setattr(
-        skills_router_module,
-        "install_skill_from_hub",
-        _raise_value_error,
-    )
-
+def test_install_from_hub_returns_bad_request_for_invalid_url() -> None:
     client = _build_client()
     response = client.post(
         "/skills/hub/install",
