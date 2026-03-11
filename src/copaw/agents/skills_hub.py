@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 import frontmatter
 
-from .skills_manager import SkillService
+from .skills_manager import SkillService, get_customized_skills_dir
 
 logger = logging.getLogger(__name__)
 
@@ -1156,6 +1156,11 @@ def install_skill_from_hub(
     if not name:
         fallback = urlparse(bundle_url).path.strip("/").split("/")[-1]
         name = _safe_fallback_name(fallback)
+
+    if not overwrite and (get_customized_skills_dir() / name).exists():
+        raise FileExistsError(
+            f"Skill '{name}' already exists. Use overwrite=true to replace.",
+        )
 
     created = SkillService.create_skill(
         name=name,
