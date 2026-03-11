@@ -269,6 +269,7 @@ def _strip_top_level_message_name(
 
 
 _WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
+_WINDOWS_DRIVE_REL_RE = re.compile(r"^[A-Za-z]:[^\\/]")
 
 
 def _extract_local_path_from_url(url: Any) -> str | None:
@@ -276,22 +277,32 @@ def _extract_local_path_from_url(url: Any) -> str | None:
     if not isinstance(url, str) or not url:
         return None
 
-    if url.startswith("file://"):
+    url = url.strip()
+    lowered = url.lower()
+
+    if lowered.startswith("file://"):
         return _file_url_to_path(url)
 
-    if url.startswith(("http://", "https://", "data:")):
+    if lowered.startswith(("http://", "https://", "data:")):
         return None
 
     if _WINDOWS_ABS_PATH_RE.match(url):
         return url
 
+    if _WINDOWS_DRIVE_REL_RE.match(url):
+        return url
+
     if url.startswith(("/", "\\")):
+        return url
+
+    if url.startswith(("./", "../", ".\\", "..\\", "~/")):
         return url
 
     if "://" in url:
         return None
 
-    return None
+    # Non-URL fallback: treat remaining values as local paths to avoid leakage.
+    return url
 
 
 def _sanitize_local_media_block(block: dict) -> tuple[dict, bool]:
@@ -307,12 +318,10 @@ def _sanitize_local_media_block(block: dict) -> tuple[dict, bool]:
     if not local_path:
         return block, False
 
-    filename = os.path.basename(local_path.replace("\\", "/")) or "local-file"
     if block_type == "file":
-        display_name = block.get("filename") or filename
-        text = f"[Local file omitted for model call: {display_name}]"
+        text = "[Local file omitted for model call]"
     else:
-        text = f"[Local media omitted for model call: {filename}]"
+        text = "[Local media omitted for model call]"
     return {"type": "text", "text": text}, True
 
 

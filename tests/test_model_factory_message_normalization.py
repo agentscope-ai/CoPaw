@@ -45,7 +45,7 @@ def test_normalize_file_scheme_image_block() -> None:
     assert normalized[0].content == [
         {
             "type": "text",
-            "text": "[Local media omitted for model call: a.png]",
+            "text": "[Local media omitted for model call]",
         },
     ]
 
@@ -70,7 +70,7 @@ def test_normalize_windows_file_scheme_image_block() -> None:
     assert normalized[0].content == [
         {
             "type": "text",
-            "text": "[Local media omitted for model call: a.png]",
+            "text": "[Local media omitted for model call]",
         },
     ]
 
@@ -96,7 +96,7 @@ def test_normalize_file_scheme_file_block() -> None:
     assert normalized[0].content == [
         {
             "type": "text",
-            "text": "[Local file omitted for model call: report.csv]",
+            "text": "[Local file omitted for model call]",
         },
     ]
 
@@ -121,7 +121,7 @@ def test_normalize_plain_local_path_image_block() -> None:
     assert normalized[0].content == [
         {
             "type": "text",
-            "text": "[Local media omitted for model call: plain-path.png]",
+            "text": "[Local media omitted for model call]",
         },
     ]
 
@@ -146,7 +146,7 @@ def test_normalize_plain_windows_path_image_block() -> None:
     assert normalized[0].content == [
         {
             "type": "text",
-            "text": "[Local media omitted for model call: plain-path.png]",
+            "text": "[Local media omitted for model call]",
         },
     ]
 
@@ -184,7 +184,7 @@ def test_normalize_local_media_in_tool_result_output() -> None:
             "output": [
                 {
                     "type": "text",
-                    "text": "[Local media omitted for model call: page-1773199016.png]",
+                    "text": "[Local media omitted for model call]",
                 },
                 {"type": "text", "text": "已成功发送文件"},
             ],
@@ -229,5 +229,55 @@ def test_normalize_local_media_in_deep_nested_structure() -> None:
     nested_item = normalized[0].content[0]["output"][1]["nested"]["items"][0]
     assert nested_item == {
         "type": "text",
-        "text": "[Local media omitted for model call: secret.png]",
+        "text": "[Local media omitted for model call]",
     }
+
+
+def test_normalize_uppercase_file_scheme_url() -> None:
+    msg = Msg(
+        name="assistant",
+        content=[
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "FILE:///tmp/case.png",
+                },
+            },
+        ],
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "[Local media omitted for model call]",
+        },
+    ]
+
+
+def test_normalize_relative_local_path_url() -> None:
+    msg = Msg(
+        name="assistant",
+        content=[
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "./images/local.png",
+                },
+            },
+        ],
+        role="assistant",
+    )
+
+    normalized = _normalize_messages_for_model([msg])
+
+    assert normalized[0].content == [
+        {
+            "type": "text",
+            "text": "[Local media omitted for model call]",
+        },
+    ]
