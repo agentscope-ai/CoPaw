@@ -1,0 +1,138 @@
+# 任务调度规则
+# 总调度·范总 使用
+
+dispatch_rules:
+  # 基金投资相关 → 基金专员·钱多多
+  fund_manager:
+    keywords:
+      - 基金
+      - 投资
+      - 净值
+      - 行情
+      - 市场
+      - 股票
+      - 债券
+      - 组合
+      - 调仓
+      - 回撤
+      - 风险
+      - 收益
+      - 理财
+    priority: 1
+
+  # 数据处理相关 → 数据专员·数小据
+  data_processor:
+    keywords:
+      - 数据
+      - 表格
+      - Excel
+      - CSV
+      - 清洗
+      - 统计
+      - 分析
+      - 图表
+      - 报表
+      - ETL
+      - 自动化
+      - 批处理
+    priority: 1
+
+  # 编程开发相关 → 编程专员·码大神
+  coding_master:
+    keywords:
+      - 代码
+      - 编程
+      - 开发
+      - 脚本
+      - Python
+      - 程序
+      - Bug
+      - 调试
+      - 重构
+      - 架构
+      - 接口
+      - API
+    priority: 1
+
+  # 知识检索相关 → 知识库·知小识
+  knowledge_base:
+    keywords:
+      - 搜索
+      - 查询
+      - 知识
+      - 资料
+      - 文档
+      - 记忆
+      - 回忆
+      - 历史
+      - 信息
+      - 整理
+      - 总结
+      - 归纳
+    priority: 1
+
+  # 复杂任务或多代理协作 → 总调度协调
+  orchestrator:
+    keywords:
+      - 协调
+      - 调度
+      - 分配
+      - 汇报
+      - 进度
+      - 综合
+      - 全部
+      - 一起
+    priority: 0
+
+# 小说创作相关 → 小说作家·墨小七
+  novel_writer:
+    keywords:
+      - 小说
+      - 写作
+      - 故事
+      - 章节
+      - 大纲
+      - 人物
+      - 剧情
+      - 网文
+      - 连载
+    priority: 1
+
+  # 监督检查相关 → 纪委·铁面判官
+  discipline_inspector:
+    keywords:
+      - 检查
+      - 监督
+      - 监察
+      - 纪委
+      - 偷懒
+      - 进度
+      - 谁没干活
+      - 查岗
+    priority: 0
+
+# 多代理协作场景
+collaboration_scenarios:
+  - name: 投资研究
+    agents: [fund_manager, data_processor]
+    description: 基金分析需要数据支持
+
+  - name: 数据产品开发
+    agents: [data_processor, coding_master]
+    description: 数据处理需要自动化脚本
+
+  - name: 知识系统建设
+    agents: [knowledge_base, coding_master]
+    description: 知识管理需要技术实现
+
+  - name: 全面分析
+    agents: [fund_manager, data_processor, knowledge_base]
+    description: 复杂分析需要多维度支持
+
+  - name: 小说创作
+    agents: [novel_writer, knowledge_base]
+    description: 小说创作需要知识支持
+
+  - name: 工作检查
+    agents: [discipline_inspector, orchestrator]
+    description: 纪委检查，总调度配合

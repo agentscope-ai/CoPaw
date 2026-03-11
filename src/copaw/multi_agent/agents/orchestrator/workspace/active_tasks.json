@@ -1,0 +1,33 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "基金系统自主进化方案 V2",
+      "agent": "fund_manager",
+      "status": "completed",
+      "description": "黄蓉已完成深度优化方案",
+      "deliverable": "workspace/evolution_plan.md",
+      "reported_by": "fund_manager"
+    },
+    {
+      "id": 2,
+      "name": "飞书连接修复",
+      "agent": "coding_master",
+      "status": "in_progress",
+      "description": "赵敏正在修复飞书实时监听",
+      "deliverable": "workspace/feishu_fix_task.md",
+      "priority": "highest"
+    },
+    {
+      "id": 3,
+      "name": "量子密码小说创作",
+      "agent": "novel_writer",
+      "status": "in_progress",
+      "description": "任盈盈正在创作，先写方案再写小说，不停顿",
+      "deliverable": "云文档上传",
+      "notes": "无时限，完全自主，写完汇报"
+    }
+  ],
+  "last_updated": "2025-03-08T00:00:00+08:00",
+  "next_report_scheduled": "2025-03-08T00:30:00+08:00"
+}

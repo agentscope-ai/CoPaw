@@ -1,0 +1,25 @@
+# Copaw Agent System - 全局配置
+system:
+  name: Copaw Agent System
+  version: 1.0.0
+  
+server:
+  host: 127.0.0.1
+  port: 8765
+  
+dashboard:
+  port: 3000
+  backend_port: 8766
+  
+orchestrator:
+  default_agent: fund_manager
+  max_concurrent_tasks: 5
+  
+discussion:
+  enabled: true
+  max_rounds: 10
+  timeout_seconds: 300
+  
+logging:
+  level: INFO
+  path: logs/

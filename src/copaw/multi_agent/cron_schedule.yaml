@@ -1,0 +1,32 @@
+# 多代理系统定时任务配置
+
+tasks:
+  # 纪委每日检查
+  - name: daily_inspection
+    schedule: "0 9 * * *"  # 每天9点
+    agent: discipline_inspector
+    script: workspace/inspector_daemon.py
+    
+  # 代理任务检查
+  - name: check_pending_tasks
+    schedule: "*/5 * * * *"  # 每5分钟
+    agent: orchestrator
+    script: agent_runner.py
+    
+  # 每周监察报告
+  - name: weekly_inspection_report
+    schedule: "0 10 * * 1"  # 每周一10点
+    agent: discipline_inspector
+    action: generate_weekly_report
+    
+  # 基金日报
+  - name: fund_daily_report
+    schedule: "10 20 * * *"  # 每天20:10
+    agent: fund_manager
+    action: generate_daily_report
+    
+  # 系统健康检查
+  - name: health_check
+    schedule: "0 */6 * * *"  # 每6小时
+    agent: orchestrator
+    action: check_system_health

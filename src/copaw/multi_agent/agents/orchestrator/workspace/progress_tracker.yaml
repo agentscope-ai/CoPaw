@@ -1,0 +1,59 @@
+# 工作进度跟踪系统
+# 总调度·范总 维护
+
+progress_tracking:
+  enabled: true
+  # 定期汇报间隔（分钟）
+  report_interval: 30
+  # 汇报时机
+  report_triggers:
+    - scheduled      # 定时汇报
+    - task_complete  # 任务完成
+    - user_request   # 用户要求
+    - error_occurred # 发生错误
+
+# 汇报内容模板
+report_template:
+  header: "📋 特工小队工作进度汇报"
+  sections:
+    - title: "✅ 已完成任务"
+      content: "列出已完成的任务及结果摘要"
+    - title: "🔄 进行中任务"
+      content: "列出正在进行的任务及当前进度"
+    - title: "⏳ 待处理任务"
+      content: "列出等待开始的任务"
+    - title: "⚠️ 问题与风险"
+      content: "列出遇到的问题和需要关注的风险"
+    - title: "📊 各代理状态"
+      content: "每个代理的当前状态和负载情况"
+
+# 各代理状态记录
+agent_status:
+  fund_manager:
+    status: idle  # idle, busy, error
+    current_task: null
+    completed_today: 0
+    last_active: null
+
+  data_processor:
+    status: idle
+    current_task: null
+    completed_today: 0
+    last_active: null
+
+  coding_master:
+    status: idle
+    current_task: null
+    completed_today: 0
+    last_active: null
+
+  knowledge_base:
+    status: idle
+    current_task: null
+    completed_today: 0
+    last_active: null
+
+# 任务历史记录
+task_history:
+  max_records: 100
+  retention_days: 30
