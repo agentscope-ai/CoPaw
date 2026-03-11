@@ -37,6 +37,10 @@ function encodeSlot(slot: ModelSlotConfig): string {
   )}`;
 }
 
+function emptySlot(): ModelSlotConfig {
+  return { provider_id: "", model: "" };
+}
+
 export default function ModelSelector() {
   const { t } = useTranslation();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -249,11 +253,20 @@ export default function ModelSelector() {
     savingRef.current = true;
     setSaving(true);
     try {
+      const nextLocal =
+        kind === "local"
+          ? slot
+          : effectiveLocalSlot ?? routingConfig?.local ?? emptySlot();
+      const nextCloud =
+        kind === "cloud"
+          ? slot
+          : effectiveCloudSlot ?? routingConfig?.cloud ?? null;
+
       const nextRouting: LLMRoutingConfig = {
         enabled: routingConfig?.enabled ?? false,
         mode: routingConfig?.mode ?? "local_first",
-        local: kind === "local" ? slot : effectiveLocalSlot ?? slot,
-        cloud: kind === "cloud" ? slot : effectiveCloudSlot ?? slot,
+        local: nextLocal,
+        cloud: nextCloud,
       };
       await providerApi.setLlmRoutingConfig(nextRouting);
       setRoutingConfig(nextRouting);
