@@ -253,7 +253,7 @@ const DOC_TITLES: Record<Lang, Record<string, string>> = {
   en: {
     "docs.intro": "Introduction",
     "docs.quickstart": "Quick start",
-    "docs.desktop": "Desktop",
+    "docs.desktop": "Desktop App",
     "docs.console": "Console",
     "docs.models": "Models",
     "docs.channels": "Channels",
