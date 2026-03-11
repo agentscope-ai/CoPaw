@@ -97,8 +97,8 @@ def desktop_cmd(
             [
                 sys.executable,
                 "-m",
-                "uvicorn",
-                "copaw.app._app:app",
+                "copaw",
+                "app",
                 "--host",
                 host,
                 "--port",
