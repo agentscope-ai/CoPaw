@@ -2,6 +2,7 @@
 # Usage: cd deploy && docker compose up --build
 services:
   copaw:
+    container_name: copaw
     build:
       context: ..
       dockerfile: deploy/Dockerfile
