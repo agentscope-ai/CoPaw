@@ -102,11 +102,16 @@ def _build_spec_from_cli(
     target_user: str,
     target_session: str,
     text: Optional[str],
-    timezone: str,
+    timezone: Optional[str],
     enabled: bool,
     mode: str,
 ) -> dict:
     """Build CronJobSpec JSON payload from CLI args (no id)."""
+    # Use provided timezone or default from constant
+    if timezone is None:
+        from ..constant import DEFAULT_TIMEZONE
+        timezone = DEFAULT_TIMEZONE
+
     schedule = {"type": "cron", "cron": cron, "timezone": timezone}
     dispatch = {
         "type": "channel",
@@ -237,8 +242,11 @@ def _build_spec_from_cli(
 )
 @click.option(
     "--timezone",
-    default="UTC",
-    help="Timezone for the cron schedule (e.g. UTC, America/New_York).",
+    default=None,
+    help=(
+        "Timezone for the cron schedule (e.g. Asia/Shanghai, UTC, America/New_York). "
+        "Defaults to COPAW_TIMEZONE env var or Asia/Shanghai."
+    ),
 )
 @click.option(
     "--enabled/--no-enabled",

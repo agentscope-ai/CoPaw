@@ -159,6 +159,32 @@ DASHSCOPE_BASE_URL = EnvVarLoader.get_str(
 # When unset, CORS middleware is not applied.
 CORS_ORIGINS = EnvVarLoader.get_str("COPAW_CORS_ORIGINS", "").strip()
 
+# Default timezone for cron jobs and time-related operations.
+# Can be overridden by environment variable COPAW_TIMEZONE.
+# Defaults to the system's local timezone.
+def _get_default_timezone() -> str:
+    """Get the default timezone from system or environment."""
+    # Check environment variable first
+    env_tz = os.environ.get("COPAW_TIMEZONE")
+    if env_tz:
+        return env_tz
+
+    # Try to get system timezone using tzlocal
+    try:
+        from tzlocal import get_localzone
+
+        tz = get_localzone()
+        if tz:
+            return str(tz)
+    except Exception:
+        pass
+
+    # Fallback to UTC
+    return "UTC"
+
+
+DEFAULT_TIMEZONE = _get_default_timezone()
+
 # LLM API retry configuration
 LLM_MAX_RETRIES = EnvVarLoader.get_int(
     "COPAW_LLM_MAX_RETRIES",

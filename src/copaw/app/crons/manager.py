@@ -36,12 +36,14 @@ class CronManager:
         repo: BaseJobRepository,
         runner: Any,
         channel_manager: Any,
-        timezone: str = "UTC",
+        timezone: Optional[str] = None,
     ):
+        from ...constant import DEFAULT_TIMEZONE
+
         self._repo = repo
         self._runner = runner
         self._channel_manager = channel_manager
-        self._scheduler = AsyncIOScheduler(timezone=timezone)
+        self._scheduler = AsyncIOScheduler(timezone=timezone or DEFAULT_TIMEZONE)
         self._executor = CronExecutor(
             runner=runner,
             channel_manager=channel_manager,
@@ -294,5 +296,10 @@ class CronManager:
                 )
                 raise
             finally:
-                st.last_run_at = datetime.utcnow()
+                # Use timezone-aware datetime
+                from zoneinfo import ZoneInfo
+                from ...constant import DEFAULT_TIMEZONE
+
+                tz = ZoneInfo(DEFAULT_TIMEZONE)
+                st.last_run_at = datetime.now(tz)
                 self._states[job.id] = st
