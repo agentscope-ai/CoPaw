@@ -130,7 +130,7 @@ export default function ModelSelector() {
                   .join(" ")}
                 role="button"
                 tabIndex={0}
-                aria-expanded={isExpanded}
+                aria-expanded={isExpanded ? "true" : "false"}
                 onClick={() =>
                   setExpandedProvider(isExpanded ? null : provider.id)
                 }
