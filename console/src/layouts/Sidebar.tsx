@@ -166,10 +166,28 @@ function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation();
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    const doCopy = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    };
+    const fallback = () => {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.cssText = "position:fixed;left:-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        const successful = document.execCommand("copy");
+        if (successful) doCopy();
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(doCopy).catch(fallback);
+    } else {
+      fallback();
+    }
   }, [text]);
 
   return (
