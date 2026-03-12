@@ -207,7 +207,11 @@ class AgentRunner(Runner):
                 session_id=session_id,
                 user_id=user_id,
                 channel=channel,
-                working_dir=str(WORKING_DIR),
+                working_dir=(
+                    str(self.workspace_dir)
+                    if self.workspace_dir
+                    else str(WORKING_DIR)
+                ),
             )
 
             # Get MCP clients from manager (hot-reloadable)
@@ -481,13 +485,20 @@ class AgentRunner(Runner):
                 "using existing environment variables",
             )
 
-        session_dir = str(WORKING_DIR / "sessions")
+        session_dir = str(
+            (self.workspace_dir if self.workspace_dir else WORKING_DIR)
+            / "sessions",
+        )
         self.session = SafeJSONSession(save_dir=session_dir)
 
         try:
             if self.memory_manager is None:
                 self.memory_manager = MemoryManager(
-                    working_dir=str(WORKING_DIR),
+                    working_dir=(
+                        str(self.workspace_dir)
+                        if self.workspace_dir
+                        else str(WORKING_DIR)
+                    ),
                 )
             await self.memory_manager.start()
         except Exception as e:
