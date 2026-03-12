@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-TELEMETRY_ENDPOINT = "https://telemetry.agentscope.io/copaw/install"
+TELEMETRY_ENDPOINT = "https://copaw-telemetry-xissagieap.cn-hangzhou.fcapp.run"
 TELEMETRY_MARKER_FILE = ".telemetry_collected"
 
 
