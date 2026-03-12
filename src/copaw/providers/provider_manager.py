@@ -87,6 +87,11 @@ AZURE_OPENAI_MODELS: List[ModelInfo] = [
 
 ANTHROPIC_MODELS: List[ModelInfo] = []
 
+MINIMAX_MODELS: List[ModelInfo] = [
+    ModelInfo(id="MiniMax-M2.5", name="MiniMax M2.5"),
+    ModelInfo(id="MiniMax-M2.5-highspeed", name="MiniMax M2.5 Highspeed"),
+]
+
 PROVIDER_MODELSCOPE = OpenAIProvider(
     id="modelscope",
     name="ModelScope",
@@ -169,6 +174,15 @@ PROVIDER_LMSTUDIO = LMStudioProvider(
     models=[],
 )
 
+PROVIDER_MINIMAX = OpenAIProvider(
+    id="minimax",
+    name="MiniMax",
+    base_url="https://api.minimaxi.com/v1",
+    api_key_prefix="",
+    models=MINIMAX_MODELS,
+    freeze_url=True,
+)
+
 
 class ModelSlotConfig(BaseModel):
     provider_id: str = Field(
@@ -229,6 +243,7 @@ class ProviderManager:
         self._add_builtin(PROVIDER_LMSTUDIO)
         self._add_builtin(PROVIDER_LLAMACPP)
         self._add_builtin(PROVIDER_MLX)
+        self._add_builtin(PROVIDER_MINIMAX)
 
     def _add_builtin(self, provider: Provider):
         self.builtin_providers[provider.id] = provider
