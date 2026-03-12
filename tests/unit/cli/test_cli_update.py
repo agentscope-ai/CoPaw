@@ -134,9 +134,7 @@ def test_detect_installation(
             }
             return mapping.get(name)
 
-    expected_python_executable = str(
-        Path("/tmp/test-venv/bin/python").resolve(),
-    )
+    expected_python_executable = "/tmp/test-venv/bin/python"
     expected_environment_root = str(Path("/tmp/test-venv").resolve())
     expected_package_dir = str(
         Path(update_cmd_module.__file__).resolve().parent.parent,

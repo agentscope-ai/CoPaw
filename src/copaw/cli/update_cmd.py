@@ -120,7 +120,7 @@ def _detect_installation() -> InstallInfo:
 
     source_type, source_url = _detect_source_type(direct_url)
     package_dir = Path(__file__).resolve().parent.parent
-    python_executable = Path(sys.executable).resolve()
+    python_executable = sys.executable
     environment_root = Path(sys.prefix).resolve()
     environment_kind = (
         "virtualenv" if sys.prefix != sys.base_prefix else "system"
