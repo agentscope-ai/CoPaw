@@ -214,58 +214,65 @@ def _pid_exists(pid: int) -> bool:
     return True
 
 
+def _wait_for_pid_exit(
+    pid: int,
+    timeout_sec: float,
+    interval_sec: float,
+) -> bool:
+    """Wait until a PID exits within the given timeout."""
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if not _pid_exists(pid):
+            return True
+        time.sleep(interval_sec)
+    return not _pid_exists(pid)
+
+
+def _signal_process_tree_unix(pid: int, sig: signal.Signals) -> None:
+    """Send a signal to a Unix process and its descendants."""
+    descendants = sorted(_child_pids_unix(pid), reverse=True)
+    for child_pid in descendants:
+        try:
+            os.kill(child_pid, sig)
+        except OSError:
+            continue
+    try:
+        os.kill(pid, sig)
+    except OSError:
+        pass
+
+
+def _terminate_process_tree_windows(pid: int) -> None:
+    """Terminate a Windows process tree."""
+    try:
+        subprocess.run(
+            ["taskkill", "/T", "/PID", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def _terminate_pid(pid: int, timeout_sec: float = 5.0) -> bool:
     """Terminate a process tree gracefully, then force kill if needed."""
     if not _pid_exists(pid):
         return True
 
     if sys.platform == "win32":
-        try:
-            subprocess.run(
-                ["taskkill", "/T", "/PID", str(pid)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        _terminate_process_tree_windows(pid)
     else:
-        descendants = sorted(_child_pids_unix(pid), reverse=True)
-        for child_pid in descendants:
-            try:
-                os.kill(child_pid, signal.SIGTERM)
-            except OSError:
-                continue
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except OSError:
-            pass
+        _signal_process_tree_unix(pid, signal.SIGTERM)
 
-    deadline = time.monotonic() + timeout_sec
-    while time.monotonic() < deadline:
-        if not _pid_exists(pid):
-            return True
-        time.sleep(0.2)
+    if _wait_for_pid_exit(pid, timeout_sec, 0.2):
+        return True
 
     if sys.platform != "win32":
-        descendants = sorted(_child_pids_unix(pid), reverse=True)
-        for child_pid in descendants:
-            try:
-                os.kill(child_pid, signal.SIGKILL)
-            except OSError:
-                continue
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
+        _signal_process_tree_unix(pid, signal.SIGKILL)
 
-    force_deadline = time.monotonic() + 2.0
-    while time.monotonic() < force_deadline:
-        if not _pid_exists(pid):
-            return True
-        time.sleep(0.1)
-    return not _pid_exists(pid)
+    return _wait_for_pid_exit(pid, 2.0, 0.1)
 
 
 def _stop_pid_set(pids: set[int]) -> tuple[list[int], list[int]]:
@@ -325,6 +332,6 @@ def shutdown_cmd(ctx: click.Context, port: Optional[int]) -> None:
         )
     if failed:
         raise click.ClickException(
-            "Failed to stop process(es): "
+            "Failed to shutdown process(es): "
             + ", ".join(str(pid) for pid in sorted(failed)),
         )
