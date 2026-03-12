@@ -297,6 +297,6 @@ class CronManager:
                 )
                 raise
             finally:
-                tz = ZoneInfo(DEFAULT_TIMEZONE)
-                st.last_run_at = datetime.now(tz)
+                # Use timezone-aware UTC for internal timestamps to ensure consistency.
+                st.last_run_at = datetime.now(ZoneInfo("UTC"))
                 self._states[job.id] = st
