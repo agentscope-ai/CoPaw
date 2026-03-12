@@ -6,6 +6,7 @@ import {
   Modal,
   Spin,
   Tooltip,
+  message,
   type MenuProps,
 } from "antd";
 import { useState, useEffect, useCallback } from "react";
@@ -175,10 +176,18 @@ function CopyButton({ text }: { text: string }) {
       textarea.value = text;
       textarea.style.cssText = "position:fixed;left:-9999px";
       document.body.appendChild(textarea);
+      textarea.focus();
       textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
       try {
         const successful = document.execCommand("copy");
-        if (successful) doCopy();
+        if (successful) {
+          doCopy();
+        } else {
+          message.error(t("common.copyFailed"));
+        }
+      } catch {
+        message.error(t("common.copyFailed"));
       } finally {
         document.body.removeChild(textarea);
       }
@@ -188,7 +197,7 @@ function CopyButton({ text }: { text: string }) {
     } else {
       fallback();
     }
-  }, [text]);
+  }, [text, t]);
 
   return (
     <Tooltip
