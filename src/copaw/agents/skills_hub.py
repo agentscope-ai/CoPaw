@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 import frontmatter
 
-from .skills_manager import SkillService
+from .skills_manager import SkillService, get_customized_skills_dir
 
 logger = logging.getLogger(__name__)
 
@@ -488,6 +488,21 @@ def _normalize_bundle(
 def _safe_fallback_name(raw: str) -> str:
     out = re.sub(r"[^a-zA-Z0-9_-]", "-", raw).strip("-_")
     return out or "imported-skill"
+
+
+def _ensure_safe_skill_name(name: str) -> str:
+    raw = (name or "").strip()
+    if not raw:
+        raise ValueError("Hub bundle missing skill name")
+    if raw in {".", ".."}:
+        raise ValueError("Hub bundle skill name must be a safe directory name")
+    if raw.startswith("/") or raw.startswith("\\"):
+        raise ValueError("Hub bundle skill name must be a safe directory name")
+    if "/" in raw or "\\" in raw:
+        raise ValueError("Hub bundle skill name must be a safe directory name")
+    if ".." in raw:
+        raise ValueError("Hub bundle skill name must be a safe directory name")
+    return raw
 
 
 def _is_http_url(text: str) -> bool:
@@ -1156,6 +1171,12 @@ def install_skill_from_hub(
     if not name:
         fallback = urlparse(bundle_url).path.strip("/").split("/")[-1]
         name = _safe_fallback_name(fallback)
+    name = _ensure_safe_skill_name(name)
+
+    if not overwrite and (get_customized_skills_dir() / name).exists():
+        raise FileExistsError(
+            f"Skill '{name}' already exists. Use overwrite=true to replace.",
+        )
 
     created = SkillService.create_skill(
         name=name,
@@ -1166,6 +1187,11 @@ def install_skill_from_hub(
         extra_files=extra_files,
     )
     if not created:
+        if not overwrite and (get_customized_skills_dir() / name).exists():
+            raise FileExistsError(
+                f"Skill '{name}' already exists. "
+                "Use overwrite=true to replace.",
+            )
         raise RuntimeError(
             f"Failed to create skill '{name}'. "
             "Try overwrite=true if it already exists.",

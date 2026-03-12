@@ -77,7 +77,11 @@ export function useSkills() {
       return false;
     } catch (error) {
       console.error("Failed to import skill from hub", error);
-      message.error("Import failed");
+      const errorMsg =
+        error instanceof Error && error.message
+          ? error.message
+          : "Import failed";
+      message.error(errorMsg);
       return false;
     } finally {
       setImporting(false);

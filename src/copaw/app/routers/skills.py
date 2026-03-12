@@ -126,6 +126,14 @@ async def install_from_hub(request: HubInstallRequest):
             enable=request.enable,
             overwrite=request.overwrite,
         )
+    except FileExistsError as e:
+        detail = str(e)
+        logger.warning(
+            "Skill hub install 409: bundle_url=%s detail=%s",
+            (request.bundle_url or "")[:80],
+            detail,
+        )
+        raise HTTPException(status_code=409, detail=detail) from e
     except ValueError as e:
         detail = str(e)
         logger.warning(
