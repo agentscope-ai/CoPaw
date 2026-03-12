@@ -22,8 +22,47 @@ export const useAgentsData = () => {
 
   useEffect(() => {
     const initializeData = async () => {
+      // Remember currently selected file name
+      const previouslySelectedFilename = selectedFile?.filename;
+
+      // Clear content first
+      setFileContent("");
+      setOriginalContent("");
+      setExpandedMemory(false);
+
       const enabled = await fetchEnabledFiles();
-      await fetchFiles(enabled);
+      const fileList = await agentsApi.listAgentFiles(activeAgent);
+      const sortedFiles = sortFilesByEnabled(
+        fileList as unknown as MarkdownFile[],
+        enabled,
+      );
+      setFiles(sortedFiles);
+
+      // Set workspace path
+      if (fileList.length > 0) {
+        const path = fileList[0].path;
+        const workspace = path.substring(
+          0,
+          path.lastIndexOf("/") || path.lastIndexOf("\\"),
+        );
+        setWorkspacePath(workspace);
+      }
+
+      // Try to re-select the same file in new workspace
+      if (previouslySelectedFilename) {
+        const sameFile = sortedFiles.find(
+          (f) => f.filename === previouslySelectedFilename,
+        );
+        if (sameFile) {
+          // Auto-load the same file from new workspace
+          await handleFileClick(sameFile);
+        } else {
+          // File doesn't exist in new workspace, clear selection
+          setSelectedFile(null);
+        }
+      } else {
+        setSelectedFile(null);
+      }
     };
     initializeData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
