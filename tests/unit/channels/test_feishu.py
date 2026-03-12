@@ -50,22 +50,14 @@ def test_build_agent_request_from_native(feishu_channel):
     
     request = feishu_channel.build_agent_request_from_native(native_payload)
     
-    # Check if query exists, if not check if it's in input/messages
-    if hasattr(request, "query"):
-        assert request.query == "hello"
-    elif hasattr(request, "input"):
-        # AgentRequest structure might vary, check input content
-        assert "hello" in str(request.input)
-    
-    # 'channel' field is likely used instead of 'channel_id'
-    if hasattr(request, "channel_id"):
-        assert request.channel_id == "feishu"
-    elif hasattr(request, "channel"):
-        assert request.channel == "feishu"
+    assert request.user_id == "ou_sender"
+    assert request.session_id == "u_sender"
+    assert request.channel == "feishu"
+    assert request.input[0].content[0].text == "hello"
 
     # Verify meta is attached
-    if hasattr(request, "channel_meta"):
-        assert request.channel_meta["feishu_chat_type"] == "p2p"
+    assert hasattr(request, "channel_meta")
+    assert request.channel_meta["feishu_chat_type"] == "p2p"
 
 def test_merge_native_items(feishu_channel):
     """Test merging multiple native items (e.g. split messages)."""
