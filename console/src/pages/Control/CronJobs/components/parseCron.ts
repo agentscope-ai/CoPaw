@@ -132,7 +132,16 @@ function parseDaysOfWeek(dayOfWeek: string): number[] {
 
   for (const part of parts) {
     if (part.includes("-")) {
-      const [startText, endText] = part.split("-");
+      const rangeParts = part.split("-");
+      if (
+        rangeParts.length !== 2 ||
+        rangeParts[0] === "" ||
+        rangeParts[1] === ""
+      ) {
+        return [];
+      }
+
+      const [startText, endText] = rangeParts;
       const start = parsePlainCronNumber(startText, 0, 6);
       const end = parsePlainCronNumber(endText, 0, 6);
       if (start !== null && end !== null && start <= end) {
@@ -141,11 +150,15 @@ function parseDaysOfWeek(dayOfWeek: string): number[] {
             days.push(i);
           }
         }
+      } else {
+        return [];
       }
     } else {
       const day = parsePlainCronNumber(part, 0, 6);
       if (day !== null && !days.includes(day)) {
         days.push(day);
+      } else {
+        return [];
       }
     }
   }
