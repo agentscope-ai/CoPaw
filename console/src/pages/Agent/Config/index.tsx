@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  Form,
-  Select,
-  Button,
-  Card,
-  Input,
-} from "@agentscope-ai/design";
+import { Form, Select, Button, Card, Input } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import { useAgentConfig } from "./useAgentConfig.tsx";
 import {
