@@ -53,6 +53,30 @@ logger = logging.getLogger(__name__)
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
 
+def _is_recoverable_mcp_error(error: BaseException) -> bool:
+    """Check if the error indicates a recoverable MCP connection issue.
+
+    Args:
+        error: The exception to check.
+
+    Returns:
+        True if the error is recoverable (connection-related), False otherwise.
+    """
+    if isinstance(error, ClosedResourceError):
+        return True
+    if isinstance(error, asyncio.CancelledError):
+        # CancelledError is recoverable (MCP-internal cancellation)
+        return True
+    if isinstance(error, RuntimeError):
+        msg = str(error).lower()
+        # Match agentscope's connection error message patterns
+        return any(
+            kw in msg
+            for kw in ["not connected", "not established", "connect()"]
+        )
+    return False
+
+
 class CoPawAgent(ToolGuardMixin, ReActAgent):
     """CoPaw Agent with integrated tools, skills, and memory management.
 
@@ -337,8 +361,15 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                     client,
                     namesake_strategy=namesake_strategy,
                 )
-            except (ClosedResourceError, asyncio.CancelledError) as error:
+            except BaseException as error:  # pylint: disable=broad-except
                 if self._should_propagate_cancelled_error(error):
+                    raise
+                if not _is_recoverable_mcp_error(error):
+                    logger.exception(
+                        "Unexpected error registering MCP client '%s': %s",
+                        client_name,
+                        error,
+                    )
                     raise
                 logger.warning(
                     "MCP client '%s' session interrupted while listing tools; "
@@ -364,25 +395,18 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
                             "recovery, skipping",
                             client_name,
                         )
-                    except Exception as e:  # pylint: disable=broad-except
-                        logger.warning(
+                    except Exception:  # pylint: disable=broad-except
+                        logger.exception(
                             "MCP client '%s' still unavailable after "
-                            "recovery, skipping: %s",
+                            "recovery, skipping",
                             client_name,
-                            e,
                         )
-                else:
-                    logger.warning(
-                        "MCP client '%s' recovery failed, skipping",
-                        client_name,
-                    )
-            except Exception as e:  # pylint: disable=broad-except
-                logger.exception(
-                    "Unexpected error registering MCP client '%s': %s",
+                    # Recovery failed, skip this client
+                    continue
+                logger.warning(
+                    "MCP client '%s' recovery failed, skipping",
                     client_name,
-                    e,
                 )
-                raise
 
     async def _recover_mcp_client(self, client: Any) -> Any | None:
         """Recover MCP client from broken session and return healthy client."""
