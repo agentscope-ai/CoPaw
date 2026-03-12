@@ -9,6 +9,7 @@ import click
 
 from .http import client, print_json
 from ..app.channels.schema import DEFAULT_CHANNEL
+from ..constant import DEFAULT_TIMEZONE
 
 
 def _base_url(ctx: click.Context, base_url: Optional[str]) -> str:
@@ -109,7 +110,6 @@ def _build_spec_from_cli(
     """Build CronJobSpec JSON payload from CLI args (no id)."""
     # Use provided timezone or default from constant
     if timezone is None:
-        from ..constant import DEFAULT_TIMEZONE
         timezone = DEFAULT_TIMEZONE
 
     schedule = {"type": "cron", "cron": cron, "timezone": timezone}

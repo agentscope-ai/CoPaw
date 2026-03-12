@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from pathlib import Path
+from tzlocal import get_localzone
 
 
 class EnvVarLoader:
@@ -17,11 +18,11 @@ class EnvVarLoader:
 
     @staticmethod
     def get_float(
-        env_var: str,
-        default: float = 0.0,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        allow_inf: bool = False,
+            env_var: str,
+            default: float = 0.0,
+            min_value: float | None = None,
+            max_value: float | None = None,
+            allow_inf: bool = False,
     ) -> float:
         """Get a float environment variable with optional bounds
         and infinity handling."""
@@ -32,7 +33,7 @@ class EnvVarLoader:
             if max_value is not None and value > max_value:
                 return max_value
             if not allow_inf and (
-                value == float("inf") or value == float("-inf")
+                    value == float("inf") or value == float("-inf")
             ):
                 return default
             return value
@@ -41,10 +42,10 @@ class EnvVarLoader:
 
     @staticmethod
     def get_int(
-        env_var: str,
-        default: int = 0,
-        min_value: int | None = None,
-        max_value: int | None = None,
+            env_var: str,
+            default: int = 0,
+            min_value: int | None = None,
+            max_value: int | None = None,
     ) -> int:
         """Get an integer environment variable with optional bounds."""
         try:
@@ -159,6 +160,7 @@ DASHSCOPE_BASE_URL = EnvVarLoader.get_str(
 # When unset, CORS middleware is not applied.
 CORS_ORIGINS = EnvVarLoader.get_str("COPAW_CORS_ORIGINS", "").strip()
 
+
 # Default timezone for cron jobs and time-related operations.
 # Can be overridden by environment variable COPAW_TIMEZONE.
 # Defaults to the system's local timezone.
@@ -171,8 +173,6 @@ def _get_default_timezone() -> str:
 
     # Try to get system timezone using tzlocal
     try:
-        from tzlocal import get_localzone
-
         tz = get_localzone()
         if tz:
             return str(tz)

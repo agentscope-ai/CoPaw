@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,6 +19,7 @@ from .executor import CronExecutor
 from .heartbeat import parse_heartbeat_every, run_heartbeat_once
 from .models import CronJobSpec, CronJobState
 from .repo.base import BaseJobRepository
+from ...constant import DEFAULT_TIMEZONE
 
 HEARTBEAT_JOB_ID = "_heartbeat"
 
@@ -38,7 +40,6 @@ class CronManager:
         channel_manager: Any,
         timezone: Optional[str] = None,
     ):
-        from ...constant import DEFAULT_TIMEZONE
 
         self._repo = repo
         self._runner = runner
@@ -296,10 +297,6 @@ class CronManager:
                 )
                 raise
             finally:
-                # Use timezone-aware datetime
-                from zoneinfo import ZoneInfo
-                from ...constant import DEFAULT_TIMEZONE
-
                 tz = ZoneInfo(DEFAULT_TIMEZONE)
                 st.last_run_at = datetime.now(tz)
                 self._states[job.id] = st
