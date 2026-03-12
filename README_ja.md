@@ -54,6 +54,13 @@
 
 ## ニュース
 
+[2026-03-12] v0.0.7をリリースしました！詳細は[v0.0.7リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
+
+- **[v0.0.7] 追加:** Tool Guardセキュリティレイヤー（危険なツール呼び出しをユーザー承認まで遮断）; MattermostとMatrixチャネル統合; Discord/DingTalk/Feishu/Telegramの@メンションフィルタリング; Telegram Markdownレンダリング; Feishu絵文字リアクションとリッチテキストメディア; QQ画像送信; LLM呼び出し自動リトライ; LM Studioプロバイダー; トークン使用量ダッシュボード; プロバイダー`generate_kwargs`エディタ; ワークスペースファイルのドラッグ＆ドロップ; チャット中のモデル切替; エージェント言語セレクター; コンテキスト管理UI; 中国ユーザー向け自動PyPIミラー選択。
+- **[v0.0.7] 改善:** プロバイダー接続テストメッセージ; ワークスペースzip・セッションI/Oの非同期化; プロバイダーID競合の自動解決; 組み込みスキルドキュメントとシェルPATH処理; Himalayaメールスキル; メモリドキュメント再構成。
+- **[v0.0.7] 修正:** DingTalk認証失敗時のクリーンアップ; Discord 2000文字超メッセージ分割; Windowsシェルエンコーディングとプロセスツリークリーンアップ; デスクトップSSL証明書・IME入力・外部URLナビゲーション; マジックコマンドセッション状態保護; Ollamaモーダル再レンダリング; `get_token_usage`データアクセス。
+- **[v0.0.7] 貢献者:** 新規貢献者の皆さんに感謝します: [@2catycm](https://github.com/2catycm), [@2niuhe](https://github.com/2niuhe), [@yingdachen](https://github.com/yingdachen), [@Atletico1999](https://github.com/Atletico1999), [@buecker](https://github.com/buecker), [@Cirilla-zmh](https://github.com/Cirilla-zmh), [@gnipping](https://github.com/gnipping), [@Nufe-muzi](https://github.com/Nufe-muzi), [@FuKunZ](https://github.com/FuKunZ)。
+
 [2026-03-09] v0.0.6をリリースしました！詳細は[v0.0.6リリースノート](https://agentscope-ai.github.io/CoPaw/release-notes)でご確認ください。
 
 - **[v0.0.6] 追加:** ワンクリックセットアップのネイティブデスクトップインストーラー（Windows/macOS）; UIとエージェント設定全体でのロシア語と日本語サポート; 許可リスト付きTelegramアクセス制御; QQ Markdownとリッチメディアサポート; Discord/Feishu/DingTalkメディア機能強化; IoT統合用MQTTチャネル; Gemini思考モデルとMLXバックエンドサポート; 組み込みツール管理ページ; ワークスペースファイルからのカスタムシステムプロンプト; スマート切り詰め機能付きReMeLightメモリシステム。

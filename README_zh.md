@@ -54,6 +54,13 @@
 
 ## 新闻
 
+[2026-03-12] 我们发布了 v0.0.7！完整更新说明见 [v0.0.7 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
+
+- **[v0.0.7]** **新增：** Tool Guard 安全守卫——拦截危险工具调用并等待用户审批；Mattermost 和 Matrix 频道集成；Discord/钉钉/飞书/Telegram @提及过滤；Telegram Markdown 渲染；飞书表情回应和富文本媒体解析；QQ 图片发送；LLM 调用自动重试与指数退避；LM Studio 提供商；Token 用量统计面板；提供商 `generate_kwargs` 编辑器；工作区文件拖拽排序；聊天中模型切换；智能体语言选择；上下文管理配置界面；中国用户自动选择 PyPI 镜像。
+- **[v0.0.7]** **优化：** 提供商连接测试错误提示；工作区压缩和会话读写异步化；提供商 ID 冲突自动解决；内置技能文档和 Shell PATH 处理；Himalaya 邮件技能；记忆文档重组。
+- **[v0.0.7]** **修复：** 钉钉认证失败清理；Discord 超长消息拆分；Windows Shell 编码和进程树清理；桌面应用 SSL 证书、输入法和外部链接导航；魔术命令会话状态保护；Ollama 弹窗渲染；`get_token_usage` 数据访问。
+- **[v0.0.7]** **贡献者：** 感谢新贡献者：[@2catycm](https://github.com/2catycm)、[@2niuhe](https://github.com/2niuhe)、[@yingdachen](https://github.com/yingdachen)、[@Atletico1999](https://github.com/Atletico1999)、[@buecker](https://github.com/buecker)、[@Cirilla-zmh](https://github.com/Cirilla-zmh)、[@gnipping](https://github.com/gnipping)、[@Nufe-muzi](https://github.com/Nufe-muzi)、[@FuKunZ](https://github.com/FuKunZ)。
+
 [2026-03-09] 我们发布了 v0.0.6！完整更新说明见 [v0.0.6 发布说明](https://agentscope-ai.github.io/CoPaw/release-notes)。
 
 - **[v0.0.6]** **新增：** 原生桌面安装包，一键安装（Windows/macOS）；俄语和日语支持覆盖界面和智能体配置；Telegram 访问控制和白名单；QQ Markdown 和富媒体支持；Discord/飞书/钉钉媒体增强；MQTT 频道支持物联网集成；Gemini 思考模型和 MLX 后端支持；内置工具管理页面；从工作区文件自定义系统提示词；ReMeLight 记忆系统带智能截断。
