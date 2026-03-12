@@ -18,6 +18,21 @@ function buildHeaders(method?: string, extra?: HeadersInit): Headers {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  // Add active agent ID to all requests (for multi-agent support)
+  try {
+    const agentStorage = localStorage.getItem("copaw-agent-storage");
+    if (agentStorage) {
+      const parsed = JSON.parse(agentStorage);
+      const activeAgent = parsed?.state?.activeAgent;
+      if (activeAgent) {
+        headers.set("X-Agent-Id", activeAgent);
+      }
+    }
+  } catch (error) {
+    // Ignore localStorage errors
+    console.warn("Failed to get active agent from storage:", error);
+  }
+
   return headers;
 }
 

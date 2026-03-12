@@ -180,6 +180,12 @@ class ChannelManager:
                 )
             if ch_cfg is None:
                 continue
+
+            # Check if channel is enabled
+            enabled = getattr(ch_cfg, "enabled", False)
+            if not enabled:
+                continue
+
             filter_tool_messages = getattr(
                 ch_cfg,
                 "filter_tool_messages",

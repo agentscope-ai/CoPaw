@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
+import json
+from pathlib import Path
 from typing import Optional, Union, Dict, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -254,29 +256,97 @@ class AgentsLLMRoutingConfig(BaseModel):
     )
 
 
-class AgentsConfig(BaseModel):
-    defaults: AgentsDefaultsConfig = Field(
-        default_factory=AgentsDefaultsConfig,
+class AgentProfileRef(BaseModel):
+    """Agent Profile reference (stored in root config.json).
+
+    Only contains ID and workspace directory reference.
+    Full agent configuration is stored in workspace/agent.json.
+    """
+
+    id: str = Field(..., description="Unique agent ID")
+    workspace_dir: str = Field(
+        ...,
+        description="Path to agent's workspace directory",
+    )
+
+
+class AgentProfileConfig(BaseModel):
+    """Complete Agent Profile configuration (stored in workspace/agent.json).
+
+    Each agent has its own configuration file with all settings.
+    """
+
+    id: str = Field(..., description="Unique agent ID")
+    name: str = Field(..., description="Human-readable agent name")
+    description: str = Field(default="", description="Agent description")
+    workspace_dir: str = Field(
+        default="",
+        description="Path to agent's workspace (optional, for reference)",
+    )
+
+    # Agent-specific configurations
+    channels: Optional["ChannelConfig"] = Field(
+        default=None,
+        description="Channel configurations for this agent",
+    )
+    mcp: Optional["MCPConfig"] = Field(
+        default=None,
+        description="MCP clients for this agent",
+    )
+    heartbeat: Optional[HeartbeatConfig] = Field(
+        default=None,
+        description="Heartbeat configuration for this agent",
     )
     running: AgentsRunningConfig = Field(
         default_factory=AgentsRunningConfig,
+        description="Runtime configuration",
     )
     llm_routing: AgentsLLMRoutingConfig = Field(
         default_factory=AgentsLLMRoutingConfig,
-        description="LLM routing settings (local/cloud).",
+        description="LLM routing settings",
     )
     language: str = Field(
         default="zh",
-        description="Language for agent MD files (zh/en/ru)",
-    )
-    installed_md_files_language: Optional[str] = Field(
-        default=None,
-        description="Language of currently installed md files",
+        description="Language setting for this agent",
     )
     system_prompt_files: List[str] = Field(
         default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
-        description="List of markdown files to load into system prompt",
+        description="System prompt markdown files",
     )
+    tools: Optional["ToolsConfig"] = Field(
+        default=None,
+        description="Tools configuration for this agent",
+    )
+    security: Optional["SecurityConfig"] = Field(
+        default=None,
+        description="Security configuration for this agent",
+    )
+
+
+class AgentsConfig(BaseModel):
+    """Agents configuration (root config.json only contains references)."""
+
+    active_agent: str = Field(
+        default="default",
+        description="Currently active agent ID",
+    )
+    profiles: Dict[str, AgentProfileRef] = Field(
+        default_factory=lambda: {
+            "default": AgentProfileRef(
+                id="default",
+                workspace_dir="~/.copaw/workspaces/default",
+            ),
+        },
+        description="Agent profile references (ID and workspace path only)",
+    )
+
+    # Legacy fields for backward compatibility (deprecated)
+    defaults: Optional[AgentsDefaultsConfig] = None
+    running: Optional[AgentsRunningConfig] = None
+    llm_routing: Optional[AgentsLLMRoutingConfig] = None
+    language: Optional[str] = None
+    installed_md_files_language: Optional[str] = None
+    system_prompt_files: Optional[List[str]] = None
 
 
 class LastDispatchConfig(BaseModel):
@@ -502,3 +572,245 @@ ChannelConfigUnion = Union[
     MatrixConfig,
     VoiceChannelConfig,
 ]
+
+
+# Agent configuration utility functions
+
+
+def load_agent_config(agent_id: str) -> AgentProfileConfig:
+    """Load agent's complete configuration from workspace/agent.json.
+
+    Args:
+        agent_id: Agent ID to load
+
+    Returns:
+        AgentProfileConfig: Complete agent configuration
+
+    Raises:
+        ValueError: If agent ID not found in root config
+    """
+    from .utils import load_config
+
+    config = load_config()
+
+    if agent_id not in config.agents.profiles:
+        raise ValueError(f"Agent '{agent_id}' not found in config")
+
+    agent_ref = config.agents.profiles[agent_id]
+    workspace_dir = Path(agent_ref.workspace_dir).expanduser()
+    agent_config_path = workspace_dir / "agent.json"
+
+    if not agent_config_path.exists():
+        # Fallback: Try to use root config fields for backward compatibility
+        # This allows downgrade scenarios where agent.json doesn't exist yet
+        fallback_config = AgentProfileConfig(
+            id=agent_id,
+            name=agent_id.title(),
+            description=f"{agent_id} agent",
+            workspace_dir=str(workspace_dir),
+            # Inherit from root config if available (for backward compat)
+            channels=(
+                config.channels
+                if hasattr(config, "channels") and config.channels
+                else None
+            ),
+            mcp=config.mcp if hasattr(config, "mcp") and config.mcp else None,
+            tools=(
+                config.tools
+                if hasattr(config, "tools") and config.tools
+                else None
+            ),
+            security=(
+                config.security
+                if hasattr(config, "security") and config.security
+                else None
+            ),
+            # Use agent-specific configs with proper defaults
+            running=(
+                config.agents.running
+                if hasattr(config.agents, "running") and config.agents.running
+                else AgentsRunningConfig()
+            ),
+            llm_routing=(
+                config.agents.llm_routing
+                if hasattr(config.agents, "llm_routing")
+                and config.agents.llm_routing
+                else AgentsLLMRoutingConfig()
+            ),
+            system_prompt_files=(
+                config.agents.system_prompt_files
+                if hasattr(config.agents, "system_prompt_files")
+                and config.agents.system_prompt_files
+                else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
+            ),
+        )
+        # Save for future use
+        save_agent_config(agent_id, fallback_config)
+        return fallback_config
+
+    with open(agent_config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return AgentProfileConfig(**data)
+
+
+def save_agent_config(
+    agent_id: str,
+    agent_config: AgentProfileConfig,
+) -> None:
+    """Save agent configuration to workspace/agent.json.
+
+    Args:
+        agent_id: Agent ID
+        agent_config: Complete agent configuration to save
+
+    Raises:
+        ValueError: If agent ID not found in root config
+    """
+    from .utils import load_config
+
+    config = load_config()
+
+    if agent_id not in config.agents.profiles:
+        raise ValueError(f"Agent '{agent_id}' not found in config")
+
+    agent_ref = config.agents.profiles[agent_id]
+    workspace_dir = Path(agent_ref.workspace_dir).expanduser()
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    agent_config_path = workspace_dir / "agent.json"
+
+    with open(agent_config_path, "w", encoding="utf-8") as f:
+        json.dump(
+            agent_config.model_dump(exclude_none=True),
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+
+def migrate_legacy_config_to_multi_agent() -> bool:
+    """Migrate legacy single-agent config to new multi-agent structure.
+
+    Returns:
+        bool: True if migration was performed, False if already migrated
+    """
+    from .utils import load_config, save_config
+
+    config = load_config()
+
+    # Check if already migrated (new structure has only AgentProfileRef)
+    if "default" in config.agents.profiles:
+        agent_ref = config.agents.profiles["default"]
+        # If it's already a AgentProfileRef, migration done
+        if isinstance(agent_ref, AgentProfileRef):
+            # Check if default agent config exists
+            workspace_dir = Path(agent_ref.workspace_dir).expanduser()
+            agent_config_path = workspace_dir / "agent.json"
+            if agent_config_path.exists():
+                return False  # Already migrated
+
+    # Perform migration
+    print("Migrating legacy config to multi-agent structure...")
+
+    # Extract legacy agent configuration
+    legacy_agents = config.agents
+
+    # Create default agent workspace
+    default_workspace = Path("~/.copaw/workspaces/default").expanduser()
+    default_workspace.mkdir(parents=True, exist_ok=True)
+
+    # Create default agent configuration from legacy settings
+    default_agent_config = AgentProfileConfig(
+        id="default",
+        name="Default Agent",
+        description="Default CoPaw agent",
+        workspace_dir=str(default_workspace),
+        channels=config.channels if config.channels else None,
+        mcp=config.mcp if config.mcp else None,
+        heartbeat=(
+            legacy_agents.defaults.heartbeat
+            if legacy_agents.defaults
+            else None
+        ),
+        running=(
+            legacy_agents.running
+            if legacy_agents.running
+            else AgentsRunningConfig()
+        ),
+        llm_routing=(
+            legacy_agents.llm_routing
+            if legacy_agents.llm_routing
+            else AgentsLLMRoutingConfig()
+        ),
+        system_prompt_files=(
+            legacy_agents.system_prompt_files
+            if legacy_agents.system_prompt_files
+            else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
+        ),
+        tools=config.tools if config.tools else None,
+        security=config.security if config.security else None,
+    )
+
+    # Save default agent configuration to workspace
+    agent_config_path = default_workspace / "agent.json"
+    with open(agent_config_path, "w", encoding="utf-8") as f:
+        json.dump(
+            default_agent_config.model_dump(exclude_none=True),
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    # Migrate existing workspace files to default agent workspace
+    old_workspace = Path("~/.copaw").expanduser()
+
+    # Move sessions, memory, and other workspace files
+    for item_name in ["sessions", "memory", "jobs.json"]:
+        old_path = old_workspace / item_name
+        if old_path.exists():
+            new_path = default_workspace / item_name
+            if not new_path.exists():
+                import shutil
+
+                if old_path.is_dir():
+                    shutil.copytree(old_path, new_path)
+                else:
+                    shutil.copy2(old_path, new_path)
+                print(f"  Migrated {item_name} to default workspace")
+
+    # Copy markdown files (AGENTS.md, SOUL.md, PROFILE.md)
+    for md_file in ["AGENTS.md", "SOUL.md", "PROFILE.md"]:
+        old_md = old_workspace / md_file
+        if old_md.exists():
+            new_md = default_workspace / md_file
+            if not new_md.exists():
+                import shutil
+
+                shutil.copy2(old_md, new_md)
+                print(f"  Migrated {md_file} to default workspace")
+
+    # Update root config.json to new structure
+    config.agents = AgentsConfig(
+        active_agent="default",
+        profiles={
+            "default": AgentProfileRef(
+                id="default",
+                workspace_dir=str(default_workspace),
+            ),
+        },
+    )
+
+    # Clear legacy fields from root config
+    config.channels = ChannelConfig()  # Empty channels in root
+    config.mcp = MCPConfig()  # Empty MCP in root
+    config.tools = ToolsConfig()  # Empty tools in root
+    config.security = SecurityConfig()  # Empty security in root
+
+    save_config(config)
+
+    print("Migration completed successfully!")
+    print(f"  Default agent workspace: {default_workspace}")
+    print(f"  Default agent config: {agent_config_path}")
+
+    return True

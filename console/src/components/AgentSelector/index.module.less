@@ -1,0 +1,28 @@
+.agentSelector {
+  :global {
+    .ant-select-selector {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+
+      &:hover {
+        border-color: var(--primary-color);
+      }
+    }
+  }
+}
+
+.agentName {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.agentDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
