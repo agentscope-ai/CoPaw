@@ -244,7 +244,8 @@ def _build_spec_from_cli(
     "--timezone",
     default=None,
     help=(
-        "Timezone for the cron schedule (e.g. Asia/Shanghai, UTC, America/New_York). "
+        "Timezone for the cron schedule (e.g. Asia/Shanghai, UTC, "
+        "America/New_York). "
         "Defaults to the COPAW_TIMEZONE env var, system timezone, or UTC."
     ),
 )
