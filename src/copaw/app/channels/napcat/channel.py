@@ -7,23 +7,16 @@ NapCat 基于 OneBot 11 协议，使用 WebSocket 接收消息，HTTP API 发送
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import threading
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-import websocket
 
 from agentscope_runtime.engine.schemas.agent_schemas import (
     RunStatus,
     TextContent,
-    ImageContent,
-    VideoContent,
-    AudioContent,
-    FileContent,
     ContentType,
 )
 
@@ -33,273 +26,20 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
+from .constants import DEFAULT_MEDIA_DIR
+from .api import (
+    send_group_message,
+    send_private_message,
+    get_login_info,
+    get_group_list,
+)
+from .message import (
+    parse_message,
+    build_message_segment,
+)
+from .websocket import WebSocketClient
 
 logger = logging.getLogger(__name__)
-
-# Reconnect settings
-RECONNECT_DELAYS = [1, 2, 5, 10, 30, 60]
-MAX_RECONNECT_ATTEMPTS = 100
-QUICK_DISCONNECT_THRESHOLD = 5
-MAX_QUICK_DISCONNECT_COUNT = 3
-
-# Default paths
-_DEFAULT_MEDIA_DIR = Path("~/.copaw/media/napcat").expanduser()
-
-
-class NapCatApiError(RuntimeError):
-    """HTTP error returned by NapCat API."""
-
-    def __init__(self, path: str, status: int, data: Any, message: str = None):
-        self.path = path
-        self.status = status
-        self.data = data
-        self.message = message
-        super().__init__(f"NapCat API {path} {status}: {message or data}")
-
-
-def _as_bool(value: Any) -> bool:
-    """Convert value to boolean."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
-def _parse_message(message: Any) -> List[OutgoingContentPart]:  # noqa: R0912
-    """Parse OneBot 11 message to content parts.
-
-    Handles:
-    - Plain text (str)
-    - Array of message segments
-    - Message segments: text, image, record, video, file, etc.
-    """
-    parts: List[OutgoingContentPart] = []
-
-    if not message:
-        return parts
-
-    # If message is a string (plain text)
-    if isinstance(message, str):
-        if message.strip():
-            parts.append(
-                TextContent(
-                    type=ContentType.TEXT,
-                    text=message.strip(),
-                ),
-            )
-        return parts
-
-    # If message is a list of segments
-    if isinstance(message, list):
-        for segment in message:
-            seg_type = segment.get("type", "")
-            seg_data = segment.get("data", {})
-
-            if seg_type == "text":
-                text = seg_data.get("text", "").strip()
-                if text:
-                    parts.append(TextContent(type=ContentType.TEXT, text=text))
-
-            elif seg_type == "image":
-                # Image can be file path, URL, or base64
-                image_data = seg_data.get("file", seg_data.get("url", ""))
-                if image_data:
-                    parts.append(
-                        ImageContent(
-                            type=ContentType.IMAGE,
-                            image_url=image_data,
-                        ),
-                    )
-
-            elif seg_type == "record":  # Voice
-                record_data = seg_data.get("file", seg_data.get("url", ""))
-                if record_data:
-                    parts.append(
-                        AudioContent(
-                            type=ContentType.AUDIO,
-                            data=record_data,
-                        ),
-                    )
-
-            elif seg_type == "video":
-                video_data = seg_data.get("file", seg_data.get("url", ""))
-                if video_data:
-                    parts.append(
-                        VideoContent(
-                            type=ContentType.VIDEO,
-                            video_url=video_data,
-                        ),
-                    )
-
-            elif seg_type == "file":
-                file_data = seg_data.get("file", seg_data.get("url", ""))
-                file_name = seg_data.get("name", "file")
-                if file_data:
-                    parts.append(
-                        FileContent(
-                            type=ContentType.FILE,
-                            filename=file_name,
-                            file_url=file_data,
-                        ),
-                    )
-
-    return parts
-
-
-def _build_message_segment(text: str, auto_escape: bool = True) -> Any:
-    """Build OneBot 11 message segment from text.
-
-    Args:
-        text: Message text
-        auto_escape: Whether to escape special characters
-
-    Returns:
-        Message segment (string or list of segments)
-    """
-    if auto_escape:
-        # Simple escape for CQ codes
-        text = text.replace("&", "&amp;")
-        text = text.replace("[", "&#91;")
-        text = text.replace("]", "&#93;")
-    return text
-
-
-async def _api_request(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    access_token: str,
-    method: str,
-    path: str,
-    body: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Make HTTP API request to NapCat."""
-    url = f"http://{host}:{port}{path}"
-    headers = {"Content-Type": "application/json"}
-    if access_token:
-        headers["Authorization"] = f"Bearer {access_token}"
-
-    kwargs: Dict[str, Any] = {"headers": headers}
-    if body is not None:
-        kwargs["json"] = body
-
-    async with session.request(method, url, **kwargs) as resp:
-        data = await resp.json()
-        if resp.status >= 400:
-            raise NapCatApiError(path=path, status=resp.status, data=data)
-        # Check OneBot retcode and status
-        retcode = data.get("retcode", 0)
-        status = data.get("status", "ok")
-        if retcode != 0 or status == "failed":
-            msg = data.get("message") or data.get("wording", "Unknown error")
-            raise NapCatApiError(
-                path=path,
-                status=resp.status,
-                data=data,
-                message=msg,
-            )
-        return data
-
-
-async def _send_group_message(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    access_token: str,
-    group_id: str,
-    message: Any,
-    auto_escape: bool = True,
-) -> int:
-    """Send message to group.
-
-    Returns:
-        message_id on success
-    """
-    body = {
-        "group_id": group_id,
-        "message": message,
-        "auto_escape": auto_escape,
-    }
-    result = await _api_request(
-        session,
-        host,
-        port,
-        access_token,
-        "POST",
-        "/send_group_msg",
-        body,
-    )
-    return (result.get("data") or {}).get("message_id", 0)
-
-
-async def _send_private_message(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    access_token: str,
-    user_id: str,
-    message: Any,
-    auto_escape: bool = True,
-) -> int:
-    """Send private message.
-
-    Returns:
-        message_id on success
-    """
-    body = {
-        "user_id": user_id,
-        "message": message,
-        "auto_escape": auto_escape,
-    }
-    result = await _api_request(
-        session,
-        host,
-        port,
-        access_token,
-        "POST",
-        "/send_private_msg",
-        body,
-    )
-    return (result.get("data") or {}).get("message_id", 0)
-
-
-async def _get_login_info(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    access_token: str,
-) -> Dict[str, Any]:
-    """Get login info."""
-    result = await _api_request(
-        session,
-        host,
-        port,
-        access_token,
-        "POST",
-        "/get_login_info",
-        None,
-    )
-    return result.get("data", {})
-
-
-async def _get_group_list(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    access_token: str,
-) -> List[Dict[str, Any]]:
-    """Get group list."""
-    result = await _api_request(
-        session,
-        host,
-        port,
-        access_token,
-        "POST",
-        "/get_group_list",
-        None,
-    )
-    return result.get("data", [])
 
 
 class NapCatChannel(BaseChannel):
@@ -348,7 +88,7 @@ class NapCatChannel(BaseChannel):
         self.access_token = access_token
         self.bot_prefix = bot_prefix
         self._media_dir = (
-            Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
+            Path(media_dir).expanduser() if media_dir else DEFAULT_MEDIA_DIR
         )
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -418,12 +158,131 @@ class NapCatChannel(BaseChannel):
             media_dir=media_dir,
         )
 
+    def _is_bot_mentioned(
+        self,
+        raw_message: Any,
+    ) -> bool:
+        """Check if the bot was mentioned in the message.
+
+        Checks for CQ code: [CQ:at,qq={bot_qq}]
+        Also supports the 'all' mention: [CQ:at,qq=all]
+
+        Args:
+            raw_message: The raw message from OneBot 11 event
+
+        Returns:
+            True if bot is mentioned
+        """
+        if not raw_message:
+            return False
+
+        # Get bot QQ from login info
+        bot_qq = (
+            str(self._login_info.get("user_id", ""))
+            if self._login_info
+            else ""
+        )
+        if not bot_qq:
+            return False
+
+        # Handle both string and list message formats
+        if isinstance(raw_message, str):
+            # Check for CQ at code with bot QQ
+            if f"[CQ:at,qq={bot_qq}]" in raw_message:
+                return True
+            # Also check for @all (everyone)
+            if "[CQ:at,qq=all]" in raw_message:
+                return True
+        elif isinstance(raw_message, list):
+            # Check message segments for at type
+            for segment in raw_message:
+                if isinstance(segment, dict):
+                    seg_type = segment.get("type", "")
+                    if seg_type == "at":
+                        seg_data = segment.get("data", {})
+                        qq = seg_data.get("qq", "")
+                        # Check if it's mentioning the bot or everyone
+                        if str(qq) == bot_qq or qq == "all":
+                            return True
+
+        return False
+
+    def _clean_at_mention(
+        self,
+        raw_message: Any,
+    ) -> Any:
+        """Remove the @ bot mention from the message.
+
+        This is used to clean the message before processing,
+        so the bot doesn't see the @ mention in its input.
+
+        Args:
+            raw_message: The raw message from OneBot 11 event
+
+        Returns:
+            Cleaned message without the @ mention
+        """
+        if not raw_message:
+            return raw_message
+
+        # Get bot QQ from login info
+        bot_qq = (
+            str(self._login_info.get("user_id", ""))
+            if self._login_info
+            else ""
+        )
+
+        # Handle string message format
+        if isinstance(raw_message, str):
+            cleaned = raw_message
+            # Remove CQ at code with bot QQ
+            if bot_qq:
+                cleaned = cleaned.replace(f"[CQ:at,qq={bot_qq}]", "")
+            # Remove @all CQ code
+            cleaned = cleaned.replace("[CQ:at,qq=all]", "")
+            # Also try without comma format
+            if bot_qq:
+                cleaned = cleaned.replace(f"[CQ:at qq={bot_qq}]", "")
+            cleaned = cleaned.replace("[CQ:at qq=all]", "")
+            return cleaned.strip()
+
+        # Handle list message format
+        if isinstance(raw_message, list):
+            cleaned_segments = []
+            for segment in raw_message:
+                if isinstance(segment, dict):
+                    seg_type = segment.get("type", "")
+                    if seg_type == "at":
+                        # Skip at segments
+                        seg_data = segment.get("data", {})
+                        qq = seg_data.get("qq", "")
+                        # Skip if it's mentioning bot or everyone
+                        if str(qq) == bot_qq or qq == "all":
+                            continue
+                    # Keep other segments
+                    cleaned_segments.append(segment)
+                else:
+                    cleaned_segments.append(segment)
+            return cleaned_segments
+
+        return raw_message
+
     def _should_process(
         self,
         user_id: str,
         group_id: Optional[str] = None,
+        raw_message: Any = None,
     ) -> bool:
-        """Check if the message should be processed based on policy."""
+        """Check if the message should be processed based on policy.
+
+        For group messages, also checks if the bot was mentioned (unless
+        bot_prefix is set, in which case message must start with prefix).
+
+        Args:
+            user_id: The user ID who sent the message
+            group_id: The group ID if this is a group message
+            raw_message: The raw message content for at-mention checking
+        """
         # Check allow_from list
         if self.allow_from and user_id not in self.allow_from:
             return False
@@ -432,6 +291,17 @@ class NapCatChannel(BaseChannel):
         if group_id:
             if self.group_policy == "deny":
                 return False
+
+            # For group messages, check if bot is mentioned
+            # (only if no bot_prefix is set, since prefix takes precedence)
+            if not self.bot_prefix:
+                if not self._is_bot_mentioned(raw_message):
+                    # Bot not mentioned in group message, skip processing
+                    logger.debug(
+                        f"napcat: group message without bot mention, "
+                        f"group={group_id}, user={user_id}",
+                    )
+                    return False
         else:
             # Private message
             if self.dm_policy == "deny":
@@ -457,6 +327,9 @@ class NapCatChannel(BaseChannel):
 
         text = text.strip()
         meta = meta or {}
+
+        # Build message segment (simple text)
+        message = build_message_segment(text, auto_escape=True)
 
         # Determine if this is group or private message
         # Check multiple sources for group_id
@@ -488,38 +361,30 @@ class NapCatChannel(BaseChannel):
                     f"message_type={message_type}, session_id={session_id}",
                 )
             try:
-                await _send_group_message(
+                await send_group_message(
                     self._http,
                     self.host,
                     self.port,
                     self.access_token,
                     group_id,
-                    text,
-                    auto_escape=True,
+                    message,
                 )
-            except Exception as e:
-                logger.exception(
-                    f"NapCat send to group {group_id} failed: {e}",
-                )
+            except Exception:
+                logger.exception(f"NapCat send to group {group_id} failed")
         else:
             # Private message
             user_id = meta.get("user_id") or to_handle
             try:
-                await _send_private_message(
+                await send_private_message(
                     self._http,
                     self.host,
                     self.port,
                     self.access_token,
                     user_id,
-                    text,
-                    auto_escape=True,
+                    message,
                 )
-            except Exception as e:
-                logger.exception(
-                    "NapCat send to user %s failed: %s",
-                    user_id,
-                    e,
-                )
+            except Exception:
+                logger.exception("NapCat send to user %s failed", user_id)
 
     def build_agent_request_from_native(self, native_payload: Any) -> Any:
         """Build AgentRequest from NapCat/OneBot 11 event dict."""
@@ -553,12 +418,15 @@ class NapCatChannel(BaseChannel):
                 if bot_qq and f"[CQ:at,qq={bot_qq}]" not in raw_message:
                     return None
 
-        # Check policy
-        if not self._should_process(user_id, group_id):
+        # Check policy (pass raw_message for at-mention detection)
+        if not self._should_process(user_id, group_id, raw_message):
             return None
 
+        # Clean the message by removing @bot mention (for processing)
+        cleaned_message = self._clean_at_mention(raw_message)
+
         # Parse message to content parts
-        content_parts = _parse_message(raw_message)
+        content_parts = parse_message(cleaned_message)
 
         # Build metadata
         meta = {
@@ -693,101 +561,6 @@ class NapCatChannel(BaseChannel):
             except Exception:
                 logger.exception("send error message failed")
 
-    def _run_ws_forever(self) -> None:
-        """Run WebSocket client to receive events."""
-        reconnect_attempts = 0
-        last_connect_time = 0.0
-        quick_disconnect_count = 0
-
-        def connect() -> bool:
-            nonlocal reconnect_attempts, last_connect_time, quick_disconnect_count  # noqa: E501
-            if self._stop_event.is_set():
-                return False
-
-            ws_url = f"ws://{self.host}:{self.ws_port}/ws"
-            headers = {}
-            if self.access_token:
-                headers["Authorization"] = f"Bearer {self.access_token}"
-
-            logger.info(f"napcat connecting to {ws_url}")
-
-            try:
-                ws = websocket.create_connection(
-                    ws_url,
-                    header=headers,
-                    timeout=30,
-                )
-            except Exception as e:
-                logger.warning(f"napcat ws connect failed: {e}")
-                return True
-
-            current_ws = ws
-
-            try:
-                while not self._stop_event.is_set():
-                    try:
-                        raw = current_ws.recv()
-                    except websocket.WebSocketTimeoutException:
-                        continue
-                    except websocket.WebSocketConnectionClosedException:
-                        break
-
-                    if not raw:
-                        break
-
-                    try:
-                        payload = json.loads(raw)
-                    except json.JSONDecodeError:
-                        logger.warning(f"napcat invalid JSON: {raw[:200]}")
-                        continue
-
-                    # Handle OneBot 11 event
-                    self._handle_event(payload)
-
-            except Exception as e:
-                logger.exception(f"napcat ws loop: {e}")
-            finally:
-                try:
-                    current_ws.close()
-                except Exception:
-                    pass
-
-            # Calculate reconnect delay
-            if (
-                last_connect_time
-                and (time.time() - last_connect_time)
-                < QUICK_DISCONNECT_THRESHOLD
-            ):
-                quick_disconnect_count += 1
-                if quick_disconnect_count >= MAX_QUICK_DISCONNECT_COUNT:
-                    quick_disconnect_count = 0
-                    delay = 60  # Rate limit
-                else:
-                    delay = RECONNECT_DELAYS[
-                        min(reconnect_attempts, len(RECONNECT_DELAYS) - 1)
-                    ]
-            else:
-                quick_disconnect_count = 0
-                delay = RECONNECT_DELAYS[
-                    min(reconnect_attempts, len(RECONNECT_DELAYS) - 1)
-                ]
-
-            reconnect_attempts += 1
-            if reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
-                logger.error("napcat max reconnect attempts reached")
-                return False
-
-            logger.info(
-                f"napcat reconnecting in {delay}s (attempt {reconnect_attempts})",  # noqa: E501
-            )
-            self._stop_event.wait(timeout=delay)
-            return not self._stop_event.is_set()
-
-        while connect():
-            pass
-        self._stop_event.set()
-        logger.info("napcat ws thread stopped")
-
     def _handle_event(self, payload: Dict[str, Any]) -> None:
         """Handle incoming NapCat/OneBot 11 event."""
         post_type = payload.get("post_type", "")
@@ -828,7 +601,7 @@ class NapCatChannel(BaseChannel):
 
         # Test connection and get login info
         try:
-            self._login_info = await _get_login_info(
+            self._login_info = await get_login_info(
                 self._http,
                 self.host,
                 self.port,
@@ -836,7 +609,7 @@ class NapCatChannel(BaseChannel):
             )
             logger.info(f"napcat logged in as: {self._login_info}")
 
-            self._group_list = await _get_group_list(
+            self._group_list = await get_group_list(
                 self._http,
                 self.host,
                 self.port,
@@ -847,8 +620,15 @@ class NapCatChannel(BaseChannel):
             logger.warning(f"napcat initial fetch failed: {e}")
 
         # Start WebSocket thread
+        ws_client = WebSocketClient(
+            host=self.host,
+            ws_port=self.ws_port,
+            access_token=self.access_token,
+            stop_event=self._stop_event,
+            message_handler=self._handle_event,
+        )
         self._ws_thread = threading.Thread(
-            target=self._run_ws_forever,
+            target=ws_client.run_forever,
             daemon=True,
         )
         self._ws_thread.start()
