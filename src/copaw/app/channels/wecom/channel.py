@@ -75,6 +75,9 @@ class WecomChannel(BaseChannel):
         self.running = False
         self.active_tasks: set[asyncio.Task] = set()
 
+        # Session locks for message queuing (session_id -> lock)
+        self._session_locks: Dict[str, asyncio.Lock] = {}
+
     @classmethod
     def from_config(
         cls,
@@ -163,7 +166,14 @@ class WecomChannel(BaseChannel):
         logger.info("Stopping WeCom Channel")
         self.running = False
 
+        # Clear session locks
+        self._session_locks.clear()
+
+        # Cancel and wait for active tasks
         if self.active_tasks:
+            for task in self.active_tasks:
+                if not task.done():
+                    task.cancel()
             await asyncio.gather(*self.active_tasks, return_exceptions=True)
             self.active_tasks.clear()
 
@@ -280,7 +290,7 @@ class WecomChannel(BaseChannel):
         frame: WsFrame,
         content_parts: list,
     ) -> None:
-        """Build AgentRequest and initiate streaming reply.
+        """Build AgentRequest and process with session lock for queuing.
 
         Args:
             frame: Raw WsFrame from SDK.
@@ -295,14 +305,21 @@ class WecomChannel(BaseChannel):
         chatid = body.get("chatid") or user_id
         session_id = f"{self.channel}:{chatid}"
 
-        request = self.build_agent_request_from_user_content(
-            channel_id=self.channel,
-            sender_id=user_id,
-            session_id=session_id,
-            content_parts=content_parts,
-        )
+        # Get or create lock for this session
+        if session_id not in self._session_locks:
+            self._session_locks[session_id] = asyncio.Lock()
+        lock = self._session_locks[session_id]
 
-        await stream.dispatch_with_timeout(self, request, frame, req_id)
+        # Acquire lock to ensure messages are processed sequentially
+        async with lock:
+            request = self.build_agent_request_from_user_content(
+                channel_id=self.channel,
+                sender_id=user_id,
+                session_id=session_id,
+                content_parts=content_parts,
+            )
+
+            await stream.dispatch_with_timeout(self, request, frame, req_id)
 
     # -- Image Download --------------------------------------------------
 
@@ -376,4 +393,4 @@ class WecomChannel(BaseChannel):
     # -- BaseChannel Abstract Method -------------------------------------
 
     async def consume_one(self, payload: Any) -> None:  # noqa: ARG002
-        """Not used in WebSocket mode (BaseChannel abstract method)."""
+        """Not used - WeCom processes messages directly in handlers."""
