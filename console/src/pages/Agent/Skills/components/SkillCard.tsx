@@ -103,14 +103,7 @@ export function SkillCard({
         skill.enabled ? styles.enabledCard : ""
       } ${isHover ? styles.hover : styles.normal}`}
     >
-      <div
-        style={{
-          marginBottom: 16,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className={styles.cardBody}>
         <div className={styles.cardHeader}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className={styles.fileIcon}>{getFileIcon(skill.name)}</span>
@@ -132,16 +125,36 @@ export function SkillCard({
           </div>
         </div>
 
-        <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.source")}</div>
-          <code className={styles.infoCode}>{skill.source}</code>
+        <div className={styles.descriptionSection}>
+          <div className={styles.infoLabel}>{t("skills.skillDescription")}</div>
+          <div
+            className={`${styles.infoBlock} ${styles.descriptionContent}`}
+            title={skill.description || "-"}
+          >
+            {skill.description || "-"}
+          </div>
         </div>
 
-        <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.path")}</div>
-          <code className={`${styles.infoCode} ${styles.path}`}>
-            {skill.path}
-          </code>
+        <div className={styles.metaStack}>
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.source")}</div>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue}`}
+              title={skill.source}
+            >
+              {skill.source}
+            </div>
+          </div>
+
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.path")}</div>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue} ${styles.pathValue}`}
+              title={skill.path}
+            >
+              {skill.path}
+            </div>
+          </div>
         </div>
       </div>
 

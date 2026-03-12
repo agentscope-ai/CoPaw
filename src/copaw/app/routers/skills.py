@@ -380,9 +380,12 @@ async def load_skill_file(
     Returns:
         File content as string, or None if not found
 
-    Example:
-        GET /skills/my_skill/files/customized/references/doc.md
-        GET /skills/builtin_skill/files/builtin/scripts/utils/helper.py
+        Example:
+
+            GET /skills/my_skill/files/customized/references/doc.md
+
+            GET /skills/builtin_skill/files/builtin/scripts/utils/helper.py
+
     """
     from ..agent_context import get_agent_for_request
 
