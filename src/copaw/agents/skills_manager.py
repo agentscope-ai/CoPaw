@@ -4,6 +4,7 @@
 import filecmp
 import logging
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
@@ -12,6 +13,75 @@ import frontmatter
 from ..constant import ACTIVE_SKILLS_DIR, CUSTOMIZED_SKILLS_DIR
 
 logger = logging.getLogger(__name__)
+
+
+IGNORED_RUNTIME_ARTIFACT_NAMES = {
+    "__pycache__",
+    ".DS_Store",
+    "Thumbs.db",
+    ".pytest_cache",
+}
+IGNORED_RUNTIME_ARTIFACT_SUFFIXES = {
+    ".pyc",
+    ".pyo",
+}
+
+
+def _should_ignore_runtime_artifact(path: Path) -> bool:
+    """Return True for generated runtime files that should not sync."""
+    if path.name in IGNORED_RUNTIME_ARTIFACT_NAMES:
+        return True
+    if path.is_file() and path.suffix in IGNORED_RUNTIME_ARTIFACT_SUFFIXES:
+        return True
+    return False
+
+
+def _iter_relevant_directory_entries(
+    directory: Path,
+) -> Iterable[tuple[Path, Path]]:
+    """Yield relative paths for non-generated files and directories."""
+    if not directory.exists():
+        return
+
+    for item in sorted(directory.rglob("*"), key=lambda p: p.relative_to(directory).as_posix()):
+        if _should_ignore_runtime_artifact(item):
+            continue
+        if any(_should_ignore_runtime_artifact(parent) for parent in item.parents if parent != directory):
+            continue
+        yield item.relative_to(directory), item
+
+
+def _directories_match_ignoring_runtime_artifacts(
+    dir1: Path,
+    dir2: Path,
+) -> bool:
+    """Compare two directories while ignoring generated runtime artifacts."""
+    if not dir1.exists() or not dir2.exists():
+        return False
+
+    dir1_entries = dict(_iter_relevant_directory_entries(dir1))
+    dir2_entries = dict(_iter_relevant_directory_entries(dir2))
+
+    if set(dir1_entries) != set(dir2_entries):
+        return False
+
+    for relative_path in dir1_entries:
+        left = dir1_entries[relative_path]
+        right = dir2_entries[relative_path]
+        if left.is_dir() != right.is_dir():
+            return False
+        if left.is_file() and not filecmp.cmp(left, right, shallow=False):
+            return False
+
+    return True
+
+
+def _dedupe_skills_by_name(skills: list["SkillInfo"]) -> list["SkillInfo"]:
+    """Return one skill per name, preferring customized over builtin."""
+    merged: dict[str, SkillInfo] = {}
+    for skill in skills:
+        merged[skill.name] = skill
+    return list(merged.values())
 
 
 class SkillInfo(BaseModel):
@@ -287,7 +357,10 @@ def sync_skills_from_active_to_customized(
 
         if skill_name in builtin_skills_dict:
             builtin_skill_dir = builtin_skills_dict[skill_name]
-            if _is_directory_same(skill_dir, builtin_skill_dir):
+            if _directories_match_ignoring_runtime_artifacts(
+                skill_dir,
+                builtin_skill_dir,
+            ):
                 skipped_count += 1
                 continue
 
@@ -513,7 +586,8 @@ class SkillService:
 
         skills: list[SkillInfo] = []
 
-        # Collect from builtin and customized skills
+        # Collect from builtin and customized skills. Customized skills
+        # override built-in skills with the same name in the UI/API listing.
         skills.extend(
             _read_skills_from_dir(get_builtin_skills_dir(), "builtin"),
         )
@@ -521,7 +595,7 @@ class SkillService:
             _read_skills_from_dir(get_customized_skills_dir(), "customized"),
         )
 
-        return skills
+        return _dedupe_skills_by_name(skills)
 
     @staticmethod
     def list_available_skills() -> list[SkillInfo]:
