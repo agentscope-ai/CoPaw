@@ -145,8 +145,24 @@ class MCPConfigWatcher:
             try:
                 await asyncio.sleep(self._poll_interval)
                 await self._check()
+                await self._health_check()
+            except asyncio.CancelledError:
+                break
             except Exception:
                 logger.exception("MCPConfigWatcher: poll iteration failed")
+
+    async def _health_check(self) -> None:
+        """Proactively reconnect any disconnected MCP clients.
+
+        Skipped when a config reload is already in progress to
+        avoid conflicting concurrent mutations on the client dict.
+        """
+        if self._reload_task and not self._reload_task.done():
+            return
+        try:
+            await self._mcp_manager.reconnect_disconnected()
+        except Exception:
+            logger.debug("MCPConfigWatcher: health check encountered an error")
 
     async def _check(self) -> None:
         """Check for config changes and reload if needed."""
