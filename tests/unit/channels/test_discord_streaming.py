@@ -102,9 +102,14 @@ class TestDiscordTypingController:
         channel = _make_channel()
         ctrl = DiscordTypingController()
         ctrl.start(channel)
+        await asyncio.sleep(0.01)  # allow task to start
+        assert ctrl._task is not None
         ctrl.stop()
-        # After stop, _stopped should be True
         assert ctrl._stopped is True
+        assert ctrl._task is None
+        # Attempt to restart and verify it doesn't create a new task
+        ctrl.start(channel)
+        assert ctrl._task is None
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +164,7 @@ class TestDiscordDraftStream:
         draft = DiscordDraftStream(channel)
         await draft.send_placeholder()
         await draft.clear()
-        draft._draft_msg is None or None  # after clear, ref is gone
+        assert draft._draft_msg is None  # after clear, ref is gone
 
     @pytest.mark.asyncio
     async def test_truncation_at_max_len(self):
@@ -184,31 +189,25 @@ class TestFromEnvStreamingMode:
     def test_default_streaming_mode_from_env_is_off(self, monkeypatch):
         """DISCORD_STREAMING_MODE not set -> off."""
         monkeypatch.delenv("DISCORD_STREAMING_MODE", raising=False)
-        # We don't need a real process handler for this test
         from copaw.app.channels.discord_.channel import DiscordChannel
 
-        with patch.object(DiscordChannel, "__init__", return_value=None):
-            channel = DiscordChannel.__new__(DiscordChannel)
-            # Simulate from_env calling cls(**kwargs) with streaming_mode
-            import os
-
-            raw = os.getenv("DISCORD_STREAMING_MODE", "off").strip().lower()
-            mode = "partial" if raw == "partial" else "off"
-            assert mode == "off"
+        with patch.object(DiscordChannel, "__init__", return_value=None) as mock_init:
+            DiscordChannel.from_env(process=MagicMock())
+            assert mock_init.call_args.kwargs.get("streaming_mode", "off") == "off"
 
     def test_partial_streaming_mode_from_env(self, monkeypatch):
         """DISCORD_STREAMING_MODE=partial -> partial."""
         monkeypatch.setenv("DISCORD_STREAMING_MODE", "partial")
-        import os
+        from copaw.app.channels.discord_.channel import DiscordChannel
 
-        raw = os.getenv("DISCORD_STREAMING_MODE", "off").strip().lower()
-        mode = "partial" if raw == "partial" else "off"
-        assert mode == "partial"
+        with patch.object(DiscordChannel, "__init__", return_value=None) as mock_init:
+            DiscordChannel.from_env(process=MagicMock())
+            assert mock_init.call_args.kwargs.get("streaming_mode") == "partial"
 
     def test_unknown_streaming_mode_from_env_defaults_to_off(self, monkeypatch):
         monkeypatch.setenv("DISCORD_STREAMING_MODE", "full")
-        import os
+        from copaw.app.channels.discord_.channel import DiscordChannel
 
-        raw = os.getenv("DISCORD_STREAMING_MODE", "off").strip().lower()
-        mode = "partial" if raw == "partial" else "off"
-        assert mode == "off"
+        with patch.object(DiscordChannel, "__init__", return_value=None) as mock_init:
+            DiscordChannel.from_env(process=MagicMock())
+            assert mock_init.call_args.kwargs.get("streaming_mode", "off") == "off"

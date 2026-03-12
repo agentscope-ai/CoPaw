@@ -402,6 +402,8 @@ class DiscordChannel(BaseChannel):
             if allow_from_env
             else []
         )
+        raw_mode = os.getenv("DISCORD_STREAMING_MODE", "off").strip().lower()
+        streaming_mode = "partial" if raw_mode == "partial" else "off"
         return cls(
             process=process,
             enabled=os.getenv("DISCORD_CHANNEL_ENABLED", "1") == "1",
@@ -418,6 +420,7 @@ class DiscordChannel(BaseChannel):
             allow_from=allow_from,
             deny_message=os.getenv("DISCORD_DENY_MESSAGE", ""),
             require_mention=os.getenv("DISCORD_REQUIRE_MENTION", "0") == "1",
+            streaming_mode=streaming_mode,
         )
 
     @classmethod
