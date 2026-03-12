@@ -18,6 +18,7 @@ from ..constant import DOCS_ENABLED, LOG_LEVEL_ENV, CORS_ORIGINS, WORKING_DIR
 from ..__version__ import __version__
 from ..utils.logging import setup_logger, add_copaw_file_handler
 from .routers import router as api_router, create_agent_scoped_router
+from .routers.agent_scoped import AgentContextMiddleware
 from .routers.voice import voice_router
 from ..envs import load_envs_into_environ
 from ..providers.provider_manager import ProviderManager
@@ -134,17 +135,21 @@ async def lifespan(
     logger.info("Initializing MultiAgentManager...")
     multi_agent_manager = MultiAgentManager()
 
-    # Preload active agent (optional but recommended for faster first request)
+    # Start all configured agents (so each agent's channels can listen)
     config = load_config()
-    active_agent_id = config.agents.active_agent
+    agent_ids = list(config.agents.profiles.keys())
+    logger.info(f"Starting {len(agent_ids)} agent(s): {agent_ids}")
 
-    try:
-        logger.info(f"Preloading active agent: {active_agent_id}")
-        await multi_agent_manager.preload_agent(active_agent_id)
-    except Exception as e:
-        logger.warning(
-            f"Failed to preload active agent {active_agent_id}: {e}",
-        )
+    for agent_id in agent_ids:
+        try:
+            logger.info(f"Starting agent: {agent_id}")
+            await multi_agent_manager.preload_agent(agent_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to start agent {agent_id}: {e}. "
+                f"Continuing with other agents...",
+            )
+            # Continue to start other agents even if one fails
 
     # --- Model provider manager (non-reloadable, in-memory) ---
     provider_manager = ProviderManager.get_instance()
@@ -204,6 +209,9 @@ app = FastAPI(
     redoc_url="/redoc" if DOCS_ENABLED else None,
     openapi_url="/openapi.json" if DOCS_ENABLED else None,
 )
+
+# Add agent context middleware for agent-scoped routes
+app.add_middleware(AgentContextMiddleware)
 
 # Apply CORS middleware if CORS_ORIGINS is set
 if CORS_ORIGINS:

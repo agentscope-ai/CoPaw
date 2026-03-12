@@ -40,6 +40,16 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
         return False
 
     # Check if already migrated
+    # Skip if:
+    # 1. Multiple agents already exist (multi-agent config), OR
+    # 2. Default agent has agent.json (already migrated)
+    if len(config.agents.profiles) > 1:
+        logger.debug(
+            f"Multi-agent config already exists "
+            f"({len(config.agents.profiles)} agents), skipping migration",
+        )
+        return False
+
     if "default" in config.agents.profiles:
         agent_ref = config.agents.profiles["default"]
         if isinstance(agent_ref, AgentProfileRef):
@@ -47,7 +57,7 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
             agent_config_path = workspace_dir / "agent.json"
             if agent_config_path.exists():
                 logger.debug(
-                    "Multi-agent config already exists, skipping migration",
+                    "Default agent already migrated, skipping migration",
                 )
                 return False
 
@@ -227,14 +237,49 @@ def ensure_default_agent_exists() -> None:
 
     This function is called on startup to verify the default agent
     is properly configured. If not, it will be created.
+    Also ensures necessary workspace files exist (chats.json, jobs.json).
     """
     config = load_config()
 
-    if "default" not in config.agents.profiles:
-        logger.info("Creating default agent...")
-
+    # Get or determine default workspace path
+    if "default" in config.agents.profiles:
+        agent_ref = config.agents.profiles["default"]
+        default_workspace = Path(agent_ref.workspace_dir).expanduser()
+        agent_existed = True
+    else:
         default_workspace = Path("~/.copaw/workspaces/default").expanduser()
-        default_workspace.mkdir(parents=True, exist_ok=True)
+        agent_existed = False
+
+    # Ensure workspace directory exists
+    default_workspace.mkdir(parents=True, exist_ok=True)
+
+    # Always ensure chats.json exists (even if agent already registered)
+    chats_file = default_workspace / "chats.json"
+    if not chats_file.exists():
+        with open(chats_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {"version": 1, "chats": []},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        logger.debug("Created chats.json for default agent")
+
+    # Always ensure jobs.json exists (even if agent already registered)
+    jobs_file = default_workspace / "jobs.json"
+    if not jobs_file.exists():
+        with open(jobs_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {"version": 1, "jobs": []},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        logger.debug("Created jobs.json for default agent")
+
+    # Only update config if agent didn't exist
+    if not agent_existed:
+        logger.info("Creating default agent...")
 
         # Add default agent reference to config
         config.agents.profiles["default"] = AgentProfileRef(

@@ -21,11 +21,20 @@ class AgentContextMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         """Extract agentId from path and inject into request.state."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         # Extract agentId from path: /agents/{agentId}/...
         path_parts = request.url.path.split("/")
-        if len(path_parts) >= 3 and path_parts[1] == "agents":
-            agent_id = path_parts[2]
-            request.state.agent_id = agent_id
+        if len(path_parts) >= 3 and path_parts[1] == "api":
+            if len(path_parts) >= 4 and path_parts[2] == "agents":
+                agent_id = path_parts[3]
+                request.state.agent_id = agent_id
+                logger.info(
+                    f"AgentContextMiddleware: set agent_id={agent_id} "
+                    f"for path={request.url.path}",
+                )
 
         response = await call_next(request)
         return response

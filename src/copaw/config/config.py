@@ -625,23 +625,23 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
                 if hasattr(config, "security") and config.security
                 else None
             ),
-            # Use agent-specific configs if they exist
+            # Use agent-specific configs with proper defaults
             running=(
                 config.agents.running
                 if hasattr(config.agents, "running") and config.agents.running
-                else None
+                else AgentsRunningConfig()
             ),
             llm_routing=(
                 config.agents.llm_routing
                 if hasattr(config.agents, "llm_routing")
                 and config.agents.llm_routing
-                else None
+                else AgentsLLMRoutingConfig()
             ),
             system_prompt_files=(
                 config.agents.system_prompt_files
                 if hasattr(config.agents, "system_prompt_files")
                 and config.agents.system_prompt_files
-                else None
+                else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
             ),
         )
         # Save for future use

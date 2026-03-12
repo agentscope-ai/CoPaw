@@ -178,13 +178,13 @@ class Workspace:
                 from .runner.manager import ChatManager
                 from .runner.repo.json_repo import JsonChatRepository
 
-                chat_repo = JsonChatRepository(
-                    str(self.workspace_dir / "chats.json"),
-                )
+                chats_path = str(self.workspace_dir / "chats.json")
+                chat_repo = JsonChatRepository(chats_path)
                 self._chat_manager = ChatManager(repo=chat_repo)
                 self._runner.set_chat_manager(self._chat_manager)
-                logger.debug(
-                    f"ChatManager started for agent: {self.agent_id}",
+                logger.info(
+                    f"ChatManager started for agent {self.agent_id}: "
+                    f"chats.json={chats_path}",
                 )
 
             # Run Memory, MCP, and Chat initialization concurrently
