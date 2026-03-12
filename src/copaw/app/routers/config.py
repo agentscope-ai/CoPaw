@@ -15,11 +15,40 @@ from ...config import (
     ToolGuardRuleConfig,
 )
 from ..channels.registry import BUILTIN_CHANNEL_KEYS
-from ...config.config import AgentsLLMRoutingConfig, HeartbeatConfig
+from ...config.config import (
+    AgentsLLMRoutingConfig,
+    ConsoleConfig,
+    DingTalkConfig,
+    DiscordConfig,
+    FeishuConfig,
+    HeartbeatConfig,
+    IMessageChannelConfig,
+    MatrixConfig,
+    MattermostConfig,
+    MQTTConfig,
+    QQConfig,
+    TelegramConfig,
+    VoiceChannelConfig,
+)
 
 from .schemas_config import HeartbeatBody
 
 router = APIRouter(prefix="/config", tags=["config"])
+
+
+_CHANNEL_CONFIG_CLASS_MAP = {
+    "telegram": TelegramConfig,
+    "dingtalk": DingTalkConfig,
+    "discord": DiscordConfig,
+    "feishu": FeishuConfig,
+    "qq": QQConfig,
+    "imessage": IMessageChannelConfig,
+    "console": ConsoleConfig,
+    "voice": VoiceChannelConfig,
+    "mattermost": MattermostConfig,
+    "mqtt": MQTTConfig,
+    "matrix": MatrixConfig,
+}
 
 
 @router.get(
@@ -144,39 +173,9 @@ async def put_channel(
         )
     config = load_config()
 
-    # Create the appropriate config object based on channel_name
-    if channel_name == "telegram":
-        from ...config.config import TelegramConfig
-
-        channel_config = TelegramConfig(**single_channel_config)
-    elif channel_name == "dingtalk":
-        from ...config.config import DingTalkConfig
-
-        channel_config = DingTalkConfig(**single_channel_config)
-    elif channel_name == "discord":
-        from ...config.config import DiscordConfig
-
-        channel_config = DiscordConfig(**single_channel_config)
-    elif channel_name == "feishu":
-        from ...config.config import FeishuConfig
-
-        channel_config = FeishuConfig(**single_channel_config)
-    elif channel_name == "qq":
-        from ...config.config import QQConfig
-
-        channel_config = QQConfig(**single_channel_config)
-    elif channel_name == "imessage":
-        from ...config.config import IMessageChannelConfig
-
-        channel_config = IMessageChannelConfig(**single_channel_config)
-    elif channel_name == "console":
-        from ...config.config import ConsoleConfig
-
-        channel_config = ConsoleConfig(**single_channel_config)
-    elif channel_name == "voice":
-        from ...config.config import VoiceChannelConfig
-
-        channel_config = VoiceChannelConfig(**single_channel_config)
+    config_class = _CHANNEL_CONFIG_CLASS_MAP.get(channel_name)
+    if config_class is not None:
+        channel_config = config_class(**single_channel_config)
     else:
         # For custom channels, just use the dict
         channel_config = single_channel_config

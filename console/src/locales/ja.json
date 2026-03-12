@@ -72,6 +72,7 @@
     "invalidSkillUrlSource": "スキルURLは https://skills.sh/、https://clawhub.ai/、https://skillsmp.com/、または https://github.com/ で始まる必要があります",
     "source": "ソース",
     "path": "パス",
+    "skillDescription": "説明",
     "createSkill": "スキルを作成",
     "viewSkill": "スキルを表示",
     "editSkill": "スキルを編集",
