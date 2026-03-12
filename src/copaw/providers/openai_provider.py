@@ -114,11 +114,17 @@ class OpenAIProvider(Provider):
             CODING_DASHSCOPE_BASE_URL,
         ]
 
-        client_kwargs = {"base_url": self.base_url}
+        client_kwargs: dict[str, Any] = {"base_url": self.base_url}
+
+        # Start with any user-supplied custom headers.
+        merged_headers: dict[str, str] = (
+            dict(self.headers) if self.headers else {}
+        )
 
         if self.base_url in dashscope_base_urls:
-            client_kwargs["default_headers"] = {
-                "x-dashscope-agentapp": json.dumps(
+            merged_headers.setdefault(
+                "x-dashscope-agentapp",
+                json.dumps(
                     {
                         "agentType": "CoPaw",
                         "deployType": "UnKnown",
@@ -127,7 +133,21 @@ class OpenAIProvider(Provider):
                     },
                     ensure_ascii=False,
                 ),
-            }
+            )
+
+        if merged_headers:
+            client_kwargs["default_headers"] = merged_headers
+
+        if self.wire_api == "responses":
+            from .openai_responses_model import OpenAIResponsesChatModel
+
+            return OpenAIResponsesChatModel(
+                model_name=model_id,
+                stream=False,
+                api_key=self.api_key,
+                client_kwargs=client_kwargs,
+                generate_kwargs=self.generate_kwargs,
+            )
 
         return OpenAIChatModelCompat(
             model_name=model_id,
