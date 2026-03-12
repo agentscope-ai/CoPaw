@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Result } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import Weather from "./Weather";
@@ -36,7 +36,11 @@ function buildModelError(): Response {
 export default function ChatPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { chatId } = useParams<{ chatId: string }>();
+  const location = useLocation();
+  const chatId = useMemo(() => {
+    const match = location.pathname.match(/^\/chat\/(.+)$/);
+    return match?.[1];
+  }, [location.pathname]);
   const [showModelPrompt, setShowModelPrompt] = useState(false);
 
   const isComposingRef = useRef(false);
