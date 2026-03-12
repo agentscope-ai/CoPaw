@@ -24,9 +24,7 @@ def test_resolve_session_id_p2p(feishu_channel):
     
     session_id = feishu_channel.resolve_session_id(sender_id, meta)
     
-    # Logic: short_session_id_from_full_id takes last N chars.
-    # Assuming full ID is used if shorter than N, or suffix if longer.
-    assert "12345" in session_id
+    assert session_id == "u_12345"
 
 def test_resolve_session_id_group(feishu_channel):
     """Test resolving session ID for group chat."""
