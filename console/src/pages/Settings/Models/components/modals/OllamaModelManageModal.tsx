@@ -374,7 +374,7 @@ export function OllamaModelManageModal({
             onClick={fetchOllamaModels}
             loading={discovering}
             style={{ marginTop: 12 }}
-            >
+          >
             {t("models.discoverModels")}
           </Button>
           <Button
