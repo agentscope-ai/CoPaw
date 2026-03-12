@@ -16,6 +16,7 @@ def _iter_children(p: Path) -> list[Path]:
     return sorted(list(p.iterdir()), key=lambda x: x.name)
 
 
+# pylint: disable=too-many-branches
 @click.command("clean")
 @click.option("--yes", is_flag=True, help="Do not prompt for confirmation")
 @click.option(
@@ -37,7 +38,12 @@ def clean_cmd(yes: bool, dry_run: bool) -> None:
     children = [c for c in children if c != telemetry_marker]
 
     if not children:
-        click.echo(f"WORKING_DIR is already empty: {wd}")
+        if telemetry_marker.exists():
+            click.echo(
+                "WORKING_DIR has no removable files",
+            )
+        else:
+            click.echo(f"WORKING_DIR is already empty: {wd}")
         return
 
     click.echo(f"WORKING_DIR: {wd}")

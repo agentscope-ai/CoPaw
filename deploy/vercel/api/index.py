@@ -62,6 +62,8 @@ class handler(BaseHTTPRequestHandler):
 
             required_fields = [
                 "install_id",
+                "copaw_version",
+                "install_method",
                 "os",
                 "os_version",
                 "python_version",

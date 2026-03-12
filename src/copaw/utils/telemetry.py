@@ -26,19 +26,44 @@ def _safe_get(func: Callable[[], str], default: str = "unknown") -> str:
         return default
 
 
+def _detect_install_method() -> str:
+    """Detect how CoPaw was installed based on environment signals."""
+    import os
+
+    if os.environ.get("COPAW_RUNNING_IN_CONTAINER", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return "docker"
+    if os.environ.get("COPAW_DESKTOP_APP", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return "desktop"
+    return "pip"
+
+
 def get_system_info() -> dict[str, Any]:
     """Collect system environment information.
 
     Returns anonymized system information including:
     - install_id: Random UUID (not tied to user)
+    - copaw_version: CoPaw version string
+    - install_method: How CoPaw was installed (docker/desktop/pip)
     - os: Operating system (Windows/Darwin/Linux)
     - os_version: OS version string
     - python_version: Python version running copaw (major.minor)
     - architecture: CPU architecture (x86_64/arm64/etc)
     - has_gpu: GPU availability detection
     """
+    from ..__version__ import __version__ as copaw_ver
+
     info = {
         "install_id": str(uuid.uuid4()),
+        "copaw_version": _safe_get(lambda: copaw_ver, "unknown"),
+        "install_method": _safe_get(_detect_install_method, "unknown"),
         "os": _safe_get(platform.system, "unknown"),
         "os_version": _safe_get(platform.release, "unknown"),
         "python_version": (
