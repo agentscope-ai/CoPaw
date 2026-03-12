@@ -15,7 +15,6 @@ from ..constant import (
     JOBS_FILE,
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH_ENV,
     RUNNING_IN_CONTAINER,
-    WORKING_DIR,
     get_workspace_dir,
 )
 from .config import Config, HeartbeatConfig, LastApiConfig, LastDispatchConfig
