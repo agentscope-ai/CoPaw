@@ -5,15 +5,19 @@ This module provides the main CoPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
 import asyncio
+import json
 import logging
 import os
 from typing import Any, List, Literal, Optional, Type
 
 from agentscope.agent import ReActAgent
+from agentscope.agent._react_agent import _MemoryMark
+from agentscope.agent._utils import _AsyncNullContext
 from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 from agentscope.memory import InMemoryMemory
-from agentscope.message import Msg
+from agentscope.message import AudioBlock, Msg, TextBlock, ToolResultBlock
 from agentscope.tool import Toolkit
+from agentscope.tracing import trace_reply
 from anyio import ClosedResourceError
 from pydantic import BaseModel
 
@@ -53,6 +57,71 @@ logger = logging.getLogger(__name__)
 NamesakeStrategy = Literal["override", "skip", "raise", "rename"]
 
 
+def normalize_reasoning_tool_choice(
+    tool_choice: Literal["auto", "none", "required"] | None,
+    has_tools: bool,
+) -> Literal["auto", "none", "required"] | None:
+    """Normalize tool_choice for reasoning to reduce provider variance."""
+    if tool_choice is None and has_tools:
+        return "auto"
+    return tool_choice
+
+
+def _extract_visible_text_blocks(msg: Msg | None) -> list[dict]:
+    """Return only plain text blocks from a reasoning message."""
+    if msg is None or not isinstance(getattr(msg, "content", None), list):
+        return []
+
+    visible_blocks: list[dict] = []
+    for block in msg.content:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") != "text":
+            continue
+        text = (block.get("text") or "").strip()
+        if not text:
+            continue
+        visible_blocks.append(TextBlock(type="text", text=text))
+    return visible_blocks
+
+
+def _build_progress_metadata(msg: Msg | None) -> dict:
+    """Mark an emitted intermediate message as progress."""
+    metadata = getattr(msg, "metadata", None)
+    if isinstance(metadata, dict):
+        return {**metadata, "_progress": True}
+    return {"_progress": True}
+
+
+def _build_post_tool_progress_hint() -> Msg:
+    """Ask the model to emit a standalone post-tool progress update."""
+    return Msg(
+        "user",
+        (
+            "<system-hint>You have just finished a tool step. "
+            "Now send exactly one short standalone progress update to the "
+            "user about the latest completed check. Do not summarize the "
+            "whole task. Do not include a final conclusion. Do not call any "
+            "tools.</system-hint>"
+        ),
+        "user",
+    )
+
+
+def _build_final_summary_hint() -> Msg:
+    """Ask the model to emit the final answer after progress is sent."""
+    return Msg(
+        "user",
+        (
+            "<system-hint>Now send the final answer summary to the user. "
+            "Assume the standalone progress update has already been sent. "
+            "Do not repeat that progress line verbatim. Do not call any "
+            "tools.</system-hint>"
+        ),
+        "user",
+    )
+
+
 class CoPawAgent(ToolGuardMixin, ReActAgent):
     """CoPaw Agent with integrated tools, skills, and memory management.
 
@@ -64,13 +133,11 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
     - System command handling (/compact, /new, etc.)
     - Tool-guard security interception (via ToolGuardMixin)
 
-    MRO note
-    ~~~~~~~~
-    ``ToolGuardMixin`` overrides ``_acting`` and ``_reasoning`` via
-    Python's MRO: CoPawAgent → ToolGuardMixin → ReActAgent.  If you
-    add a ``_acting`` or ``_reasoning`` override in this class, you
-    **must** call ``super()._acting(...)`` / ``super()._reasoning(...)``
-    so the guard interception remains active.
+    Security note
+    ~~~~~~~~~~~~~
+    ``ToolGuardMixin`` provides the tool-guard interception in ``_acting``.
+    This class overrides ``_reasoning`` for progress emission, so guard-aware
+    approval waiting must be preserved here as well.
     """
 
     def __init__(
@@ -495,12 +562,140 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         except Exception:  # pylint: disable=broad-except
             return None
 
-    async def reply(
+    # pylint: disable-next=too-many-branches,too-many-statements
+    async def _reasoning(
+        self,
+        tool_choice: Literal["auto", "none", "required"] | None = None,
+        defer_text_print: bool = False,
+    ) -> Msg:
+        """Set tool-choice defaults and suppress duplicate progress prints."""
+        if self._last_tool_response_is_denied():
+            pending = getattr(self, "_tool_guard_pending_info", None) or {}
+            tool_name = pending.get("tool_name", "unknown")
+            tool_input = pending.get("tool_input", {})
+            params_text = json.dumps(
+                tool_input,
+                ensure_ascii=False,
+                indent=2,
+            )
+            msg = Msg(
+                self.name,
+                "⏳ Waiting for approval / 等待审批\n\n"
+                f"- Tool / 工具: `{tool_name}`\n"
+                f"- Parameters / 参数:\n"
+                f"```json\n{params_text}\n```\n\n"
+                "Type `/approve` to approve, "
+                "or send any message to deny.\n"
+                "输入 `/approve` 批准执行，"
+                "或发送任意消息拒绝。",
+                "assistant",
+            )
+            await self.print(msg, True)
+            await self.memory.add(msg)
+            return msg
+
+        tool_choice = normalize_reasoning_tool_choice(
+            tool_choice=tool_choice,
+            has_tools=bool(self.toolkit.get_json_schemas()),
+        )
+
+        if self.plan_notebook:
+            hint_msg = await self.plan_notebook.get_current_hint()
+            if self.print_hint_msg and hint_msg:
+                await self.print(hint_msg)
+            await self.memory.add(hint_msg, marks=_MemoryMark.HINT)
+
+        prompt = await self.formatter.format(
+            msgs=[
+                Msg("system", self.sys_prompt, "system"),
+                *await self.memory.get_memory(),
+            ],
+        )
+        await self.memory.delete_by_mark(mark=_MemoryMark.HINT)
+
+        res = await self.model(
+            prompt,
+            tools=self.toolkit.get_json_schemas(),
+            tool_choice=tool_choice,
+        )
+
+        interrupted_by_user = False
+        msg = None
+
+        tts_context = self.tts_model or _AsyncNullContext()
+        speech: AudioBlock | list[AudioBlock] | None = None
+
+        try:
+            async with tts_context:
+                msg = Msg(name=self.name, content=[], role="assistant")
+                if self.model.stream:
+                    async for content_chunk in res:
+                        msg.content = content_chunk.content
+
+                        speech = msg.get_content_blocks("audio") or None
+
+                        if (
+                            self.tts_model
+                            and self.tts_model.supports_streaming_input
+                        ):
+                            tts_res = await self.tts_model.push(msg)
+                            speech = tts_res.content
+
+                else:
+                    msg.content = list(res.content)
+
+                if self.tts_model:
+                    tts_res = await self.tts_model.synthesize(msg)
+                    if self.tts_model.stream:
+                        async for tts_chunk in tts_res:
+                            speech = tts_chunk.content
+                    else:
+                        speech = tts_res.content
+
+                has_tool_use = msg.has_content_blocks("tool_use")
+                has_text = msg.has_content_blocks("text")
+                if not (has_tool_use and has_text) and not (
+                    defer_text_print and has_text
+                ):
+                    await self.print(msg, True, speech=speech)
+
+                await asyncio.sleep(0.001)
+
+        except asyncio.CancelledError as e:
+            interrupted_by_user = True
+            raise e from None
+
+        finally:
+            await self.memory.add(msg)
+
+            if interrupted_by_user and msg:
+                tool_use_blocks: list = msg.get_content_blocks("tool_use")
+                for tool_call in tool_use_blocks:
+                    msg_res = Msg(
+                        "system",
+                        [
+                            ToolResultBlock(
+                                type="tool_result",
+                                id=tool_call["id"],
+                                name=tool_call["name"],
+                                output="The tool call has been interrupted "
+                                "by the user.",
+                            ),
+                        ],
+                        "system",
+                    )
+                    await self.memory.add(msg_res)
+                    await self.print(msg_res, True)
+
+        return msg
+
+    @trace_reply
+    async def reply(  # pylint: disable=too-many-branches,too-many-statements
         self,
         msg: Msg | list[Msg] | None = None,
         structured_model: Type[BaseModel] | None = None,
     ) -> Msg:
-        """Override reply to process file blocks and handle commands.
+        """Process file blocks, emit progress, and handle commands.
 
         Args:
             msg: Input message(s) from user
@@ -525,8 +720,174 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
             await self.print(msg)
             return msg
 
-        # Normal message processing
-        return await super().reply(msg=msg, structured_model=structured_model)
+        await self.memory.add(msg)
+        await self._retrieve_from_long_term_memory(msg)
+        await self._retrieve_from_knowledge(msg)
+
+        tool_choice: Literal["auto", "none", "required"] | None = None
+        self._required_structured_model = structured_model
+        if structured_model:
+            if self.finish_function_name not in self.toolkit.tools:
+                self.toolkit.register_tool_function(
+                    getattr(self, self.finish_function_name),
+                )
+            self.toolkit.set_extended_model(
+                self.finish_function_name,
+                structured_model,
+            )
+            tool_choice = "required"
+        else:
+            self.toolkit.remove_tool_function(self.finish_function_name)
+
+        structured_output = None
+        reply_msg = None
+        printed_progress_texts: set[str] = set()
+        had_tool_calls = False
+        pending_post_tool_progress = False
+        pending_final_summary = False
+
+        for _ in range(self.max_iters):
+            await self._compress_memory_if_needed()
+            msg_reasoning = await self._reasoning(
+                tool_choice,
+                defer_text_print=True,
+            )
+
+            tool_calls = msg_reasoning.get_content_blocks("tool_use")
+            visible_text_blocks = _extract_visible_text_blocks(msg_reasoning)
+            if tool_calls:
+                had_tool_calls = True
+            if tool_calls and visible_text_blocks:
+                progress_text = "\n".join(
+                    block["text"] for block in visible_text_blocks
+                ).strip()
+                if (
+                    progress_text
+                    and progress_text not in printed_progress_texts
+                ):
+                    printed_progress_texts.add(progress_text)
+                    await self.print(
+                        Msg(
+                            self.name,
+                            visible_text_blocks,
+                            "assistant",
+                            metadata=_build_progress_metadata(msg_reasoning),
+                        ),
+                        True,
+                    )
+
+            futures = [self._acting(tool_call) for tool_call in tool_calls]
+            if self.parallel_tool_calls:
+                structured_outputs = await asyncio.gather(*futures)
+            else:
+                structured_outputs = [await _ for _ in futures]
+
+            if self._required_structured_model:
+                structured_outputs = [_ for _ in structured_outputs if _]
+
+                msg_hint = None
+                if structured_outputs:
+                    structured_output = structured_outputs[-1]
+
+                    if msg_reasoning.has_content_blocks("text"):
+                        reply_msg = Msg(
+                            self.name,
+                            msg_reasoning.get_content_blocks("text"),
+                            "assistant",
+                            metadata=structured_output,
+                        )
+                        await self.print(reply_msg, True)
+                        break
+
+                    msg_hint = Msg(
+                        "user",
+                        "<system-hint>Now generate a text "
+                        "response based on your current situation"
+                        "</system-hint>",
+                        "user",
+                    )
+                    await self.memory.add(
+                        msg_hint,
+                        marks=_MemoryMark.HINT,
+                    )
+
+                    tool_choice = "none"
+                    self._required_structured_model = None
+
+                elif not msg_reasoning.has_content_blocks("tool_use"):
+                    msg_hint = Msg(
+                        "user",
+                        "<system-hint>Structured output is "
+                        f"required, go on to finish your task or call "
+                        f"'{self.finish_function_name}' to generate the "
+                        f"required structured output.</system-hint>",
+                        "user",
+                    )
+                    await self.memory.add(msg_hint, marks=_MemoryMark.HINT)
+                    tool_choice = "required"
+
+                if msg_hint and self.print_hint_msg:
+                    await self.print(msg_hint)
+
+            elif not msg_reasoning.has_content_blocks("tool_use"):
+                if pending_post_tool_progress:
+                    progress_text = "\n".join(
+                        block["text"] for block in visible_text_blocks
+                    ).strip()
+                    if progress_text:
+                        printed_progress_texts.add(progress_text)
+                        progress_msg = Msg(
+                            self.name,
+                            visible_text_blocks,
+                            "assistant",
+                            metadata=_build_progress_metadata(msg_reasoning),
+                        )
+                        await self.print(progress_msg, True)
+
+                    pending_post_tool_progress = False
+                    pending_final_summary = True
+                    msg_hint = _build_final_summary_hint()
+                    await self.memory.add(msg_hint, marks=_MemoryMark.HINT)
+                    tool_choice = "none"
+                    if self.print_hint_msg:
+                        await self.print(msg_hint)
+                    continue
+
+                if pending_final_summary:
+                    msg_reasoning.metadata = structured_output
+                    await self.print(msg_reasoning, True)
+                    reply_msg = msg_reasoning
+                    break
+
+                if had_tool_calls and visible_text_blocks:
+                    msg_hint = _build_post_tool_progress_hint()
+                    await self.memory.add(msg_hint, marks=_MemoryMark.HINT)
+                    pending_post_tool_progress = True
+                    tool_choice = "none"
+                    if self.print_hint_msg:
+                        await self.print(msg_hint)
+                    continue
+
+                msg_reasoning.metadata = structured_output
+                await self.print(msg_reasoning, True)
+                reply_msg = msg_reasoning
+                break
+
+        if reply_msg is None:
+            reply_msg = await self._summarizing()
+            reply_msg.metadata = structured_output
+            await self.memory.add(reply_msg)
+
+        if self._static_control:
+            await self.long_term_memory.record(
+                [
+                    *await self.memory.get_memory(
+                        exclude_mark=_MemoryMark.COMPRESSED,
+                    ),
+                ],
+            )
+
+        return reply_msg
 
     async def interrupt(self, msg: Msg | list[Msg] | None = None) -> None:
         """Interrupt the current reply process and wait for cleanup."""

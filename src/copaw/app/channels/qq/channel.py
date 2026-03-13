@@ -123,6 +123,19 @@ def _should_plaintext_fallback_from_markdown(exc: Exception) -> bool:
     )
 
 
+def _is_progress_event(event: Any) -> bool:
+    """Return whether a runtime message event is tagged as progress."""
+    metadata = getattr(event, "metadata", None) or {}
+    if not isinstance(metadata, dict):
+        return False
+
+    nested_metadata = metadata.get("metadata")
+    if isinstance(nested_metadata, dict):
+        return bool(nested_metadata.get("_progress"))
+
+    return bool(metadata.get("_progress"))
+
+
 def _get_api_base() -> str:
     """API root address (e.g. sandbox: https://sandbox.api.sgroup.qq.com)"""
     return os.getenv("QQ_API_BASE", DEFAULT_API_BASE).rstrip("/")
@@ -452,6 +465,8 @@ class QQChannel(BaseChannel):
         client_secret: str,
         bot_prefix: str = "",
         markdown_enabled: bool = True,
+        stream_reply: bool = False,
+        send_progress: bool = False,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
@@ -470,6 +485,8 @@ class QQChannel(BaseChannel):
         self.client_secret = client_secret
         self.bot_prefix = bot_prefix
         self._markdown_enabled = markdown_enabled
+        self._stream_reply = stream_reply
+        self._send_progress = send_progress
         self._media_dir = (
             Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
         )
@@ -568,6 +585,8 @@ class QQChannel(BaseChannel):
             client_secret=os.getenv("QQ_CLIENT_SECRET", ""),
             bot_prefix=os.getenv("QQ_BOT_PREFIX", ""),
             markdown_enabled=_as_bool(os.getenv("QQ_MARKDOWN_ENABLED", "1")),
+            stream_reply=_as_bool(os.getenv("QQ_STREAM_REPLY", "0")),
+            send_progress=_as_bool(os.getenv("QQ_SEND_PROGRESS", "0")),
             on_reply_sent=on_reply_sent,
         )
 
@@ -588,6 +607,8 @@ class QQChannel(BaseChannel):
             client_secret=config.client_secret or "",
             bot_prefix=config.bot_prefix or "",
             markdown_enabled=getattr(config, "markdown_enabled", True),
+            stream_reply=getattr(config, "stream_reply", False),
+            send_progress=getattr(config, "send_progress", False),
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
@@ -932,6 +953,7 @@ class QQChannel(BaseChannel):
             last_response = None
             accumulated_parts: List[OutgoingContentPart] = []
             event_count = 0
+            sent_reply = False
 
             async for event in self._process(request):
                 event_count += 1
@@ -946,42 +968,66 @@ class QQChannel(BaseChannel):
                     ev_type,
                 )
                 if obj == "message" and status == RunStatus.Completed:
+                    if _is_progress_event(event) and not self._send_progress:
+                        logger.info(
+                            "qq skip progress message: send_progress=0",
+                        )
+                        continue
                     parts = self._message_to_content_parts(event)
                     logger.info(
                         "qq completed message: type=%s parts_count=%s",
                         ev_type,
                         len(parts),
                     )
-                    accumulated_parts.extend(parts)
+                    if self._stream_reply and parts:
+                        chunk_meta = dict(send_meta)
+                        if sent_reply:
+                            chunk_meta["bot_prefix"] = ""
+                        await self.send_content_parts(
+                            to_handle,
+                            parts,
+                            chunk_meta,
+                        )
+                        sent_reply = True
+                    else:
+                        accumulated_parts.extend(parts)
                 elif obj == "response":
                     last_response = event
 
             err_msg = self._get_response_error_message(last_response)
             if err_msg:
-                err_text = self.bot_prefix + f"Error: {err_msg}"
+                err_text = f"Error: {err_msg}"
+                err_meta = dict(send_meta)
+                if sent_reply:
+                    err_meta["bot_prefix"] = ""
                 await self.send_content_parts(
                     to_handle,
                     [TextContent(type=ContentType.TEXT, text=err_text)],
-                    send_meta,
+                    err_meta,
                 )
             elif accumulated_parts:
+                final_meta = dict(send_meta)
+                if sent_reply:
+                    final_meta["bot_prefix"] = ""
                 await self.send_content_parts(
                     to_handle,
                     accumulated_parts,
-                    send_meta,
+                    final_meta,
                 )
             elif last_response is None:
+                fallback_meta = dict(send_meta)
+                if sent_reply:
+                    fallback_meta["bot_prefix"] = ""
                 await self.send_content_parts(
                     to_handle,
                     [
                         TextContent(
                             type=ContentType.TEXT,
-                            text=self.bot_prefix
-                            + "An error occurred while processing your "
+                            text="An error occurred while processing your "
                             "request.",
                         ),
                     ],
-                    send_meta,
+                    fallback_meta,
                 )
             if self._on_reply_sent:
                 self._on_reply_sent(
