@@ -90,6 +90,29 @@ def _build_progress_metadata(msg: Msg | None) -> dict:
     return {"_progress": True}
 
 
+def _build_post_tool_progress_hint() -> Msg:
+    """Ask the model to emit a standalone post-tool progress update."""
+    return Msg(
+        "user",
+        "<system-hint>You have just finished a tool step. "
+        "Now send exactly one short standalone progress update to the user "
+        "about the latest completed check. Do not summarize the whole task. "
+        "Do not include a final conclusion. Do not call any tools.</system-hint>",
+        "user",
+    )
+
+
+def _build_final_summary_hint() -> Msg:
+    """Ask the model to emit the final answer after progress is sent."""
+    return Msg(
+        "user",
+        "<system-hint>Now send the final answer summary to the user. "
+        "Assume the standalone progress update has already been sent. "
+        "Do not repeat that progress line verbatim. Do not call any tools.</system-hint>",
+        "user",
+    )
+
+
 class CoPawAgent(ReActAgent):
     """CoPaw Agent with integrated tools, skills, and memory management.
 
@@ -523,6 +546,7 @@ class CoPawAgent(ReActAgent):
     async def _reasoning(
         self,
         tool_choice: Literal["auto", "none", "required"] | None = None,
+        defer_text_print: bool = False,
     ) -> Msg:
         """Ensure stable tool-choice defaults and suppress duplicate progress."""
         tool_choice = normalize_reasoning_tool_choice(
@@ -583,9 +607,10 @@ class CoPawAgent(ReActAgent):
                     else:
                         speech = tts_res.content
 
-                if not (
-                    msg.has_content_blocks("tool_use")
-                    and msg.has_content_blocks("text")
+                has_tool_use = msg.has_content_blocks("tool_use")
+                has_text = msg.has_content_blocks("text")
+                if not (has_tool_use and has_text) and not (
+                    defer_text_print and has_text
                 ):
                     await self.print(msg, True, speech=speech)
 
@@ -672,13 +697,21 @@ class CoPawAgent(ReActAgent):
         structured_output = None
         reply_msg = None
         printed_progress_texts: set[str] = set()
+        had_tool_calls = False
+        pending_post_tool_progress = False
+        pending_final_summary = False
 
         for _ in range(self.max_iters):
             await self._compress_memory_if_needed()
-            msg_reasoning = await self._reasoning(tool_choice)
+            msg_reasoning = await self._reasoning(
+                tool_choice,
+                defer_text_print=True,
+            )
 
             tool_calls = msg_reasoning.get_content_blocks("tool_use")
             visible_text_blocks = _extract_visible_text_blocks(msg_reasoning)
+            if tool_calls:
+                had_tool_calls = True
             if tool_calls and visible_text_blocks:
                 progress_text = "\n".join(
                     block["text"] for block in visible_text_blocks
@@ -715,6 +748,7 @@ class CoPawAgent(ReActAgent):
                             "assistant",
                             metadata=structured_output,
                         )
+                        await self.print(reply_msg, True)
                         break
 
                     msg_hint = Msg(
@@ -748,7 +782,46 @@ class CoPawAgent(ReActAgent):
                     await self.print(msg_hint)
 
             elif not msg_reasoning.has_content_blocks("tool_use"):
+                if pending_post_tool_progress:
+                    progress_text = "\n".join(
+                        block["text"] for block in visible_text_blocks
+                    ).strip()
+                    if progress_text:
+                        printed_progress_texts.add(progress_text)
+                        progress_msg = Msg(
+                            self.name,
+                            visible_text_blocks,
+                            "assistant",
+                            metadata=_build_progress_metadata(msg_reasoning),
+                        )
+                        await self.print(progress_msg, True)
+
+                    pending_post_tool_progress = False
+                    pending_final_summary = True
+                    msg_hint = _build_final_summary_hint()
+                    await self.memory.add(msg_hint, marks=_MemoryMark.HINT)
+                    tool_choice = "none"
+                    if self.print_hint_msg:
+                        await self.print(msg_hint)
+                    continue
+
+                if pending_final_summary:
+                    msg_reasoning.metadata = structured_output
+                    await self.print(msg_reasoning, True)
+                    reply_msg = msg_reasoning
+                    break
+
+                if had_tool_calls and visible_text_blocks:
+                    msg_hint = _build_post_tool_progress_hint()
+                    await self.memory.add(msg_hint, marks=_MemoryMark.HINT)
+                    pending_post_tool_progress = True
+                    tool_choice = "none"
+                    if self.print_hint_msg:
+                        await self.print(msg_hint)
+                    continue
+
                 msg_reasoning.metadata = structured_output
+                await self.print(msg_reasoning, True)
                 reply_msg = msg_reasoning
                 break
 
