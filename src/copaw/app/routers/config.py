@@ -315,10 +315,8 @@ async def put_heartbeat(
     summary="Get agent LLM routing settings",
 )
 async def get_agents_llm_routing() -> AgentsLLMRoutingConfig:
-    from ...config.config import AgentsLLMRoutingConfig as LLMRouting
-
     config = load_config()
-    return config.agents.llm_routing or LLMRouting()
+    return config.agents.llm_routing
 
 
 @router.put(

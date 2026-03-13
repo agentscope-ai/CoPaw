@@ -341,12 +341,19 @@ class AgentsConfig(BaseModel):
     )
 
     # Legacy fields for backward compatibility (deprecated)
+    # These fields MUST have default values (not None) to support downgrade
     defaults: Optional[AgentsDefaultsConfig] = None
-    running: Optional[AgentsRunningConfig] = None
-    llm_routing: Optional[AgentsLLMRoutingConfig] = None
-    language: Optional[str] = None
+    running: AgentsRunningConfig = Field(
+        default_factory=AgentsRunningConfig,
+    )
+    llm_routing: AgentsLLMRoutingConfig = Field(
+        default_factory=AgentsLLMRoutingConfig,
+    )
+    language: str = Field(default="zh")
     installed_md_files_language: Optional[str] = None
-    system_prompt_files: Optional[List[str]] = None
+    system_prompt_files: List[str] = Field(
+        default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
+    )
 
 
 class LastDispatchConfig(BaseModel):
@@ -791,6 +798,7 @@ def migrate_legacy_config_to_multi_agent() -> bool:
                 print(f"  Migrated {md_file} to default workspace")
 
     # Update root config.json to new structure
+    # CRITICAL: Preserve legacy agent fields for downgrade compatibility
     config.agents = AgentsConfig(
         active_agent="default",
         profiles={
@@ -799,13 +807,20 @@ def migrate_legacy_config_to_multi_agent() -> bool:
                 workspace_dir=str(default_workspace),
             ),
         },
+        # Preserve legacy fields with values from migrated agent config
+        running=default_agent_config.running,
+        llm_routing=default_agent_config.llm_routing,
+        language=(
+            default_agent_config.language
+            if hasattr(default_agent_config, "language")
+            else "zh"
+        ),
+        system_prompt_files=default_agent_config.system_prompt_files,
     )
 
-    # Clear legacy fields from root config
-    config.channels = ChannelConfig()  # Empty channels in root
-    config.mcp = MCPConfig()  # Empty MCP in root
-    config.tools = ToolsConfig()  # Empty tools in root
-    config.security = SecurityConfig()  # Empty security in root
+    # IMPORTANT: Keep channels, mcp, tools, security in root config for
+    # backward compatibility. Do NOT clear these fields.
+    # Old versions expect these fields to exist with valid values.
 
     save_config(config)
 

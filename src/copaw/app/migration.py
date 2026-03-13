@@ -168,6 +168,8 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
         logger.info(f"Migrated workspace items: {', '.join(migrated_items)}")
 
     # Update root config.json to new structure
+    # CRITICAL: Preserve legacy agent fields in root config for downgrade
+    # compatibility. Old versions expect these fields to have valid values.
     config.agents = AgentsConfig(
         active_agent="default",
         profiles={
@@ -176,6 +178,11 @@ def migrate_legacy_workspace_to_default_agent() -> bool:
                 workspace_dir=str(default_workspace),
             ),
         },
+        # Preserve legacy fields with values from migrated agent config
+        running=default_agent_config.running,
+        llm_routing=default_agent_config.llm_routing,
+        language=default_agent_config.language,
+        system_prompt_files=default_agent_config.system_prompt_files,
     )
 
     # IMPORTANT: Keep original config fields in root config.json for
