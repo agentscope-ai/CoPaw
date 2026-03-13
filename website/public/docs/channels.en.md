@@ -632,7 +632,7 @@ done). **✗** = not supported (not possible on this channel).
 | Discord  | ✓         | ✓          | ✓          | ✓          | ✓         | ✓         | 🚧         | 🚧         | 🚧         | 🚧        |
 | iMessage | ✓         | ✗          | ✗          | ✗          | ✗         | ✓         | ✗          | ✗          | ✗          | ✗         |
 | QQ       | ✓         | 🚧         | 🚧         | 🚧         | 🚧        | ✓         | 🚧         | 🚧         | 🚧         | 🚧        |
-| WeCom    | ✓         | ✓          | 🚧          | ✓          | ✓         | ✓         | 🚧          | 🚧          | 🚧          | 🚧         |
+| WeCom    | ✓         | ✓          | 🚧         | ✓          | ✓         | ✓         | 🚧         | 🚧         | 🚧         | 🚧        |
 | Telegram | ✓         | ✓          | ✓          | ✓          | ✓         | ✓         | ✓          | ✓          | ✓          | ✓         |
 
 Notes:

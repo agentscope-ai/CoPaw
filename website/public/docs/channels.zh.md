@@ -430,6 +430,7 @@
 ## 企业微信
 
 ### 创建新企业
+
 个人使用者可先注册账号，创建新企业，成为企业管理员。
 ![创建企业](https://img.alicdn.com/imgextra/i2/O1CN01Xg8B3i1EQWAKt5xj0_!!6000000000346-2-tps-2938-1588.png)
 ![新建账号](https://img.alicdn.com/imgextra/i2/O1CN01QzuScv26w6je9Yypg_!!6000000007725-2-tps-2938-1592.png)
@@ -437,12 +438,14 @@
 若已经有企业微信账号或是企业普通员工，可以直接在当前企业创建API模式机器人。
 
 ### 创建机器人
+
 可在管理后台点击管理工具-智能机器人-创建机器人，选择API模式创建-通过长链接配置
 ![创建机器人1](https://img.alicdn.com/imgextra/i2/O1CN01n4qAEI1deajLveo2B_!!6000000003761-2-tps-2938-1590.png)
 ![新建机器人2](https://img.alicdn.com/imgextra/i4/O1CN01kZDNVk1ugHf73ybs2_!!6000000006066-2-tps-2938-1594.png)
 ![新建机器人3](https://img.alicdn.com/imgextra/i1/O1CN01Znm7aQ1Tfpe5Ha9WL_!!6000000002410-2-tps-1482-992.png)
 
 ### 绑定bot
+
 可以在Console或是`config.json`填写Bot ID和Secret绑定bot
 
 **方法一**在console填写
@@ -450,6 +453,7 @@
 
 **方法二**在`config.json`填写(默认文件路径为`~/.copaw/config.json`)
 找到`wecom`，填写对应信息，例如：
+
 ```json
 "wecom": {
       "enabled": true,
@@ -463,6 +467,7 @@
 ```
 
 ### 在企业微信开始与机器人聊天
+
 ![开始使用](https://img.alicdn.com/imgextra/i3/O1CN01ZsmpYr1tq4ViIbO80_!!6000000005952-2-tps-1308-1130.png)
 
 ---
@@ -614,7 +619,7 @@ JSON消息格式
 | Discord  | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
 | iMessage | ✓        | ✗        | ✗        | ✗        | ✗        | ✓        | ✗        | ✗        | ✗        | ✗        |
 | QQ       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
-| 企业微信 | ✓        | ✓        | 🚧        | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
+| 企业微信 | ✓        | ✓        | 🚧       | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
 | Telegram | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
 
 说明：
