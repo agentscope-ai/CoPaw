@@ -5,6 +5,7 @@ This module provides the main CoPawAgent class built on ReActAgent,
 with integrated tools, skills, and memory management.
 """
 import asyncio
+import json
 import logging
 import os
 from typing import Any, List, Literal, Optional, Type
@@ -24,6 +25,7 @@ from .command_handler import CommandHandler
 from .hooks import BootstrapHook, MemoryCompactionHook
 from .model_factory import create_model_and_formatter
 from .prompt import build_system_prompt_from_working_dir
+from .tool_guard_mixin import ToolGuardMixin
 from .skills_manager import (
     ensure_skills_initialized,
     get_working_skills_dir,
@@ -35,6 +37,7 @@ from .tools import (
     edit_file,
     execute_shell_command,
     get_current_time,
+    get_token_usage,
     read_file,
     send_file_to_user,
     write_file,
@@ -119,7 +122,7 @@ def _build_final_summary_hint() -> Msg:
     )
 
 
-class CoPawAgent(ReActAgent):
+class CoPawAgent(ToolGuardMixin, ReActAgent):
     """CoPaw Agent with integrated tools, skills, and memory management.
 
     This agent extends ReActAgent with:
@@ -128,6 +131,13 @@ class CoPawAgent(ReActAgent):
     - Memory management with auto-compaction
     - Bootstrap guidance for first-time setup
     - System command handling (/compact, /new, etc.)
+    - Tool-guard security interception (via ToolGuardMixin)
+
+    Security note
+    ~~~~~~~~~~~~~
+    ``ToolGuardMixin`` provides the tool-guard interception in ``_acting``.
+    This class overrides ``_reasoning`` for progress emission, so guard-aware
+    approval waiting must be preserved here as well.
     """
 
     def __init__(
@@ -136,6 +146,7 @@ class CoPawAgent(ReActAgent):
         enable_memory_manager: bool = True,
         mcp_clients: Optional[List[Any]] = None,
         memory_manager: MemoryManager | None = None,
+        request_context: Optional[dict[str, str]] = None,
         max_iters: int = 50,
         max_input_length: int = 128 * 1024,  # 128K = 131072 tokens
         namesake_strategy: NamesakeStrategy = "skip",
@@ -158,6 +169,7 @@ class CoPawAgent(ReActAgent):
                 (default: "skip")
         """
         self._env_context = env_context
+        self._request_context = dict(request_context or {})
         self._max_input_length = max_input_length
         self._mcp_clients = mcp_clients or []
         self._namesake_strategy = namesake_strategy
@@ -243,6 +255,7 @@ class CoPawAgent(ReActAgent):
             "desktop_screenshot": desktop_screenshot,
             "send_file_to_user": send_file_to_user,
             "get_current_time": get_current_time,
+            "get_token_usage": get_token_usage,
         }
 
         # Register only enabled tools
@@ -331,7 +344,7 @@ class CoPawAgent(ReActAgent):
             logger.debug("Registered memory_search tool")
 
     def _register_hooks(self) -> None:
-        """Register pre-reasoning hooks for bootstrap and memory compaction."""
+        """Register pre-reasoning and pre-acting hooks."""
         # Bootstrap hook - checks BOOTSTRAP.md on first interaction
         config = load_config()
         bootstrap_hook = BootstrapHook(
@@ -549,12 +562,38 @@ class CoPawAgent(ReActAgent):
         except Exception:  # pylint: disable=broad-except
             return None
 
-    async def _reasoning(  # pylint: disable=too-many-branches
+    # pylint: disable-next=too-many-branches,too-many-statements
+    async def _reasoning(
         self,
         tool_choice: Literal["auto", "none", "required"] | None = None,
         defer_text_print: bool = False,
     ) -> Msg:
         """Set tool-choice defaults and suppress duplicate progress prints."""
+        if self._last_tool_response_is_denied():
+            pending = getattr(self, "_tool_guard_pending_info", None) or {}
+            tool_name = pending.get("tool_name", "unknown")
+            tool_input = pending.get("tool_input", {})
+            params_text = json.dumps(
+                tool_input,
+                ensure_ascii=False,
+                indent=2,
+            )
+            msg = Msg(
+                self.name,
+                "⏳ Waiting for approval / 等待审批\n\n"
+                f"- Tool / 工具: `{tool_name}`\n"
+                f"- Parameters / 参数:\n"
+                f"```json\n{params_text}\n```\n\n"
+                "Type `/approve` to approve, "
+                "or send any message to deny.\n"
+                "输入 `/approve` 批准执行，"
+                "或发送任意消息拒绝。",
+                "assistant",
+            )
+            await self.print(msg, True)
+            await self.memory.add(msg)
+            return msg
+
         tool_choice = normalize_reasoning_tool_choice(
             tool_choice=tool_choice,
             has_tools=bool(self.toolkit.get_json_schemas()),
