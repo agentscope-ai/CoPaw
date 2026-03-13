@@ -12,9 +12,15 @@ const GlobalStyle = createGlobalStyle`
 }
 `;
 
+function getRouterBasename(pathname: string): string | undefined {
+  return /^\/console(?:\/|$)/.test(pathname) ? "/console" : undefined;
+}
+
 function App() {
+  const basename = getRouterBasename(window.location.pathname);
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <GlobalStyle />
       <ConfigProvider {...bailianTheme} prefix="copaw" prefixCls="copaw">
         <MainLayout />
