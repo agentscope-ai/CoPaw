@@ -4,7 +4,6 @@ import {
   DownOutlined,
   CheckOutlined,
   LoadingOutlined,
-  RightOutlined,
 } from "@ant-design/icons";
 import { providerApi } from "../../../api/modules/provider";
 import type { ProviderInfo, ActiveModelsInfo } from "../../../api/types";
@@ -24,6 +23,7 @@ export default function ModelSelector() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const savingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
@@ -82,11 +82,13 @@ export default function ModelSelector() {
     if (savingRef.current) return;
     if (providerId === activeProviderId && modelId === activeModelId) {
       setOpen(false);
+      setExpandedProvider(null);
       return;
     }
     savingRef.current = true;
     setSaving(true);
     setOpen(false);
+    setExpandedProvider(null);
     try {
       await providerApi.setActiveLlm({
         provider_id: providerId,
@@ -115,44 +117,66 @@ export default function ModelSelector() {
       ) : (
         eligibleProviders.map((provider) => {
           const isProviderActive = provider.id === activeProviderId;
+          const isExpanded = expandedProvider === provider.id;
           return (
-            <div
-              key={provider.id}
-              className={[
-                styles.providerItem,
-                isProviderActive ? styles.providerItemActive : "",
-              ].join(" ")}
-            >
-              <span className={styles.providerName}>{provider.name}</span>
-              <RightOutlined className={styles.providerArrow} />
-
-              {/* Level-2 submenu — shown on parent hover via CSS */}
-              <div className={`${styles.submenu} modelSubmenu`}>
-                {provider.models.map((model) => {
-                  const isActive =
-                    isProviderActive && model.id === activeModelId;
-                  return (
-                    <div
-                      key={model.id}
-                      className={[
-                        styles.modelItem,
-                        isActive ? styles.modelItemActive : "",
-                      ].join(" ")}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelect(provider.id, model.id);
-                      }}
-                    >
-                      <span className={styles.modelName}>
-                        {model.name || model.id}
-                      </span>
-                      {isActive && (
-                        <CheckOutlined className={styles.checkIcon} />
-                      )}
-                    </div>
-                  );
-                })}
+            <div key={provider.id}>
+              <div
+                className={[
+                  styles.providerItem,
+                  isProviderActive && styles.providerItemActive,
+                  isExpanded && styles.providerItemExpanded,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded ? "true" : "false"}
+                onClick={() =>
+                  setExpandedProvider(isExpanded ? null : provider.id)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpandedProvider(isExpanded ? null : provider.id);
+                  }
+                }}
+              >
+                <span className={styles.providerName}>{provider.name}</span>
+                <DownOutlined
+                  className={[
+                    styles.providerArrow,
+                    isExpanded ? styles.providerArrowOpen : "",
+                  ].join(" ")}
+                />
               </div>
+              {isExpanded && (
+                <div className={styles.submenu}>
+                  {provider.models.map((model) => {
+                    const isActive =
+                      isProviderActive && model.id === activeModelId;
+                    return (
+                      <div
+                        key={model.id}
+                        className={[
+                          styles.modelItem,
+                          isActive ? styles.modelItemActive : "",
+                        ].join(" ")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelect(provider.id, model.id);
+                        }}
+                      >
+                        <span className={styles.modelName}>
+                          {model.name || model.id}
+                        </span>
+                        {isActive && (
+                          <CheckOutlined className={styles.checkIcon} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })
@@ -163,7 +187,10 @@ export default function ModelSelector() {
   return (
     <Dropdown
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setExpandedProvider(null);
+      }}
       dropdownRender={() => dropdownContent}
       trigger={["click"]}
       placement="bottomLeft"
