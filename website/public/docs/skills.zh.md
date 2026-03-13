@@ -60,12 +60,13 @@
 
 ## 导入 Skill
 
-当前支持在控制台中导入以下五种来源的 Skills：
+当前支持在控制台中导入以下 Skill URL：
 
 - `https://skills.sh/...`
 - `https://clawhub.ai/...`
 - `https://skillsmp.com/...`
 - `https://lobehub.com/...`
+- `https://market.lobehub.com/...`（LobeHub 直链下载地址）
 - `https://github.com/...`
 
 ### 步骤
@@ -96,6 +97,8 @@
 3. 点击最上方的 URL 并复制，即为导入 Skill 时需要的 Skill URL。
 
    ![url](https://img.alicdn.com/imgextra/i2/O1CN01d1l5kO1wgrODXukNV_!!6000000006338-2-tps-3410-2064.png)
+
+   LobeHub 另外还提供 `https://market.lobehub.com/...` 形式的直链下载地址，这类 URL 也支持直接导入。
 
 4. 如果想导入 GitHub 仓库中的 Skills，进入包含 `SKILL.md` 的页面（以 anthropics 的 skills 仓库中的 `skill-creator` 为例），复制最上方 URL 即可。
 

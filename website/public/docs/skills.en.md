@@ -71,6 +71,7 @@ You can import skills from these URL sources in the Console:
 - `https://clawhub.ai/...`
 - `https://skillsmp.com/...`
 - `https://lobehub.com/...`
+- `https://market.lobehub.com/...` (LobeHub direct download endpoint)
 - `https://github.com/...`
 
 ### Steps
@@ -101,6 +102,8 @@ You can import skills from these URL sources in the Console:
 3. Copy the URL from the top address bar; this is the Skill URL used for import.
 
    ![url](https://img.alicdn.com/imgextra/i2/O1CN01d1l5kO1wgrODXukNV_!!6000000006338-2-tps-3410-2064.png)
+
+   LobeHub also exposes a direct download endpoint on `https://market.lobehub.com/...`, and that URL is accepted as well.
 
 4. To import Skills from GitHub, open a page that contains `SKILL.md` (for example, `skill-creator` in the anthropics skills repo), then copy the URL from the top address bar.
 

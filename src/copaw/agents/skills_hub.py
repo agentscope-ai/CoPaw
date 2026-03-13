@@ -53,6 +53,7 @@ RETRYABLE_HTTP_STATUS = {
 
 LOBEHUB_MAX_ZIP_ENTRIES = 256
 LOBEHUB_MAX_ZIP_BYTES = 5 * 1024 * 1024
+HTTP_READ_CHUNK_BYTES = 64 * 1024
 
 
 def _hub_http_timeout() -> float:
@@ -145,11 +146,52 @@ def _build_request(full_url: str, accept: str) -> Request:
     return req
 
 
+def _read_response_bytes(
+    resp: Any,
+    *,
+    full_url: str,
+    max_bytes: int | None = None,
+) -> bytes:
+    if max_bytes is not None and max_bytes <= 0:
+        raise ValueError("max_bytes must be greater than 0")
+
+    content_length = None
+    headers = getattr(resp, "headers", None)
+    if headers is not None:
+        raw_content_length = headers.get("Content-Length")
+        try:
+            content_length = int(raw_content_length)
+        except (TypeError, ValueError):
+            content_length = None
+    if (
+        max_bytes is not None
+        and content_length is not None
+        and content_length > max_bytes
+    ):
+        raise ValueError(
+            f"Response body too large from {full_url}: "
+            f"{content_length} bytes exceeds limit {max_bytes}",
+        )
+
+    body = bytearray()
+    while True:
+        chunk = resp.read(HTTP_READ_CHUNK_BYTES)
+        if not chunk:
+            return bytes(body)
+        body.extend(chunk)
+        if max_bytes is not None and len(body) > max_bytes:
+            raise ValueError(
+                f"Response body too large from {full_url}: "
+                f"download exceeded limit {max_bytes}",
+            )
+
+
 # pylint: disable-next=too-many-branches,too-many-statements
 def _http_fetch(
     url: str,
     params: dict[str, Any] | None = None,
     accept: str = "application/json",
+    max_bytes: int | None = None,
 ) -> bytes:
     full_url = url
     if params:
@@ -163,7 +205,11 @@ def _http_fetch(
     for attempt in range(1, attempts + 1):
         try:
             with urlopen(req, timeout=timeout) as resp:
-                return resp.read()
+                return _read_response_bytes(
+                    resp,
+                    full_url=full_url,
+                    max_bytes=max_bytes,
+                )
         except HTTPError as e:
             last_error = e
             status = getattr(e, "code", 0) or 0
@@ -247,8 +293,14 @@ def _http_bytes_get(
     url: str,
     params: dict[str, Any] | None = None,
     accept: str = "application/octet-stream, */*",
+    max_bytes: int | None = None,
 ) -> bytes:
-    return _http_fetch(url, params=params, accept=accept)
+    return _http_fetch(
+        url,
+        params=params,
+        accept=accept,
+        max_bytes=max_bytes,
+    )
 
 
 def _http_json_get(url: str, params: dict[str, Any] | None = None) -> Any:
@@ -1240,12 +1292,15 @@ def _fetch_bundle_from_lobehub_url(
             _lobehub_download_url(identifier),
             params=params,
             accept="application/zip, application/octet-stream, */*",
+            max_bytes=LOBEHUB_MAX_ZIP_BYTES,
         )
     except HTTPError as e:
         raise ValueError(
             "LobeHub skill download failed: "
             f"{_lobehub_http_error_message(e)}",
         ) from e
+    except ValueError as e:
+        raise ValueError(f"LobeHub skill download failed: {e}") from e
     return _lobehub_zip_to_bundle(identifier, payload), bundle_url
 
 
