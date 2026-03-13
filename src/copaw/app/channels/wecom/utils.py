@@ -21,13 +21,29 @@ def format_markdown_tables(text: str) -> str:
     lines = text.split("\n")
     result: List[str] = []
     i = 0
+    in_code_fence = False
     while i < len(lines):
         line = lines[i]
-        # Detect table start (line with |)
-        if "|" in line and not line.strip().startswith("```"):
+        stripped = line.strip()
+        # Track fenced code blocks (```), pass through inside lines unchanged.
+        if stripped.startswith("```"):
+            in_code_fence = not in_code_fence
+            result.append(line)
+            i += 1
+            continue
+        if in_code_fence:
+            result.append(line)
+            i += 1
+            continue
+        # Detect table start (line with |) when not inside a code fence
+        if "|" in line:
             # Collect table lines
             table_lines: List[str] = []
-            while i < len(lines) and "|" in lines[i]:
+            while (
+                i < len(lines)
+                and "|" in lines[i]
+                and not lines[i].strip().startswith("```")
+            ):
                 table_lines.append(lines[i])
                 i += 1
             # Format and add table
@@ -44,9 +60,15 @@ def _format_table(lines: List[str]) -> List[str]:
     if not lines:
         return lines
 
-    # Parse cells
+    # Check if second row is separator (contains only -, :, |, spaces)
+    sep_pattern = re.compile(r"^[\s\-:|]+$")
+    has_separator = len(lines) >= 2 and sep_pattern.match(lines[1]) is not None
+
+    # Parse cells, skipping the separator row (it will be rebuilt)
     rows: List[List[str]] = []
-    for line in lines:
+    for idx, line in enumerate(lines):
+        if has_separator and idx == 1:
+            continue  # Skip separator row; rebuild it from column widths
         cells = [c.strip() for c in line.split("|")]
         # Remove empty first/last cells from leading/trailing |
         if cells and not cells[0]:
@@ -56,12 +78,8 @@ def _format_table(lines: List[str]) -> List[str]:
         if cells:
             rows.append(cells)
 
-    if len(rows) < 2:
-        return lines  # Not a valid table
-
-    # Check if second row is separator (contains only -, :, |, spaces)
-    sep_pattern = re.compile(r"^[\s\-:|]+$")
-    has_separator = sep_pattern.match(lines[1]) is not None
+    if not rows:
+        return lines
 
     # Calculate column widths
     col_count = max(len(r) for r in rows)
@@ -70,14 +88,20 @@ def _format_table(lines: List[str]) -> List[str]:
         for j, cell in enumerate(row):
             widths[j] = max(widths[j], len(cell))
 
-    # Format rows with proper padding
+    # Format rows with proper padding, inserting separator after header
     formatted: List[str] = []
     for idx, row in enumerate(rows):
-        padded = [cell.ljust(widths[j]) for j, cell in enumerate(row)]
+        padded = [
+            (row[j] if j < len(row) else "").ljust(widths[j])
+            for j in range(col_count)
+        ]
         formatted.append("| " + " | ".join(padded) + " |")
-        # Add separator after header if not present
-        if idx == 0 and not has_separator:
-            sep = "|" + "|".join("-" * (w + 2) for w in widths) + "|"
+        if idx == 0:
+            sep = (
+                "| "
+                + " | ".join("-" * widths[j] for j in range(col_count))
+                + " |"
+            )
             formatted.append(sep)
 
     return formatted

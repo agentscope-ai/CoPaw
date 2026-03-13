@@ -474,7 +474,17 @@ class WecomChannel(BaseChannel):
         except Exception:
             logger.exception("wecom _on_message failed")
 
-    async def _on_enter_chat_sync(self, frame: Any) -> None:
+    def _on_enter_chat_sync(self, frame: Any) -> None:
+        """Sync handler called from SDK event; dispatches to async loop."""
+        if not self._loop or not self._loop.is_running():
+            logger.warning("wecom: main loop not set/running, drop enter_chat")
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._on_enter_chat(frame),
+            self._loop,
+        )
+
+    async def _on_enter_chat(self, frame: Any) -> None:
         """Handle enter_chat event; send welcome reply if configured."""
         logger.info("wecom enter_chat event")
         if not self.welcome_text or not self._client:
