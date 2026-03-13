@@ -205,9 +205,13 @@ export function RemoteProviderCard({
             size="small"
             danger
             onClick={handleDeleteProvider}
+            className={styles.configBtn}
             icon={<DeleteOutlined />}
           >
-            {t("models.deleteProvider")}
+            <span className={styles.deleteTextLong}>
+              {t("models.deleteProvider")}
+            </span>
+            <span className={styles.deleteTextShort}>{t("common.delete")}</span>
           </Button>
         )}
       </div>

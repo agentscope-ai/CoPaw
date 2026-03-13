@@ -70,6 +70,7 @@
 .providerCard {
   flex: 1 1 calc(33.333% - 16px);
   min-width: 280px;
+  container-type: inline-size;
   border-radius: 16px;
   transition: all 0.2s ease-in-out;
   cursor: pointer;
@@ -197,7 +198,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: clamp(2px, 0.8vw, 8px);
+  flex-wrap: nowrap;
   padding-top: 14px;
   border-top: 1px solid #f0f0f0;
 }
@@ -206,14 +208,46 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: clamp(3px, 0.6vw, 6px);
+  padding: 6px clamp(6px, 1vw, 14px);
   color: #555;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
   line-height: 1;
   white-space: nowrap;
+}
+
+.deleteTextShort {
+  display: none;
+}
+
+@container (max-width: 360px) {
+  .cardActions {
+    gap: 2px;
+  }
+
+  .configBtn {
+    padding: 6px 6px;
+  }
+
+  .deleteTextLong {
+    display: none;
+  }
+
+  .deleteTextShort {
+    display: inline;
+  }
+}
+
+@media (max-width: 1440px) {
+  .cardActions {
+    gap: 4px;
+  }
+
+  .configBtn {
+    padding: 6px 10px;
+  }
 }
 
 /* ---- Modal Footer ---- */
