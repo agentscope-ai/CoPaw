@@ -35,8 +35,11 @@ BUILTIN_CHANNEL_TYPES = (
     "feishu",
     "qq",
     "telegram",
+    "mattermost",
     "mqtt",
+    "nextcloud_talk",
     "console",
+    "matrix",
     "voice",
 )
 

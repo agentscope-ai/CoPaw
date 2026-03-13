@@ -26,6 +26,7 @@ from ...config.config import (
     MatrixConfig,
     MattermostConfig,
     MQTTConfig,
+    NextcloudTalkConfig,
     QQConfig,
     TelegramConfig,
     VoiceChannelConfig,
@@ -48,6 +49,7 @@ _CHANNEL_CONFIG_CLASS_MAP = {
     "mattermost": MattermostConfig,
     "mqtt": MQTTConfig,
     "matrix": MatrixConfig,
+    "nextcloud_talk": NextcloudTalkConfig,
 }
 
 
