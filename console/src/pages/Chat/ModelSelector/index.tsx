@@ -54,8 +54,7 @@ export default function ModelSelector() {
     const prev = prevPathRef.current;
     const curr = location.pathname;
     prevPathRef.current = curr;
-    const comingToChat =
-      curr.startsWith("/chat") && !prev.startsWith("/chat");
+    const comingToChat = curr.startsWith("/chat") && !prev.startsWith("/chat");
     if (comingToChat) {
       providerApi
         .getActiveModels()
@@ -98,21 +97,18 @@ export default function ModelSelector() {
     return activeModelId;
   })();
 
-  const handleOpenChange = useCallback(
-    async (next: boolean) => {
-      setOpen(next);
-      if (next) {
-        // Re-fetch active model every time the dropdown opens
-        try {
-          const activeData = await providerApi.getActiveModels();
-          if (activeData) setActiveModels(activeData);
-        } catch {
-          // ignore
-        }
+  const handleOpenChange = useCallback(async (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      // Re-fetch active model every time the dropdown opens
+      try {
+        const activeData = await providerApi.getActiveModels();
+        if (activeData) setActiveModels(activeData);
+      } catch {
+        // ignore
       }
-    },
-    [],
-  );
+    }
+  }, []);
 
   const handleSelect = async (providerId: string, modelId: string) => {
     if (savingRef.current) return;
