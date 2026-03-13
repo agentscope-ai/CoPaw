@@ -7,6 +7,9 @@ from .config import (
     HeartbeatConfig,
     SkillEntryConfig,
     SkillsConfig,
+    SecurityConfig,
+    ToolGuardConfig,
+    ToolGuardRuleConfig,
 )
 from .utils import (
     get_available_channels,
@@ -39,8 +42,11 @@ __all__ = [
     "is_running_in_container",
     "load_config",
     "save_config",
+    "SecurityConfig",
     "SkillEntryConfig",
     "SkillsConfig",
+    "ToolGuardConfig",
+    "ToolGuardRuleConfig",
     "update_last_dispatch",
 ]
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Drawer,
   Form,
@@ -8,12 +8,14 @@ import {
   Switch,
 } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
+import { ThunderboltOutlined, StopOutlined } from "@ant-design/icons";
 import type { FormInstance } from "antd";
 import type {
   SkillConfigView,
   SkillConfigUpdatePayload,
   SkillSpec,
 } from "../../../../api/types";
+import { api } from "../../../../api";
 import { MarkdownCopy } from "../../../../components/MarkdownCopy/MarkdownCopy";
 import styles from "../index.module.less";
 
@@ -94,11 +96,13 @@ export function SkillDrawer({
   savingConfig = false,
   onContentChange,
 }: SkillDrawerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [showMarkdown, setShowMarkdown] = useState(true);
   const [contentValue, setContentValue] = useState("");
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [configLoadFailed, setConfigLoadFailed] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const validateFrontmatter = useCallback(
     (_: unknown, value: string) => {
@@ -186,6 +190,11 @@ export function SkillDrawer({
 
     return () => {
       cancelled = true;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setOptimizing(false);
     };
   }, [editingSkill, form, onLoadConfig]);
 
@@ -246,6 +255,49 @@ export function SkillDrawer({
     }
   };
 
+  const handleOptimize = async () => {
+    if (!contentValue.trim()) {
+      message.warning(t("skills.noContentToOptimize"));
+      return;
+    }
+
+    setOptimizing(true);
+    abortControllerRef.current = new AbortController();
+    const originalContent = contentValue;
+    setContentValue("");
+
+    try {
+      await api.streamOptimizeSkill(
+        originalContent,
+        (textChunk) => {
+          setContentValue((prev) => {
+            const newContent = prev + textChunk;
+            form.setFieldsValue({ content: newContent });
+            return newContent;
+          });
+        },
+        abortControllerRef.current?.signal as AbortSignal,
+        i18n.language,
+      );
+      message.success(t("skills.optimizeSuccess"));
+    } catch (error: any) {
+      if (error.name !== "AbortError") {
+        message.error(error.message || t("skills.optimizeFailed"));
+      }
+    } finally {
+      setOptimizing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleStopOptimize = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setOptimizing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
   const requirements = editingSkill?.metadata?.requires;
   const missing = editingSkill?.eligibility;
 
@@ -293,10 +345,33 @@ export function SkillDrawer({
 
             <Form.Item>
               <div className={styles.drawerActions}>
-                <Button onClick={onClose}>{t("common.cancel")}</Button>
-                <Button type="primary" htmlType="submit">
-                  {t("skills.create")}
-                </Button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {!optimizing ? (
+                    <Button
+                      type="default"
+                      icon={<ThunderboltOutlined />}
+                      onClick={handleOptimize}
+                      disabled={!contentValue.trim()}
+                    >
+                      {t("skills.optimizeWithAI")}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="default"
+                      danger
+                      icon={<StopOutlined />}
+                      onClick={handleStopOptimize}
+                    >
+                      {t("skills.stopOptimize")}
+                    </Button>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={onClose}>{t("common.cancel")}</Button>
+                  <Button type="primary" htmlType="submit">
+                    {t("skills.create")}
+                  </Button>
+                </div>
               </div>
             </Form.Item>
           </>

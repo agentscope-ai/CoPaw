@@ -155,7 +155,6 @@ def _merge_skill_env_payload(
 @router.get("")
 async def list_skills() -> list[SkillSpec]:
     all_skills = SkillService.list_all_skills()
-
     available_skills = set(list_available_skills())
     return [_build_skill_spec(skill, available_skills) for skill in all_skills]
 
@@ -362,9 +361,12 @@ async def load_skill_file(
     Returns:
         File content as string, or None if not found
 
-    Example:
-        GET /skills/my_skill/files/customized/references/doc.md
-        GET /skills/builtin_skill/files/builtin/scripts/utils/helper.py
+        Example:
+
+            GET /skills/my_skill/files/customized/references/doc.md
+
+            GET /skills/builtin_skill/files/builtin/scripts/utils/helper.py
+
     """
     content = SkillService.load_skill_file(
         skill_name=skill_name,

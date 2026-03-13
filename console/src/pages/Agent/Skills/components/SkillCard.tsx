@@ -1,4 +1,4 @@
-import { Card, Button } from "@agentscope-ai/design";
+import { Card, Button, Tooltip } from "@agentscope-ai/design";
 import {
   DeleteOutlined,
   FileTextFilled,
@@ -106,14 +106,7 @@ export function SkillCard({
         isHover ? styles.hover : styles.normal
       }`}
     >
-      <div
-        style={{
-          marginBottom: 16,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className={styles.cardBody}>
         <div className={styles.cardHeader}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className={styles.fileIcon}>
@@ -137,23 +130,62 @@ export function SkillCard({
           </div>
         </div>
 
-        <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.source")}</div>
-          <code className={styles.infoCode}>{skill.source}</code>
+        <div className={styles.descriptionSection}>
+          <div className={styles.infoLabel}>{t("skills.skillDescription")}</div>
+          <Tooltip
+            title={skill.description || "-"}
+            placement="top"
+            overlayStyle={{ maxWidth: 360 }}
+          >
+            <div className={`${styles.infoBlock} ${styles.descriptionContent}`}>
+              {skill.description || "-"}
+            </div>
+          </Tooltip>
         </div>
 
-        <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.runtimeStatus")}</div>
-          <code className={styles.infoCode}>
-            {isEligible ? t("skills.eligible") : t("skills.ineligible")}
-          </code>
-        </div>
+        <div className={styles.metaStack}>
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.source")}</div>
+            <div>
+              <span
+                className={
+                  isCustomized ? styles.customizedTag : styles.builtinTag
+                }
+              >
+                {skill.source}
+              </span>
+            </div>
+          </div>
 
-        <div className={styles.infoSection}>
-          <div className={styles.infoLabel}>{t("skills.skillKey")}</div>
-          <code className={`${styles.infoCode} ${styles.path}`}>
-            {skill.resolved_skill_key || skill.name || "-"}
-          </code>
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.path")}</div>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue} ${styles.pathValue}`}
+              title={skill.path}
+            >
+              {skill.path}
+            </div>
+          </div>
+
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.runtimeStatus")}</div>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue} ${styles.pathValue}`}
+              title={isEligible ? t("skills.eligible") : t("skills.ineligible")}
+            >
+              {isEligible ? t("skills.eligible") : t("skills.ineligible")}
+            </div>
+          </div>
+
+          <div className={styles.infoSection}>
+            <div className={styles.infoLabel}>{t("skills.skillKey")}</div>
+            <div
+              className={`${styles.infoBlock} ${styles.singleLineValue} ${styles.pathValue}`}
+              title={skill.resolved_skill_key || skill.name || "-"}
+            >
+              {skill.resolved_skill_key || skill.name || "-"}
+            </div>
+          </div>
         </div>
       </div>
 
