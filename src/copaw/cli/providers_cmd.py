@@ -27,10 +27,12 @@ def _mask_api_key(api_key: str) -> str:
 
 
 def _mask_header_value(value: str) -> str:
-    """Mask a header value for safe display."""
-    if len(value) <= 4:
-        return "*" * len(value)
-    return f"{value[:2]}***{value[-2:]}"
+    """Mask a header value for safe display.
+
+    Delegates to :meth:`Provider._mask_header_value` to keep a single
+    implementation.
+    """
+    return Provider._mask_header_value(value)
 
 
 def _parse_header_pairs(raw: tuple[str, ...]) -> dict[str, str]:
@@ -529,7 +531,6 @@ def config_key_cmd(
     """Configure a provider's API key (and optionally wire_api / headers)."""
     pid = configure_provider_api_key_interactive(provider_id)
 
-    manager = _manager()
     config: dict = {}
 
     if wire_api is not None:
@@ -542,7 +543,7 @@ def config_key_cmd(
 
     if config:
         try:
-            ok = manager.update_provider(pid, config)
+            ok = _manager().update_provider(pid, config)
         except ValueError as exc:
             click.echo(click.style(f"Error: {exc}", fg="red"))
             raise SystemExit(1) from exc
