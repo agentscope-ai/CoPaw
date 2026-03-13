@@ -644,5 +644,24 @@
         "TOOL_CMD_DANGEROUS_MV": "Detects 'mv' command that may move or overwrite files unexpectedly"
       }
     }
+  },
+  "login": {
+    "title": "Login to CoPaw",
+    "registerTitle": "Create Account",
+    "firstUserHint": "Create your admin account to get started",
+    "usernamePlaceholder": "Username",
+    "passwordPlaceholder": "Password",
+    "usernameRequired": "Please enter your username",
+    "passwordRequired": "Please enter your password",
+    "submit": "Login",
+    "register": "Register",
+    "failed": "Login failed, please check your credentials",
+    "registerSuccess": "Registration successful",
+    "registerFailed": "Registration failed",
+    "authNotEnabled": "Authentication is not enabled",
+    "logout": "Logout",
+    "logoutSuccess": "Logged out successfully",
+    "sessionExpired": "Session expired, please login again",
+    "unauthorized": "Unauthorized, please login"
   }
 }

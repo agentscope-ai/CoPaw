@@ -644,5 +644,24 @@
         "TOOL_CMD_DANGEROUS_MV": "检测可能意外移动或覆盖文件的 mv 命令"
       }
     }
+  },
+  "login": {
+    "title": "登录 CoPaw",
+    "registerTitle": "创建账户",
+    "firstUserHint": "创建管理员账户以开始使用",
+    "usernamePlaceholder": "用户名",
+    "passwordPlaceholder": "密码",
+    "usernameRequired": "请输入用户名",
+    "passwordRequired": "请输入密码",
+    "submit": "登录",
+    "register": "注册",
+    "failed": "登录失败，请检查您的凭据",
+    "registerSuccess": "注册成功",
+    "registerFailed": "注册失败",
+    "authNotEnabled": "认证未启用",
+    "logout": "退出登录",
+    "logoutSuccess": "已成功退出",
+    "sessionExpired": "会话已过期，请重新登录",
+    "unauthorized": "未授权，请登录"
   }
 }
