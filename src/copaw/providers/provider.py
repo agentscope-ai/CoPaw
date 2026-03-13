@@ -190,7 +190,7 @@ class Provider(ProviderInfo, ABC):
         provider and model_id."""
 
     @staticmethod
-    def _mask_header_value(value: str) -> str:
+    def mask_header_value(value: str) -> str:
         """Mask a header value for safe display."""
         if len(value) <= 4:
             return "*" * len(value)
@@ -204,7 +204,7 @@ class Provider(ProviderInfo, ABC):
             else self.api_key
         )
         masked_headers = (
-            {k: self._mask_header_value(v) for k, v in self.headers.items()}
+            {k: self.mask_header_value(v) for k, v in self.headers.items()}
             if mock_secret
             else dict(self.headers)
         )
