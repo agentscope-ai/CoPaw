@@ -9,7 +9,7 @@ from copaw.cli.main import cli
 from copaw.cli.shutdown_cmd import _terminate_pid
 
 
-def test_stop_command_stops_backend_and_frontend(monkeypatch) -> None:
+def test_shutdown_command_stops_backend_and_frontend(monkeypatch) -> None:
     monkeypatch.setattr(
         "copaw.cli.shutdown_cmd._listening_pids_for_port",
         lambda _port: {1001},
@@ -34,7 +34,7 @@ def test_stop_command_stops_backend_and_frontend(monkeypatch) -> None:
     assert "2002" in result.output
 
 
-def test_stop_command_reports_failure(monkeypatch) -> None:
+def test_shutdown_command_reports_failure(monkeypatch) -> None:
     monkeypatch.setattr(
         "copaw.cli.shutdown_cmd._listening_pids_for_port",
         lambda _port: {1001},
@@ -58,7 +58,7 @@ def test_stop_command_reports_failure(monkeypatch) -> None:
     assert "Failed to shutdown process" in result.output
 
 
-def test_stop_command_reports_nothing_found(monkeypatch) -> None:
+def test_shutdown_command_reports_nothing_found(monkeypatch) -> None:
     monkeypatch.setattr(
         "copaw.cli.shutdown_cmd._listening_pids_for_port",
         lambda _port: set(),

@@ -16,7 +16,9 @@ from copaw.cli.update_cmd import (
     _detect_installation,
     _is_newer_version,
     _detect_source_type,
+    _run_update_worker_detached,
     _run_update_worker_foreground,
+    run_update_worker,
 )
 
 
@@ -616,6 +618,117 @@ def test_update_returns_worker_exit_code(monkeypatch, tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "Starting CoPaw update..." in result.output
+
+
+def test_update_detaches_worker_on_windows(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from copaw.cli import update_cmd as update_cmd_module
+
+    install_info = _install_info()
+    spawned: dict[str, object] = {}
+
+    monkeypatch.setattr(update_cmd_module, "WORKING_DIR", tmp_path)
+    monkeypatch.setattr(update_cmd_module.sys, "platform", "win32")
+    monkeypatch.setattr(
+        update_cmd_module,
+        "_detect_installation",
+        lambda: install_info,
+    )
+    monkeypatch.setattr(
+        update_cmd_module,
+        "_fetch_latest_version",
+        lambda: "9.9.9",
+    )
+    monkeypatch.setattr(
+        update_cmd_module,
+        "_detect_running_service",
+        lambda host, port: RunningServiceInfo(is_running=False),
+    )
+
+    def _fake_run_detached(plan_path: Path) -> None:
+        spawned["path"] = plan_path
+        spawned["plan"] = json.loads(plan_path.read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(
+        update_cmd_module,
+        "_run_update_worker_detached",
+        _fake_run_detached,
+    )
+    monkeypatch.setattr(
+        update_cmd_module,
+        "_run_update_worker_foreground",
+        lambda plan_path: pytest.fail("foreground worker should not run"),
+    )
+
+    result = CliRunner().invoke(cli, ["update", "--yes"])
+
+    assert result.exit_code == 0
+    assert "Starting CoPaw update..." in result.output
+    assert "continue after this command exits" in result.output
+    assert isinstance(spawned["path"], Path)
+    assert spawned["plan"]["launcher_pid"] is not None  # type: ignore[index]
+
+
+def test_update_worker_waits_for_launcher_exit(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    plan_path = tmp_path / "update-plan-wait.json"
+    _write_plan(
+        plan_path,
+        command=[
+            sys.executable,
+            "-u",
+            "-c",
+            "print('installer: done', flush=True)",
+        ],
+    )
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["launcher_pid"] = 4321
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    waited: list[tuple[int | None, float]] = []
+    monkeypatch.setattr(
+        "copaw.cli.update_cmd._wait_for_process_exit",
+        lambda pid, timeout=15.0: waited.append((pid, timeout)),
+    )
+
+    return_code = run_update_worker(plan_path)
+    captured = capsys.readouterr()
+
+    assert return_code == 0
+    assert waited == [(4321, 15.0)]
+    assert "installer: done" in captured.out
+
+
+def test_run_update_worker_detached_spawns_without_capture(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_spawn(plan_path: Path, *, capture_output: bool = True):
+        captured["path"] = plan_path
+        captured["capture_output"] = capture_output
+        return object()
+
+    monkeypatch.setattr(
+        "copaw.cli.update_cmd._spawn_update_worker",
+        _fake_spawn,
+    )
+
+    plan_path = tmp_path / "update-plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+
+    _run_update_worker_detached(plan_path)
+
+    assert captured == {
+        "path": plan_path,
+        "capture_output": False,
+    }
 
 
 def _write_plan(

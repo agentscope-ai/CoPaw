@@ -323,20 +323,27 @@ def _write_worker_plan(plan: dict[str, Any]) -> Path:
     return plan_path
 
 
-def _spawn_update_worker(plan_path: Path) -> subprocess.Popen[str]:
+def _spawn_update_worker(
+    plan_path: Path,
+    *,
+    capture_output: bool = True,
+) -> subprocess.Popen[str]:
     """Spawn the worker that performs the actual package upgrade."""
     worker_code = (
         "from copaw.cli.update_cmd import run_update_worker; "
         "import sys; "
         "sys.exit(run_update_worker(sys.argv[1]))"
     )
-    kwargs: dict[str, Any] = {
-        "stdin": subprocess.DEVNULL,
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
-        "text": True,
-        "bufsize": 1,
-    }
+    kwargs: dict[str, Any] = {"stdin": subprocess.DEVNULL}
+    if capture_output:
+        kwargs.update(
+            {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "bufsize": 1,
+            },
+        )
     if sys.platform == "win32":
         kwargs["creationflags"] = getattr(
             subprocess,
@@ -382,6 +389,43 @@ def _terminate_update_worker(proc: subprocess.Popen[str]) -> None:
             return
 
 
+def _wait_for_process_exit(pid: int | None, timeout: float = 15.0) -> None:
+    """Wait briefly for another process to exit before updating files."""
+    if pid is None or pid <= 0:
+        return
+
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            synchronize = 0x00100000
+            wait_timeout = 0x00000102
+            handle = kernel32.OpenProcess(synchronize, False, pid)
+            if not handle:
+                return
+            try:
+                result = kernel32.WaitForSingleObject(
+                    handle,
+                    max(0, int(timeout * 1000)),
+                )
+                if result == wait_timeout:
+                    time.sleep(1.0)
+            finally:
+                kernel32.CloseHandle(handle)
+        except (AttributeError, ImportError, OSError):
+            time.sleep(min(timeout, 2.0))
+        return
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return
+        time.sleep(0.1)
+
+
 def _run_update_worker_foreground(plan_path: Path) -> int:
     """Run the update worker in a child process and wait for completion."""
     try:
@@ -404,6 +448,16 @@ def _run_update_worker_foreground(plan_path: Path) -> int:
         return 130
 
 
+def _run_update_worker_detached(plan_path: Path) -> None:
+    """Launch the update worker and return immediately."""
+    try:
+        _spawn_update_worker(plan_path, capture_output=False)
+    except OSError as exc:
+        raise click.ClickException(
+            "Failed to start update worker: " f"{exc}",
+        ) from exc
+
+
 def _load_worker_plan(plan_path: str | Path) -> dict[str, Any]:
     """Load a persisted worker plan."""
     return json.loads(Path(plan_path).read_text(encoding="utf-8"))
@@ -414,6 +468,8 @@ def run_update_worker(plan_path: str | Path) -> int:
     path = Path(plan_path)
     plan = _load_worker_plan(path)
     command = [str(part) for part in plan["command"]]
+
+    _wait_for_process_exit(plan.get("launcher_pid"))
 
     click.echo("")
     click.echo(
@@ -578,10 +634,21 @@ def update_cmd(ctx: click.Context, yes: bool) -> None:
         "installer_label": installer_label,
         "command": command,
         "install": asdict(info),
+        "launcher_pid": os.getpid() if sys.platform == "win32" else None,
     }
     plan_path = _write_worker_plan(plan)
     click.echo("")
     click.echo("Starting CoPaw update...")
+
+    if sys.platform == "win32":
+        _run_update_worker_detached(plan_path)
+        click.echo(
+            "On Windows, the update will continue after this command exits "
+            "to avoid locking `copaw.exe`.",
+        )
+        click.echo("Keep this terminal open until the update completes.")
+        return
+
     return_code = _run_update_worker_foreground(plan_path)
 
     if return_code != 0:
