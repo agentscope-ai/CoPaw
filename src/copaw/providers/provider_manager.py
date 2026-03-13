@@ -159,6 +159,7 @@ PROVIDER_OLLAMA = OllamaProvider(
     name="Ollama",
     require_api_key=False,
     support_model_discovery=True,
+    generate_kwargs={"max_tokens": None},
 )
 
 PROVIDER_LMSTUDIO = OpenAIProvider(
@@ -168,6 +169,7 @@ PROVIDER_LMSTUDIO = OpenAIProvider(
     require_api_key=False,
     api_key_prefix="",
     support_model_discovery=True,
+    generate_kwargs={"max_tokens": None},
 )
 
 
@@ -286,7 +288,7 @@ class ProviderManager:
             return []
         try:
             models = await provider.fetch_models()
-            provider.models = models
+            provider.extra_models = models
             self._save_provider(
                 provider,
                 is_builtin=provider_id in self.builtin_providers,
@@ -436,7 +438,7 @@ class ProviderManager:
 
         if provider_id == "anthropic" or chat_model == "AnthropicChatModel":
             return AnthropicProvider.model_validate(data)
-        if provider_id == "ollama" or chat_model == "OllamaChatModel":
+        if provider_id == "ollama":
             return OllamaProvider.model_validate(data)
         if data.get("is_local", False):
             return DefaultProvider.model_validate(data)
@@ -544,7 +546,7 @@ class ProviderManager:
                 builtin.base_url = provider.base_url
                 builtin.api_key = provider.api_key
                 builtin.extra_models = provider.extra_models
-                builtin.generate_kwargs = provider.generate_kwargs
+                builtin.generate_kwargs.update(provider.generate_kwargs)
         # Load custom providers
         for provider_file in self.custom_path.glob("*.json"):
             provider = self.load_provider(provider_file.stem, is_builtin=False)

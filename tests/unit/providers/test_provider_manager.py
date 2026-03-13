@@ -354,21 +354,6 @@ def test_provider_from_data_dispatch_to_anthropic(isolated_secret_dir) -> None:
     assert isinstance(provider, AnthropicProvider)
 
 
-def test_provider_from_data_dispatch_to_ollama(isolated_secret_dir) -> None:
-    manager = ProviderManager()
-
-    provider = manager._provider_from_data(
-        {
-            "id": "custom-ollama",
-            "name": "Custom Ollama",
-            "chat_model": "OllamaChatModel",
-            "base_url": "http://localhost:11434",
-        },
-    )
-
-    assert isinstance(provider, OllamaProvider)
-
-
 def test_provider_from_data_dispatch_to_default_local(
     isolated_secret_dir,
 ) -> None:
