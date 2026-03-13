@@ -820,7 +820,9 @@ class QQChannel(BaseChannel):
                 )
                 if obj == "message" and status == RunStatus.Completed:
                     if _is_progress_event(event) and not self._send_progress:
-                        logger.info("qq skip progress message: send_progress=0")
+                        logger.info(
+                            "qq skip progress message: send_progress=0",
+                        )
                         continue
                     parts = self._message_to_content_parts(event)
                     logger.info(

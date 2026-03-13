@@ -94,10 +94,13 @@ def _build_post_tool_progress_hint() -> Msg:
     """Ask the model to emit a standalone post-tool progress update."""
     return Msg(
         "user",
-        "<system-hint>You have just finished a tool step. "
-        "Now send exactly one short standalone progress update to the user "
-        "about the latest completed check. Do not summarize the whole task. "
-        "Do not include a final conclusion. Do not call any tools.</system-hint>",
+        (
+            "<system-hint>You have just finished a tool step. "
+            "Now send exactly one short standalone progress update to the "
+            "user about the latest completed check. Do not summarize the "
+            "whole task. Do not include a final conclusion. Do not call any "
+            "tools.</system-hint>"
+        ),
         "user",
     )
 
@@ -106,9 +109,12 @@ def _build_final_summary_hint() -> Msg:
     """Ask the model to emit the final answer after progress is sent."""
     return Msg(
         "user",
-        "<system-hint>Now send the final answer summary to the user. "
-        "Assume the standalone progress update has already been sent. "
-        "Do not repeat that progress line verbatim. Do not call any tools.</system-hint>",
+        (
+            "<system-hint>Now send the final answer summary to the user. "
+            "Assume the standalone progress update has already been sent. "
+            "Do not repeat that progress line verbatim. Do not call any "
+            "tools.</system-hint>"
+        ),
         "user",
     )
 
@@ -543,12 +549,12 @@ class CoPawAgent(ReActAgent):
         except Exception:  # pylint: disable=broad-except
             return None
 
-    async def _reasoning(
+    async def _reasoning(  # pylint: disable=too-many-branches
         self,
         tool_choice: Literal["auto", "none", "required"] | None = None,
         defer_text_print: bool = False,
     ) -> Msg:
-        """Ensure stable tool-choice defaults and suppress duplicate progress."""
+        """Set tool-choice defaults and suppress duplicate progress prints."""
         tool_choice = normalize_reasoning_tool_choice(
             tool_choice=tool_choice,
             has_tools=bool(self.toolkit.get_json_schemas()),
@@ -645,12 +651,12 @@ class CoPawAgent(ReActAgent):
         return msg
 
     @trace_reply
-    async def reply(
+    async def reply(  # pylint: disable=too-many-branches,too-many-statements
         self,
         msg: Msg | list[Msg] | None = None,
         structured_model: Type[BaseModel] | None = None,
     ) -> Msg:
-        """Override reply to process file blocks, emit progress, and handle commands.
+        """Process file blocks, emit progress, and handle commands.
 
         Args:
             msg: Input message(s) from user
@@ -716,7 +722,10 @@ class CoPawAgent(ReActAgent):
                 progress_text = "\n".join(
                     block["text"] for block in visible_text_blocks
                 ).strip()
-                if progress_text and progress_text not in printed_progress_texts:
+                if (
+                    progress_text
+                    and progress_text not in printed_progress_texts
+                ):
                     printed_progress_texts.add(progress_text)
                     await self.print(
                         Msg(
