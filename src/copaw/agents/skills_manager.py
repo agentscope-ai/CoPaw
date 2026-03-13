@@ -5,6 +5,7 @@ import filecmp
 import logging
 import shutil
 from collections.abc import Iterable
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel
@@ -43,12 +44,28 @@ def _iter_relevant_directory_entries(
     if not directory.exists():
         return
 
-    for item in sorted(directory.rglob("*"), key=lambda p: p.relative_to(directory).as_posix()):
+    yield from _iter_relevant_directory_entries_from(
+        root_dir=directory,
+        current_dir=directory,
+    )
+
+
+def _iter_relevant_directory_entries_from(
+    root_dir: Path,
+    current_dir: Path,
+) -> Iterable[tuple[Path, Path]]:
+    """Yield sorted non-generated directory entries without buffering."""
+    for item in sorted(current_dir.iterdir(), key=lambda path: path.name):
         if _should_ignore_runtime_artifact(item):
             continue
-        if any(_should_ignore_runtime_artifact(parent) for parent in item.parents if parent != directory):
-            continue
-        yield item.relative_to(directory), item
+
+        yield item.relative_to(root_dir), item
+
+        if item.is_dir():
+            yield from _iter_relevant_directory_entries_from(
+                root_dir=root_dir,
+                current_dir=item,
+            )
 
 
 def _directories_match_ignoring_runtime_artifacts(
@@ -59,15 +76,17 @@ def _directories_match_ignoring_runtime_artifacts(
     if not dir1.exists() or not dir2.exists():
         return False
 
-    dir1_entries = dict(_iter_relevant_directory_entries(dir1))
-    dir2_entries = dict(_iter_relevant_directory_entries(dir2))
+    for entry1, entry2 in zip_longest(
+        _iter_relevant_directory_entries(dir1),
+        _iter_relevant_directory_entries(dir2),
+    ):
+        if entry1 is None or entry2 is None:
+            return False
 
-    if set(dir1_entries) != set(dir2_entries):
-        return False
-
-    for relative_path in dir1_entries:
-        left = dir1_entries[relative_path]
-        right = dir2_entries[relative_path]
+        relative_path1, left = entry1
+        relative_path2, right = entry2
+        if relative_path1 != relative_path2:
+            return False
         if left.is_dir() != right.is_dir():
             return False
         if left.is_file() and not filecmp.cmp(left, right, shallow=False):
@@ -274,53 +293,6 @@ def sync_skills_to_working_dir(
             )
 
     return synced_count, skipped_count
-
-
-def _is_directory_same(dir1: Path, dir2: Path) -> bool:
-    """
-    Check if two directories have the same content.
-
-    Args:
-        dir1: First directory path.
-        dir2: Second directory path.
-
-    Returns:
-        True if directories have the same structure and file contents.
-    """
-    if not dir1.exists() or not dir2.exists():
-        return False
-
-    dcmp = filecmp.dircmp(dir1, dir2)
-
-    if dcmp.left_only or dcmp.right_only or dcmp.funny_files:
-        return False
-
-    if dcmp.diff_files:
-        return False
-
-    for sub_dcmp in dcmp.subdirs.values():
-        if not _compare_dircmp(sub_dcmp):
-            return False
-
-    return True
-
-
-def _compare_dircmp(dcmp: "filecmp.dircmp") -> bool:
-    """Helper to recursively compare dircmp objects."""
-    has_diff = any(
-        [
-            dcmp.left_only,
-            dcmp.right_only,
-            dcmp.funny_files,
-            dcmp.diff_files,
-        ],
-    )
-    if has_diff:
-        return False
-    for sub_dcmp in dcmp.subdirs.values():
-        if not _compare_dircmp(sub_dcmp):
-            return False
-    return True
 
 
 def sync_skills_from_active_to_customized(

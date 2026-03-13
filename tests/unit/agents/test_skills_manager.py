@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 import sys
 import types
@@ -25,10 +26,9 @@ def _install_frontmatter_stub() -> None:
     sys.modules["frontmatter"] = types.SimpleNamespace(loads=loads)
 
 
-_install_frontmatter_stub()
-
-import copaw.agents.skills_manager as skills_manager_module
-from copaw.agents.skills_manager import SkillService
+def _load_skills_manager_module():
+    _install_frontmatter_stub()
+    return importlib.import_module("copaw.agents.skills_manager")
 
 
 SKILL_TEMPLATE = """---
@@ -61,6 +61,7 @@ def _write_skill(
 
 def _patch_skill_dirs(
     monkeypatch,
+    skills_manager_module,
     *,
     builtin_dir: Path,
     customized_dir: Path,
@@ -87,6 +88,7 @@ def test_sync_from_active_to_customized_ignores_runtime_artifacts(
     monkeypatch,
     tmp_path,
 ) -> None:
+    skills_manager_module = _load_skills_manager_module()
     builtin_dir = tmp_path / "builtin"
     customized_dir = tmp_path / "customized"
     active_dir = tmp_path / "active"
@@ -100,12 +102,16 @@ def test_sync_from_active_to_customized_ignores_runtime_artifacts(
 
     _patch_skill_dirs(
         monkeypatch,
+        skills_manager_module,
         builtin_dir=builtin_dir,
         customized_dir=customized_dir,
         active_dir=active_dir,
     )
 
-    synced, skipped = skills_manager_module.sync_skills_from_active_to_customized()
+    (
+        synced,
+        skipped,
+    ) = skills_manager_module.sync_skills_from_active_to_customized()
 
     assert synced == 0
     assert skipped == 1
@@ -116,6 +122,7 @@ def test_sync_from_active_to_customized_keeps_real_builtin_edits(
     monkeypatch,
     tmp_path,
 ) -> None:
+    skills_manager_module = _load_skills_manager_module()
     builtin_dir = tmp_path / "builtin"
     customized_dir = tmp_path / "customized"
     active_dir = tmp_path / "active"
@@ -129,24 +136,31 @@ def test_sync_from_active_to_customized_keeps_real_builtin_edits(
 
     _patch_skill_dirs(
         monkeypatch,
+        skills_manager_module,
         builtin_dir=builtin_dir,
         customized_dir=customized_dir,
         active_dir=active_dir,
     )
 
-    synced, skipped = skills_manager_module.sync_skills_from_active_to_customized()
+    (
+        synced,
+        skipped,
+    ) = skills_manager_module.sync_skills_from_active_to_customized()
 
     assert synced == 1
     assert skipped == 0
     copied_skill = customized_dir / active_skill.name
     assert copied_skill.exists()
-    assert (copied_skill / "scripts" / "main.py").read_text(encoding="utf-8") == "print(2)\n"
+    assert (copied_skill / "scripts" / "main.py").read_text(
+        encoding="utf-8",
+    ) == "print(2)\n"
 
 
 def test_list_all_skills_prefers_customized_over_builtin_duplicates(
     monkeypatch,
     tmp_path,
 ) -> None:
+    skills_manager_module = _load_skills_manager_module()
     builtin_dir = tmp_path / "builtin"
     customized_dir = tmp_path / "customized"
     active_dir = tmp_path / "active"
@@ -157,12 +171,13 @@ def test_list_all_skills_prefers_customized_over_builtin_duplicates(
 
     _patch_skill_dirs(
         monkeypatch,
+        skills_manager_module,
         builtin_dir=builtin_dir,
         customized_dir=customized_dir,
         active_dir=active_dir,
     )
 
-    skills = SkillService.list_all_skills()
+    skills = skills_manager_module.SkillService.list_all_skills()
 
     assert [skill.name for skill in skills] == ["calendar", "mail", "notes"]
     skills_by_name = {skill.name: skill for skill in skills}
