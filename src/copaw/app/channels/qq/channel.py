@@ -323,7 +323,7 @@ async def _upload_media_async(
         access_token: QQ access token
         openid: user openid or group openid
         media_type: 1 image, 2 video, 3 audio, 4 file
-        url: media url
+        url: media url or file:// path
         message_type: "c2c" or "group"
 
     Returns:
@@ -340,24 +340,35 @@ async def _upload_media_async(
             )
             return None
 
-        body = {
+        body: Dict[str, Any] = {
             "file_type": media_type,
             "srv_send_msg": False,
         }
 
         # Handle local file paths
         if url.startswith("file://"):
-            local_path = url[7:]  # Remove file:// prefix
+            from urllib.parse import urlparse
+            from urllib.request import url2pathname
 
-            # Windows path handling: file:///C:/path -> C:/path
-            if (
-                os.name == "nt"
-                and len(local_path) >= 3
-                and local_path.startswith("/")
-                and local_path[1].isalpha()
-                and local_path[2] == ":"
-            ):
-                local_path = local_path[1:]
+            try:
+                # Handle Windows paths with backslashes
+                url_normalized = url.replace("\\", "/")
+                parsed_path = urlparse(url_normalized).path
+                local_path = url2pathname(parsed_path)
+
+                # Fix Windows drive letter path
+                # url2pathname may return /C:/path on Windows, remove leading /
+                if (
+                    os.name == "nt"
+                    and len(local_path) >= 3
+                    and local_path.startswith("/")
+                    and local_path[1].isalpha()
+                    and local_path[2] == ":"
+                ):
+                    local_path = local_path[1:]
+            except Exception:
+                logger.warning(f"Could not parse file URL: {url}")
+                return None
 
             if not os.path.exists(local_path):
                 logger.warning(f"Local file not found: {local_path}")
@@ -372,6 +383,7 @@ async def _upload_media_async(
                 logger.exception(f"Failed to read local file: {local_path}")
                 return None
         else:
+            # HTTP/HTTPS URL, use original method
             body["url"] = url
 
         response = await _api_request_async(
