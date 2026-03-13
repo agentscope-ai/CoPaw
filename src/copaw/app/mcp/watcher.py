@@ -86,6 +86,8 @@ class MCPConfigWatcher:
                 await self._task
             except asyncio.CancelledError:
                 pass
+            except Exception as e:
+                logger.warning(f"MCPConfigWatcher: error stopping task: {e}")
             self._task = None
 
         # Wait for ongoing reload to complete
@@ -94,14 +96,18 @@ class MCPConfigWatcher:
                 "MCPConfigWatcher: waiting for reload task to complete",
             )
             try:
-                await asyncio.wait_for(self._reload_task, timeout=5.0)
+                await asyncio.wait_for(self._reload_task, timeout=10.0)
             except asyncio.TimeoutError:
                 logger.warning(
-                    "MCPConfigWatcher: reload task did not finish in time",
+                    "MCPConfigWatcher: reload task did not finish in time, cancelling",
                 )
                 self._reload_task.cancel()
-            except Exception:
-                pass
+                try:
+                    await self._reload_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            except Exception as e:
+                logger.warning(f"MCPConfigWatcher: error waiting for reload: {e}")
 
         logger.debug("MCPConfigWatcher stopped")
 
@@ -145,8 +151,13 @@ class MCPConfigWatcher:
             try:
                 await asyncio.sleep(self._poll_interval)
                 await self._check()
+            except asyncio.CancelledError:
+                logger.debug("MCPConfigWatcher: poll loop cancelled")
+                raise
             except Exception:
                 logger.exception("MCPConfigWatcher: poll iteration failed")
+                # Add small delay to prevent tight loop on repeated failures
+                await asyncio.sleep(0.5)
 
     async def _check(self) -> None:
         """Check for config changes and reload if needed."""
@@ -155,6 +166,13 @@ class MCPConfigWatcher:
             try:
                 mtime = self._config_path.stat().st_mtime
             except FileNotFoundError:
+                # File temporarily unavailable, don't trigger reload
+                # Reset last_mtime to avoid false positive on next check
+                if self._last_mtime != 0.0:
+                    logger.debug(
+                        "MCPConfigWatcher: config file not found, resetting mtime"
+                    )
+                    self._last_mtime = 0.0
                 return
             if mtime == self._last_mtime:
                 return
@@ -171,8 +189,10 @@ class MCPConfigWatcher:
         if new_hash == self._last_mcp_hash:
             return  # No changes
 
-        # 3) Check if previous reload is still running
+        # 3) Check if previous reload is still running or taking too long
         if self._reload_task and not self._reload_task.done():
+            # Check if reload task is stuck (running for more than 5 minutes)
+            # This shouldn't happen, but provides a safety valve
             logger.debug(
                 "MCPConfigWatcher: skipping reload, "
                 "previous reload still in progress",

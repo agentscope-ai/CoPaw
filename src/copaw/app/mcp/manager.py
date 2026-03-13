@@ -101,15 +101,24 @@ class MCPClientManager:
             logger.warning(
                 f"Timeout connecting MCP client '{key}' after {timeout}s",
             )
+            # Ensure cleanup on timeout
             try:
-                await new_client.close()
+                await asyncio.wait_for(new_client.close(), timeout=5.0)
+            except Exception:
+                pass
+            raise
+        except asyncio.CancelledError:
+            logger.warning(f"Cancelled connecting MCP client '{key}'")
+            try:
+                await asyncio.wait_for(new_client.close(), timeout=5.0)
             except Exception:
                 pass
             raise
         except Exception as e:
             logger.warning(f"Failed to connect MCP client '{key}': {e}")
+            # Ensure cleanup on error
             try:
-                await new_client.close()
+                await asyncio.wait_for(new_client.close(), timeout=5.0)
             except Exception:
                 pass
             raise
@@ -122,7 +131,12 @@ class MCPClientManager:
             if old_client is not None:
                 logger.debug(f"Closing old MCP client: {key}")
                 try:
-                    await old_client.close()
+                    # Add timeout to prevent hanging on close
+                    await asyncio.wait_for(old_client.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"Timeout closing old MCP client '{key}', forcing",
+                    )
                 except Exception as e:
                     logger.warning(
                         f"Error closing old MCP client '{key}': {e}",
@@ -142,7 +156,12 @@ class MCPClientManager:
         if old_client is not None:
             logger.debug(f"Removing MCP client: {key}")
             try:
-                await old_client.close()
+                # Add timeout to prevent hanging on close
+                await asyncio.wait_for(old_client.close(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Timeout removing MCP client '{key}', forcing",
+                )
             except Exception as e:
                 logger.warning(f"Error closing MCP client '{key}': {e}")
 
@@ -159,7 +178,12 @@ class MCPClientManager:
         for key, client in clients_snapshot:
             if client is not None:
                 try:
-                    await client.close()
+                    # Add timeout to prevent hanging on close
+                    await asyncio.wait_for(client.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"Timeout closing MCP client '{key}', forcing",
+                    )
                 except Exception as e:
                     logger.warning(f"Error closing MCP client '{key}': {e}")
 
@@ -178,8 +202,16 @@ class MCPClientManager:
         """
         client = self._build_client(client_config)
 
-        # Add timeout to prevent indefinite blocking
-        await asyncio.wait_for(client.connect(), timeout=timeout)
+        try:
+            # Add timeout to prevent indefinite blocking
+            await asyncio.wait_for(client.connect(), timeout=timeout)
+        except Exception:
+            # Ensure cleanup on connection failure
+            try:
+                await asyncio.wait_for(client.close(), timeout=5.0)
+            except Exception:
+                pass
+            raise
 
         async with self._lock:
             self._clients[key] = client
