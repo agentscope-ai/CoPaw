@@ -23,6 +23,8 @@ function ModelsPage() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [addProviderOpen, setAddProviderOpen] = useState(false);
 
+  const refreshProvidersSilently = () => fetchAll(false);
+
   const { regularProviders, embeddedProviders } = useMemo(() => {
     const regular: ProviderInfo[] = [];
     const embedded: ProviderInfo[] = [];
@@ -47,7 +49,7 @@ function ModelsPage() {
         key={provider.id}
         provider={provider}
         activeModels={activeModels}
-        onSaved={fetchAll}
+        onSaved={refreshProvidersSilently}
         isHover={hoveredCard === provider.id}
         onMouseEnter={() => handleMouseEnter(provider.id)}
         onMouseLeave={handleMouseLeave}
@@ -55,7 +57,7 @@ function ModelsPage() {
     ));
 
   return (
-    <div className={styles.page}>
+    <div className={styles.settingsPage}>
       {loading ? (
         <LoadingState message={t("models.loading")} />
       ) : error ? (
