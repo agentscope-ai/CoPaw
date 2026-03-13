@@ -395,77 +395,88 @@ def _read_skills_from_dir(
     for skill_dir in directory.iterdir():
         if not skill_dir.is_dir():
             continue
+        skill = _read_skill_from_path(
+            skill_dir=skill_dir,
+            source=source,
+            config=config,
+        )
+        if skill is not None:
+            skills.append(skill)
 
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
+    return skills
 
+
+def _read_skill_from_path(
+    skill_dir: Path,
+    source: str,
+    config: Config | None = None,
+) -> SkillInfo | None:
+    """Read one skill directory into a SkillInfo model."""
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_dir.is_dir() or not skill_md.exists():
+        return None
+
+    try:
+        content = skill_md.read_text(encoding="utf-8")
+        description = ""
         try:
-            content = skill_md.read_text(encoding="utf-8")
-            description = ""
-            try:
-                post = frontmatter.loads(content)
-                description = str(post.get("description", "") or "")
-            except Exception as e:
-                logger.warning(
-                    "Failed to parse SKILL.md frontmatter for skill '%s': %s",
-                    skill_dir.name,
-                    e,
-                )
-                logger.debug(
-                    "Invalid SKILL.md frontmatter/content in '%s': %r",
-                    skill_md,
-                    e,
-                )
-                description = ""
-            metadata = parse_skill_metadata_from_content(content)
-            resolved_skill_key = resolve_skill_key(skill_dir.name, metadata)
-            eligibility = compute_skill_eligibility(
-                config=config,
-                skill_name=skill_dir.name,
-                metadata=metadata,
-            )
-            config_status = build_skill_config_status(
-                config=config,
-                skill_name=skill_dir.name,
-                metadata=metadata,
-            )
-
-            # Build references directory tree
-            references = {}
-            references_dir = skill_dir / "references"
-            if references_dir.exists() and references_dir.is_dir():
-                references = _build_directory_tree(references_dir)
-
-            # Build scripts directory tree
-            scripts = {}
-            scripts_dir = skill_dir / "scripts"
-            if scripts_dir.exists() and scripts_dir.is_dir():
-                scripts = _build_directory_tree(scripts_dir)
-
-            skills.append(
-                SkillInfo(
-                    name=skill_dir.name,
-                    description=description,
-                    content=content,
-                    source=source,
-                    path=str(skill_dir),
-                    references=references,
-                    scripts=scripts,
-                    metadata=metadata,
-                    resolved_skill_key=resolved_skill_key,
-                    eligibility=eligibility,
-                    config_status=config_status,
-                ),
-            )
+            post = frontmatter.loads(content)
+            description = str(post.get("description", "") or "")
         except Exception as e:
-            logger.error(
-                "Failed to read skill '%s': %s",
+            logger.warning(
+                "Failed to parse SKILL.md frontmatter for skill '%s': %s",
                 skill_dir.name,
                 e,
             )
+            logger.debug(
+                "Invalid SKILL.md frontmatter/content in '%s': %r",
+                skill_md,
+                e,
+            )
+            description = ""
+        metadata = parse_skill_metadata_from_content(content)
+        resolved_skill_key = resolve_skill_key(skill_dir.name, metadata)
+        eligibility = compute_skill_eligibility(
+            config=config,
+            skill_name=skill_dir.name,
+            metadata=metadata,
+        )
+        config_status = build_skill_config_status(
+            config=config,
+            skill_name=skill_dir.name,
+            metadata=metadata,
+        )
 
-    return skills
+        references = {}
+        references_dir = skill_dir / "references"
+        if references_dir.exists() and references_dir.is_dir():
+            references = _build_directory_tree(references_dir)
+
+        scripts = {}
+        scripts_dir = skill_dir / "scripts"
+        if scripts_dir.exists() and scripts_dir.is_dir():
+            scripts = _build_directory_tree(scripts_dir)
+
+        return SkillInfo(
+            name=skill_dir.name,
+            description=description,
+            content=content,
+            source=source,
+            path=str(skill_dir),
+            references=references,
+            scripts=scripts,
+            metadata=metadata,
+            resolved_skill_key=resolved_skill_key,
+            eligibility=eligibility,
+            config_status=config_status,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to read skill '%s': %s",
+            skill_dir.name,
+            e,
+        )
+        return None
 
 
 def _create_files_from_tree(
@@ -590,13 +601,13 @@ class SkillService:
         ]
         config = load_config()
         for directory, source in search_order:
-            for skill in _read_skills_from_dir(
-                directory,
-                source,
+            skill = _read_skill_from_path(
+                skill_dir=directory / name,
+                source=source,
                 config=config,
-            ):
-                if skill.name == name:
-                    return skill
+            )
+            if skill is not None:
+                return skill
         return None
 
     @staticmethod

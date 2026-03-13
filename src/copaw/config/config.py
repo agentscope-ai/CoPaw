@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 from typing import Optional, Union, Dict, List, Literal, Any
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    field_validator,
+    model_validator,
+)
 
 from ..providers.models import ModelSlotConfig
 from ..constant import (
@@ -464,6 +470,13 @@ class SkillEntryConfig(BaseModel):
         default_factory=dict,
         description="Optional skill-specific configuration bag",
     )
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value)
 
 
 class SkillsConfig(BaseModel):

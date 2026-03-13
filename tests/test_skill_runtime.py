@@ -4,13 +4,14 @@ import os
 import pytest
 from fastapi import HTTPException
 
+from copaw.agents import skills_manager as skills_manager_module
 from copaw.agents.skill_metadata import parse_skill_metadata_from_content
 from copaw.agents.skill_runtime import (
     apply_skill_env_overrides,
     compute_skill_eligibility,
     has_skill_env_overrides,
 )
-from copaw.agents.skills_manager import SkillInfo
+from copaw.agents.skills_manager import SkillInfo, SkillService
 from copaw.app.routers.skills import (
     MASKED_ENV_VALUE,
     _build_skill_config_view,
@@ -277,3 +278,94 @@ def test_merge_skill_env_payload_preserves_masked_values() -> None:
 
     assert merged["DEMO_REGION"] == "cn"
     assert merged["OTHER_ENV"] == "updated"
+
+
+def test_merge_skill_env_payload_rejects_mask_for_new_key() -> None:
+    existing = SkillEntryConfig(env={"DEMO_REGION": "cn"})
+
+    with pytest.raises(HTTPException) as exc:
+        _merge_skill_env_payload(
+            existing,
+            {
+                "NEW_SECRET": MASKED_ENV_VALUE,
+            },
+        )
+
+    assert exc.value.status_code == 400
+    assert "NEW_SECRET" in str(exc.value.detail)
+
+
+def test_skill_entry_config_normalizes_null_api_key() -> None:
+    entry = SkillEntryConfig.model_validate({"apiKey": None})
+    assert entry.api_key == ""
+
+
+def test_get_skill_reads_requested_directory_only(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    builtin_dir = tmp_path / "builtin"
+    customized_dir = tmp_path / "customized"
+    active_dir = tmp_path / "active"
+    builtin_dir.mkdir()
+    customized_dir.mkdir()
+    active_dir.mkdir()
+
+    skill_dir = customized_dir / "demo_skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: demo_skill
+description: demo
+---
+demo
+""",
+        encoding="utf-8",
+    )
+
+    def _builtin_dir():
+        return builtin_dir
+
+    def _customized_dir():
+        return customized_dir
+
+    def _active_dir():
+        return active_dir
+
+    def _config():
+        return Config()
+
+    monkeypatch.setattr(
+        skills_manager_module,
+        "get_builtin_skills_dir",
+        _builtin_dir,
+    )
+    monkeypatch.setattr(
+        skills_manager_module,
+        "get_customized_skills_dir",
+        _customized_dir,
+    )
+    monkeypatch.setattr(
+        skills_manager_module,
+        "get_active_skills_dir",
+        _active_dir,
+    )
+    monkeypatch.setattr(
+        skills_manager_module,
+        "load_config",
+        _config,
+    )
+
+    def _should_not_scan(*args, **kwargs):
+        raise AssertionError("get_skill should not scan all skills")
+
+    monkeypatch.setattr(
+        skills_manager_module,
+        "_read_skills_from_dir",
+        _should_not_scan,
+    )
+
+    skill = SkillService.get_skill("demo_skill")
+    assert skill is not None
+    assert skill.name == "demo_skill"
+    assert skill.source == "customized"

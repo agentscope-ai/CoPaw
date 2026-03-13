@@ -147,6 +147,14 @@ def _merge_skill_env_payload(
     for key, value in env_payload.items():
         if value == MASKED_ENV_VALUE and key in existing_entry.env:
             merged_env[key] = existing_entry.env[key]
+        elif value == MASKED_ENV_VALUE:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Skill env key '{key}' cannot use the masked placeholder "
+                    "unless a value is already stored"
+                ),
+            )
         else:
             merged_env[key] = value
     return merged_env
