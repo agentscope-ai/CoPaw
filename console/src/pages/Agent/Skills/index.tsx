@@ -31,6 +31,7 @@ function SkillsPage() {
     "https://clawhub.ai/",
     "https://skillsmp.com/",
     "https://lobehub.com/",
+    "https://market.lobehub.com/",
     "https://github.com/",
   ];
 
@@ -174,12 +175,16 @@ function SkillsPage() {
             <li>https://clawhub.ai/</li>
             <li>https://skillsmp.com/</li>
             <li>https://lobehub.com/</li>
+            <li>https://market.lobehub.com/</li>
             <li>https://github.com/</li>
           </ul>
           <p className={styles.importHintTitle}>{t("skills.urlExamples")}</p>
           <ul className={styles.importHintList}>
             <li>https://skills.sh/vercel-labs/skills/find-skills</li>
             <li>https://lobehub.com/zh/skills/openclaw-skills-cli-developer</li>
+            <li>
+              https://market.lobehub.com/api/v1/skills/openclaw-skills-cli-developer/download
+            </li>
             <li>
               https://github.com/anthropics/skills/tree/main/skills/skill-creator
             </li>
