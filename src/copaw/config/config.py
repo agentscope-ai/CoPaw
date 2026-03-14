@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=C0301  # line-too-long
+
 import os
 from typing import Optional, Union, Dict, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
@@ -96,6 +98,20 @@ class MattermostConfig(BaseChannelConfig):
     thread_follow_without_mention: bool = False
 
 
+class NextcloudTalkConfig(BaseChannelConfig):
+    """
+    Nextcloud Talk (Spreed) channel: webhook_secret, webhook configuration.
+    Webhook settings control the HTTP server that receives messages from Nextcloud Talk.  # noqa: E501
+    """
+
+    webhook_secret: str = ""
+    webhook_host: str = "0.0.0.0"
+    webhook_port: int = 8765
+    webhook_path: str = "/webhook/nextcloud_talk"
+    username: str = ""
+    password: str = ""
+
+
 class ConsoleConfig(BaseChannelConfig):
     """Console channel: prints agent responses to stdout."""
 
@@ -134,6 +150,7 @@ class ChannelConfig(BaseModel):
     dingtalk: DingTalkConfig = DingTalkConfig()
     feishu: FeishuConfig = FeishuConfig()
     qq: QQConfig = QQConfig()
+    nextcloud_talk: NextcloudTalkConfig = NextcloudTalkConfig()
     telegram: TelegramConfig = TelegramConfig()
     mattermost: MattermostConfig = MattermostConfig()
     mqtt: MQTTConfig = MQTTConfig()
@@ -495,6 +512,7 @@ ChannelConfigUnion = Union[
     DingTalkConfig,
     FeishuConfig,
     QQConfig,
+    NextcloudTalkConfig,
     TelegramConfig,
     MattermostConfig,
     MQTTConfig,
