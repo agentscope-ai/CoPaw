@@ -104,8 +104,8 @@
     - "authorized_keys"
     - "\\/etc\\/sudoers"
     - "\\/etc\\/crontab"
-  description: "Detects modifications to cron jobs, SSH keys, or sudo permissions"
-  remediation: "Confirm with user. Restrict agent access to credential and scheduling files."
+  description: "Detects access to cron jobs, SSH keys, or sudo permissions (including reads and modifications)"
+  remediation: "Confirm with user. Treat any access to credential and scheduling files as sensitive and restrict when possible."
 
 # ── Dangerous Permission Changes ──────────────────────────────────────
 - id: TOOL_CMD_UNSAFE_PERMISSIONS
