@@ -43,7 +43,7 @@ from .content_utils import (
 )
 from .constants import MAX_MESSAGE_LENGTH
 from .files_client import NextcloudFilesClient
-from .handler_stdlib import StdlibWebhookServer, NextcloudTalkWebhookHandler
+from .handler_stdlib import StdlibWebhookServer
 from .utils import (
     normalize_nextcloud_url,
     build_bot_headers,
