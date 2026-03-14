@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -23,6 +24,38 @@ def _heartbeat_hash(hb: Optional[HeartbeatConfig]) -> int:
     if hb is None:
         return hash("None")
     return hash(str(hb.model_dump(mode="json")))
+
+
+def _raw_mcp_hash(config_path: Path) -> int:
+    """Hash of raw MCP section from on-disk config.json.
+
+    Reads the JSON file directly (like the loader) and hashes the 'mcp'
+    key portion with stable canonical JSON, avoiding dependency on
+    model instantiation and ensuring consistent hashing across runs.
+
+    Args:
+        config_path: Path to config.json file.
+
+    Returns:
+        Hash of the canonical MCP JSON, or hash('None') if not present
+        or on error.
+    """
+    try:
+        with open(config_path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        mcp = data.get("mcp")
+        if mcp is None:
+            return hash("None")
+        # Canonical JSON for stable hashing (sorted keys, compact separators)
+        canonical = json.dumps(
+            mcp,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hash(canonical)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError, OSError):
+        return hash("None")
 
 
 class ConfigWatcher:
@@ -45,6 +78,7 @@ class ConfigWatcher:
         self._last_channels: Optional[ChannelConfig] = None
         self._last_channels_hash: Optional[int] = None
         self._last_heartbeat_hash: Optional[int] = None
+        self._last_mcp_hash: Optional[int] = None
         # mtime of config.json at last check
         self._last_mtime: float = 0.0
 
@@ -74,7 +108,7 @@ class ConfigWatcher:
     # ------------------------------------------------------------------
 
     def _snapshot(self) -> None:
-        """Load current config; record mtime, channels hash, heartbeat hash."""
+        """Load config; record mtime, channels, heartbeat, and mcp hashes."""
         try:
             self._last_mtime = self._config_path.stat().st_mtime
         except FileNotFoundError:
@@ -89,11 +123,14 @@ class ConfigWatcher:
                 None,
             )
             self._last_heartbeat_hash = _heartbeat_hash(hb)
+            # MCP section - use raw file hash for on-disk change detection
+            self._last_mcp_hash = _raw_mcp_hash(self._config_path)
         except Exception:
             logger.exception("ConfigWatcher: failed to load initial config")
             self._last_channels = None
             self._last_channels_hash = None
             self._last_heartbeat_hash = None
+            self._last_mcp_hash = None
 
     @staticmethod
     def _channels_hash(channels: ChannelConfig) -> int:
@@ -190,6 +227,24 @@ class ConfigWatcher:
         else:
             self._last_heartbeat_hash = new_hb_hash
 
+    async def _apply_mcp_change(self) -> None:
+        """Check if MCP section changed; warn if changed (requires restart).
+
+        Only warns on actual changes (not first-load), since MCP config
+        requires server restart to apply.
+        """
+        new_mcp_hash = _raw_mcp_hash(self._config_path)
+        if self._last_mcp_hash is None:
+            # First load - just record hash, no warning
+            self._last_mcp_hash = new_mcp_hash
+            return
+        if new_mcp_hash != self._last_mcp_hash:
+            self._last_mcp_hash = new_mcp_hash
+            msg = (
+                "MCP config changed - restart needed unless MCP hot-reload on"
+            )
+            logger.warning("ConfigWatcher: %s", msg)
+
     async def _poll_loop(self) -> None:
         while True:
             try:
@@ -213,3 +268,4 @@ class ConfigWatcher:
             return
         await self._apply_channel_changes(loaded)
         await self._apply_heartbeat_change(loaded)
+        await self._apply_mcp_change()
