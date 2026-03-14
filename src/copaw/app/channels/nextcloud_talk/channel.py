@@ -501,12 +501,12 @@ class NextcloudTalkChannel(BaseChannel):
             webhook_path=self.webhook_path,
         )
 
-        # Set callback and config
-        NextcloudTalkWebhookHandler.set_enqueue_callback(self.consume_one)
-        NextcloudTalkWebhookHandler.set_webhook_secret(self.webhook_secret)
-        NextcloudTalkWebhookHandler.set_bot_prefix(self.bot_prefix)
-        NextcloudTalkWebhookHandler.set_api_user(self.api_user)
-        NextcloudTalkWebhookHandler.set_credentials(
+        # Set callback and config on the handler class via the server
+        self._webhook_server.set_enqueue_callback(self.consume_one)
+        self._webhook_server.set_webhook_secret(self.webhook_secret)
+        self._webhook_server.set_bot_prefix(self.bot_prefix)
+        self._webhook_server.set_api_user(self.api_user)
+        self._webhook_server.set_credentials(
             self.nc_username,
             self.nc_password,
         )
