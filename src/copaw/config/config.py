@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=C0301  # line-too-long
 
 import os
 from typing import Optional, Union, Dict, List, Literal
@@ -101,7 +100,6 @@ class MattermostConfig(BaseChannelConfig):
 class NextcloudTalkConfig(BaseChannelConfig):
     """
     Nextcloud Talk (Spreed) channel: webhook_secret, webhook configuration.
-    Webhook settings control the HTTP server that receives messages from Nextcloud Talk.  # noqa: E501
     """
 
     webhook_secret: str = ""
