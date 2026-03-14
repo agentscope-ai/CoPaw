@@ -43,6 +43,9 @@ export function ModelsSection({
   const [dirty, setDirty] = useState(false);
 
   const currentSlot = activeModels?.active_llm;
+  const activeProvider = providers.find(
+    (p) => p.id === currentSlot?.provider_id,
+  );
 
   const eligible = useMemo(
     () =>
@@ -73,6 +76,10 @@ export function ModelsSection({
     ...(chosenProvider?.extra_models ?? []),
   ];
   const hasModels = modelOptions.length > 0;
+  const activeProviderLabel = activeProvider
+    ? `${activeProvider.name} (${activeProvider.id})`
+    : currentSlot?.provider_id;
+  const activeEndpoint = activeProvider?.current_base_url;
 
   const handleProviderChange = (pid: string) => {
     setSelectedProviderId(pid);
@@ -119,12 +126,24 @@ export function ModelsSection({
       <div className={styles.slotHeader}>
         <h3 className={styles.slotTitle}>{t("models.llmConfiguration")}</h3>
         {currentSlot?.provider_id && currentSlot?.model && (
-          <span className={styles.slotCurrent}>
-            {t("models.active", {
-              provider: currentSlot.provider_id,
-              model: currentSlot.model,
-            })}
-          </span>
+          <div className={styles.slotCurrentBlock}>
+            <span className={styles.slotCurrent}>
+              {t("models.active", {
+                provider: activeProviderLabel,
+                model: currentSlot.model,
+              })}
+            </span>
+            {activeProvider && !activeProvider.is_local && (
+              <span
+                className={styles.slotEndpoint}
+                title={activeEndpoint || t("models.notSet")}
+              >
+                {`${t("models.baseURL")}: ${
+                  activeEndpoint || t("models.notSet")
+                }`}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
