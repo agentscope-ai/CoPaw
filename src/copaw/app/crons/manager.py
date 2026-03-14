@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -16,6 +17,7 @@ from ...config import get_heartbeat_config
 from ..console_push_store import append as push_store_append
 from .executor import CronExecutor
 from .heartbeat import parse_heartbeat_every, run_heartbeat_once
+from .history import CronJobHistory, HistoryRepo
 from .models import CronJobSpec, CronJobState
 from .repo.base import BaseJobRepository
 
@@ -37,6 +39,7 @@ class CronManager:
         runner: Any,
         channel_manager: Any,
         timezone: str = "UTC",
+        history_repo: Optional[HistoryRepo] = None,
     ):
         self._repo = repo
         self._runner = runner
@@ -46,6 +49,7 @@ class CronManager:
             runner=runner,
             channel_manager=channel_manager,
         )
+        self._history = history_repo
 
         self._lock = asyncio.Lock()
         self._states: Dict[str, CronJobState] = {}
@@ -92,6 +96,15 @@ class CronManager:
 
     def get_state(self, job_id: str) -> CronJobState:
         return self._states.get(job_id, CronJobState())
+
+    def get_history(
+        self,
+        job_id: str,
+        limit: int = 50,
+    ) -> List[CronJobHistory]:
+        if self._history is None:
+            return []
+        return self._history.list_by_job(job_id, limit=limit)
 
     # ----- write/control -----
 
@@ -265,6 +278,39 @@ class CronManager:
         except Exception:  # pylint: disable=broad-except
             logger.exception("heartbeat run failed")
 
+    def _handle_failure(
+        self,
+        job: CronJobSpec,
+        st: CronJobState,
+        exc: Exception,
+    ) -> None:
+        """Update state and auto-pause on consecutive failures."""
+        st.last_status = "error"
+        st.last_error = repr(exc)
+        st.consecutive_failures += 1
+
+        pause_after = job.runtime.auto_pause_after
+        if 0 < pause_after <= st.consecutive_failures:
+            logger.warning(
+                "cron auto-pause: job_id=%s after %d consecutive failures",
+                job.id,
+                st.consecutive_failures,
+            )
+            try:
+                self._scheduler.pause_job(job.id)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            session_id = job.dispatch.target.session_id
+            if session_id:
+                msg = (
+                    f"⚠️ Cron job [{job.name}] auto-paused after "
+                    f"{st.consecutive_failures} consecutive failures. "
+                    f"Last error: {exc}"
+                )
+                asyncio.ensure_future(
+                    push_store_append(session_id, msg),
+                )
+
     async def _execute_once(self, job: CronJobSpec) -> None:
         rt = self._rt.get(job.id)
         if not rt:
@@ -276,23 +322,64 @@ class CronManager:
             st.last_status = "running"
             self._states[job.id] = st
 
-            try:
-                await self._executor.execute(job)
-                st.last_status = "success"
-                st.last_error = None
-                logger.info(
-                    "cron _execute_once: job_id=%s status=success",
-                    job.id,
+            max_attempts = 1 + job.runtime.max_retries
+            last_exc: Optional[Exception] = None
+
+            for attempt in range(1, max_attempts + 1):
+                history = CronJobHistory(
+                    job_id=job.id,
+                    attempt=attempt,
                 )
-            except Exception as e:  # pylint: disable=broad-except
-                st.last_status = "error"
-                st.last_error = repr(e)
-                logger.warning(
-                    "cron _execute_once: job_id=%s status=error error=%s",
-                    job.id,
-                    repr(e),
-                )
-                raise
-            finally:
-                st.last_run_at = datetime.utcnow()
-                self._states[job.id] = st
+
+                try:
+                    await self._executor.execute(job)
+                    history.status = "success"
+                    history.finished_at = time.time()
+                    st.last_status = "success"
+                    st.last_error = None
+                    st.consecutive_failures = 0
+                    logger.info(
+                        "cron _execute_once: job_id=%s status=success "
+                        "attempt=%d/%d",
+                        job.id,
+                        attempt,
+                        max_attempts,
+                    )
+                    last_exc = None
+                    break
+                except Exception as e:  # pylint: disable=broad-except
+                    last_exc = e
+                    history.status = "error"
+                    history.error = repr(e)
+                    history.finished_at = time.time()
+                    logger.warning(
+                        "cron _execute_once: job_id=%s attempt=%d/%d "
+                        "error=%s",
+                        job.id,
+                        attempt,
+                        max_attempts,
+                        repr(e),
+                    )
+                    if attempt < max_attempts:
+                        delay = job.runtime.retry_delay * (2 ** (attempt - 1))
+                        logger.info(
+                            "cron retry: job_id=%s next_attempt=%d "
+                            "delay=%.1fs",
+                            job.id,
+                            attempt + 1,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                finally:
+                    if self._history:
+                        self._history.append(history)
+
+            st.last_run_at = datetime.utcnow()
+
+            if last_exc is not None:
+                self._handle_failure(job, st, last_exc)
+
+            self._states[job.id] = st
+
+            if last_exc is not None:
+                raise last_exc

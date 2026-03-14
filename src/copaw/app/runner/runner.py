@@ -30,6 +30,8 @@ from ...config import load_config
 from ...constant import (
     TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS,
     WORKING_DIR,
+    get_sessions_dir,
+    get_workspace_dir,
 )
 from ...security.tool_guard.approval import ApprovalDecision
 
@@ -433,13 +435,13 @@ class AgentRunner(Runner):
                 "using existing environment variables",
             )
 
-        session_dir = str(WORKING_DIR / "sessions")
+        session_dir = str(get_sessions_dir())
         self.session = SafeJSONSession(save_dir=session_dir)
 
         try:
             if self.memory_manager is None:
                 self.memory_manager = MemoryManager(
-                    working_dir=str(WORKING_DIR),
+                    working_dir=str(get_workspace_dir()),
                 )
             await self.memory_manager.start()
         except Exception as e:

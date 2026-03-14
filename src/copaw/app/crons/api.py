@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from .history import CronJobHistory
 from .manager import CronManager
 from .models import CronJobSpec, CronJobView
 
@@ -109,3 +110,18 @@ async def get_job_state(
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return mgr.get_state(job_id).model_dump(mode="json")
+
+
+@router.get(
+    "/jobs/{job_id}/history",
+    response_model=list[CronJobHistory],
+)
+async def get_job_history(
+    job_id: str,
+    limit: int = 50,
+    mgr: CronManager = Depends(get_cron_manager),
+):
+    job = await mgr.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return mgr.get_history(job_id, limit=limit)

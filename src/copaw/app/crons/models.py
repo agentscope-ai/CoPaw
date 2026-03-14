@@ -99,6 +99,13 @@ class JobRuntimeSpec(BaseModel):
     max_concurrency: int = Field(default=1, ge=1)
     timeout_seconds: int = Field(default=120, ge=1)
     misfire_grace_seconds: int = Field(default=60, ge=0)
+    max_retries: int = Field(default=0, ge=0)
+    retry_delay: float = Field(default=5.0, ge=0)
+    auto_pause_after: int = Field(
+        default=3,
+        ge=0,
+        description="Auto-pause job after N consecutive failures (0=disabled)",
+    )
 
 
 class CronJobRequest(BaseModel):
@@ -162,6 +169,7 @@ class CronJobState(BaseModel):
         Literal["success", "error", "running", "skipped"]
     ] = None
     last_error: Optional[str] = None
+    consecutive_failures: int = 0
 
 
 class CronJobView(BaseModel):
