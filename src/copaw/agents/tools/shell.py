@@ -6,6 +6,7 @@
 import asyncio
 import locale
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -173,6 +174,11 @@ async def execute_shell_command(
                 env,
             )
         else:
+            # On Unix, use a new process group to allow killing child processes
+            kwargs = {}
+            if sys.platform != "win32":
+                kwargs["preexec_fn"] = os.setsid
+
             proc = await asyncio.create_subprocess_shell(
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -180,6 +186,7 @@ async def execute_shell_command(
                 bufsize=0,
                 cwd=str(working_dir),
                 env=env,
+                **kwargs,
             )
 
             try:
@@ -203,13 +210,27 @@ async def execute_shell_command(
                 )
                 returncode = -1
                 try:
-                    proc.terminate()
+                    # Kill the whole process group on Unix
+                    if sys.platform != "win32":
+                        try:
+                            os.killpg(proc.pid, signal.SIGTERM)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+                    else:
+                        proc.terminate()
+
                     # Wait a bit for graceful termination
                     try:
                         await asyncio.wait_for(proc.wait(), timeout=1)
                     except asyncio.TimeoutError:
                         # Force kill if graceful termination fails
-                        proc.kill()
+                        if sys.platform != "win32":
+                            try:
+                                os.killpg(proc.pid, signal.SIGKILL)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                        else:
+                            proc.kill()
                         await proc.wait()
 
                     # Avoid hanging forever while draining pipes after timeout.
