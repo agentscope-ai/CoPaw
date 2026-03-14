@@ -21,6 +21,7 @@ from copaw.providers.provider import (
 )
 from copaw.providers.openai_provider import OpenAIProvider
 from copaw.providers.anthropic_provider import AnthropicProvider
+from copaw.providers.gemini_provider import GeminiProvider
 from copaw.providers.ollama_provider import OllamaProvider
 from copaw.constant import SECRET_DIR
 from copaw.local_models import create_local_chat_model
@@ -91,6 +92,12 @@ MINIMAX_MODELS: List[ModelInfo] = [
 ]
 
 ANTHROPIC_MODELS: List[ModelInfo] = []
+
+GEMINI_MODELS: List[ModelInfo] = [
+    ModelInfo(id="gemini-2.5-pro", name="Gemini 2.5 Pro"),
+    ModelInfo(id="gemini-2.5-flash", name="Gemini 2.5 Flash"),
+    ModelInfo(id="gemini-2.0-flash", name="Gemini 2.0 Flash"),
+]
 
 PROVIDER_MODELSCOPE = OpenAIProvider(
     id="modelscope",
@@ -169,6 +176,17 @@ PROVIDER_ANTHROPIC = AnthropicProvider(
     freeze_url=True,
 )
 
+PROVIDER_GEMINI = GeminiProvider(
+    id="gemini",
+    name="Google Gemini",
+    base_url="https://generativelanguage.googleapis.com",
+    api_key_prefix="",
+    models=GEMINI_MODELS,
+    chat_model="GeminiChatModel",
+    freeze_url=True,
+    support_model_discovery=True,
+)
+
 PROVIDER_OLLAMA = OllamaProvider(
     id="ollama",
     name="Ollama",
@@ -244,6 +262,7 @@ class ProviderManager:
         self._add_builtin(PROVIDER_AZURE_OPENAI)
         self._add_builtin(PROVIDER_MINIMAX)
         self._add_builtin(PROVIDER_ANTHROPIC)
+        self._add_builtin(PROVIDER_GEMINI)
         self._add_builtin(PROVIDER_OLLAMA)
         self._add_builtin(PROVIDER_LMSTUDIO)
         self._add_builtin(PROVIDER_LLAMACPP)
@@ -454,6 +473,8 @@ class ProviderManager:
 
         if provider_id == "anthropic" or chat_model == "AnthropicChatModel":
             return AnthropicProvider.model_validate(data)
+        if provider_id == "gemini" or chat_model == "GeminiChatModel":
+            return GeminiProvider.model_validate(data)
         if provider_id == "ollama":
             return OllamaProvider.model_validate(data)
         if data.get("is_local", False):
