@@ -14,11 +14,12 @@ import Weather from "./Weather";
 import { getApiToken, getApiUrl } from "../../api/config";
 import { providerApi } from "../../api/modules/provider";
 import ModelSelector from "./ModelSelector";
-import "./index.module.less";
 
-type CopyableContent =
-  | { type?: string; text?: string }
-  | { type?: string; refusal?: string };
+type CopyableContent = {
+  type?: string;
+  text?: string;
+  refusal?: string;
+};
 
 type CopyableMessage = {
   role?: string;
@@ -42,7 +43,15 @@ function extractCopyableText(response: CopyableResponse): string {
     const chunks = (response.output || []).flatMap((item: CopyableMessage) => {
       if (assistantOnly && item.role !== "assistant") return [];
 
-      return (item.content || []).flatMap((content: CopyableContent) => {
+      if (typeof item.content === "string") {
+        return [item.content];
+      }
+
+      if (!Array.isArray(item.content)) {
+        return [];
+      }
+
+      return item.content.flatMap((content: CopyableContent) => {
         if (content.type === "text" && typeof content.text === "string") {
           return [content.text];
         }
