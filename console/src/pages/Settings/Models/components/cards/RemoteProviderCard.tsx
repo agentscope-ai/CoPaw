@@ -140,7 +140,8 @@ export function RemoteProviderCard({
     titleWords.length > 1 ? titleWords.slice(0, -1).join(" ") : provider.name;
   const wrappedTitleLine2 =
     titleWords.length > 1 ? titleWords[titleWords.length - 1] : "";
-  const shouldUseWrappedTitleLayout = isTitleWrapped && titleWords.length > 1;
+  const shouldUseWrappedTitleLayout = isTitleWrapped;
+  const hasWrappedTitleLine2 = wrappedTitleLine2.length > 0;
 
   const statusLabelMatch = statusLabel.match(/^(.+?)\s*([（(])(.+)([）)])\s*$/);
   const statusMainText = statusLabelMatch?.[1]?.trim() ?? statusLabel;
@@ -173,9 +174,14 @@ export function RemoteProviderCard({
                   {wrappedTitleLine1}
                 </span>
                 <span className={styles.cardNameLine2Wrap}>
-                  <span className={styles.cardNameLine2} title={provider.name}>
-                    {wrappedTitleLine2}
-                  </span>
+                  {hasWrappedTitleLine2 && (
+                    <span
+                      className={styles.cardNameLine2}
+                      title={provider.name}
+                    >
+                      {wrappedTitleLine2}
+                    </span>
+                  )}
                   <span className={styles.cardTagRow}>{providerTag}</span>
                 </span>
               </>
