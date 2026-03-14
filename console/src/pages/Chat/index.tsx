@@ -23,7 +23,7 @@ type CopyableContent = {
 
 type CopyableMessage = {
   role?: string;
-  content?: CopyableContent[];
+  content?: string | CopyableContent[];
 };
 
 type CopyableResponse = {
@@ -67,7 +67,7 @@ function extractCopyableText(response: CopyableResponse): string {
     return chunks.filter(Boolean).join("\n\n").trim();
   };
 
-  return collectText(true) || collectText(false) || JSON.stringify(response);
+  return collectText(true) || JSON.stringify(response);
 }
 
 async function copyText(text: string) {
