@@ -277,6 +277,15 @@ class AgentsConfig(BaseModel):
         default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
         description="List of markdown files to load into system prompt",
     )
+    audio_mode: str = Field(
+        default="auto",
+        description=(
+            "How to handle incoming audio/voice messages. "
+            '"auto": try transcription first, fall back to native audio; '
+            '"transcribe": always convert audio to text; '
+            '"native": send audio blocks directly (may need ffmpeg).'
+        ),
+    )
 
 
 class LastDispatchConfig(BaseModel):

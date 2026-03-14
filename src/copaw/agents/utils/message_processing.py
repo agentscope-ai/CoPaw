@@ -182,14 +182,10 @@ def _update_block_with_local_path(
             block["filename"] = os.path.basename(local_path)
     else:
         if block_type == "audio":
-            # Convert unsupported audio formats (e.g. ogg from Discord
-            # voice messages) to wav so the LLM formatter accepts them.
-            converted = _convert_audio_to_wav(local_path)
-            audio_path = converted or local_path
             block["source"] = {
                 "type": "url",
-                "url": Path(audio_path).as_uri(),
-                "media_type": _media_type_from_path(audio_path),
+                "url": Path(local_path).as_uri(),
+                "media_type": _media_type_from_path(local_path),
             }
         else:
             block["source"] = {
@@ -208,6 +204,62 @@ def _handle_download_failure(block_type: str) -> Optional[dict]:
         }
     logger.debug("Failed to download %s block, keeping original", block_type)
     return None
+
+
+async def _process_audio_block(
+    message_content: list,
+    index: int,
+    local_path: str,
+    block: dict,
+) -> None:
+    """Handle an audio block according to the configured audio_mode.
+
+    Modes:
+      - ``"auto"`` (default): try transcription first, fall back to native
+        audio block (with ffmpeg conversion if available).
+      - ``"transcribe"``: always transcribe, never keep audio blocks.
+      - ``"native"``: always keep audio block (convert via ffmpeg if needed).
+    """
+    from .audio_transcription import transcribe_audio
+
+    audio_mode = load_config().agents.audio_mode
+
+    if audio_mode == "native":
+        converted = _convert_audio_to_wav(local_path)
+        audio_path = converted or local_path
+        block["source"] = {
+            "type": "url",
+            "url": Path(audio_path).as_uri(),
+            "media_type": _media_type_from_path(audio_path),
+        }
+        return
+
+    # "transcribe" or "auto": attempt transcription.
+    text = await transcribe_audio(local_path)
+    if text:
+        message_content[index] = {
+            "type": "text",
+            "text": f"[Voice message]: {text}",
+        }
+        return
+
+    if audio_mode == "transcribe":
+        # Transcription failed but user explicitly chose transcribe-only.
+        message_content[index] = {
+            "type": "text",
+            "text": "[Voice message]: (transcription unavailable)",
+        }
+        return
+
+    # "auto" fallback: transcription failed, try native audio with
+    # optional ffmpeg conversion.
+    converted = _convert_audio_to_wav(local_path)
+    audio_path = converted or local_path
+    block["source"] = {
+        "type": "url",
+        "url": Path(audio_path).as_uri(),
+        "media_type": _media_type_from_path(audio_path),
+    }
 
 
 async def _process_single_block(
@@ -254,11 +306,19 @@ async def _process_single_block(
         local_path = await _process_single_file_block(source, filename)
 
         if local_path:
-            message_content[index] = _update_block_with_local_path(
-                block,
-                block_type,
-                local_path,
-            )
+            if block_type == "audio":
+                # Audio blocks need transcription or format conversion
+                # depending on the configured audio_mode.
+                _update_block_with_local_path(block, block_type, local_path)
+                await _process_audio_block(
+                    message_content, index, local_path, block,
+                )
+            else:
+                message_content[index] = _update_block_with_local_path(
+                    block,
+                    block_type,
+                    local_path,
+                )
             logger.debug(
                 "Updated %s block with local path: %s",
                 block_type,
