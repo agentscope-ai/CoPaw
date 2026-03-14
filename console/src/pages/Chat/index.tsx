@@ -3,7 +3,7 @@ import {
   IAgentScopeRuntimeWebUIOptions,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Modal, Result } from "antd";
+import { Modal, Button, Result, GetProp, Upload, Image } from "antd";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -32,6 +32,16 @@ function buildModelError(): Response {
   );
 }
 
+// Convert file to base64 data URL
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function ChatPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -41,6 +51,122 @@ export default function ChatPage() {
     return match?.[1];
   }, [location.pathname]);
   const [showModelPrompt, setShowModelPrompt] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Store original full-resolution images as array (most recent first)
+  const originalImagesRef = useRef<string[]>([]);
+
+  // Handle clipboard paste for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          // Find the attachment input and trigger upload
+          const container = containerRef.current;
+          if (!container) continue;
+
+          // Find upload input in the chat component
+          const uploadInput = container.querySelector(
+            'input[type="file"]',
+          ) as HTMLInputElement;
+          if (uploadInput) {
+            // Create a DataTransfer to set files on the input
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            uploadInput.files = dataTransfer.files;
+            uploadInput.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          break;
+        }
+      }
+    };
+
+    // Handle click on attachment thumbnails to preview full image
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Find the closest attachment container or image
+      const attachmentContainer = target.closest(
+        '[class*="attachment"], [class*="Attachment"], [class*="attachments"]',
+      );
+
+      // Must be in sender area, not conversation
+      const senderArea = target.closest('[class*="sender"], [class*="Sender"]');
+
+      if (attachmentContainer && senderArea) {
+        // Find the image inside the attachment container
+        const img = attachmentContainer.querySelector(
+          "img",
+        ) as HTMLImageElement;
+        if (img?.src) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Try to find original full-resolution image
+          let fullResUrl = img.src;
+
+          // Find all attachment images to determine index
+          const allAttachments = senderArea.querySelectorAll(
+            '[class*="attachment"] img, [class*="Attachment"] img',
+          );
+          const attachmentIndex = Array.from(allAttachments).indexOf(img);
+
+          // Use stored original by index (stored in reverse order)
+          const storedImages = originalImagesRef.current;
+          if (storedImages.length > 0) {
+            // Images are stored most-recent-first, but displayed in upload order
+            // So reverse the index: last stored = first displayed
+            const reverseIndex = storedImages.length - 1 - attachmentIndex;
+            if (reverseIndex >= 0 && reverseIndex < storedImages.length) {
+              fullResUrl = storedImages[reverseIndex];
+            } else if (storedImages.length === 1) {
+              // If only one image stored, use it
+              fullResUrl = storedImages[0];
+            }
+          }
+
+          setPreviewImage(fullResUrl);
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("click", handleClick, true);
+    return () => {
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("click", handleClick, true);
+    };
+  }, []);
+
+  // Custom upload handler for clipboard paste and file attachments
+  const customUploadRequest: GetProp<typeof Upload, "customRequest"> =
+    useCallback(async (options) => {
+      const { file, onSuccess, onError, onProgress } = options;
+      try {
+        onProgress?.({ percent: 30 });
+        const base64Url = await fileToBase64(file as File);
+        onProgress?.({ percent: 100 });
+
+        // Store original full-resolution image (most recent first)
+        originalImagesRef.current.unshift(base64Url);
+        // Keep only last 10 images to prevent memory leak
+        if (originalImagesRef.current.length > 10) {
+          originalImagesRef.current.pop();
+        }
+
+        // Return the base64 URL - this will be used as image_url in message content
+        onSuccess?.({ url: base64Url });
+      } catch (error) {
+        onError?.(error as Error);
+      }
+    }, []);
 
   const isComposingRef = useRef(false);
   const isChatActiveRef = useRef(false);
@@ -241,6 +367,11 @@ export default function ChatPage() {
       sender: {
         ...(i18nConfig as any)?.sender,
         beforeSubmit: handleBeforeSubmit,
+        attachments: {
+          accept: "image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp",
+          multiple: true,
+          customRequest: customUploadRequest,
+        },
       },
       session: { multiple: true, api: wrappedSessionApi },
       api: {
@@ -254,10 +385,10 @@ export default function ChatPage() {
         "weather search mock": Weather,
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
-  }, [wrappedSessionApi, customFetch, t]);
+  }, [wrappedSessionApi, customFetch, t, customUploadRequest]);
 
   return (
-    <div style={{ height: "100%", width: "100%" }}>
+    <div ref={containerRef} style={{ height: "100%", width: "100%" }}>
       <AgentScopeRuntimeWebUI options={options} />
 
       <Modal open={showModelPrompt} closable={false} footer={null} width={480}>
@@ -283,6 +414,18 @@ export default function ChatPage() {
           ]}
         />
       </Modal>
+
+      {/* Image preview modal for attachment thumbnails */}
+      <Image
+        style={{ display: "none" }}
+        preview={{
+          visible: !!previewImage,
+          src: previewImage || "",
+          onVisibleChange: (visible) => {
+            if (!visible) setPreviewImage(null);
+          },
+        }}
+      />
     </div>
   );
 }
