@@ -937,29 +937,29 @@ class TelegramChannel(BaseChannel):
         delay = _RECONNECT_INITIAL_S
         while True:
             try:
-                app = self._build_application()
-                self._application = app
-                await self._polling_cycle(app)
+                self._application = self._build_application()
+                await self._polling_cycle(self._application)
+                delay = _RECONNECT_INITIAL_S
             except asyncio.CancelledError:
                 logger.debug("telegram: polling cancelled")
-                await self._teardown_application(self._application)
                 raise
             except InvalidToken:
                 logger.error(
                     "telegram: invalid bot token — not retrying",
                 )
-                await self._teardown_application(self._application)
                 return
             except Exception:
                 logger.exception(
                     "telegram: polling failed (check token, network, "
                     "proxy; in China you may need TELEGRAM_HTTP_PROXY)",
                 )
-            else:
-                delay = _RECONNECT_INITIAL_S
+            finally:
+                if self._application:
+                    await self._teardown_application(
+                        self._application,
+                    )
+                    self._application = None
 
-            if self._application:
-                await self._teardown_application(self._application)
             logger.info(
                 "telegram: reconnecting in %.1fs",
                 delay,
