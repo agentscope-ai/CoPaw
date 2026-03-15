@@ -759,7 +759,7 @@ done). **✗** = not supported (not possible on this channel).
 | Telegram      | ✓         | ✓          | ✓          | ✓          | ✓         | ✓         | ✓          | ✓          | ✓          | ✓         |
 | Mattermost    | ✓         | ✓          | 🚧         | 🚧         | ✓         | ✓         | ✓          | 🚧         | 🚧         | ✓         |
 | Matrix        | ✓         | ✓          | ✓          | ✓          | ✓         | ✓         | ✓          | ✓          | ✓          | ✓         |
-| NextcloudTalk | ✓         | ✓          | 🚧         | 🚧         | ✓         | ✓         | 🚧         | 🚧         | 🚧         | 🚧        |
+| NextcloudTalk | ✓         | ✓          | ✓          | ✓          | ✓         | ✓         | 🚧         | 🚧         | 🚧         | 🚧        |
 
 Notes:
 
