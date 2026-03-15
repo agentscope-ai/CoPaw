@@ -15,7 +15,8 @@ from copaw.providers.provider import ModelInfo, Provider
 class GeminiProvider(Provider):
     """Provider implementation for Google Gemini API."""
 
-    def _client(self, timeout: float = 5) -> Any:
+    def _client(self, timeout: float = 5) -> Any:  # noqa: W0613
+        _ = timeout  # Gemini SDK does not support per-client timeout
         return genai.Client(api_key=self.api_key)
 
     @staticmethod
@@ -33,7 +34,7 @@ class GeminiProvider(Provider):
             # Gemini API returns model names like "models/gemini-2.5-flash"
             # Strip the "models/" prefix for cleaner IDs
             if model_id.startswith("models/"):
-                model_id = model_id[len("models/"):]
+                model_id = model_id[len("models/") :]
 
             if not display_name or display_name.startswith("models/"):
                 display_name = model_id

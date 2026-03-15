@@ -383,7 +383,9 @@ export function Docs({ config, lang, onLangClick }: DocsProps) {
     }
     setContent("");
     let cancelled = false;
-    const langSuffix = (["zh", "ja", "fr"] as const).includes(lang as any) ? lang : "en";
+    const langSuffix = (["zh", "ja", "fr"] as const).includes(lang as any)
+      ? lang
+      : "en";
     const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "") || "";
     const url = `${base}/docs/${activeSlug}.${langSuffix}.md`;
     fetch(url)

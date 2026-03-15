@@ -438,8 +438,7 @@ export const i18n: Record<Lang, Record<string, string>> = {
       "C'est ce qu'un assistant personnel devrait être : une seule entrée, tous les canaux.",
     "testimonials.2":
       "Le Cron et le heartbeat sont très pratiques. Ajoutez vos propres compétences ; les données restent en local.",
-    "testimonials.3":
-      "Les équipes qui veulent un contrôle total l'adorent.",
+    "testimonials.3": "Les équipes qui veulent un contrôle total l'adorent.",
     "usecases.title": "Ce que vous pouvez faire avec CoPaw",
     "usecases.sub": "",
     "usecases.category.social": "Réseaux sociaux",
@@ -484,8 +483,7 @@ export const i18n: Record<Lang, Record<string, string>> = {
     "quickstart.method.docker": "Docker",
     "quickstart.method.cloud": "Cloud",
     "quickstart.method.desktop": "Bureau",
-    "quickstart.desc.pip":
-      "Si vous préférez gérer Python vous-même",
+    "quickstart.desc.pip": "Si vous préférez gérer Python vous-même",
     "quickstart.desc.script":
       "Aucune configuration Python requise, une seule commande installe tout. Le script téléchargera automatiquement uv (gestionnaire de paquets Python), créera un environnement virtuel et installera CoPaw avec toutes ses dépendances (y compris Node.js et les ressources frontend). Note : peut ne pas fonctionner dans les environnements réseau restreints ou derrière des pare-feu d'entreprise.",
     "quickstart.desc.docker":
