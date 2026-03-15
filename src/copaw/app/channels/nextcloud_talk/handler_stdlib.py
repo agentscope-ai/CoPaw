@@ -179,16 +179,16 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
     def _schedule_callback_async(self, callback_func, actor_name: str):
         """Schedule async callback in main event loop or background thread."""
         try:
-            # 获取主事件循环（由应用启动时创建）
+            # Get the main event loop (created when the application starts).
             loop = asyncio.get_running_loop()
-            # 在主线程的事件循环中调度协程
+            # Schedule the coroutine in the main thread's event loop.
             asyncio.run_coroutine_threadsafe(
                 callback_func(),
                 loop,
             )
             logger.info(f"Scheduled message processing for: {actor_name}")
         except RuntimeError:
-            # 如果没有运行中的事件循环，在新线程中运行
+            # If there is no running event loop, run in a new thread.
             def run_in_thread():
                 asyncio.run(callback_func())
 
