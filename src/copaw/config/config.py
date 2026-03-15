@@ -392,74 +392,77 @@ class BuiltinToolConfig(BaseModel):
     )
 
 
-_DEFAULT_BUILTIN_TOOLS: Dict[str, BuiltinToolConfig] = {
-    "execute_shell_command": BuiltinToolConfig(
-        name="execute_shell_command",
-        enabled=True,
-        description="Execute shell commands",
-    ),
-    "read_file": BuiltinToolConfig(
-        name="read_file",
-        enabled=True,
-        description="Read file contents",
-    ),
-    "write_file": BuiltinToolConfig(
-        name="write_file",
-        enabled=True,
-        description="Write content to file",
-    ),
-    "edit_file": BuiltinToolConfig(
-        name="edit_file",
-        enabled=True,
-        description="Edit file using find-and-replace",
-    ),
-    "browser_use": BuiltinToolConfig(
-        name="browser_use",
-        enabled=True,
-        description="Browser automation and web interaction",
-    ),
-    "desktop_screenshot": BuiltinToolConfig(
-        name="desktop_screenshot",
-        enabled=True,
-        description="Capture desktop screenshots",
-    ),
-    "view_image": BuiltinToolConfig(
-        name="view_image",
-        enabled=True,
-        description="Load an image into LLM context " "for visual analysis",
-        display_to_user=False,
-    ),
-    "send_file_to_user": BuiltinToolConfig(
-        name="send_file_to_user",
-        enabled=True,
-        description="Send files to user",
-    ),
-    "get_current_time": BuiltinToolConfig(
-        name="get_current_time",
-        enabled=True,
-        description="Get current date and time",
-    ),
-    "get_token_usage": BuiltinToolConfig(
-        name="get_token_usage",
-        enabled=True,
-        description="Get llm token usage",
-    ),
-}
+def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
+    """Return a fresh copy of the canonical built-in tool definitions."""
+    return {
+        "execute_shell_command": BuiltinToolConfig(
+            name="execute_shell_command",
+            enabled=True,
+            description="Execute shell commands",
+        ),
+        "read_file": BuiltinToolConfig(
+            name="read_file",
+            enabled=True,
+            description="Read file contents",
+        ),
+        "write_file": BuiltinToolConfig(
+            name="write_file",
+            enabled=True,
+            description="Write content to file",
+        ),
+        "edit_file": BuiltinToolConfig(
+            name="edit_file",
+            enabled=True,
+            description="Edit file using find-and-replace",
+        ),
+        "browser_use": BuiltinToolConfig(
+            name="browser_use",
+            enabled=True,
+            description="Browser automation and web interaction",
+        ),
+        "desktop_screenshot": BuiltinToolConfig(
+            name="desktop_screenshot",
+            enabled=True,
+            description="Capture desktop screenshots",
+        ),
+        "view_image": BuiltinToolConfig(
+            name="view_image",
+            enabled=True,
+            description="Load an image into LLM context "
+            "for visual analysis",
+            display_to_user=False,
+        ),
+        "send_file_to_user": BuiltinToolConfig(
+            name="send_file_to_user",
+            enabled=True,
+            description="Send files to user",
+        ),
+        "get_current_time": BuiltinToolConfig(
+            name="get_current_time",
+            enabled=True,
+            description="Get current date and time",
+        ),
+        "get_token_usage": BuiltinToolConfig(
+            name="get_token_usage",
+            enabled=True,
+            description="Get llm token usage",
+        ),
+    }
 
 
 class ToolsConfig(BaseModel):
     """Built-in tools management configuration."""
 
     builtin_tools: Dict[str, BuiltinToolConfig] = Field(
-        default_factory=lambda: dict(_DEFAULT_BUILTIN_TOOLS),
+        default_factory=_default_builtin_tools,
     )
 
     @model_validator(mode="after")
     def _merge_default_tools(self):
         """Ensure new code-defined tools are present in saved configs."""
-        for name, default_tc in _DEFAULT_BUILTIN_TOOLS.items():
+        for name, tc in _default_builtin_tools().items():
             if name not in self.builtin_tools:
-                self.builtin_tools[name] = default_tc
+                self.builtin_tools[name] = tc
         return self
 
 
