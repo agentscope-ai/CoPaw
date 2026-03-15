@@ -203,7 +203,7 @@ async def put_agent_language(
     summary="Get audio mode",
     description=(
         "Get the audio handling mode for incoming voice messages. "
-        'Values: "auto", "transcribe", "native".'
+        'Values: "auto", "native".'
     ),
 )
 async def get_audio_mode() -> dict:
@@ -217,9 +217,8 @@ async def get_audio_mode() -> dict:
     summary="Update audio mode",
     description=(
         "Update how incoming audio/voice messages are handled. "
-        '"auto": try transcription, fall back to native; '
-        '"transcribe": always convert to text; '
-        '"native": send audio directly (may need ffmpeg).'
+        '"auto": transcribe if provider available, else file placeholder; '
+        '"native": send audio directly to model (may need ffmpeg).'
     ),
 )
 async def put_audio_mode(
@@ -230,7 +229,7 @@ async def put_audio_mode(
 ) -> dict:
     """Update audio mode setting."""
     audio_mode = (body.get("audio_mode") or "").strip().lower()
-    valid = {"auto", "transcribe", "native"}
+    valid = {"auto", "native"}
     if audio_mode not in valid:
         raise HTTPException(
             status_code=400,
@@ -276,15 +275,15 @@ async def put_transcription_provider_type(
     body: dict = Body(
         ...,
         description=(
-            'Provider type, e.g. '
+            "Provider type, e.g. "
             '{"transcription_provider_type": "whisper_api"}'
         ),
     ),
 ) -> dict:
     """Set the transcription provider type."""
     provider_type = (
-        body.get("transcription_provider_type") or ""
-    ).strip().lower()
+        (body.get("transcription_provider_type") or "").strip().lower()
+    )
     valid = {"whisper_api", "local_whisper"}
     if provider_type not in valid:
         raise HTTPException(

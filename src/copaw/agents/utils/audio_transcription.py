@@ -190,11 +190,14 @@ async def _transcribe_local_whisper(file_path: str) -> Optional[str]:
         text = await asyncio.to_thread(_run)
         if text:
             logger.debug(
-                "Local Whisper transcribed %s: %s", file_path, text[:80],
+                "Local Whisper transcribed %s: %s",
+                file_path,
+                text[:80],
             )
             return text
         logger.warning(
-            "Local Whisper returned empty text for %s", file_path,
+            "Local Whisper returned empty text for %s",
+            file_path,
         )
         return None
     except Exception:

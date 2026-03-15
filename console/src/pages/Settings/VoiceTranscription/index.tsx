@@ -39,20 +39,17 @@ function VoiceTranscriptionPage() {
         api.getLocalWhisperStatus(),
       ]);
       setAudioMode(modeRes.audio_mode ?? "auto");
-      setProviderType(
-        provTypeRes.transcription_provider_type ?? "whisper_api",
-      );
+      setProviderType(provTypeRes.transcription_provider_type ?? "whisper_api");
       setProviders(provRes.providers ?? []);
       setActiveProviderId(provRes.active_provider_id ?? "");
       setLocalWhisperStatus(lwStatus);
       // Find the configured provider (not auto-detected)
-      const configuredId =
-        provRes.providers?.some(
-          (p: TranscriptionProvider) =>
-            p.id === provRes.active_provider_id && p.available,
-        )
-          ? provRes.active_provider_id
-          : "";
+      const configuredId = provRes.providers?.some(
+        (p: TranscriptionProvider) =>
+          p.id === provRes.active_provider_id && p.available,
+      )
+        ? provRes.active_provider_id
+        : "";
       setSelectedProviderId(configuredId);
     } catch (err) {
       console.error("Failed to load settings:", err);
@@ -132,14 +129,6 @@ function VoiceTranscriptionPage() {
               </span>
               <span className={styles.optionDescription}>
                 {t("voiceTranscription.modeAutoDesc")}
-              </span>
-            </Radio>
-            <Radio value="transcribe">
-              <span className={styles.optionLabel}>
-                {t("voiceTranscription.modeTranscribe")}
-              </span>
-              <span className={styles.optionDescription}>
-                {t("voiceTranscription.modeTranscribeDesc")}
               </span>
             </Radio>
             <Radio value="native">

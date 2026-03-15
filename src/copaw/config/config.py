@@ -277,21 +277,27 @@ class AgentsConfig(BaseModel):
         default_factory=lambda: ["AGENTS.md", "SOUL.md", "PROFILE.md"],
         description="List of markdown files to load into system prompt",
     )
-    audio_mode: Literal["auto", "transcribe", "native"] = Field(
+    audio_mode: Literal["auto", "native"] = Field(
         default="auto",
         description=(
             "How to handle incoming audio/voice messages. "
-            '"auto": try transcription first, fall back to native audio; '
-            '"transcribe": always convert audio to text; '
-            '"native": send audio blocks directly (may need ffmpeg).'
+            '"auto": transcribe if a provider is available, otherwise show '
+            "file-uploaded placeholder; "
+            '"native": send audio blocks directly to the model '
+            "(may need ffmpeg)."
         ),
     )
-    transcription_provider_type: Literal["whisper_api", "local_whisper"] = Field(
+
+    transcription_provider_type: Literal[
+        "whisper_api",
+        "local_whisper",
+    ] = Field(
         default="whisper_api",
         description=(
             "Type of transcription provider. "
             '"whisper_api": use an OpenAI-compatible Whisper API endpoint; '
-            '"local_whisper": use the locally installed openai-whisper library.'
+            '"local_whisper": use the locally installed '
+            "openai-whisper library."
         ),
     )
     transcription_provider_id: str = Field(

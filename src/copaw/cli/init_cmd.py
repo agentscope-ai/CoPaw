@@ -266,11 +266,10 @@ def init_cmd(
         if not use_defaults:
             audio_mode = prompt_choice(
                 "Select audio mode for voice messages:\n"
-                "  auto       - transcribe first, fall back to native\n"
-                "  transcribe - always convert audio to text\n"
-                "  native     - send audio directly (needs ffmpeg)\n"
+                "  auto   - transcribe if provider available, else file placeholder\n"
+                "  native - send audio directly to model (needs ffmpeg)\n"
                 "Audio mode:",
-                options=["auto", "transcribe", "native"],
+                options=["auto", "native"],
                 default=existing.agents.audio_mode,
             )
             existing.agents.audio_mode = audio_mode

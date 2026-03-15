@@ -224,14 +224,23 @@ async def _process_audio_block(
     index: int,
     local_path: str,
     block: dict,
-) -> None:
+) -> bool:
     """Handle an audio block according to the configured audio_mode.
 
     Modes:
-      - ``"auto"`` (default): try transcription first, fall back to native
-        audio block (with ffmpeg conversion if available).
-      - ``"transcribe"``: always transcribe, never keep audio blocks.
-      - ``"native"``: always keep audio block (convert via ffmpeg if needed).
+      - ``"auto"`` (default): try transcription; if it succeeds, replace
+        the audio block with the transcribed text and suppress file
+        metadata.  If transcription fails (no provider, missing deps,
+        API error), show a file-uploaded placeholder instead.  Audio is
+        never sent directly to the model in this mode.
+      - ``"native"``: send the audio block directly to the model
+        (convert via ffmpeg if needed).  No transcription is attempted.
+
+    Returns:
+        True if the audio was fully handled (transcribed or sent natively)
+        — the "file downloaded" notification will be suppressed.
+        False if transcription failed — the notification is kept so the
+        LLM knows the file path.
     """
     from .audio_transcription import transcribe_audio
 
@@ -245,34 +254,23 @@ async def _process_audio_block(
             "url": Path(audio_path).as_uri(),
             "media_type": _media_type_from_path(audio_path),
         }
-        return
+        return True
 
-    # "transcribe" or "auto": attempt transcription.
+    # "auto": attempt transcription.
     text = await transcribe_audio(local_path)
     if text:
         message_content[index] = {
             "type": "text",
             "text": f"[Voice message]: {text}",
         }
-        return
+        return True
 
-    if audio_mode == "transcribe":
-        # Transcription failed but user explicitly chose transcribe-only.
-        message_content[index] = {
-            "type": "text",
-            "text": "[Voice message]: (transcription unavailable)",
-        }
-        return
-
-    # "auto" fallback: transcription failed, try native audio with
-    # optional ffmpeg conversion.
-    converted = await asyncio.to_thread(_convert_audio_to_wav, local_path)
-    audio_path = converted or local_path
-    block["source"] = {
-        "type": "url",
-        "url": Path(audio_path).as_uri(),
-        "media_type": _media_type_from_path(audio_path),
+    # Transcription failed — show file-uploaded placeholder.
+    message_content[index] = {
+        "type": "text",
+        "text": "[Voice message]: (audio file received)",
     }
+    return False
 
 
 async def _process_single_block(
@@ -323,12 +321,16 @@ async def _process_single_block(
                 # Audio blocks need transcription or format conversion
                 # depending on the configured audio_mode.
                 _update_block_with_local_path(block, block_type, local_path)
-                await _process_audio_block(
+                handled = await _process_audio_block(
                     message_content,
                     index,
                     local_path,
                     block,
                 )
+                if handled:
+                    # Audio was transcribed or sent natively; suppress the
+                    # "file downloaded" notification that would follow.
+                    return None
             else:
                 message_content[index] = _update_block_with_local_path(
                     block,
