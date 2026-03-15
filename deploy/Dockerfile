@@ -41,6 +41,8 @@ RUN apt-get update && apt-get install -y --fix-missing \
     dbus-x11 \
     fonts-wqy-zenhei \
     fonts-wqy-microhei \
+    poppler-utils \
+    libreoffice \
   && rm -rf /var/lib/apt/lists/* \
   && apt-get clean
 
