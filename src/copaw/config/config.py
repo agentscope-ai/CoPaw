@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
-from typing import Optional, Union, Dict, List, Literal
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from typing import Optional, Union, Dict, List, Literal, Any
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    field_validator,
+    model_validator,
+)
 
 from ..providers.models import ModelSlotConfig
 from ..constant import (
@@ -442,6 +448,46 @@ class ToolsConfig(BaseModel):
     )
 
 
+class SkillEntryConfig(BaseModel):
+    """Configuration for a single skill."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Optional enabled override for the skill",
+    )
+    api_key: str = Field(
+        default="",
+        alias="apiKey",
+        description="Optional secret injected via metadata.primary_env",
+    )
+    env: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional environment variables injected for the skill",
+    )
+    config: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Optional skill-specific configuration bag",
+    )
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _normalize_api_key(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value)
+
+
+class SkillsConfig(BaseModel):
+    """Skill runtime configuration."""
+
+    entries: Dict[str, SkillEntryConfig] = Field(
+        default_factory=dict,
+        description="Per-skill configuration entries keyed by skill key",
+    )
+
+
 class ToolGuardRuleConfig(BaseModel):
     """A single user-defined guard rule (stored in config.json)."""
 
@@ -481,6 +527,7 @@ class Config(BaseModel):
 
     channels: ChannelConfig = ChannelConfig()
     mcp: MCPConfig = MCPConfig()
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     last_api: LastApiConfig = LastApiConfig()
     agents: AgentsConfig = Field(default_factory=AgentsConfig)

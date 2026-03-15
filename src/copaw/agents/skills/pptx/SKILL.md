@@ -234,4 +234,3 @@ To re-render specific slides after fixes:
 ```bash
 pdftoppm -jpeg -r 150 -f N -l N output.pdf slide-fixed
 ```
-

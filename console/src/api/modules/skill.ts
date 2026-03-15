@@ -1,5 +1,10 @@
 import { request } from "../request";
-import type { HubSkillSpec, SkillSpec } from "../types";
+import type {
+  HubSkillSpec,
+  SkillConfigUpdatePayload,
+  SkillConfigView,
+  SkillSpec,
+} from "../types";
 
 // Declare BASE_URL as global (injected by Vite)
 declare const BASE_URL: string;
@@ -42,6 +47,18 @@ export const skillApi = {
     request<{ deleted: boolean }>(`/skills/${encodeURIComponent(skillName)}`, {
       method: "DELETE",
     }),
+
+  getSkillConfig: (skillName: string) =>
+    request<SkillConfigView>(`/skills/${encodeURIComponent(skillName)}/config`),
+
+  updateSkillConfig: (skillName: string, payload: SkillConfigUpdatePayload) =>
+    request<SkillConfigView>(
+      `/skills/${encodeURIComponent(skillName)}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    ),
 
   searchHubSkills: (query: string, limit = 20) =>
     request<HubSkillSpec[]>(
