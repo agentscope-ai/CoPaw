@@ -33,8 +33,8 @@ def _find_transcription_provider() -> Optional[Tuple[str, str]]:
         return None
 
     def _url_for_provider(provider) -> Optional[Tuple[str, str]]:
-        if isinstance(provider, OpenAIProvider):
-            return (provider.base_url, provider.api_key or "")
+        if isinstance(provider, OpenAIProvider) and provider.api_key:
+            return (provider.base_url, provider.api_key)
         if isinstance(provider, OllamaProvider):
             base = provider.base_url.rstrip("/")
             return (base + "/v1", provider.api_key or "ollama")
