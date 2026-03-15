@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Card, Button, Tag, Modal, message } from "@agentscope-ai/design";
 import {
   EditOutlined,
@@ -32,6 +32,36 @@ export function RemoteProviderCard({
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [modelManageOpen, setModelManageOpen] = useState(false);
+  const titleRef = useRef<HTMLSpanElement | null>(null);
+  const [isTitleWrapped, setIsTitleWrapped] = useState(false);
+
+  useLayoutEffect(() => {
+    const titleElement = titleRef.current;
+    if (!titleElement) {
+      return;
+    }
+
+    const checkWrapped = () => {
+      const computedStyle = window.getComputedStyle(titleElement);
+      const lineHeight = Number.parseFloat(computedStyle.lineHeight || "0");
+      if (!lineHeight) {
+        setIsTitleWrapped(false);
+        return;
+      }
+      const titleHeight = titleElement.getBoundingClientRect().height;
+      setIsTitleWrapped(titleHeight > lineHeight * 1.4);
+    };
+
+    checkWrapped();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(checkWrapped);
+    resizeObserver.observe(titleElement);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [provider.name]);
 
   const handleDeleteProvider = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -75,11 +105,11 @@ export function RemoteProviderCard({
   const isAvailable = isConfigured && hasModels;
 
   const providerTag = provider.is_custom ? (
-    <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>
+    <Tag color="blue" style={{ fontSize: 11 }}>
       {t("models.custom")}
     </Tag>
   ) : (
-    <Tag color="green" style={{ marginLeft: 8, fontSize: 11 }}>
+    <Tag color="green" style={{ fontSize: 11 }}>
       {t("models.builtin")}
     </Tag>
   );
@@ -105,6 +135,20 @@ export function RemoteProviderCard({
     ? "0 0 0 2px rgba(250, 173, 20, 0.2)"
     : "none";
 
+  const titleWords = provider.name.trim().split(/\s+/).filter(Boolean);
+  const wrappedTitleLine1 =
+    titleWords.length > 1 ? titleWords.slice(0, -1).join(" ") : provider.name;
+  const wrappedTitleLine2 =
+    titleWords.length > 1 ? titleWords[titleWords.length - 1] : "";
+  const shouldUseWrappedTitleLayout = isTitleWrapped;
+  const hasWrappedTitleLine2 = wrappedTitleLine2.length > 0;
+
+  const statusLabelMatch = statusLabel.match(/^(.+?)\s*([（(])(.+)([）)])\s*$/);
+  const statusMainText = statusLabelMatch?.[1]?.trim() ?? statusLabel;
+  const statusMetaOpen = statusLabelMatch?.[2] ?? "";
+  const statusMetaText = statusLabelMatch?.[3]?.trim();
+  const statusMetaClose = statusLabelMatch?.[4] ?? "";
+
   return (
     <Card
       hoverable
@@ -114,22 +158,41 @@ export function RemoteProviderCard({
         isAvailable ? styles.enabledCard : ""
       } ${isHover ? styles.hover : styles.normal}`}
     >
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, paddingTop: 4 }}>
         <div className={styles.cardHeader}>
-          <span className={styles.cardName}>
-            {provider.name}
-            {providerTag}
-          </span>
+          <div
+            className={`${styles.cardName} ${
+              shouldUseWrappedTitleLayout ? styles.cardNameWrapped : ""
+            }`}
+          >
+            <span ref={titleRef} className={styles.cardNameMeasure}>
+              {provider.name}
+            </span>
+            {shouldUseWrappedTitleLayout ? (
+              <>
+                <span className={styles.cardNameLine1} title={provider.name}>
+                  {wrappedTitleLine1}
+                </span>
+                <span className={styles.cardNameLine2Wrap}>
+                  {hasWrappedTitleLine2 && (
+                    <span
+                      className={styles.cardNameLine2}
+                      title={provider.name}
+                    >
+                      {wrappedTitleLine2}
+                    </span>
+                  )}
+                  <span className={styles.cardTagRow}>{providerTag}</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className={styles.cardNameText}>{provider.name}</span>
+                <span className={styles.cardTagRow}>{providerTag}</span>
+              </>
+            )}
+          </div>
           <div className={styles.statusContainer}>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: statusDotColor,
-                boxShadow: statusDotShadow,
-              }}
-            />
             <span
               className={`${styles.statusText} ${
                 statusType === "enabled"
@@ -139,7 +202,24 @@ export function RemoteProviderCard({
                   : styles.disabled
               }`}
             >
-              {statusLabel}
+              <span className={styles.statusMainRow}>
+                <span className={styles.statusTextMain}>{statusMainText}</span>
+                <span
+                  className={styles.statusDot}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: statusDotColor,
+                    boxShadow: statusDotShadow,
+                  }}
+                />
+              </span>
+              <span className={styles.statusTextMeta}>
+                {statusMetaText
+                  ? `${statusMetaOpen}${statusMetaText}${statusMetaClose}`
+                  : "\u00A0"}
+              </span>
             </span>
           </div>
         </div>
@@ -182,7 +262,7 @@ export function RemoteProviderCard({
             e.stopPropagation();
             setModelManageOpen(true);
           }}
-          className={styles.configBtn}
+          className={`${styles.configBtn} ${styles.configBtnNeutral}`}
           icon={<AppstoreOutlined />}
         >
           {t("models.manageModels")}
@@ -194,7 +274,7 @@ export function RemoteProviderCard({
             e.stopPropagation();
             setModalOpen(true);
           }}
-          className={styles.configBtn}
+          className={`${styles.configBtn} ${styles.configBtnNeutral}`}
           icon={<EditOutlined />}
         >
           {t("models.settings")}
@@ -205,9 +285,13 @@ export function RemoteProviderCard({
             size="small"
             danger
             onClick={handleDeleteProvider}
+            className={styles.configBtn}
             icon={<DeleteOutlined />}
           >
-            {t("models.deleteProvider")}
+            <span className={styles.deleteTextLong}>
+              {t("models.deleteProvider")}
+            </span>
+            <span className={styles.deleteTextShort}>{t("common.delete")}</span>
           </Button>
         )}
       </div>
