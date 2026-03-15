@@ -44,6 +44,14 @@ class ProviderConfigRequest(BaseModel):
             "(e.g., openai.chat.completions, anthropic.messages)."
         ),
     )
+    headers: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Custom HTTP headers for API requests.",
+    )
+    wire_api: Optional[str] = Field(
+        default=None,
+        description="Wire format: 'chat_completions' or 'responses'.",
+    )
 
 
 class ModelSlotRequest(BaseModel):
@@ -58,6 +66,8 @@ class CreateCustomProviderRequest(BaseModel):
     api_key_prefix: str = Field(default="")
     chat_model: ChatModelName = Field(default="OpenAIChatModel")
     models: List[ModelInfo] = Field(default_factory=list)
+    headers: dict[str, str] = Field(default_factory=dict)
+    wire_api: str = Field(default="chat_completions")
 
 
 class AddModelRequest(BaseModel):
@@ -86,15 +96,20 @@ async def configure_provider(
     provider_id: str = Path(...),
     body: ProviderConfigRequest = Body(...),
 ) -> ProviderInfo:
-    ok = manager.update_provider(
-        provider_id,
-        {
-            "api_key": body.api_key,
-            "base_url": body.base_url,
-            "chat_model": body.chat_model,
-            "generate_kwargs": body.generate_kwargs,
-        },
-    )
+    try:
+        ok = manager.update_provider(
+            provider_id,
+            {
+                "api_key": body.api_key,
+                "base_url": body.base_url,
+                "chat_model": body.chat_model,
+                "generate_kwargs": body.generate_kwargs,
+                "headers": body.headers,
+                "wire_api": body.wire_api,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not ok:
         raise HTTPException(
             status_code=404,
@@ -129,6 +144,8 @@ async def create_custom_provider_endpoint(
                 api_key_prefix=body.api_key_prefix,
                 chat_model=body.chat_model,
                 extra_models=body.models,
+                headers=body.headers,
+                wire_api=body.wire_api,
             ),
         )
     except ValueError as exc:
@@ -216,9 +233,9 @@ async def test_provider(
         ok, msg = await tmp_provider.check_connection()
         return TestConnectionResponse(
             success=ok,
-            message="Connection successful"
-            if ok
-            else f"Connection failed: {msg}",
+            message=(
+                "Connection successful" if ok else f"Connection failed: {msg}"
+            ),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
