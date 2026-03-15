@@ -35,7 +35,8 @@
   category: command_injection
   severity: CRITICAL
   patterns:
-    - "\\bmkfs\\b"
+    - "\\bmkfs(\\.[a-zA-Z0-9_]+)?\\b"
+    - "\\bmke2fs\\b"
     - "\\bdd\\s+.*of=\\/dev\\/"
     - ">\\s*\\/dev\\/(sda|nvme|vd)"
   description: "Detects low-level disk formatting or wiping commands"
