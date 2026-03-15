@@ -441,7 +441,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   }
 
   async updateSession(session: Partial<IAgentScopeRuntimeWebUISession>) {
-    const { messages, ...metadataUpdate } = session as any;
+    const { messages, ...metadataUpdate } = session;
     const index = this.sessionList.findIndex((s) => s.id === metadataUpdate.id);
 
     if (index > -1) {
