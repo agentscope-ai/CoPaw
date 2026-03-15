@@ -1,25 +1,41 @@
 # -*- coding: utf-8 -*-
-"""Tool that returns the current UTC time."""
+"""Tool that returns the current time in the user-configured timezone."""
 
+import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
+from ...config import load_config
+
+logger = logging.getLogger(__name__)
+
 
 async def get_current_time() -> ToolResponse:
-    """Get the current UTC time.
+    """Get the current time.
 
-    Returns the current time in UTC in a human-readable format.
+    Returns the current time in the user-configured timezone.
     Useful for time-sensitive tasks such as scheduling cron jobs.
 
     Returns:
         `ToolResponse`:
-            The current UTC time string,
-            e.g. "2026-02-13 11:30:45 UTC (Friday)".
+            The current time string,
+            e.g. "2026-02-13 19:30:45 Asia/Shanghai (Friday)".
     """
-    now = datetime.now(timezone.utc)
-    time_str = now.strftime("%Y-%m-%d %H:%M:%S UTC (%A)")
+    user_tz = load_config().user_timezone or "UTC"
+    try:
+        now = datetime.now(ZoneInfo(user_tz))
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning("Invalid timezone %r, falling back to UTC", user_tz)
+        now = datetime.now(timezone.utc)
+        user_tz = "UTC"
+
+    time_str = (
+        f"{now.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"{user_tz} ({now.strftime('%A')})"
+    )
 
     return ToolResponse(
         content=[

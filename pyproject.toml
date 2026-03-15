@@ -27,6 +27,7 @@ dependencies = [
     "aiofiles>=24.1.0",
     "paho-mqtt>=2.0.0",
     "matrix-nio>=0.24.0",
+    "tzdata>=2024.1",
 ]
 
 [tool.setuptools.dynamic]
