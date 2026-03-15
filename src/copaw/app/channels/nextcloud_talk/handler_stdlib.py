@@ -239,6 +239,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
         # Check media files
         media_result = self._handle_media_file(
             payload,
+            obj,
             backend_url,
             actor_info,
         )
@@ -246,7 +247,12 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
             return media_result
 
         # Check regular messages
-        return self._handle_regular_message(payload, backend_url, actor_info)
+        return self._handle_regular_message(
+            payload,
+            obj,
+            backend_url,
+            actor_info,
+        )
 
     def _handle_wrapped_activity(self, activity_type: str, obj: dict) -> None:
         """Handle wrapped Activity type for debugging."""
@@ -371,6 +377,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
     def _handle_media_file(
         self,
         payload: dict,
+        obj: dict,
         backend_url: str,
         actor_info: dict,
     ) -> Optional[bool]:
@@ -403,6 +410,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
 
         # Build channel payload
         channel_payload = self._build_media_channel_payload(
+            obj,
             actor_info,
             backend_url,
             media_info,
@@ -459,6 +467,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
 
     def _build_media_channel_payload(
         self,
+        obj: dict,
         actor_info: dict,
         backend_url: str,
         media_info: dict,
@@ -467,7 +476,6 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
         """Build channel payload for media files."""
         actor_id, actor_name, actor_type = actor_info["actor"]
         conversation_token, conversation_name = actor_info["conversation"]
-        obj = {}  # This would need to be passed in or reconstructed
 
         return {
             "channel_id": "nextcloud_talk",
@@ -480,7 +488,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
                 "actor_type": actor_type,
                 "conversation_token": conversation_token,
                 "conversation_name": conversation_name,
-                "message_id": obj.get("id", ""),  # TODO: Pass obj parameter
+                "message_id": obj.get("id", ""),
                 "backend_url": backend_url,
                 "bot_prefix": self.bot_prefix,
                 "download_url": download_url,
@@ -492,6 +500,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
     def _handle_regular_message(
         self,
         payload: dict,
+        obj: dict,
         backend_url: str,
         actor_info: dict,
     ) -> bool:
@@ -505,6 +514,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
 
         # Build channel payload for regular message
         channel_payload = self._build_message_channel_payload(
+            obj,
             actor_info,
             backend_url,
             message,
@@ -516,6 +526,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
 
     def _build_message_channel_payload(
         self,
+        obj: dict,
         actor_info: dict,
         backend_url: str,
         message: str,
@@ -523,8 +534,6 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
         """Build channel payload for regular messages."""
         actor_id, actor_name, actor_type = actor_info["actor"]
         conversation_token, conversation_name = actor_info["conversation"]
-        # TODO: Need to pass obj to get message id
-        obj = {}
 
         return {
             "channel_id": "nextcloud_talk",
@@ -537,7 +546,7 @@ class NextcloudTalkWebhookHandler(BaseHTTPRequestHandler):
                 "actor_type": actor_type,
                 "conversation_token": conversation_token,
                 "conversation_name": conversation_name,
-                "message_id": obj.get("id", ""),  # TODO: Pass obj parameter
+                "message_id": obj.get("id", ""),
                 "backend_url": backend_url,
                 "bot_prefix": self.bot_prefix,
             },
