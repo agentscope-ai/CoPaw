@@ -57,6 +57,14 @@ class _DummySession(SafeJSONSession):
         self.saved = True
 
 
+class _FailingStreamIterator:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise _Retryable503Error("Error code: 503")
+
+
 def test_build_retryable_error_msg_includes_status_code() -> None:
     msg = _build_retryable_error_msg(_Retryable503Error("Error code: 503"))
     text = cast(str, (msg.get_text_content() if msg is not None else "") or "")
@@ -84,18 +92,19 @@ async def test_query_handler_returns_retryable_error_msg(
         _ = session_id, query
         return None, False
 
-    async def _failing_stream_printing_messages(*args, **kwargs):
+    def _failing_stream_printing_messages(*args, **kwargs):
         _ = args, kwargs
-        raise _Retryable503Error("Error code: 503")
-        yield  # pragma: no cover
+        return _FailingStreamIterator()
 
     runner = AgentRunner()
     runner.session = _DummySession()
-    cast(Any, runner)._resolve_pending_approval = _no_approval
+    monkeypatch.setattr(runner, "_resolve_pending_approval", _no_approval)
 
     monkeypatch.setattr(runner_module, "CoPawAgent", _DummyAgent)
     monkeypatch.setattr(
-        runner_module, "build_env_context", lambda **kwargs: kwargs
+        runner_module,
+        "build_env_context",
+        lambda **kwargs: kwargs,
     )
     monkeypatch.setattr(
         runner_module,

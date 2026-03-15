@@ -9,7 +9,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, cast
 
 from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import stream_printing_messages
@@ -40,7 +40,8 @@ from ...security.tool_guard.approval import ApprovalDecision
 logger = logging.getLogger(__name__)
 
 _RETRYABLE_STATUS_PATTERN = re.compile(
-    r"(?:error\s*code|status)\s*[:=]?\s*(\d{3})", re.IGNORECASE
+    r"(?:error\s*code|status)\s*[:=]?\s*(\d{3})",
+    re.IGNORECASE,
 )
 
 
@@ -512,7 +513,7 @@ class AgentRunner(Runner):
                 self.memory_manager = MemoryManager(
                     working_dir=str(WORKING_DIR),
                 )
-            start_fn = getattr(self.memory_manager, "start", None)
+            start_fn = cast(Any, getattr(self.memory_manager, "start", None))
             if callable(start_fn):
                 start_result = start_fn()
                 if inspect.isawaitable(start_result):
@@ -530,7 +531,10 @@ class AgentRunner(Runner):
         """
         try:
             if self.memory_manager is not None:
-                close_fn = getattr(self.memory_manager, "close", None)
+                close_fn = cast(
+                    Any,
+                    getattr(self.memory_manager, "close", None),
+                )
                 if callable(close_fn):
                     close_result = close_fn()
                     if inspect.isawaitable(close_result):
