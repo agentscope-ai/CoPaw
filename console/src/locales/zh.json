@@ -655,11 +655,13 @@
     "saveFailed": "保存音频模式失败",
     "audioModeLabel": "音频模式",
     "audioModeDescription": "选择来自频道（Discord、Telegram 等）的语音消息在发送给模型之前如何处理。",
-    "modeAuto": "自动",
-    "modeAutoDesc": "优先转写，失败时回退到原生音频",
-    "modeTranscribe": "转写",
-    "modeTranscribeDesc": "始终将音频转为文字（适用于所有模型）",
-    "modeNative": "原生",
-    "modeNativeDesc": "直接发送音频给模型（需要 ffmpeg，仅支持音频的模型可用）"
+    "modeAuto": "自动（推荐）",
+    "modeAutoDesc": "通过 Whisper API 将音频转写为文字后发送给模型。如果转写不可用，则回退到原生音频。适用于所有模型。",
+    "modeTranscribe": "仅转写",
+    "modeTranscribeDesc": "始终通过 Whisper API 将音频转为文字。如果转写失败，将发送占位消息而非音频。适用于所有模型。",
+    "modeNative": "原生音频",
+    "modeNativeDesc": "直接将音频文件发送给模型，不进行转写。仅适用于特定的音频模型（如 gpt-4o-audio），大多数模型不支持此模式。",
+    "transcriptionInfoTitle": "转写工作原理",
+    "transcriptionInfoDesc": "音频转写使用 OpenAI Whisper API（/v1/audio/transcriptions）。需要配置一个支持 Whisper 端点的提供商，例如配置了有效 API Key 的 OpenAI 提供商。如果未配置兼容的提供商，转写功能将不可用。"
   }
 }

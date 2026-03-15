@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Card, message } from "@agentscope-ai/design";
-import { Radio, Space, Spin } from "antd";
+import { Radio, Space, Spin, Alert } from "antd";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import styles from "./index.module.less";
@@ -101,6 +101,14 @@ function VoiceTranscriptionPage() {
           </Space>
         </Radio.Group>
       </Card>
+
+      <Alert
+        type="info"
+        showIcon
+        message={t("voiceTranscription.transcriptionInfoTitle")}
+        description={t("voiceTranscription.transcriptionInfoDesc")}
+        style={{ marginBottom: 16 }}
+      />
 
       <div className={styles.footerActions}>
         <Button

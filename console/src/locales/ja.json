@@ -649,11 +649,13 @@
     "saveFailed": "音声モードの保存に失敗しました",
     "audioModeLabel": "音声モード",
     "audioModeDescription": "チャンネル（Discord、Telegram など）からの音声メッセージをモデルに送信する前にどのように処理するかを選択します。",
-    "modeAuto": "自動",
-    "modeAutoDesc": "まず文字起こしを試み、失敗した場合はネイティブ音声にフォールバック",
-    "modeTranscribe": "文字起こし",
-    "modeTranscribeDesc": "常に音声をテキストに変換（すべてのモデルで動作）",
-    "modeNative": "ネイティブ",
-    "modeNativeDesc": "音声をモデルに直接送信（ffmpeg が必要、音声対応モデルのみ）"
+    "modeAuto": "自動（推奨）",
+    "modeAutoDesc": "Whisper API で音声をテキストに変換してからモデルに送信します。文字起こしが利用できない場合はネイティブ音声にフォールバックします。すべてのモデルで動作します。",
+    "modeTranscribe": "文字起こしのみ",
+    "modeTranscribeDesc": "常に Whisper API で音声をテキストに変換します。文字起こしに失敗した場合、音声の代わりにプレースホルダーメッセージが送信されます。すべてのモデルで動作します。",
+    "modeNative": "ネイティブ音声",
+    "modeNativeDesc": "文字起こしせずに音声ファイルをモデルに直接送信します。音声対応モデル（例: gpt-4o-audio）でのみ動作します。ほとんどのモデルはこのモードをサポートしていません。",
+    "transcriptionInfoTitle": "文字起こしの仕組み",
+    "transcriptionInfoDesc": "音声の文字起こしには OpenAI Whisper API（/v1/audio/transcriptions）を使用します。Whisper 対応エンドポイントを持つプロバイダー（例: 有効な API キーを持つ OpenAI プロバイダー）の設定が必要です。互換性のあるプロバイダーが設定されていない場合、文字起こし機能は利用できません。"
   }
 }

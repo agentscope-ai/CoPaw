@@ -52,12 +52,14 @@
     "saveFailed": "Failed to save audio mode",
     "audioModeLabel": "Audio Mode",
     "audioModeDescription": "Choose how voice messages from channels (Discord, Telegram, etc.) are processed before being sent to the model.",
-    "modeAuto": "Auto",
-    "modeAutoDesc": "Try transcription first, fall back to native audio",
-    "modeTranscribe": "Transcribe",
-    "modeTranscribeDesc": "Always convert audio to text (works with all models)",
-    "modeNative": "Native",
-    "modeNativeDesc": "Send audio directly to the model (requires ffmpeg, only for audio-capable models)"
+    "modeAuto": "Auto (Recommended)",
+    "modeAutoDesc": "Transcribe audio to text via the Whisper API, then send the text to the model. Falls back to native audio if transcription is unavailable. Works with all models.",
+    "modeTranscribe": "Transcribe Only",
+    "modeTranscribeDesc": "Always convert audio to text via the Whisper API. If transcription fails, a placeholder message is sent instead of the audio. Works with all models.",
+    "modeNative": "Native Audio",
+    "modeNativeDesc": "Send the audio file directly to the model without transcription. Only works with specific audio-capable models (e.g. gpt-4o-audio). Most models do not support this and will reject the message.",
+    "transcriptionInfoTitle": "How transcription works",
+    "transcriptionInfoDesc": "Audio transcription uses the OpenAI Whisper API (/v1/audio/transcriptions). This requires a configured provider with a Whisper-compatible endpoint \u2014 for example, an OpenAI provider with a valid API key. If no compatible provider is configured, transcription will be unavailable."
   },
   "workspace": {
     "title": "WorkSpace",
