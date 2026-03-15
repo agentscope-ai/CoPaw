@@ -56,8 +56,9 @@ function SessionsPage() {
     let filtered: Session[] = sessions;
 
     if (filterUserId) {
-      filtered = filtered.filter((session: Session) =>
-        session.user_id?.toLowerCase().includes(filterUserId.toLowerCase()),
+      filtered = filtered.filter(
+        (session: Session) =>
+          session.user_id?.toLowerCase().includes(filterUserId.toLowerCase()),
       );
     }
 
