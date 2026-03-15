@@ -43,6 +43,10 @@ class DingTalkConfig(BaseChannelConfig):
     client_id: str = ""
     client_secret: str = ""
     media_dir: str = "~/.copaw/media"
+    message_type: str = "markdown"
+    card_template_id: str = ""
+    card_template_key: str = "content"
+    robot_code: str = ""
 
 
 class FeishuConfig(BaseChannelConfig):
