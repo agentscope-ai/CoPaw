@@ -1013,7 +1013,11 @@ class NextcloudTalkChannel(BaseChannel):
         body = self._add_media_attachments(body, media_parts)
 
         if body.strip():
-            await self.send(to_handle, body.strip(), meta)
+            full_body = body.strip()
+            while full_body:
+                chunk = full_body[:MAX_MESSAGE_LENGTH]
+                full_body = full_body[MAX_MESSAGE_LENGTH:]
+                await self.send(to_handle, chunk, meta)
 
     async def _run_process_loop(
         self,
