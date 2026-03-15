@@ -8,6 +8,7 @@ from ..constant import (
     HEARTBEAT_DEFAULT_EVERY,
     HEARTBEAT_DEFAULT_TARGET,
 )
+from .timezone import detect_system_timezone
 
 
 class BaseChannelConfig(BaseModel):
@@ -487,6 +488,11 @@ class Config(BaseModel):
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     show_tool_details: bool = True
+    user_timezone: str = Field(
+        default_factory=detect_system_timezone,
+        description="User IANA timezone (e.g. Asia/Shanghai). "
+        "Defaults to the system timezone.",
+    )
 
 
 ChannelConfigUnion = Union[

@@ -238,7 +238,7 @@ class CoPawAgent(ToolGuardMixin, ReActAgent):
         """
         sys_prompt = build_system_prompt_from_working_dir()
         if self._env_context is not None:
-            sys_prompt = self._env_context + "\n\n" + sys_prompt
+            sys_prompt = sys_prompt + "\n\n" + self._env_context
         return sys_prompt
 
     def _setup_memory_manager(
