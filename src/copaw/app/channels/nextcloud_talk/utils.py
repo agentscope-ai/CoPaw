@@ -55,8 +55,9 @@ def verify_request_signature(
 
     try:
         # Calculate expected signature
-        # Signature is HMAC-SHA256 of BODY + RANDOM (Nextcloud Talk spec)
-        message_to_sign = body + random_header.encode("utf-8")
+        # Signature is HMAC-SHA256 of RANDOM + BODY (Nextcloud Talk spec)
+        # Verified by actual testing: RANDOM+BODY matches, BODY+RANDOM doesn't
+        message_to_sign = random_header.encode("utf-8") + body
 
         expected_digest = hmac.new(
             secret.encode("utf-8"),
