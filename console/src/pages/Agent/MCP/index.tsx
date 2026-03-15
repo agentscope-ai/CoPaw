@@ -1,11 +1,51 @@
 import { useState } from "react";
 import { Button, Empty, Modal } from "@agentscope-ai/design";
-import type { MCPClientInfo } from "../../../api/types";
+import type { MCPClientCreateRequest, MCPClientInfo } from "../../../api/types";
 import { MCPClientCard } from "./components";
 import { useMCP } from "./useMCP";
 import { useTranslation } from "react-i18next";
 
 type MCPTransport = "stdio" | "streamable_http" | "sse";
+type JSONRecord = Record<string, unknown>;
+type MCPClientDraft = MCPClientCreateRequest["client"];
+type ClientToCreate = { key: string; data: MCPClientDraft };
+
+function isRecord(value: unknown): value is JSONRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function hasClientConnectionFields(value: unknown): value is JSONRecord {
+  return (
+    isRecord(value) &&
+    ("command" in value || "url" in value || "baseUrl" in value)
+  );
+}
+
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asBoolean(value: unknown, fallback = true) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asStringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
 
 function normalizeTransport(raw?: unknown): MCPTransport | undefined {
   if (typeof raw !== "string") return undefined;
@@ -24,27 +64,26 @@ function normalizeTransport(raw?: unknown): MCPTransport | undefined {
   }
 }
 
-function normalizeClientData(key: string, rawData: any) {
+function normalizeClientData(key: string, rawData: JSONRecord): MCPClientDraft {
   const transport =
     normalizeTransport(rawData.transport ?? rawData.type) ??
     (rawData.url || rawData.baseUrl || !rawData.command
       ? "streamable_http"
       : "stdio");
 
-  const command =
-    transport === "stdio" ? (rawData.command ?? "").toString() : "";
+  const command = transport === "stdio" ? asString(rawData.command) : "";
 
   return {
-    name: rawData.name || key,
-    description: rawData.description || "",
-    enabled: rawData.enabled ?? rawData.isActive ?? true,
+    name: asString(rawData.name, key),
+    description: asString(rawData.description),
+    enabled: asBoolean(rawData.enabled, asBoolean(rawData.isActive, true)),
     transport,
-    url: (rawData.url || rawData.baseUrl || "").toString(),
-    headers: rawData.headers || {},
+    url: asString(rawData.url, asString(rawData.baseUrl)),
+    headers: asStringRecord(rawData.headers),
     command,
-    args: Array.isArray(rawData.args) ? rawData.args : [],
-    env: rawData.env || {},
-    cwd: (rawData.cwd || "").toString(),
+    args: asStringArray(rawData.args),
+    env: asStringRecord(rawData.env),
+    cwd: asString(rawData.cwd),
   };
 }
 
@@ -53,6 +92,9 @@ function MCPPage() {
   const {
     clients,
     loading,
+    refreshStatuses,
+    queuedRefreshKeys,
+    refreshingKeys,
     toggleEnabled,
     deleteClient,
     createClient,
@@ -88,27 +130,31 @@ function MCPPage() {
   const handleCreateClient = async () => {
     try {
       const parsed = JSON.parse(newClientJson);
+      if (!isRecord(parsed)) {
+        throw new Error("Invalid JSON format");
+      }
 
       // Support two formats:
       // Format 1: { "mcpServers": { "key": { "command": "...", ... } } }
       // Format 2: { "key": { "command": "...", ... } }
       // Format 3: { "key": "...", "name": "...", "command": "...", ... } (direct)
 
-      let clientsToCreate: Array<{ key: string; data: any }> = [];
+      const clientsToCreate: ClientToCreate[] = [];
 
-      if (parsed.mcpServers) {
+      if (isRecord(parsed.mcpServers)) {
         // Format 1: nested mcpServers
-        Object.entries(parsed.mcpServers).forEach(
-          ([key, data]: [string, any]) => {
-            clientsToCreate.push({
-              key,
-              data: normalizeClientData(key, data),
-            });
-          },
-        );
+        Object.entries(parsed.mcpServers).forEach(([key, data]) => {
+          if (!isRecord(data)) {
+            return;
+          }
+          clientsToCreate.push({
+            key,
+            data: normalizeClientData(key, data),
+          });
+        });
       } else if (
-        parsed.key &&
-        (parsed.command || parsed.url || parsed.baseUrl)
+        typeof parsed.key === "string" &&
+        hasClientConnectionFields(parsed)
       ) {
         // Format 3: direct format with key field
         const { key, ...clientData } = parsed;
@@ -118,11 +164,8 @@ function MCPPage() {
         });
       } else {
         // Format 2: direct client objects with keys
-        Object.entries(parsed).forEach(([key, data]: [string, any]) => {
-          if (
-            typeof data === "object" &&
-            (data.command || data.url || data.baseUrl)
-          ) {
+        Object.entries(parsed).forEach(([key, data]) => {
+          if (hasClientConnectionFields(data)) {
             clientsToCreate.push({
               key,
               data: normalizeClientData(key, data),
@@ -152,7 +195,7 @@ function MCPPage() {
   }
 }`);
       }
-    } catch (error) {
+    } catch {
       alert("Invalid JSON format");
     }
   };
@@ -175,9 +218,17 @@ function MCPPage() {
             {t("mcp.description")}
           </p>
         </div>
-        <Button type="primary" onClick={() => setCreateModalOpen(true)}>
-          {t("mcp.create")}
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button
+            onClick={() => void refreshStatuses()}
+            loading={refreshingKeys.length > 0 || queuedRefreshKeys.length > 0}
+          >
+            {t("mcp.refreshStatus")}
+          </Button>
+          <Button type="primary" onClick={() => setCreateModalOpen(true)}>
+            {t("mcp.create")}
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -201,6 +252,13 @@ function MCPPage() {
               onToggle={handleToggleEnabled}
               onDelete={handleDelete}
               onUpdate={updateClient}
+              runtimeStateOverride={
+                refreshingKeys.includes(client.key)
+                  ? "checking"
+                  : queuedRefreshKeys.includes(client.key)
+                  ? "queued"
+                  : undefined
+              }
               isHovered={hoverKey === client.key}
               onMouseEnter={() => setHoverKey(client.key)}
               onMouseLeave={() => setHoverKey(null)}

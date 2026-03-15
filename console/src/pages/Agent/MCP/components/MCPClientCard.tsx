@@ -1,16 +1,26 @@
 import { Card, Button, Modal, Tooltip } from "@agentscope-ai/design";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Server } from "lucide-react";
-import type { MCPClientInfo } from "../../../../api/types";
+import type {
+  MCPClientInfo,
+  MCPClientUpdateRequest,
+} from "../../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import styles from "../index.module.less";
 
+type JSONRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JSONRecord {
+  return typeof value === "object" && value !== null;
+}
+
 interface MCPClientCardProps {
   client: MCPClientInfo;
-  onToggle: (client: MCPClientInfo, e: React.MouseEvent) => void;
-  onDelete: (client: MCPClientInfo, e: React.MouseEvent) => void;
-  onUpdate: (key: string, updates: any) => Promise<boolean>;
+  onToggle: (client: MCPClientInfo, e?: React.MouseEvent) => void;
+  onDelete: (client: MCPClientInfo, e?: React.MouseEvent) => void;
+  onUpdate: (key: string, updates: MCPClientUpdateRequest) => Promise<boolean>;
+  runtimeStateOverride?: "queued" | "checking";
   isHovered: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -21,6 +31,7 @@ export function MCPClientCard({
   onToggle,
   onDelete,
   onUpdate,
+  runtimeStateOverride,
   isHovered,
   onMouseEnter,
   onMouseLeave,
@@ -35,6 +46,30 @@ export function MCPClientCard({
   const isRemote =
     client.transport === "streamable_http" || client.transport === "sse";
   const clientType = isRemote ? "Remote" : "Local";
+  const runtimeStatusKey =
+    runtimeStateOverride === "checking"
+      ? "mcp.runtimeChecking"
+      : runtimeStateOverride === "queued"
+      ? "mcp.runtimeQueued"
+      : !client.enabled
+      ? "mcp.runtimeDisabled"
+      : client.active === undefined
+      ? "mcp.runtimeUnknown"
+      : client.active
+      ? "mcp.runtimeActive"
+      : "mcp.runtimeUnavailable";
+  const runtimeStatusClass =
+    runtimeStateOverride === "checking"
+      ? styles.runtimeChecking
+      : runtimeStateOverride === "queued"
+      ? styles.runtimeQueued
+      : !client.enabled
+      ? styles.runtimeDisabled
+      : client.active === undefined
+      ? styles.runtimeUnknown
+      : client.active
+      ? styles.runtimeActive
+      : styles.runtimeUnavailable;
 
   const handleToggleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -48,7 +83,7 @@ export function MCPClientCard({
 
   const confirmDelete = () => {
     setDeleteModalOpen(false);
-    onDelete(client, null as any);
+    onDelete(client);
   };
 
   const handleCardClick = () => {
@@ -61,7 +96,12 @@ export function MCPClientCard({
   const handleSaveJson = async () => {
     try {
       const parsed = JSON.parse(editedJson);
-      const { key, ...updates } = parsed;
+      if (!isRecord(parsed)) {
+        throw new Error("Invalid JSON format");
+      }
+      const updates = { ...parsed };
+      delete updates.key;
+      delete updates.active;
 
       // Send all updates directly to backend, let backend handle env masking check
       const success = await onUpdate(client.key, updates);
@@ -69,7 +109,7 @@ export function MCPClientCard({
         setJsonModalOpen(false);
         setIsEditing(false);
       }
-    } catch (error) {
+    } catch {
       alert("Invalid JSON format");
     }
   };
@@ -105,16 +145,28 @@ export function MCPClientCard({
           </div>
           <div className={styles.statusContainer}>
             <span
-              className={`${styles.statusDot} ${
-                client.enabled ? styles.enabled : styles.disabled
-              }`}
-            />
-            <span
-              className={`${styles.statusText} ${
+              className={`${styles.statusBadge} ${
                 client.enabled ? styles.enabled : styles.disabled
               }`}
             >
-              {client.enabled ? t("common.enabled") : t("common.disabled")}
+              <span
+                className={`${styles.statusDot} ${
+                  client.enabled ? styles.enabled : styles.disabled
+                }`}
+              />
+              <span
+                className={`${styles.statusText} ${
+                  client.enabled ? styles.enabled : styles.disabled
+                }`}
+              >
+                {client.enabled ? t("common.enabled") : t("common.disabled")}
+              </span>
+            </span>
+            <span className={`${styles.statusBadge} ${runtimeStatusClass}`}>
+              <span className={`${styles.statusDot} ${runtimeStatusClass}`} />
+              <span className={`${styles.statusText} ${runtimeStatusClass}`}>
+                {t(runtimeStatusKey)}
+              </span>
             </span>
           </div>
         </div>
