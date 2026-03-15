@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
+import re
 import time
 from pathlib import Path
+from typing import Any, Iterable, cast
 
 from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import stream_printing_messages
@@ -31,9 +34,69 @@ from ...constant import (
     TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS,
     WORKING_DIR,
 )
+from ...providers.retry_chat_model import _is_retryable
 from ...security.tool_guard.approval import ApprovalDecision
 
 logger = logging.getLogger(__name__)
+
+_RETRYABLE_STATUS_PATTERN = re.compile(
+    r"(?:error\s*code|status)\s*[:=]?\s*(\d{3})",
+    re.IGNORECASE,
+)
+
+
+def _iter_exception_chain(exc: BaseException) -> Iterable[BaseException]:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        yield current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+
+
+def _get_exception_status_code(exc: BaseException) -> int | None:
+    for current in _iter_exception_chain(exc):
+        status_code = getattr(current, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code
+    return None
+
+
+def _get_status_code_from_message(exc: BaseException) -> int | None:
+    for current in _iter_exception_chain(exc):
+        text = str(current)
+        match = _RETRYABLE_STATUS_PATTERN.search(text)
+        if match:
+            try:
+                return int(match.group(1))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _build_retryable_error_msg(exc: Exception) -> Msg | None:
+    status_code = _get_exception_status_code(exc)
+    if status_code is None:
+        status_code = _get_status_code_from_message(exc)
+
+    retryable = _is_retryable(exc) or status_code in {429, 500, 502, 503, 504}
+    if not retryable:
+        return None
+
+    status_text = f" ({status_code})" if status_code is not None else ""
+    text = (
+        "模型服务暂时不可用"
+        f"{status_text}，自动重试后仍未恢复。请稍后再试；"
+        "如果持续出现，可以检查当前模型提供商配置或切换模型。\n\n"
+        "The upstream model service is temporarily unavailable"
+        f"{status_text}. The request still failed after automatic retries. "
+        "Please try again later."
+    )
+    return Msg(
+        name="Friday",
+        role="assistant",
+        content=[TextBlock(type="text", text=text)],
+    )
 
 
 class AgentRunner(Runner):
@@ -140,17 +203,21 @@ class AgentRunner(Runner):
             True,
         )
 
-    async def query_handler(
+    async def query_handler(  # type: ignore[override]
         self,
         msgs,
-        request: AgentRequest = None,
+        request: AgentRequest | None = None,
         **kwargs,
     ):
         """
         Handle agent query.
         """
         query = _get_last_user_text(msgs)
-        session_id = getattr(request, "session_id", "") or ""
+        session_id = str(getattr(request, "session_id", "") or "")
+        user_id = str(getattr(request, "user_id", "") or "")
+        channel = str(
+            getattr(request, "channel", DEFAULT_CHANNEL) or DEFAULT_CHANNEL,
+        )
 
         (
             approval_response,
@@ -158,7 +225,6 @@ class AgentRunner(Runner):
         ) = await self._resolve_pending_approval(session_id, query)
         if approval_response is not None:
             yield approval_response, True
-            user_id = getattr(request, "user_id", "") or ""
             await self._cleanup_denied_session_memory(
                 session_id,
                 user_id,
@@ -176,10 +242,6 @@ class AgentRunner(Runner):
         chat = None
         session_state_loaded = False
         try:
-            session_id = request.session_id
-            user_id = request.user_id
-            channel = getattr(request, "channel", DEFAULT_CHANNEL)
-
             logger.info(
                 "Handle agent query:\n%s",
                 json.dumps(
@@ -210,16 +272,17 @@ class AgentRunner(Runner):
             config = load_config()
             max_iters = config.agents.running.max_iters
             max_input_length = config.agents.running.max_input_length
+            request_context: dict[str, str] = {
+                "session_id": session_id,
+                "user_id": user_id,
+                "channel": channel,
+            }
 
             agent = CoPawAgent(
                 env_context=env_context,
                 mcp_clients=mcp_clients,
                 memory_manager=self.memory_manager,
-                request_context={
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "channel": channel,
-                },
+                request_context=request_context,
                 max_iters=max_iters,
                 max_input_length=max_input_length,
             )
@@ -265,7 +328,7 @@ class AgentRunner(Runner):
             # in the session state.
             agent.rebuild_sys_prompt()
 
-            async for msg, last in stream_printing_messages(
+            async for msg, last, *_ in stream_printing_messages(
                 agents=[agent],
                 coroutine_task=agent(msgs),
             ):
@@ -285,6 +348,15 @@ class AgentRunner(Runner):
             path_hint = (
                 f"\n(Details:  {debug_dump_path})" if debug_dump_path else ""
             )
+            retryable_error_msg = _build_retryable_error_msg(e)
+            if retryable_error_msg is not None:
+                logger.warning(
+                    "Transient upstream model error in query handler: %s%s",
+                    e,
+                    path_hint,
+                )
+                yield retryable_error_msg, True
+                return
             logger.exception(f"Error in query handler: {e}{path_hint}")
             if debug_dump_path:
                 setattr(e, "debug_dump_path", debug_dump_path)
@@ -441,7 +513,15 @@ class AgentRunner(Runner):
                 self.memory_manager = MemoryManager(
                     working_dir=str(WORKING_DIR),
                 )
-            await self.memory_manager.start()
+            start_fn = cast(Any, getattr(self.memory_manager, "start", None))
+            if callable(start_fn):
+                start_result = start_fn()  # pylint: disable=not-callable
+                if inspect.isawaitable(start_result):
+                    await start_result
+            else:
+                logger.warning(
+                    "MemoryManager has no start() method; skipping startup",
+                )
         except Exception as e:
             logger.exception(f"MemoryManager start failed: {e}")
 
@@ -451,6 +531,17 @@ class AgentRunner(Runner):
         """
         try:
             if self.memory_manager is not None:
-                await self.memory_manager.close()
+                close_fn = cast(
+                    Any,
+                    getattr(self.memory_manager, "close", None),
+                )
+                if callable(close_fn):
+                    close_result = close_fn()  # pylint: disable=not-callable
+                    if inspect.isawaitable(close_result):
+                        await close_result
+                else:
+                    logger.warning(
+                        "MemoryManager has no close() method; skipping close",
+                    )
         except Exception as e:
             logger.warning(f"MemoryManager stop failed: {e}")
