@@ -13,6 +13,27 @@ class ModelInfo(BaseModel):
     name: str = Field(..., description="Human-readable model name")
 
 
+class ExtendedModelInfo(ModelInfo):
+    """Extended model info with additional metadata for providers."""
+
+    provider: str = Field(
+        default="",
+        description="Provider/series (e.g., 'openai', 'google')",
+    )
+    input_modalities: List[str] = Field(
+        default_factory=list,
+        description="Supported input modalities",
+    )
+    output_modalities: List[str] = Field(
+        default_factory=list,
+        description="Supported output modalities",
+    )
+    pricing: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Pricing info (prompt/completion)",
+    )
+
+
 class ProviderInfo(BaseModel):
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Human-readable provider name")
