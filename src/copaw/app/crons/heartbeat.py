@@ -10,7 +10,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, time, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Dict
 
 from ...config import (
@@ -73,7 +73,12 @@ def _in_active_hours(active_hours: Any) -> bool:
     user_tz = load_config().user_timezone or "UTC"
     try:
         now = datetime.now(ZoneInfo(user_tz)).time()
-    except (KeyError, Exception):
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning(
+            "Invalid timezone %r in config, falling back to UTC"
+            " for heartbeat active hours check.",
+            user_tz,
+        )
         now = datetime.now(timezone.utc).time()
     if start_t <= end_t:
         return start_t <= now <= end_t

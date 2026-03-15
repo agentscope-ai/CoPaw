@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Union, List
 from urllib.parse import urlparse
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agentscope.message import Msg
 from agentscope_runtime.engine.schemas.agent_schemas import (
@@ -15,6 +16,8 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 from agentscope_runtime.engine.helpers.agent_api_builder import ResponseBuilder
 
 from ...config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 def build_env_context(
@@ -40,7 +43,8 @@ def build_env_context(
     user_tz = load_config().user_timezone or "UTC"
     try:
         now = datetime.now(ZoneInfo(user_tz))
-    except (KeyError, Exception):
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning("Invalid timezone %r, falling back to UTC", user_tz)
         now = datetime.now(timezone.utc)
         user_tz = "UTC"
 

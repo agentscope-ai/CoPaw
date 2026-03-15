@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Tool that returns the current time in the user-configured timezone."""
 
+import logging
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
 from ...config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 async def get_current_time() -> ToolResponse:
@@ -24,7 +27,8 @@ async def get_current_time() -> ToolResponse:
     user_tz = load_config().user_timezone or "UTC"
     try:
         now = datetime.now(ZoneInfo(user_tz))
-    except (KeyError, Exception):
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning("Invalid timezone %r, falling back to UTC", user_tz)
         now = datetime.now(timezone.utc)
         user_tz = "UTC"
 

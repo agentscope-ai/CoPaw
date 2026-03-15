@@ -37,7 +37,7 @@ function CronJobsPage() {
       .then((res) => {
         if (res.timezone) userTimezoneRef.current = res.timezone;
       })
-      .catch(() => {});
+      .catch((err) => console.error("Failed to fetch user timezone:", err));
   }, []);
 
   const handleCreate = () => {
