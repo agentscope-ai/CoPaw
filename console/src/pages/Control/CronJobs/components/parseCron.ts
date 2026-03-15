@@ -71,21 +71,43 @@ export function parseCron(cron: string): CronParts {
 
   // Daily: "M H * * *"
   if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
-    const h = parseInt(hour, 10);
-    const m = parseInt(minute, 10);
-    if (!isNaN(h) && !isNaN(m) && h >= 0 && h < 24 && m >= 0 && m < 60) {
-      return { type: "daily", hour: h, minute: m };
+    // Check if hour and minute are simple integers (not ranges or steps)
+    const hourNum = Number(hour);
+    const minuteNum = Number(minute);
+    if (
+      Number.isInteger(hourNum) &&
+      Number.isInteger(minuteNum) &&
+      hourNum >= 0 &&
+      hourNum < 24 &&
+      minuteNum >= 0 &&
+      minuteNum < 60
+    ) {
+      return { type: "daily", hour: hourNum, minute: minuteNum };
     }
   }
 
   // Weekly: "M H * * D" where D is days
   if (dayOfMonth === "*" && month === "*" && dayOfWeek !== "*") {
-    const h = parseInt(hour, 10);
-    const m = parseInt(minute, 10);
-    if (!isNaN(h) && !isNaN(m) && h >= 0 && h < 24 && m >= 0 && m < 60) {
+    // Check if hour and minute are simple integers (not ranges or steps)
+    const hourNum = Number(hour);
+    const minuteNum = Number(minute);
+    if (
+      Number.isInteger(hourNum) &&
+      Number.isInteger(minuteNum) &&
+      hourNum >= 0 &&
+      hourNum < 24 &&
+      minuteNum >= 0 &&
+      minuteNum < 60 &&
+      !dayOfWeek.includes("/")
+    ) {
       const days = parseDaysOfWeek(dayOfWeek);
       if (days.length > 0) {
-        return { type: "weekly", hour: h, minute: m, daysOfWeek: days };
+        return {
+          type: "weekly",
+          hour: hourNum,
+          minute: minuteNum,
+          daysOfWeek: days,
+        };
       }
     }
   }
