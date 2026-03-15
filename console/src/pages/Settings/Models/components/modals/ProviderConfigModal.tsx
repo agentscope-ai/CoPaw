@@ -9,7 +9,10 @@ import {
   Select,
 } from "@agentscope-ai/design";
 import { ApiOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
-import type { ProviderConfigRequest } from "../../../../../api/types";
+import type {
+  ActiveModelsInfo,
+  ProviderConfigRequest,
+} from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
@@ -29,7 +32,7 @@ interface JsonCodeEditorProps {
 function highlightJson(text: string): ReactNode[] {
   const tokens: ReactNode[] = [];
   const pattern =
-    /("(?:\\.|[^"\\])*")(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\],:]/g;
+    /("(?:\\.|[^"\\])*")(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[[\]{}:,]/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -253,7 +256,7 @@ interface ProviderConfigModalProps {
     chat_model: string;
     generate_kwargs: Record<string, unknown>;
   };
-  activeModels: any;
+  activeModels: ActiveModelsInfo;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -271,9 +274,57 @@ export function ProviderConfigModal({
   const [testing, setTesting] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [baseUrlEditedByUser, setBaseUrlEditedByUser] = useState(false);
   const [form] = Form.useForm<ProviderConfigFormValues>();
   const selectedChatModel = Form.useWatch("chat_model", form);
+  const currentBaseUrl = Form.useWatch("base_url", form);
   const canEditBaseUrl = !provider.freeze_url;
+
+  const ollamaHostOptions = useMemo(
+    () => [
+      {
+        label: "127.0.0.1",
+        url: "http://127.0.0.1:11434",
+      },
+      {
+        label: "localhost",
+        url: "http://localhost:11434",
+      },
+      {
+        label: "host.docker.internal",
+        url: "http://host.docker.internal:11434",
+      },
+    ],
+    [],
+  );
+
+  const ollamaRecommendation = useMemo(() => {
+    const defaultOption = {
+      hintKey: "models.ollamaEnvHintLocal",
+      recommendedUrl: "http://127.0.0.1:11434",
+    };
+
+    if (typeof window === "undefined") {
+      return defaultOption;
+    }
+
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname === "host.docker.internal" || hostname.includes("docker")) {
+      return {
+        hintKey: "models.ollamaEnvHintDocker",
+        recommendedUrl: "http://host.docker.internal:11434",
+      };
+    }
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return defaultOption;
+    }
+
+    return {
+      hintKey: "models.ollamaEnvHintRemote",
+      recommendedUrl: "http://127.0.0.1:11434",
+    };
+  }, []);
 
   const parseGenerateConfig = (value?: string) => {
     const trimmed = value?.trim();
@@ -312,6 +363,19 @@ export function ProviderConfigModal({
     return t("models.enterApiKeyOptional");
   }, [provider.api_key, provider.api_key_prefix, t]);
 
+  const shouldHighlightOllamaRecommendation = useMemo(() => {
+    if (provider.id !== "ollama") {
+      return false;
+    }
+    if (baseUrlEditedByUser) {
+      return false;
+    }
+    if (provider.base_url?.trim()) {
+      return false;
+    }
+    return !(currentBaseUrl || "").trim();
+  }, [provider.id, provider.base_url, currentBaseUrl, baseUrlEditedByUser]);
+
   const baseUrlExtra = useMemo(() => {
     if (!canEditBaseUrl) {
       return undefined;
@@ -326,7 +390,42 @@ export function ProviderConfigModal({
       return t("models.openAIEndpoint");
     }
     if (provider.id === "ollama") {
-      return t("models.ollamaEndpointHint");
+      return (
+        <div className={styles.endpointHintBlock}>
+          <div>{t("models.ollamaEndpointHint")}</div>
+          <div className={styles.endpointQuickFillRow}>
+            <span className={styles.endpointQuickFillLabel}>
+              {t("models.ollamaQuickFillLabel")}
+            </span>
+            {ollamaHostOptions.map((option) => (
+              <Button
+                key={option.url}
+                size="small"
+                type={
+                  shouldHighlightOllamaRecommendation &&
+                  option.url === ollamaRecommendation.recommendedUrl
+                    ? "primary"
+                    : "default"
+                }
+                onClick={() => {
+                  form.setFieldsValue({ base_url: option.url });
+                  setFormDirty(true);
+                  message.success(
+                    t("models.ollamaQuickFillApplied", { host: option.url }),
+                  );
+                }}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          <div className={styles.endpointRecommendationText}>
+            {t(ollamaRecommendation.hintKey, {
+              host: ollamaRecommendation.recommendedUrl,
+            })}
+          </div>
+        </div>
+      );
     }
     if (provider.id === "lmstudio") {
       return t("models.lmstudioEndpointHint");
@@ -337,7 +436,17 @@ export function ProviderConfigModal({
         : t("models.openAICompatibleEndpoint");
     }
     return t("models.apiEndpointHint");
-  }, [canEditBaseUrl, provider.id, provider.is_custom, effectiveChatModel, t]);
+  }, [
+    canEditBaseUrl,
+    provider.id,
+    provider.is_custom,
+    effectiveChatModel,
+    t,
+    ollamaHostOptions,
+    ollamaRecommendation,
+    shouldHighlightOllamaRecommendation,
+    form,
+  ]);
 
   const baseUrlPlaceholder = useMemo(() => {
     if (!canEditBaseUrl) {
@@ -353,7 +462,7 @@ export function ProviderConfigModal({
       return "https://api.openai.com/v1";
     }
     if (provider.id === "ollama") {
-      return "http://localhost:11434";
+      return "http://127.0.0.1:11434";
     }
     if (provider.id === "lmstudio") {
       return "http://localhost:1234/v1";
@@ -379,6 +488,7 @@ export function ProviderConfigModal({
       });
       setAdvancedOpen(false);
       setFormDirty(false);
+      setBaseUrlEditedByUser(false);
     }
   }, [provider, form, open]);
 
@@ -614,7 +724,11 @@ export function ProviderConfigModal({
           }
           extra={baseUrlExtra}
         >
-          <Input placeholder={baseUrlPlaceholder} disabled={!canEditBaseUrl} />
+          <Input
+            placeholder={baseUrlPlaceholder}
+            disabled={!canEditBaseUrl}
+            onChange={() => setBaseUrlEditedByUser(true)}
+          />
         </Form.Item>
 
         {/* API Key */}
