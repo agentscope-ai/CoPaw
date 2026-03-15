@@ -437,12 +437,12 @@ QQ channel supports sending image, video, audio, and files (C2C and group chat o
 
 **Sending**: Multimodal content in Agent replies is delivered via the [QQ Rich Media API](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/send-receive/rich-media.html):
 
-| Type  | Supported formats        | Notes |
-| ----- | ------------------------ | ----- |
-| Image | png, jpg                 | Other formats (svg, gif, etc.) fall back to file type |
-| Video | mp4                      | — |
-| Audio | silk, wav, mp3, flac     | — |
-| File  | any                      | Uploaded as base64 with original filename |
+| Type  | Supported formats    | Notes                                                 |
+| ----- | -------------------- | ----------------------------------------------------- |
+| Image | png, jpg             | Other formats (svg, gif, etc.) fall back to file type |
+| Video | mp4                  | —                                                     |
+| Audio | silk, wav, mp3, flac | —                                                     |
+| File  | any                  | Uploaded as base64 with original filename             |
 
 > **Note**: Rich media sending is only available in C2C and group chat; guild messages are not supported. Both local file paths (`file://` or absolute path) and remote HTTP URLs are accepted.
 
