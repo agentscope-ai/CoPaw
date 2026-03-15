@@ -61,7 +61,7 @@ function App() {
   }, [i18n]);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <GlobalStyle />
       <ConfigProvider
         {...bailianTheme}
