@@ -21,8 +21,8 @@
     "copied": "Copied to clipboard",
     "copyFailed": "Failed to copy to clipboard",
     "contentPlaceholder": "Enter content...",
-    "help": "Help",
-    "close": "Close"
+    "close": "Close",
+    "help": "Help"
   },
   "nav": {
     "chat": "Chat",
@@ -526,6 +526,17 @@
     "toolResultCompactKeepNPlaceholder": "Enter keep count",
     "toolResultCompactKeepNRequired": "Tool result keep count is required",
     "toolResultCompactKeepNMin": "Tool result keep count must be at least 1",
+    "imageUploadConfigTitle": "Image Upload Configuration",
+    "imageUploadProvider": "Image Hosting Provider",
+    "imageUploadProviderTooltip": "Select image upload service provider. When enabled, sent images will be automatically uploaded to the selected hosting service.",
+    "imageUploadProviderNone": "None (local file protocol)",
+    "imageUploadProviderFivemanage": "Fivemanage",
+    "fivemanageApiKey": "Fivemanage API Key",
+    "fivemanageApiKeyRequired": "Please enter Fivemanage API key",
+    "fivemanageApiKeyTooltip": "API key for Fivemanage service, available on the official website.",
+    "fivemanageApiKeyPlaceholder": "Enter your Fivemanage API key",
+    "fivemanageApiKeyMaskedPlaceholder": "****** (already set, leave blank to keep unchanged)",
+    "officialDocs": "Official Documentation",
     "language": "Agent Language",
     "languageTooltip": "Language for agent persona files (SOUL.md, AGENTS.md, etc.). Changing this will re-copy MD files in the selected language.",
     "languageConfirmTitle": "Change Agent Language",

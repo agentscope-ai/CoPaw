@@ -218,6 +218,16 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    image_upload_provider: Literal["none", "fivemanage"] = Field(
+        default="none",
+        description="Image upload provider (none, fivemanage)",
+    )
+
+    fivemanage_api_key: str = Field(
+        default="",
+        description="Fivemanage API key for image upload",
+    )
+
     @property
     def memory_compact_reserve(self) -> int:
         """Memory compact reserve size (tokens)."""

@@ -13,4 +13,10 @@ export interface AgentsRunningConfig {
   memory_reserve_ratio: number;
   enable_tool_result_compact: boolean;
   tool_result_compact_keep_n: number;
+  image_upload_provider: "none" | "fivemanage";
+  fivemanage_api_key?: string;
+}
+
+export interface AgentsRunningConfigResponse extends AgentsRunningConfig {
+  has_fivemanage_api_key: boolean;
 }
