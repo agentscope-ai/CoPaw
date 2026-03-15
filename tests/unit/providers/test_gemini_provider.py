@@ -135,7 +135,7 @@ async def test_check_model_connection_success(monkeypatch) -> None:
     captured: list[dict] = []
 
     class FakeModels:
-        def generate_content_stream(self, **kwargs):
+        async def generate_content_stream(self, **kwargs):
             captured.append(kwargs)
             return _AsyncIter([])
 
@@ -171,7 +171,7 @@ async def test_check_model_connection_api_error_returns_false(
     provider = _make_provider()
 
     class FakeModels:
-        def generate_content_stream(self, **kwargs):
+        async def generate_content_stream(self, **kwargs):
             raise genai_errors.APIError(404, {"error": "not found"})
 
     fake_client = SimpleNamespace(

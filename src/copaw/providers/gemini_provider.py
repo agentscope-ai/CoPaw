@@ -9,6 +9,7 @@ from typing import Any, List
 from agentscope.model import ChatModelBase
 from google import genai
 from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 
 from copaw.providers.provider import ModelInfo, Provider
 
@@ -16,9 +17,11 @@ from copaw.providers.provider import ModelInfo, Provider
 class GeminiProvider(Provider):
     """Provider implementation for Google Gemini API."""
 
-    def _client(self, timeout: float = 5) -> Any:  # noqa: W0613
-        _ = timeout  # Gemini SDK does not support per-client timeout
-        return genai.Client(api_key=self.api_key)
+    def _client(self, timeout: float = 5) -> Any:
+        return genai.Client(
+            api_key=self.api_key,
+            http_options=genai_types.HttpOptions(timeout=int(timeout * 1000)),
+        )
 
     @staticmethod
     def _normalize_models_payload(payload: Any) -> List[ModelInfo]:
@@ -91,7 +94,7 @@ class GeminiProvider(Provider):
 
         try:
             client = self._client(timeout=timeout)
-            response = client.aio.models.generate_content_stream(
+            response = await client.aio.models.generate_content_stream(
                 model=target,
                 contents="ping",
             )
