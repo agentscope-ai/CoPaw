@@ -262,6 +262,31 @@ def init_cmd(
             )
             existing.agents.language = language
 
+        # --- audio mode selection ---
+        if not use_defaults:
+            audio_mode = prompt_choice(
+                "Select audio mode for voice messages:\n"
+                "  auto   - transcribe if provider available, else file placeholder\n"
+                "  native - send audio directly to model (needs ffmpeg)\n"
+                "Audio mode:",
+                options=["auto", "native"],
+                default=existing.agents.audio_mode,
+            )
+            existing.agents.audio_mode = audio_mode
+
+        # --- transcription provider type selection ---
+        if not use_defaults and audio_mode != "native":
+            provider_type = prompt_choice(
+                "Select transcription provider type:\n"
+                "  whisper_api    - use a remote Whisper API endpoint\n"
+                "  local_whisper  - use locally installed openai-whisper\n"
+                "                   (requires ffmpeg + openai-whisper)\n"
+                "Provider type:",
+                options=["whisper_api", "local_whisper"],
+                default=existing.agents.transcription_provider_type,
+            )
+            existing.agents.transcription_provider_type = provider_type
+
         # --- channels (interactive when not --defaults) ---
         if not use_defaults and prompt_confirm(
             "Configure channels? "

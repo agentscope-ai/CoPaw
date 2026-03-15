@@ -40,7 +40,8 @@
     "models": "Модели",
     "environments": "Окружения",
     "security": "Безопасность",
-    "tokenUsage": "Использование токенов"
+    "tokenUsage": "Использование токенов",
+    "voiceTranscription": "Транскрипция голоса"
   },
   "workspace": {
     "title": "Рабочее пространство",
@@ -644,5 +645,35 @@
         "TOOL_CMD_DANGEROUS_MV": "Обнаруживает команду mv, которая может неожиданно переместить или перезаписать файлы"
       }
     }
+  },
+  "voiceTranscription": {
+    "title": "Транскрипция голоса",
+    "description": "Настройте обработку входящих аудио- и голосовых сообщений.",
+    "loadFailed": "Не удалось загрузить настройки аудиорежима",
+    "saveSuccess": "Аудиорежим сохранён",
+    "saveFailed": "Не удалось сохранить аудиорежим",
+    "audioModeLabel": "Аудиорежим",
+    "audioModeDescription": "Выберите, как голосовые сообщения из каналов (Discord, Telegram и др.) обрабатываются перед отправкой модели.",
+    "modeAuto": "Авто (рекомендуется)",
+    "modeAutoDesc": "Транскрибировать аудио в текст через выбранный провайдер, затем отправить текст модели. При недоступности транскрипции (провайдер не настроен, отсутствуют зависимости, ошибка API) отображается заглушка «файл загружен». В этом режиме аудио не отправляется модели напрямую. Работает со всеми моделями.",
+    "modeNative": "Нативное аудио",
+    "modeNativeDesc": "Отправлять аудиофайл модели напрямую без транскрипции. Это единственный режим, передающий аудио модели. Работает только с моделями, поддерживающими аудио (например, gpt-4o-audio). Большинство моделей не поддерживают этот режим.",
+    "providerTypeLabel": "Тип провайдера транскрипции",
+    "providerTypeDescription": "Выберите способ транскрипции: через удалённый Whisper API или локально установленную библиотеку openai-whisper.",
+    "providerTypeWhisperApi": "Whisper API",
+    "providerTypeWhisperApiDesc": "Использовать OpenAI-совместимый Whisper API от настроенного провайдера (например, OpenAI, Ollama).",
+    "providerTypeLocalWhisper": "Локальный Whisper",
+    "providerTypeLocalWhisperDesc": "Запускать транскрипцию локально с помощью библиотеки openai-whisper. Требуются ffmpeg и openai-whisper.",
+    "localWhisperReady": "Локальный Whisper готов к работе. ffmpeg и openai-whisper установлены.",
+    "localWhisperMissing": "Локальный Whisper не готов. Необходимо установить недостающие зависимости.",
+    "localWhisperMissingDesc": "ffmpeg: {{ffmpeg}} | openai-whisper: {{whisper}}. Установите недостающие зависимости: ffmpeg (системный пакет) и openai-whisper (uv pip install openai-whisper или установите CoPaw с опцией [whisper]).",
+    "providerLabel": "Провайдер Whisper API",
+    "providerDescription": "Выберите провайдера для транскрипции аудио через Whisper API. Отображаются только провайдеры с действующим API-ключом и совместимым эндпоинтом.",
+    "providerAuto": "Автоопределение (первый доступный провайдер)",
+    "activeProvider": "Текущий:",
+    "noProvidersWarning": "Не найдено провайдеров для транскрипции. Настройте OpenAI с действующим API-ключом для включения голосовой транскрипции.",
+    "transcriptionInfoTitle": "Как работает транскрипция",
+    "transcriptionInfoDesc": "Whisper API транскрипция использует OpenAI-совместимый эндпоинт /v1/audio/transcriptions. Необходим провайдер с поддержкой Whisper — например, OpenAI с действующим API-ключом. Без совместимого провайдера транскрипция будет недоступна.",
+    "transcriptionInfoDescLocal": "Локальная Whisper транскрипция запускает библиотеку openai-whisper непосредственно на вашем устройстве. Требуются ffmpeg (для декодирования аудио) и пакет openai-whisper. API-ключ и подключение к интернету не нужны. Установка: uv pip install 'copaw[whisper]'."
   }
 }
