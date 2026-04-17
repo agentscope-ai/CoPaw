@@ -1,8 +1,8 @@
-import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
-// matchMedia (required by antd)
-Object.defineProperty(window, "matchMedia", {
+// matchMedia（antd 依赖）
+Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -14,13 +14,11 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   })),
-});
+})
 
-// ResizeObserver (required by antd rc-resize-observer — must be a constructor, not arrow fn)
-global.ResizeObserver = vi.fn().mockImplementation(function () {
-  return {
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  };
-});
+// ResizeObserver（antd 虚拟列表依赖）
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}))
