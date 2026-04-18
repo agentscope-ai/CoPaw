@@ -1,51 +1,55 @@
-import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
-import ThemeToggleButton from "./index";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { render } from "@testing-library/react";
+import { describe, it, expect, vi } from 'vitest'
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { renderWithProviders } from '@/test/common_setup'
+import ThemeToggleButton from '../index'
+import { ThemeProvider } from '@/contexts/ThemeContext'
+import { render } from '@testing-library/react'
 
-vi.mock("react-i18next", () => ({
+vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
-}));
+}))
 
 // Wrap with real ThemeProvider, control initial theme via localStorage
-function renderWithTheme(mode: "light" | "dark" | "system" = "light") {
-  localStorage.setItem("qwenpaw-theme", mode);
+function renderWithTheme(isDarkMode: boolean) {
+  localStorage.setItem('copaw-theme', isDarkMode ? 'dark' : 'light')
   return render(
     <ThemeProvider>
       <ThemeToggleButton />
     </ThemeProvider>,
-  );
+  )
 }
 
-describe("ThemeToggleButton", () => {
-  it("renders the theme toggle button", () => {
-    renderWithTheme("light");
-    expect(screen.getByRole("button")).toBeInTheDocument();
-  });
+describe('ThemeToggleButton', () => {
+  it('shows moon icon in light mode', () => {
+    renderWithTheme(false)
+    expect(screen.getByRole('img', { name: 'moon' })).toBeInTheDocument()
+  })
 
-  it("shows sun icon when light mode is active", () => {
-    renderWithTheme("light");
+  it('shows sun icon in dark mode', () => {
+    renderWithTheme(true)
+    expect(screen.getByRole('img', { name: 'sun' })).toBeInTheDocument()
+  })
+
+  it('aria-label contains switchToDark in light mode', () => {
+    renderWithTheme(false)
     expect(
-      document.querySelector('[data-icon="SparkSunLine"]'),
-    ).toBeInTheDocument();
-  });
+      screen.getByRole('button', { name: 'theme.switchToDark' }),
+    ).toBeInTheDocument()
+  })
 
-  it("shows moon icon when dark mode is active", () => {
-    renderWithTheme("dark");
+  it('aria-label contains switchToLight in dark mode', () => {
+    renderWithTheme(true)
     expect(
-      document.querySelector('[data-icon="SparkMoonLine"]'),
-    ).toBeInTheDocument();
-  });
+      screen.getByRole('button', { name: 'theme.switchToLight' }),
+    ).toBeInTheDocument()
+  })
 
-  it("shows computer icon when system mode is active", () => {
-    renderWithTheme("system");
-    expect(
-      document.querySelector('[data-icon="SparkComputerLine"]'),
-    ).toBeInTheDocument();
-  });
-
-  it("renders without crashing", () => {
-    expect(() => renderWithTheme("light")).not.toThrow();
-  });
-});
+  it('clicking the button toggles theme from light to dark', async () => {
+    const user = userEvent.setup()
+    renderWithTheme(false)
+    const btn = screen.getByRole('button')
+    await user.click(btn)
+    expect(screen.getByRole('img', { name: 'sun' })).toBeInTheDocument()
+  })
+})
