@@ -8,7 +8,7 @@ import {
   Button,
   Checkbox,
 } from "@agentscope-ai/design";
-import { TimePicker } from "antd";
+import { DatePicker, TimePicker } from "antd";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
 import type { CronJobSpecOutput } from "../../../../api/types";
@@ -90,67 +90,113 @@ export function JobDrawer({
           <Switch />
         </Form.Item>
 
-        <Form.Item name={["schedule", "type"]} label="ScheduleType" hidden>
-          <Input disabled value="cron" />
-        </Form.Item>
-
         <Form.Item
-          label={t("cronJobs.scheduleCronLabel")}
-          required
-          tooltip={t("cronJobs.cronTooltip")}
+          name="scheduleType"
+          label={t("cronJobs.scheduleType")}
+          rules={[
+            { required: true, message: t("cronJobs.pleaseSelectScheduleType") },
+          ]}
         >
-          <Form.Item name="cronType" noStyle>
-            <Select>
-              <Select.Option value="hourly">
-                {t("cronJobs.cronTypeHourly")}
-              </Select.Option>
-              <Select.Option value="daily">
-                {t("cronJobs.cronTypeDaily")}
-              </Select.Option>
-              <Select.Option value="weekly">
-                {t("cronJobs.cronTypeWeekly")}
-              </Select.Option>
-              <Select.Option value="custom">
-                {t("cronJobs.cronTypeCustom")}
-              </Select.Option>
-            </Select>
-          </Form.Item>
+          <Select>
+            <Select.Option value="cron">
+              {t("cronJobs.scheduleTypeRecurring")}
+            </Select.Option>
+            <Select.Option value="once">
+              {t("cronJobs.scheduleTypeOnce")}
+            </Select.Option>
+          </Select>
         </Form.Item>
 
         <Form.Item
           noStyle
-          shouldUpdate={(prev, cur) => prev.cronType !== cur.cronType}
+          shouldUpdate={(prev, cur) => prev.scheduleType !== cur.scheduleType}
+        >
+          {({ getFieldValue }) =>
+            getFieldValue("scheduleType") === "once" ? (
+              <Form.Item
+                name="onceRunAt"
+                label={t("cronJobs.onceRunAt")}
+                rules={[
+                  { required: true, message: t("cronJobs.pleaseInputRunAt") },
+                ]}
+              >
+                <DatePicker
+                  showTime={{ format: "HH:mm" }}
+                  format="YYYY-MM-DD HH:mm"
+                  style={{ width: "100%" }}
+                />
+              </Form.Item>
+            ) : null
+          }
+        </Form.Item>
+
+        <Form.Item
+          noStyle
+          shouldUpdate={(prev, cur) =>
+            prev.scheduleType !== cur.scheduleType ||
+            prev.cronType !== cur.cronType
+          }
         >
           {({ getFieldValue }) => {
-            const cronType = getFieldValue("cronType");
-
-            if (cronType === "daily" || cronType === "weekly") {
-              return (
-                <Form.Item
-                  name="cronTime"
-                  label={t("cronJobs.cronTime")}
-                  rules={[{ required: true }]}
-                >
-                  <TimePicker
-                    format="HH:mm"
-                    minuteStep={15}
-                    needConfirm={false}
-                    style={{ width: "100%" }}
-                  />
-                </Form.Item>
-              );
+            if (getFieldValue("scheduleType") !== "cron") {
+              return null;
             }
-            return null;
+            const cronType = getFieldValue("cronType");
+            return (
+              <>
+                <Form.Item
+                  label={t("cronJobs.scheduleCronLabel")}
+                  required
+                  tooltip={t("cronJobs.cronTooltip")}
+                >
+                  <Form.Item name="cronType" noStyle>
+                    <Select>
+                      <Select.Option value="hourly">
+                        {t("cronJobs.cronTypeHourly")}
+                      </Select.Option>
+                      <Select.Option value="daily">
+                        {t("cronJobs.cronTypeDaily")}
+                      </Select.Option>
+                      <Select.Option value="weekly">
+                        {t("cronJobs.cronTypeWeekly")}
+                      </Select.Option>
+                      <Select.Option value="custom">
+                        {t("cronJobs.cronTypeCustom")}
+                      </Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Form.Item>
+                {(cronType === "daily" || cronType === "weekly") && (
+                  <Form.Item
+                    name="cronTime"
+                    label={t("cronJobs.cronTime")}
+                    rules={[{ required: true }]}
+                  >
+                    <TimePicker
+                      format="HH:mm"
+                      minuteStep={15}
+                      needConfirm={false}
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                )}
+              </>
+            );
           }}
         </Form.Item>
 
         <Form.Item
           noStyle
-          shouldUpdate={(prev, cur) => prev.cronType !== cur.cronType}
+          shouldUpdate={(prev, cur) =>
+            prev.scheduleType !== cur.scheduleType ||
+            prev.cronType !== cur.cronType
+          }
         >
           {({ getFieldValue }) => {
+            if (getFieldValue("scheduleType") !== "cron") {
+              return null;
+            }
             const cronType = getFieldValue("cronType");
-
             if (cronType === "weekly") {
               return (
                 <Form.Item
@@ -178,9 +224,15 @@ export function JobDrawer({
 
         <Form.Item
           noStyle
-          shouldUpdate={(prev, cur) => prev.cronType !== cur.cronType}
+          shouldUpdate={(prev, cur) =>
+            prev.scheduleType !== cur.scheduleType ||
+            prev.cronType !== cur.cronType
+          }
         >
           {({ getFieldValue }) => {
+            if (getFieldValue("scheduleType") !== "cron") {
+              return null;
+            }
             const cronType = getFieldValue("cronType");
 
             if (cronType === "custom") {

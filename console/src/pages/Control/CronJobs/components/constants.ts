@@ -2,11 +2,13 @@ import dayjs from "dayjs";
 
 export const DEFAULT_FORM_VALUES = {
   enabled: false,
+  scheduleType: "cron" as const,
   schedule: {
     type: "cron" as const,
     cron: "0 9 * * *",
     timezone: "UTC",
   },
+  onceRunAt: dayjs().add(1, "hour"),
   cronType: "daily",
   cronTime: dayjs().hour(9).minute(0),
   task_type: "agent" as const,

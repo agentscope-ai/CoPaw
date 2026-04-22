@@ -58,9 +58,6 @@ function CronJobsPage() {
   const handleEdit = (job: CronJob) => {
     setEditingJob(job);
 
-    // Parse cron expression to form fields
-    const cronParts = parseCron(job.schedule?.cron || "0 9 * * *");
-
     const formValues: any = {
       ...job,
       request: {
@@ -69,24 +66,34 @@ function CronJobsPage() {
           ? JSON.stringify(job.request.input, null, 2)
           : "",
       },
-      cronType: cronParts.type,
+      scheduleType: job.schedule?.type || "cron",
     };
 
-    // Set time picker value
-    if (cronParts.type === "daily" || cronParts.type === "weekly") {
-      const h = cronParts.hour ?? 9;
-      const m = cronParts.minute ?? 0;
-      formValues.cronTime = dayjs().hour(h).minute(m);
-    }
+    if (job.schedule?.type === "once") {
+      formValues.onceRunAt = job.schedule.run_at
+        ? dayjs(job.schedule.run_at)
+        : null;
+    } else {
+      // Parse cron expression to form fields
+      const cronParts = parseCron(job.schedule?.cron || "0 9 * * *");
+      formValues.cronType = cronParts.type;
 
-    // Set days of week
-    if (cronParts.type === "weekly" && cronParts.daysOfWeek) {
-      formValues.cronDaysOfWeek = cronParts.daysOfWeek;
-    }
+      // Set time picker value
+      if (cronParts.type === "daily" || cronParts.type === "weekly") {
+        const h = cronParts.hour ?? 9;
+        const m = cronParts.minute ?? 0;
+        formValues.cronTime = dayjs().hour(h).minute(m);
+      }
 
-    // Set custom cron
-    if (cronParts.type === "custom" && cronParts.rawCron) {
-      formValues.cronCustom = cronParts.rawCron;
+      // Set days of week
+      if (cronParts.type === "weekly" && cronParts.daysOfWeek) {
+        formValues.cronDaysOfWeek = cronParts.daysOfWeek;
+      }
+
+      // Set custom cron
+      if (cronParts.type === "custom" && cronParts.rawCron) {
+        formValues.cronCustom = cronParts.rawCron;
+      }
     }
 
     form.setFieldsValue(formValues);
@@ -129,35 +136,52 @@ function CronJobsPage() {
   };
 
   const handleSubmit = async (values: any) => {
-    // Serialize cron from form fields
-    const cronParts: any = {
-      type: values.cronType || "daily",
-    };
+    let schedule: any = values.schedule || {};
+    if ((values.scheduleType || "cron") === "once") {
+      schedule = {
+        type: "once",
+        run_at: values.onceRunAt
+          ? dayjs(values.onceRunAt).format("YYYY-MM-DDTHH:mm:00")
+          : undefined,
+        timezone: values.schedule?.timezone || userTimezoneRef.current,
+      };
+    } else {
+      const cronParts: any = {
+        type: values.cronType || "daily",
+      };
 
-    if (values.cronType === "daily" || values.cronType === "weekly") {
-      if (values.cronTime) {
-        cronParts.hour = values.cronTime.hour();
-        cronParts.minute = values.cronTime.minute();
+      if (values.cronType === "daily" || values.cronType === "weekly") {
+        if (values.cronTime) {
+          cronParts.hour = values.cronTime.hour();
+          cronParts.minute = values.cronTime.minute();
+        }
       }
-    }
 
-    if (values.cronType === "weekly" && values.cronDaysOfWeek) {
-      cronParts.daysOfWeek = values.cronDaysOfWeek;
-    }
+      if (values.cronType === "weekly" && values.cronDaysOfWeek) {
+        cronParts.daysOfWeek = values.cronDaysOfWeek;
+      }
 
-    if (values.cronType === "custom" && values.cronCustom) {
-      cronParts.rawCron = values.cronCustom;
-    }
+      if (values.cronType === "custom" && values.cronCustom) {
+        cronParts.rawCron = values.cronCustom;
+      }
 
-    const cronExpression = serializeCron(cronParts);
+      schedule = {
+        ...values.schedule,
+        type: "cron",
+        cron: serializeCron(cronParts),
+      };
+    }
 
     let processedValues = {
       ...values,
-      schedule: {
-        ...values.schedule,
-        cron: cronExpression,
-      },
+      schedule,
     };
+    delete processedValues.scheduleType;
+    delete processedValues.onceRunAt;
+    delete processedValues.cronType;
+    delete processedValues.cronTime;
+    delete processedValues.cronDaysOfWeek;
+    delete processedValues.cronCustom;
 
     if (processedValues.task_type === "text") {
       // Remove request object entirely for text tasks

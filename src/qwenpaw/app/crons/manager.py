@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Union
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from agentscope_runtime.engine.schemas.exception import ConfigurationException
 
@@ -74,10 +75,13 @@ class CronManager:
                 except Exception as e:  # pylint: disable=broad-except
                     logger.warning(
                         "Skipping invalid cron job during startup: "
-                        "job_id=%s name=%s cron=%s error=%s",
+                        "job_id=%s name=%s schedule_type=%s cron=%s "
+                        "run_at=%s error=%s",
                         job.id,
                         job.name,
+                        job.schedule.type,
                         job.schedule.cron,
+                        job.schedule.run_at,
                         repr(e),
                     )
                     if job.enabled:
@@ -287,7 +291,7 @@ class CronManager:
             (job.dispatch.target.session_id or "")[:40],
         )
         task = asyncio.create_task(
-            self._execute_once(job),
+            self._execute_once(job, auto_disable_once=False),
             name=f"cron-run-{job_id}",
         )
         task.add_done_callback(lambda t: self._task_done_cb(t, job))
@@ -320,7 +324,7 @@ class CronManager:
     # ----- internal -----
 
     async def _register_or_update(self, spec: CronJobSpec) -> None:
-        # Validate and build trigger first. If cron is invalid, fail fast
+        # Validate and build trigger first. If schedule is invalid, fail fast
         # without mutating scheduler/runtime state.
         assert spec.id is not None, "Job must have an id"
         trigger = self._build_trigger(spec)
@@ -352,8 +356,19 @@ class CronManager:
         st.next_run_at = aps_job.next_run_time if aps_job else None
         self._states[spec.id] = st
 
-    def _build_trigger(self, spec: CronJobSpec) -> CronTrigger:
+    def _build_trigger(
+        self,
+        spec: CronJobSpec,
+    ) -> Union[CronTrigger, DateTrigger]:
+        if spec.schedule.type == "once":
+            assert spec.schedule.run_at is not None
+            return DateTrigger(
+                run_date=spec.schedule.run_at,
+                timezone=spec.schedule.timezone,
+            )
+
         # enforce 5 fields (no seconds)
+        assert spec.schedule.cron is not None
         parts = [p for p in spec.schedule.cron.split() if p]
         if len(parts) != 5:
             raise ConfigurationException(
@@ -400,7 +415,9 @@ class CronManager:
         if not job:
             return
 
-        await self._execute_once(job)
+        await self._execute_once(job, auto_disable_once=True)
+        if job.schedule.type == "once":
+            return
 
         # refresh next_run
         aps_job = self._scheduler.get_job(job_id)
@@ -440,7 +457,12 @@ class CronManager:
         except Exception as e:  # pylint: disable=broad-except
             logger.error(f"Failed to execute dream task: {e}", exc_info=True)
 
-    async def _execute_once(self, job: CronJobSpec) -> None:
+    async def _execute_once(
+        self,
+        job: CronJobSpec,
+        *,
+        auto_disable_once: bool = True,
+    ) -> None:
         assert job.id is not None, "Job must have an id"
         rt = self._rt.get(job.id)
         if not rt:
@@ -480,3 +502,32 @@ class CronManager:
             finally:
                 st.last_run_at = datetime.now(timezone.utc)
                 self._states[job.id] = st
+                if job.schedule.type == "once" and auto_disable_once:
+                    try:
+                        await self._disable_once_job(job)
+                    except (
+                        Exception
+                    ) as cleanup_error:  # pylint: disable=broad-except
+                        logger.warning(
+                            "failed to auto-disable one-time job job_id=%s "
+                            "error=%s",
+                            job.id,
+                            repr(cleanup_error),
+                        )
+
+    # TODO: remove this function after testing
+    # def this fun for temporary use
+    # with calendar, consider the format again
+    async def _disable_once_job(self, job: CronJobSpec) -> None:
+        """Keep one-time job record but disable it after first execution."""
+        assert job.id is not None, "Job must have an id"
+        async with self._lock:
+            disabled_job = job.model_copy(update={"enabled": False})
+            await self._repo.upsert_job(disabled_job)
+
+            if self._started and self._scheduler.get_job(job.id):
+                self._scheduler.remove_job(job.id)
+
+            st = self._states.get(job.id, CronJobState())
+            st.next_run_at = None
+            self._states[job.id] = st

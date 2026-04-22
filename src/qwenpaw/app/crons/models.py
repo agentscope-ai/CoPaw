@@ -9,7 +9,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
     model_validator,
 )
 
@@ -57,11 +56,11 @@ def _crontab_dow_to_name(field: str) -> str:
 
 
 class ScheduleSpec(BaseModel):
-    type: Literal["cron"] = "cron"
-    cron: str = Field(...)
+    type: Literal["cron", "once"] = "cron"
+    cron: Optional[str] = None
+    run_at: Optional[datetime] = None
     timezone: str = "UTC"
 
-    @field_validator("cron")
     @classmethod
     def normalize_cron_5_fields(cls, v: str) -> str:
         parts = [p for p in v.split() if p]
@@ -87,6 +86,24 @@ class ScheduleSpec(BaseModel):
                 "normalized); seconds not supported"
             ),
         )
+
+    @model_validator(mode="after")
+    def _validate_schedule_type(self) -> "ScheduleSpec":
+        if self.type == "cron":
+            if not (self.cron and self.cron.strip()):
+                raise ConfigurationException(
+                    message="schedule.type is cron but cron is empty",
+                )
+            self.cron = self.normalize_cron_5_fields(self.cron)
+            self.run_at = None
+            return self
+
+        if self.run_at is None:
+            raise ConfigurationException(
+                message="schedule.type is once but run_at is missing",
+            )
+        self.cron = None
+        return self
 
 
 class DispatchTarget(BaseModel):

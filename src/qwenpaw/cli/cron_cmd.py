@@ -124,8 +124,10 @@ def job_state(
 
 def _build_spec_from_cli(
     task_type: str,
+    schedule_type: str,
     name: str,
     cron: str,
+    run_at: Optional[str],
     channel: str,
     target_user: str,
     target_session: str,
@@ -136,7 +138,18 @@ def _build_spec_from_cli(
     share_session: bool = True,
 ) -> dict:
     """Build CronJobSpec JSON payload from CLI args (no id)."""
-    schedule = {"type": "cron", "cron": cron, "timezone": timezone}
+    if schedule_type == "once":
+        if not (run_at and run_at.strip()):
+            raise click.UsageError(
+                "--run-at is required when schedule type is 'once'",
+            )
+        schedule = {"type": "once", "run_at": run_at.strip()}
+    else:
+        if not (cron and cron.strip()):
+            raise click.UsageError(
+                "--cron is required when schedule type is 'cron'",
+            )
+        schedule = {"type": "cron", "cron": cron, "timezone": timezone}
     dispatch = {
         "type": "channel",
         "channel": channel,
@@ -218,6 +231,16 @@ def _build_spec_from_cli(
     ),
 )
 @click.option(
+    "--schedule-type",
+    type=click.Choice(["cron", "once"], case_sensitive=False),
+    default="cron",
+    show_default=True,
+    help=(
+        "Schedule type: 'cron' for recurring jobs, "
+        "'once' for one-time jobs."
+    ),
+)
+@click.option(
     "--name",
     default=None,
     help="Display name for the job. Required when not using -f/--file.",
@@ -227,7 +250,16 @@ def _build_spec_from_cli(
     default=None,
     help=(
         "Cron expression (5 fields: minute hour day month weekday). "
-        "Example: '0 9 * * *' for daily at 09:00. Required without -f/--file."
+        "Example: '0 9 * * *' for daily at 09:00. "
+        "Required when --schedule-type is cron."
+    ),
+)
+@click.option(
+    "--run-at",
+    default=None,
+    help=(
+        "Run time for one-time jobs in ISO 8601 format, e.g. "
+        "'2026-04-21T15:30:00+08:00'. Required when --schedule-type is once."
     ),
 )
 @click.option(
@@ -308,8 +340,10 @@ def create_job(
     ctx: click.Context,
     file_: Optional[Path],
     task_type: Optional[str],
+    schedule_type: str,
     name: Optional[str],
     cron: Optional[str],
+    run_at: Optional[str],
     channel: Optional[str],
     target_user: Optional[str],
     target_session: Optional[str],
@@ -338,7 +372,6 @@ def create_job(
         for value, label in [
             (task_type, "--type"),
             (name, "--name"),
-            (cron, "--cron"),
             (channel, "--channel"),
             (target_user, "--target-user"),
             (target_session, "--target-session"),
@@ -347,10 +380,21 @@ def create_job(
                 raise click.UsageError(
                     f"When creating without -f/--file, {label} is required",
                 )
+        if schedule_type == "cron":
+            if not (cron and cron.strip()):
+                raise click.UsageError(
+                    "When --schedule-type is cron, --cron is required",
+                )
+        elif not (run_at and run_at.strip()):
+            raise click.UsageError(
+                "When --schedule-type is once, --run-at is required",
+            )
         payload = _build_spec_from_cli(
             task_type=task_type or "agent",
+            schedule_type=schedule_type,
             name=name or "",
             cron=cron or "",
+            run_at=run_at,
             channel=channel or DEFAULT_CHANNEL,
             target_user=target_user or "",
             target_session=target_session or "",

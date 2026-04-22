@@ -3,6 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { MenuProps } from "antd";
 import type { CronJobSpecOutput } from "../../../../api/types";
 import { CopyOutlined, MoreOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { useAppMessage } from "../../../../hooks/useAppMessage";
 import { TFunction } from "i18next";
 import { parseCron } from "./parseCron";
@@ -85,16 +86,30 @@ export const createColumns = (
       dataIndex: ["schedule", "type"],
       key: "schedule_type",
       width: 140,
-      render: () => "cron",
+      render: (type: string) =>
+        type === "once"
+          ? handlers.t("cronJobs.scheduleTypeOnce")
+          : handlers.t("cronJobs.scheduleTypeRecurring"),
     },
     {
       title: handlers.t("cronJobs.scheduleCron"),
-      dataIndex: ["schedule", "cron"],
+      dataIndex: "schedule",
       key: "cron",
       width: 180,
-      render: (cron: string) => {
+      render: (schedule: any) => {
+        if (schedule?.type === "once") {
+          const displayText = schedule?.run_at
+            ? dayjs(schedule.run_at).format("YYYY-MM-DD HH:mm")
+            : "-";
+          return (
+            <Tooltip title={schedule?.run_at || displayText}>
+              <span className={styles.cronText}>{displayText}</span>
+            </Tooltip>
+          );
+        }
+        const cron = schedule?.cron || "0 9 * * *";
         // Parse cron to friendly text
-        const cronParts = parseCron(cron || "0 9 * * *");
+        const cronParts = parseCron(cron);
         let displayText = "";
 
         switch (cronParts.type) {

@@ -1,8 +1,15 @@
-export interface CronJobSchedule {
+export interface CronJobScheduleCron {
   type: "cron";
   cron: string;
   timezone?: string;
 }
+
+export interface CronJobScheduleOnce {
+  type: "once";
+  run_at: string;
+}
+
+export type CronJobSchedule = CronJobScheduleCron | CronJobScheduleOnce;
 
 export interface CronJobTarget {
   user_id: string;
