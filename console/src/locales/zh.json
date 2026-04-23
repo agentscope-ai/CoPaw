@@ -587,7 +587,21 @@
     "misfireGraceSecondsTooltip": "错过执行的宽限期。如果任务错过计划时间超过此时长，将不会执行。",
     "executeNowTitle": "立即执行任务",
     "executeNowContent": "确定要立即执行任务 \"{{name}}\" 吗？",
-    "executeNowConfirm": "立即执行"
+    "executeNowConfirm": "立即执行",
+    "listView": "列表视图",
+    "calendarView": "日历视图",
+    "calendarEmptyHint": "暂无一次性任务。创建一次性任务后会显示在日历中。",
+    "calendarMoreItems": "还有 {{count}} 项",
+    "calendarDayListTitle": "{{date}} 的一次性任务",
+    "executionHistory": "执行记录",
+    "historyTitle": "执行记录 - {{name}}",
+    "historyEmpty": "暂无执行记录。",
+    "historyStatusSuccess": "成功",
+    "historyStatusFailed": "失败",
+    "historyStatusRunning": "执行中",
+    "historyStatusCancelled": "已取消",
+    "historyTriggerScheduled": "定时触发",
+    "historyTriggerManual": "手动触发"
   },
   "channels": {
     "title": "频道",

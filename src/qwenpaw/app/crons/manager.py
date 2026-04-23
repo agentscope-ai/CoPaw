@@ -5,7 +5,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -23,7 +23,7 @@ from .heartbeat import (
     parse_heartbeat_every,
     run_heartbeat_once,
 )
-from .models import CronJobSpec, CronJobState
+from .models import CronExecutionRecord, CronJobSpec, CronJobState
 from .repo.base import BaseJobRepository
 
 HEARTBEAT_JOB_ID = "_heartbeat"
@@ -59,6 +59,7 @@ class CronManager:
 
         self._lock = asyncio.Lock()
         self._states: Dict[str, CronJobState] = {}
+        self._history: Dict[str, list[CronExecutionRecord]] = {}
         self._rt: Dict[str, _Runtime] = {}
         self._started = False
 
@@ -156,6 +157,9 @@ class CronManager:
     def get_state(self, job_id: str) -> CronJobState:
         return self._states.get(job_id, CronJobState())
 
+    def get_history(self, job_id: str) -> list[CronExecutionRecord]:
+        return self._history.get(job_id, [])
+
     # ----- write/control -----
 
     async def create_or_replace_job(self, spec: CronJobSpec) -> None:
@@ -169,6 +173,7 @@ class CronManager:
             if self._started and self._scheduler.get_job(job_id):
                 self._scheduler.remove_job(job_id)
             self._states.pop(job_id, None)
+            self._history.pop(job_id, None)
             self._rt.pop(job_id, None)
             return await self._repo.delete_job(job_id)
 
@@ -291,7 +296,11 @@ class CronManager:
             (job.dispatch.target.session_id or "")[:40],
         )
         task = asyncio.create_task(
-            self._execute_once(job, auto_disable_once=False),
+            self._execute_once(
+                job,
+                auto_disable_once=False,
+                trigger="manual",
+            ),
             name=f"cron-run-{job_id}",
         )
         task.add_done_callback(lambda t: self._task_done_cb(t, job))
@@ -415,7 +424,11 @@ class CronManager:
         if not job:
             return
 
-        await self._execute_once(job, auto_disable_once=True)
+        await self._execute_once(
+            job,
+            auto_disable_once=True,
+            trigger="scheduled",
+        )
         if job.schedule.type == "once":
             return
 
@@ -462,6 +475,7 @@ class CronManager:
         job: CronJobSpec,
         *,
         auto_disable_once: bool = True,
+        trigger: Literal["scheduled", "manual"] = "scheduled",
     ) -> None:
         assert job.id is not None, "Job must have an id"
         rt = self._rt.get(job.id)
@@ -502,6 +516,17 @@ class CronManager:
             finally:
                 st.last_run_at = datetime.now(timezone.utc)
                 self._states[job.id] = st
+                records = self._history.setdefault(job.id, [])
+                records.insert(
+                    0,
+                    CronExecutionRecord(
+                        run_at=st.last_run_at,
+                        status=st.last_status or "error",
+                        error=st.last_error,
+                        trigger=trigger,
+                    ),
+                )
+                del records[100:]
                 if job.schedule.type == "once" and auto_disable_once:
                     try:
                         await self._disable_once_job(job)
