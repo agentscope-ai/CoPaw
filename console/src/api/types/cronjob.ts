@@ -7,6 +7,11 @@ export interface CronJobScheduleCron {
 export interface CronJobScheduleOnce {
   type: "once";
   run_at: string;
+  timezone?: string;
+  repeat_every_days?: number;
+  repeat_end_type?: "never" | "until" | "count";
+  repeat_until?: string;
+  repeat_count?: number;
 }
 
 export type CronJobSchedule = CronJobScheduleCron | CronJobScheduleOnce;

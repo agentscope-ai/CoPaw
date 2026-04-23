@@ -60,6 +60,10 @@ class ScheduleSpec(BaseModel):
     cron: Optional[str] = None
     run_at: Optional[datetime] = None
     timezone: str = "UTC"
+    repeat_every_days: Optional[int] = Field(default=None, ge=1)
+    repeat_end_type: Optional[Literal["never", "until", "count"]] = None
+    repeat_until: Optional[datetime] = None
+    repeat_count: Optional[int] = Field(default=None, ge=1)
 
     @classmethod
     def normalize_cron_5_fields(cls, v: str) -> str:
@@ -96,6 +100,10 @@ class ScheduleSpec(BaseModel):
                 )
             self.cron = self.normalize_cron_5_fields(self.cron)
             self.run_at = None
+            self.repeat_every_days = None
+            self.repeat_end_type = None
+            self.repeat_until = None
+            self.repeat_count = None
             return self
 
         if self.run_at is None:
@@ -103,6 +111,40 @@ class ScheduleSpec(BaseModel):
                 message="schedule.type is once but run_at is missing",
             )
         self.cron = None
+        if self.repeat_every_days is None:
+            self.repeat_end_type = None
+            self.repeat_until = None
+            self.repeat_count = None
+            return self
+
+        if self.repeat_end_type is None:
+            self.repeat_end_type = "never"
+
+        if self.repeat_end_type == "never":
+            self.repeat_until = None
+            self.repeat_count = None
+            return self
+
+        if self.repeat_end_type == "until":
+            if self.repeat_until is None:
+                raise ConfigurationException(
+                    message=(
+                        "repeat_end_type is until "
+                        "but repeat_until is missing"
+                    ),
+                )
+            if self.repeat_until <= self.run_at:
+                raise ConfigurationException(
+                    message="repeat_until must be later than run_at",
+                )
+            self.repeat_count = None
+            return self
+
+        if self.repeat_count is None:
+            raise ConfigurationException(
+                message="repeat_end_type is count but repeat_count is missing",
+            )
+        self.repeat_until = None
         return self
 
 

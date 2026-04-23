@@ -35,7 +35,15 @@ import styles from "./index.module.less";
 
 type CronJob = CronJobSpecOutput;
 type OneTimeCronJob = CronJob & {
-  schedule: { type: "once"; run_at: string; timezone?: string };
+  schedule: {
+    type: "once";
+    run_at: string;
+    timezone?: string;
+    repeat_every_days?: number;
+    repeat_end_type?: "never" | "until" | "count";
+    repeat_until?: string;
+    repeat_count?: number;
+  };
 };
 type CronViewMode = "list" | "calendar";
 type ScheduleTypeFilter = "all" | "cron" | "once";
@@ -128,6 +136,13 @@ function CronJobsPage() {
       formValues.onceRunAt = job.schedule.run_at
         ? dayjs(job.schedule.run_at)
         : null;
+      formValues.onceRepeatEnabled = Boolean(job.schedule.repeat_every_days);
+      formValues.onceRepeatEveryDays = job.schedule.repeat_every_days || 1;
+      formValues.onceRepeatEndType = job.schedule.repeat_end_type || "never";
+      formValues.onceRepeatUntil = job.schedule.repeat_until
+        ? dayjs(job.schedule.repeat_until)
+        : null;
+      formValues.onceRepeatCount = job.schedule.repeat_count || 2;
     } else {
       // Parse cron expression to form fields
       const cronParts = parseCron(job.schedule?.cron || "0 9 * * *");
@@ -209,12 +224,28 @@ function CronJobsPage() {
   const handleSubmit = async (values: any) => {
     let schedule: any = values.schedule || {};
     if ((values.scheduleType || "cron") === "once") {
+      const onceRepeatEnabled = Boolean(values.onceRepeatEnabled);
+      const repeatEndType = values.onceRepeatEndType || "never";
       schedule = {
         type: "once",
         run_at: values.onceRunAt
           ? dayjs(values.onceRunAt).format("YYYY-MM-DDTHH:mm:00")
           : undefined,
         timezone: values.schedule?.timezone || userTimezoneRef.current,
+        repeat_every_days: onceRepeatEnabled
+          ? Number(values.onceRepeatEveryDays || 1)
+          : undefined,
+        repeat_end_type: onceRepeatEnabled ? repeatEndType : undefined,
+        repeat_until:
+          onceRepeatEnabled &&
+          repeatEndType === "until" &&
+          values.onceRepeatUntil
+            ? dayjs(values.onceRepeatUntil).format("YYYY-MM-DDTHH:mm:00")
+            : undefined,
+        repeat_count:
+          onceRepeatEnabled && repeatEndType === "count"
+            ? Number(values.onceRepeatCount || 1)
+            : undefined,
       };
     } else {
       const cronParts: any = {
@@ -249,6 +280,11 @@ function CronJobsPage() {
     };
     delete processedValues.scheduleType;
     delete processedValues.onceRunAt;
+    delete processedValues.onceRepeatEnabled;
+    delete processedValues.onceRepeatEveryDays;
+    delete processedValues.onceRepeatEndType;
+    delete processedValues.onceRepeatUntil;
+    delete processedValues.onceRepeatCount;
     delete processedValues.cronType;
     delete processedValues.cronTime;
     delete processedValues.cronDaysOfWeek;
@@ -326,46 +362,110 @@ function CronJobsPage() {
     });
   };
 
-  const getRunAtInUserTimezone = (job: OneTimeCronJob) => {
-    const runAt = job.schedule.run_at;
-    const hasOffset = /([zZ]|[+-]\d{2}:?\d{2})$/.test(runAt);
+  const parseAtInTimezone = (timeText: string, timezoneName: string) => {
+    const hasOffset = /([zZ]|[+-]\d{2}:?\d{2})$/.test(timeText);
     if (hasOffset) {
-      return dayjs(runAt).tz(userTimezone);
+      return dayjs(timeText).tz(timezoneName);
     }
-    return dayjs.tz(runAt, job.schedule.timezone || "UTC").tz(userTimezone);
+    return dayjs.tz(timeText, timezoneName);
   };
 
-  const oneTimeJobs = useMemo(
-    () =>
-      jobs
-        .filter(isOneTimeJob)
-        .slice()
-        .sort(
-          (a, b) =>
-            dayjs(a.schedule.run_at).valueOf() -
-            dayjs(b.schedule.run_at).valueOf(),
-        ),
-    [jobs],
-  );
+  const oneTimeJobs = useMemo(() => jobs.filter(isOneTimeJob).slice(), [jobs]);
 
   const filteredListJobs = useMemo(() => {
     if (scheduleTypeFilter === "all") return jobs;
     return jobs.filter((job) => job.schedule?.type === scheduleTypeFilter);
   }, [jobs, scheduleTypeFilter]);
 
-  const oneTimeJobEvents = useMemo<OneTimeJobEvent[]>(
-    () =>
-      oneTimeJobs
-        .map((job) => ({
+  const calendarDays = useMemo(() => {
+    const monthStart = calendarMonth.startOf("month");
+    const calendarStart = monthStart.startOf("week");
+    return Array.from({ length: 42 }, (_, index) =>
+      calendarStart.add(index, "day"),
+    );
+  }, [calendarMonth]);
+
+  const oneTimeJobEvents = useMemo<OneTimeJobEvent[]>(() => {
+    if (calendarDays.length === 0) return [];
+    const rangeStartInUserTz = calendarDays[0].startOf("day");
+    const rangeEndInUserTz = calendarDays[calendarDays.length - 1].endOf("day");
+    const events: OneTimeJobEvent[] = [];
+
+    oneTimeJobs.forEach((job) => {
+      const scheduleTimezone = job.schedule.timezone || "UTC";
+      const baseInScheduleTz = parseAtInTimezone(
+        job.schedule.run_at,
+        scheduleTimezone,
+      );
+      const rangeStartInScheduleTz = rangeStartInUserTz.tz(scheduleTimezone);
+      const rangeEndInScheduleTz = rangeEndInUserTz.tz(scheduleTimezone);
+      const repeatEveryDays = job.schedule.repeat_every_days;
+
+      if (!repeatEveryDays) {
+        const runAtInUserTimezone = baseInScheduleTz.tz(userTimezone);
+        if (
+          !runAtInUserTimezone.isBefore(rangeStartInUserTz) &&
+          !runAtInUserTimezone.isAfter(rangeEndInUserTz)
+        ) {
+          events.push({
+            job,
+            runAtInUserTimezone,
+          });
+        }
+        return;
+      }
+
+      const countLimit =
+        job.schedule.repeat_end_type === "count"
+          ? job.schedule.repeat_count ?? 0
+          : null;
+      if (countLimit !== null && countLimit <= 0) return;
+
+      const untilInScheduleTz =
+        job.schedule.repeat_end_type === "until" && job.schedule.repeat_until
+          ? parseAtInTimezone(job.schedule.repeat_until, scheduleTimezone)
+          : null;
+
+      let startIndex = 0;
+      if (baseInScheduleTz.isBefore(rangeStartInScheduleTz)) {
+        const diffDays = rangeStartInScheduleTz
+          .startOf("day")
+          .diff(baseInScheduleTz.startOf("day"), "day");
+        startIndex = Math.max(0, Math.floor(diffDays / repeatEveryDays));
+      }
+
+      let index = startIndex;
+      let current = baseInScheduleTz.add(index * repeatEveryDays, "day");
+      while (current.isBefore(rangeStartInScheduleTz)) {
+        index += 1;
+        current = baseInScheduleTz.add(index * repeatEveryDays, "day");
+      }
+
+      const maxIterations = 400;
+      let iterations = 0;
+      while (
+        !current.isAfter(rangeEndInScheduleTz) &&
+        iterations < maxIterations
+      ) {
+        iterations += 1;
+        const runNumber = index + 1;
+        if (countLimit !== null && runNumber > countLimit) break;
+        if (untilInScheduleTz && current.isAfter(untilInScheduleTz)) break;
+
+        events.push({
           job,
-          runAtInUserTimezone: getRunAtInUserTimezone(job),
-        }))
-        .sort(
-          (a, b) =>
-            a.runAtInUserTimezone.valueOf() - b.runAtInUserTimezone.valueOf(),
-        ),
-    [oneTimeJobs, userTimezone],
-  );
+          runAtInUserTimezone: current.tz(userTimezone),
+        });
+        index += 1;
+        current = baseInScheduleTz.add(index * repeatEveryDays, "day");
+      }
+    });
+
+    return events.sort(
+      (a, b) =>
+        a.runAtInUserTimezone.valueOf() - b.runAtInUserTimezone.valueOf(),
+    );
+  }, [calendarDays, oneTimeJobs, userTimezone]);
 
   const oneTimeJobsByDate = useMemo(() => {
     return oneTimeJobEvents.reduce<Record<string, OneTimeJobEvent[]>>(
@@ -379,40 +479,12 @@ function CronJobsPage() {
     );
   }, [oneTimeJobEvents]);
 
-  const calendarDays = useMemo(() => {
-    const monthStart = calendarMonth.startOf("month");
-    const calendarStart = monthStart.startOf("week");
-    return Array.from({ length: 42 }, (_, index) =>
-      calendarStart.add(index, "day"),
-    );
-  }, [calendarMonth]);
-
   return (
     <div className={styles.cronJobsPage}>
       <PageHeader
         items={[{ title: t("nav.control") }, { title: t("cronJobs.title") }]}
         extra={
           <div className={styles.headerActions}>
-            <div className={styles.viewToggle}>
-              <button
-                className={`${styles.viewToggleBtn} ${
-                  viewMode === "list" ? styles.viewToggleBtnActive : ""
-                }`}
-                onClick={() => setViewMode("list")}
-                title={t("cronJobs.listView")}
-              >
-                <UnorderedListOutlined />
-              </button>
-              <button
-                className={`${styles.viewToggleBtn} ${
-                  viewMode === "calendar" ? styles.viewToggleBtnActive : ""
-                }`}
-                onClick={() => setViewMode("calendar")}
-                title={t("cronJobs.calendarView")}
-              >
-                <CalendarOutlined />
-              </button>
-            </div>
             {viewMode === "list" && (
               <Select<ScheduleTypeFilter>
                 value={scheduleTypeFilter}
@@ -434,6 +506,26 @@ function CronJobsPage() {
                 ]}
               />
             )}
+            <div className={styles.viewToggle}>
+              <button
+                className={`${styles.viewToggleBtn} ${
+                  viewMode === "list" ? styles.viewToggleBtnActive : ""
+                }`}
+                onClick={() => setViewMode("list")}
+                title={t("cronJobs.listView")}
+              >
+                <UnorderedListOutlined />
+              </button>
+              <button
+                className={`${styles.viewToggleBtn} ${
+                  viewMode === "calendar" ? styles.viewToggleBtnActive : ""
+                }`}
+                onClick={() => setViewMode("calendar")}
+                title={t("cronJobs.calendarView")}
+              >
+                <CalendarOutlined />
+              </button>
+            </div>
             <Button type="primary" onClick={handleCreate}>
               + {t("cronJobs.createJob")}
             </Button>

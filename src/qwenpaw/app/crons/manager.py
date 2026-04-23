@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional, Union
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -306,7 +306,6 @@ class CronManager:
         task = asyncio.create_task(
             self._execute_once(
                 job,
-                auto_disable_once=False,
                 trigger="manual",
             ),
             name=f"cron-run-{job_id}",
@@ -376,9 +375,30 @@ class CronManager:
     def _build_trigger(
         self,
         spec: CronJobSpec,
-    ) -> Union[CronTrigger, DateTrigger]:
+    ) -> Union[CronTrigger, DateTrigger, IntervalTrigger]:
         if spec.schedule.type == "once":
             assert spec.schedule.run_at is not None
+            if spec.schedule.repeat_every_days:
+                end_date: datetime | None = None
+                if (
+                    spec.schedule.repeat_end_type == "until"
+                    and spec.schedule.repeat_until is not None
+                ):
+                    end_date = spec.schedule.repeat_until
+                elif (
+                    spec.schedule.repeat_end_type == "count"
+                    and spec.schedule.repeat_count is not None
+                ):
+                    end_date = spec.schedule.run_at + timedelta(
+                        days=spec.schedule.repeat_every_days
+                        * (spec.schedule.repeat_count - 1),
+                    )
+                return IntervalTrigger(
+                    days=spec.schedule.repeat_every_days,
+                    start_date=spec.schedule.run_at,
+                    end_date=end_date,
+                    timezone=spec.schedule.timezone,
+                )
             return DateTrigger(
                 run_date=spec.schedule.run_at,
                 timezone=spec.schedule.timezone,
@@ -434,12 +454,8 @@ class CronManager:
 
         await self._execute_once(
             job,
-            auto_disable_once=True,
             trigger="scheduled",
         )
-        if job.schedule.type == "once":
-            return
-
         # refresh next_run
         aps_job = self._scheduler.get_job(job_id)
         st = self._states.get(job_id, CronJobState())
@@ -482,7 +498,6 @@ class CronManager:
         self,
         job: CronJobSpec,
         *,
-        auto_disable_once: bool = True,
         trigger: Literal["scheduled", "manual"] = "scheduled",
     ) -> None:
         assert job.id is not None, "Job must have an id"
@@ -536,32 +551,3 @@ class CronManager:
                     limit=CRON_HISTORY_LIMIT,
                 )
                 self._history[job.id] = records
-                if job.schedule.type == "once" and auto_disable_once:
-                    try:
-                        await self._disable_once_job(job)
-                    except (
-                        Exception
-                    ) as cleanup_error:  # pylint: disable=broad-except
-                        logger.warning(
-                            "failed to auto-disable one-time job job_id=%s "
-                            "error=%s",
-                            job.id,
-                            repr(cleanup_error),
-                        )
-
-    # TODO: remove this function after testing
-    # def this fun for temporary use
-    # with calendar, consider the format again
-    async def _disable_once_job(self, job: CronJobSpec) -> None:
-        """Keep one-time job record but disable it after first execution."""
-        assert job.id is not None, "Job must have an id"
-        async with self._lock:
-            disabled_job = job.model_copy(update={"enabled": False})
-            await self._repo.upsert_job(disabled_job)
-
-            if self._started and self._scheduler.get_job(job.id):
-                self._scheduler.remove_job(job.id)
-
-            st = self._states.get(job.id, CronJobState())
-            st.next_run_at = None
-            self._states[job.id] = st

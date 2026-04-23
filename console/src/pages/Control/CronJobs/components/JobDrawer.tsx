@@ -113,21 +113,128 @@ export function JobDrawer({
         >
           {({ getFieldValue }) =>
             getFieldValue("scheduleType") === "once" ? (
-              <Form.Item
-                name="onceRunAt"
-                label={t("cronJobs.onceRunAt")}
-                rules={[
-                  { required: true, message: t("cronJobs.pleaseInputRunAt") },
-                ]}
-              >
-                <DatePicker
-                  showTime={{ format: "HH:mm" }}
-                  format="YYYY-MM-DD HH:mm"
-                  style={{ width: "100%" }}
-                />
-              </Form.Item>
+              <>
+                <Form.Item
+                  name="onceRunAt"
+                  label={t("cronJobs.onceRunAt")}
+                  rules={[
+                    { required: true, message: t("cronJobs.pleaseInputRunAt") },
+                  ]}
+                >
+                  <DatePicker
+                    showTime={{ format: "HH:mm" }}
+                    format="YYYY-MM-DD HH:mm"
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="onceRepeatEnabled"
+                  label={t("cronJobs.repeatEnabled")}
+                  valuePropName="checked"
+                  tooltip={t("cronJobs.repeatEnabledTooltip")}
+                >
+                  <Switch />
+                </Form.Item>
+              </>
             ) : null
           }
+        </Form.Item>
+
+        <Form.Item
+          noStyle
+          shouldUpdate={(prev, cur) =>
+            prev.scheduleType !== cur.scheduleType ||
+            prev.onceRepeatEnabled !== cur.onceRepeatEnabled ||
+            prev.onceRepeatEndType !== cur.onceRepeatEndType
+          }
+        >
+          {({ getFieldValue }) => {
+            if (
+              getFieldValue("scheduleType") !== "once" ||
+              !getFieldValue("onceRepeatEnabled")
+            ) {
+              return null;
+            }
+            const endType = getFieldValue("onceRepeatEndType") || "never";
+            return (
+              <>
+                <Form.Item label={t("cronJobs.repeatFrequency")}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span>{t("cronJobs.repeatEveryPrefix")}</span>
+                    <Form.Item
+                      name="onceRepeatEveryDays"
+                      noStyle
+                      rules={[
+                        {
+                          required: true,
+                          message: t("cronJobs.pleaseInputRepeatEveryDays"),
+                        },
+                      ]}
+                    >
+                      <InputNumber min={1} style={{ width: 120 }} />
+                    </Form.Item>
+                    <span>{t("cronJobs.repeatEverySuffix")}</span>
+                  </div>
+                </Form.Item>
+                <Form.Item
+                  name="onceRepeatEndType"
+                  label={t("cronJobs.repeatEndType")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("cronJobs.pleaseSelectRepeatEndType"),
+                    },
+                  ]}
+                >
+                  <Select>
+                    <Select.Option value="never">
+                      {t("cronJobs.repeatEndNever")}
+                    </Select.Option>
+                    <Select.Option value="until">
+                      {t("cronJobs.repeatEndUntil")}
+                    </Select.Option>
+                    <Select.Option value="count">
+                      {t("cronJobs.repeatEndCount")}
+                    </Select.Option>
+                  </Select>
+                </Form.Item>
+                {endType === "until" && (
+                  <Form.Item
+                    name="onceRepeatUntil"
+                    label={t("cronJobs.repeatUntil")}
+                    rules={[
+                      {
+                        required: true,
+                        message: t("cronJobs.pleaseInputRepeatUntil"),
+                      },
+                    ]}
+                  >
+                    <DatePicker
+                      showTime={{ format: "HH:mm" }}
+                      format="YYYY-MM-DD HH:mm"
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                )}
+                {endType === "count" && (
+                  <Form.Item
+                    name="onceRepeatCount"
+                    label={t("cronJobs.repeatCount")}
+                    rules={[
+                      {
+                        required: true,
+                        message: t("cronJobs.pleaseInputRepeatCount"),
+                      },
+                    ]}
+                  >
+                    <InputNumber min={1} style={{ width: "100%" }} />
+                  </Form.Item>
+                )}
+              </>
+            );
+          }}
         </Form.Item>
 
         <Form.Item
