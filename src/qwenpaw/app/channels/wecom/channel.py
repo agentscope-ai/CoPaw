@@ -906,7 +906,9 @@ class WecomChannel(BaseChannel):
                 )
                 return media_id
             except Exception:
-                logger.exception("wecom _upload_media failed path=%s", local[:60])
+                logger.exception(
+                    "wecom _upload_media failed path=%s", local[:60]
+                )
                 return None
 
     async def _send_media_part(
@@ -1418,7 +1420,7 @@ class WecomChannel(BaseChannel):
         for future in list(self._upload_ack_futures.values()):
             if not future.done():
                 future.set_exception(
-                    RuntimeError("WeCom adapter shutting down")
+                    RuntimeError("WeCom adapter shutting down"),
                 )
         self._upload_ack_futures.clear()
 
@@ -1440,13 +1442,11 @@ class WecomChannel(BaseChannel):
 
         # Schedule the shutdown coroutine in the WS event loop and wait
         # for it to complete without blocking the caller's event loop.
-        if (
-            self._ws_loop is not None
-            and self._ws_loop.is_running()
-        ):
+        if self._ws_loop is not None and self._ws_loop.is_running():
             try:
                 shutdown_future = asyncio.run_coroutine_threadsafe(
-                    self._graceful_shutdown(), self._ws_loop
+                    self._graceful_shutdown(),
+                    self._ws_loop,
                 )
                 await asyncio.wait_for(
                     asyncio.wrap_future(shutdown_future),
@@ -1461,13 +1461,15 @@ class WecomChannel(BaseChannel):
             try:
                 if self._client:
                     ws_manager = getattr(
-                        self._client, "_ws_manager", None
+                        self._client,
+                        "_ws_manager",
+                        None,
                     )
                     if ws_manager:
                         ws_manager._is_manual_close = True
                         ws_manager._stop_heartbeat()
                         ws_manager._clear_pending_messages(
-                            "WeCom adapter shutting down"
+                            "WeCom adapter shutting down",
                         )
             except Exception as exc:
                 logger.warning("wecom shutdown error (fallback): %s", exc)
