@@ -12,8 +12,9 @@ from ...config import (
 )
 from ...config.config import load_agent_config, save_agent_config
 from ...agents.memory.agent_md_manager import AgentMdManager
-from ...agents.utils import copy_builtin_qa_md_files, copy_md_files
-from ...constant import BUILTIN_QA_AGENT_ID
+from ...agents.templates import get_workspace_md_template_id
+from ...agents.utils import copy_workspace_md_files
+from ...constant import BUILTIN_QA_AGENT_ID, SUPPORTED_AGENT_LANGUAGES
 from ..agent_context import get_agent_for_request
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -49,6 +50,7 @@ async def list_working_files(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         files = [
             MdFileInfo.model_validate(file)
@@ -74,6 +76,7 @@ async def read_working_file(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         content = workspace_manager.read_working_md(md_name)
         return MdFileContent(content=content)
@@ -99,6 +102,7 @@ async def write_working_file(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         workspace_manager.write_working_md(md_name, body.content)
         return {"written": True}
@@ -120,6 +124,7 @@ async def list_memory_files(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         files = [
             MdFileInfo.model_validate(file)
@@ -145,6 +150,7 @@ async def read_memory_file(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         content = workspace_manager.read_memory_md(md_name)
         return MdFileContent(content=content)
@@ -170,6 +176,7 @@ async def write_memory_file(
         workspace = await get_agent_for_request(request)
         workspace_manager = AgentMdManager(
             str(workspace.workspace_dir),
+            agent_id=workspace.agent_id,
         )
         workspace_manager.write_memory_md(md_name, body.content)
         return {"written": True}
@@ -211,7 +218,7 @@ async def put_agent_language(
     Update agent language and optionally re-copy MD files to agent workspace.
     """
     language = (body.get("language") or "").strip().lower()
-    valid = {"zh", "en", "ru"}
+    valid = SUPPORTED_AGENT_LANGUAGES
     if language not in valid:
         raise HTTPException(
             status_code=400,
@@ -235,22 +242,15 @@ async def put_agent_language(
 
     copied_files: list[str] = []
     if old_language != language:
-        # Builtin QA: persona from md_files/qa/; MEMORY/HEARTBEAT from lang
-        # pack; never BOOTSTRAP (remove if wrongly copied earlier).
-        if agent_id == BUILTIN_QA_AGENT_ID:
-            copied_files = copy_builtin_qa_md_files(
-                language,
-                workspace.workspace_dir,
-                only_if_missing=False,
-            )
-        else:
-            copied_files = (
-                copy_md_files(
-                    language,
-                    workspace_dir=workspace.workspace_dir,
-                )
-                or []
-            )
+        copied_files = copy_workspace_md_files(
+            language,
+            workspace.workspace_dir,
+            md_template_id=get_workspace_md_template_id(
+                agent_config.template_id
+                or ("qa" if agent_id == BUILTIN_QA_AGENT_ID else None),
+            ),
+            only_if_missing=False,
+        )
 
     return {
         "language": language,

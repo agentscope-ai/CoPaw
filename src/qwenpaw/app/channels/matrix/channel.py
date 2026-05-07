@@ -40,24 +40,20 @@ from nio import (
 )
 from nio.responses import JoinedMembersResponse, WhoamiResponse
 
-logger = logging.getLogger("qwenpaw.channels.matrix")
+from agentscope_runtime.engine.schemas.agent_schemas import (
+    AudioContent,
+    ContentType,
+    FileContent,
+    ImageContent,
+    TextContent,
+    VideoContent,
+)
 
-# ---------------------------------------------------------------------------
-# Lazy import of QwenPaw base types so this file can be syntax-checked without
-# qwenpaw installed (it's only executed inside a qwenpaw environment).
-# ---------------------------------------------------------------------------
-try:
-    from qwenpaw.app.channels.base import BaseChannel
-    from agentscope_runtime.engine.schemas.agent_schemas import (
-        AudioContent,
-        ContentType,
-        FileContent,
-        ImageContent,
-        TextContent,
-        VideoContent,
-    )
-except ImportError:  # pragma: no cover
-    BaseChannel = object  # type: ignore[assignment,misc]
+from ....app.channels.base import BaseChannel
+from ....app.channels.utils import file_url_to_local_path
+from ....constant import WORKING_DIR
+
+logger = logging.getLogger("qwenpaw.channels.matrix")
 
 
 CHANNEL_KEY = "matrix"
@@ -228,6 +224,7 @@ class MatrixChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        workspace_dir: Path | None = None,
     ) -> None:
         super().__init__(
             process=process,
@@ -237,6 +234,9 @@ class MatrixChannel(BaseChannel):
             filter_thinking=filter_thinking,
         )
         self._cfg = config
+        self._workspace_dir = (
+            Path(workspace_dir).expanduser() if workspace_dir else None
+        )
         self._client: Optional[AsyncClient] = None
         self._user_id: Optional[str] = None
         self._sync_task: Optional[asyncio.Task] = None
@@ -280,6 +280,7 @@ class MatrixChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        workspace_dir: Path | None = None,
     ) -> "MatrixChannel":
         if isinstance(config, dict):
             cfg = MatrixChannelConfig(config)
@@ -296,6 +297,7 @@ class MatrixChannel(BaseChannel):
             filter_tool_messages=filter_tool_messages
             or cfg.filter_tool_messages,
             filter_thinking=filter_thinking or cfg.filter_thinking,
+            workspace_dir=workspace_dir,
         )
 
     @classmethod
@@ -336,6 +338,33 @@ class MatrixChannel(BaseChannel):
             encryption_enabled=encryption,
             request_timeout=request_timeout,
         )
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check Matrix client connection status."""
+        if not getattr(self, "enabled", True) or not self._cfg.homeserver:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "Matrix homeserver not configured.",
+            }
+        if self._client is None:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "Matrix client not initialized.",
+            }
+        has_token = bool(self._client.access_token)
+        if not has_token:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "Matrix client has no access token (not logged in).",
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "Matrix client is connected.",
+        }
 
     # pylint: disable=too-many-branches
     async def start(self) -> None:
@@ -484,7 +513,6 @@ class MatrixChannel(BaseChannel):
     # ------------------------------------------------------------------
     # Sync loop — token persistence, catch-up, incremental sync, E2EE
     # maintenance
-    # next_batch file under QWENPAW_WORKING_DIR (§3);
     # catch-up sync suppresses replay; incremental sync; E2EE maintenance
     # between syncs when encryption on.
     # ------------------------------------------------------------------
@@ -492,12 +520,7 @@ class MatrixChannel(BaseChannel):
     @staticmethod
     def _sync_token_path() -> Optional[Path]:
         """Return the file path for persisting the Matrix sync token."""
-        wd = os.environ.get("QWENPAW_WORKING_DIR") or os.environ.get(
-            "COPAW_WORKING_DIR",
-        )
-        if wd:
-            return Path(wd) / "matrix_sync_token"
-        return None
+        return WORKING_DIR / "matrix_sync_token"
 
     def _load_sync_token(self) -> Optional[str]:
         """Load persisted next_batch token from disk, or None.
@@ -1029,19 +1052,9 @@ class MatrixChannel(BaseChannel):
 
     def _media_dir(self) -> Path:
         """Return (and create) the local media storage directory."""
-        try:
-            from qwenpaw.constant import WORKING_DIR
-
-            d = WORKING_DIR / "media"
-        except Exception as exc:
-            logger.debug(
-                "MatrixChannel: qwenpaw.constant.WORKING_DIR "
-                "unavailable (%s), using ~/.qwenpaw/media",
-                exc,
-            )
-            d = Path.home() / ".qwenpaw" / "media"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
+        if self._workspace_dir:
+            return self._workspace_dir / "media"
+        return WORKING_DIR / "media"
 
     def _mxc_to_http(self, mxc_url: str) -> str:
         """Convert an mxc:// URL to an HTTP download URL.
@@ -1097,12 +1110,7 @@ class MatrixChannel(BaseChannel):
 
     def _e2ee_store_path(self) -> Path:
         """Return the directory for persisting Olm/Megolm crypto state."""
-        wd = os.environ.get("QWENPAW_WORKING_DIR") or os.environ.get(
-            "COPAW_WORKING_DIR",
-        )
-        if wd:
-            return Path(wd) / "matrix_crypto_store"
-        return Path.home() / ".qwenpaw" / "matrix_crypto_store"
+        return WORKING_DIR / "matrix_crypto_store"
 
     async def _download_encrypted_mxc(
         self,
@@ -1369,7 +1377,7 @@ class MatrixChannel(BaseChannel):
             return None
         try:
             # file_ref may be a file:// URI or a plain path
-            path = Path(file_ref.removeprefix("file://"))
+            path = Path(file_url_to_local_path(file_ref) or file_ref)
             if not path.exists():
                 logger.warning(
                     "MatrixChannel: upload source not found: %s",
@@ -2120,7 +2128,7 @@ class MatrixChannel(BaseChannel):
 
         # Build and send the Matrix room event
         try:
-            path_str = file_ref.removeprefix("file://")
+            path_str = file_url_to_local_path(file_ref) or file_ref
             filename = os.path.basename(path_str) or "file"
             mime_type, _ = mimetypes.guess_type(path_str)
             mime_type = mime_type or "application/octet-stream"

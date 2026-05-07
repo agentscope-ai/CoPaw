@@ -36,7 +36,7 @@ const getRoleLabel = (role: string, t: (key: string) => string): string => {
 interface SearchResult {
   chatId: string;
   chatName: string;
-  messageId: string;
+  messageId?: string;
   role: string;
   roleLabel: string;
   text: string;
@@ -62,8 +62,23 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  /** Search progress text, e.g. "3/50" */
+  const [searchProgress, setSearchProgress] = useState("");
   const inputRef = useRef<InputRef>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Monotonic id so slow list/getChat responses cannot overwrite a newer search. */
+  const searchSeqRef = useRef(0);
+
+  // Clean up on unmount: clear timers and release result data
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      setSearchResults([]);
+      setSearchQuery("");
+    };
+  }, []);
 
   // Focus input when drawer opens
   useEffect(() => {
@@ -74,81 +89,119 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
     } else {
       setSearchQuery("");
       setSearchResults([]);
+      setSearchProgress("");
     }
   }, [open]);
 
-  // Search across all sessions
+  // Search across all sessions — serial streaming to avoid memory explosion
   useEffect(() => {
+    const seq = ++searchSeqRef.current;
+
     if (!searchQuery.trim()) {
       setSearchResults([]);
+      setSearchProgress("");
+      setLoading(false);
       return;
     }
 
-    // Debounce search
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     searchTimeoutRef.current = setTimeout(async () => {
       setLoading(true);
+      setSearchProgress("");
       try {
         const query = searchQuery.toLowerCase();
         const results: SearchResult[] = [];
 
-        // Get all chats from backend
         const chats = await chatApi.listChats();
+        if (seq !== searchSeqRef.current) return;
 
-        // Fetch all chat histories in parallel using Promise.all
-        const chatHistories = await Promise.all(
-          chats
-            .filter((chat) => chat.id)
-            .map(async (chat) => {
-              try {
-                const history = await chatApi.getChat(chat.id!);
-                return { chat, history };
-              } catch (err) {
-                console.warn(`Failed to load chat ${chat.id}:`, err);
-                return null;
-              }
-            }),
+        const validChats = chats.filter(
+          (chat): chat is typeof chat & { id: string } => !!chat.id,
         );
+        const totalChats = validChats.length;
 
-        // Search in each chat
-        for (const item of chatHistories) {
-          if (!item) continue;
-          const { chat, history } = item;
-          const messages = history.messages || [];
+        // Serial iteration: load one chat at a time, search, then discard
+        for (let chatIndex = 0; chatIndex < totalChats; chatIndex++) {
+          if (seq !== searchSeqRef.current) return;
+
+          const chat = validChats[chatIndex];
+          const chatId = chat.id;
           const chatName = chat.name || "New Chat";
           const chatTimestamp = chat.created_at;
 
-          for (const msg of messages) {
-            const text = extractTextFromContent(msg.content);
-            if (text.toLowerCase().includes(query)) {
-              const lowerText = text.toLowerCase();
-              const matchIndex = lowerText.indexOf(query);
-              const contextLength = 80;
-              const start = Math.max(0, matchIndex - contextLength);
-              const end = Math.min(
-                text.length,
-                matchIndex + searchQuery.length + contextLength,
-              );
-              const matchedText = text.slice(start, end);
+          setSearchProgress(`${chatIndex + 1}/${totalChats}`);
 
-              results.push({
-                chatId: chat.id!,
-                chatName,
-                messageId: String(msg.id || ""),
-                role: msg.role || "",
-                roleLabel: getRoleLabel(msg.role || "", t),
-                text,
-                matchedText: start > 0 ? `...${matchedText}` : matchedText,
-                timestamp: chatTimestamp,
-              });
+          // Title match
+          if (chat.name && chatName.toLowerCase().includes(query)) {
+            results.push({
+              chatId,
+              chatName,
+              role: "chat_title",
+              roleLabel: t("chat.search.titleMatch"),
+              text: chatName,
+              matchedText: chatName,
+              timestamp: chatTimestamp,
+            });
+          }
+
+          // Load this chat's messages, search, then let GC reclaim
+          try {
+            const history = await chatApi.getChat(chatId);
+            if (seq !== searchSeqRef.current) return;
+
+            const messages = history.messages || [];
+            for (const msg of messages) {
+              const text = extractTextFromContent(msg.content);
+              const lowerText = text.toLowerCase();
+              if (lowerText.includes(query)) {
+                const matchIndex = lowerText.indexOf(query);
+                const contextLength = 80;
+                const start = Math.max(0, matchIndex - contextLength);
+                const end = Math.min(
+                  text.length,
+                  matchIndex + searchQuery.length + contextLength,
+                );
+                const matchedText = text.slice(start, end);
+
+                results.push({
+                  chatId,
+                  chatName,
+                  messageId: String(msg.id || ""),
+                  role: msg.role || "",
+                  roleLabel: getRoleLabel(msg.role || "", t),
+                  text: "",
+                  matchedText: start > 0 ? `...${matchedText}` : matchedText,
+                  timestamp: chatTimestamp,
+                });
+              }
             }
+            // history and messages go out of scope here — GC can reclaim
+          } catch (err) {
+            console.warn(`Failed to load chat ${chatId}:`, err);
+          }
+
+          // Flush intermediate results every 5 chats for progressive UX
+          if ((chatIndex + 1) % 5 === 0 || chatIndex === totalChats - 1) {
+            if (seq !== searchSeqRef.current) return;
+            const sorted = [...results].sort((a, b) => {
+              if (!a.timestamp && !b.timestamp) return 0;
+              if (!a.timestamp) return 1;
+              if (!b.timestamp) return -1;
+              return (
+                new Date(b.timestamp!).getTime() -
+                new Date(a.timestamp!).getTime()
+              );
+            });
+            setSearchResults(sorted);
           }
         }
 
-        // Sort by timestamp descending
+        if (seq !== searchSeqRef.current) return;
+
+        // Final sort and update
         results.sort((a, b) => {
           if (!a.timestamp && !b.timestamp) return 0;
           if (!a.timestamp) return 1;
@@ -160,10 +213,14 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
 
         setSearchResults(results);
       } catch (err) {
+        if (seq !== searchSeqRef.current) return;
         console.error("Search failed:", err);
         setSearchResults([]);
       } finally {
-        setLoading(false);
+        if (seq === searchSeqRef.current) {
+          setLoading(false);
+          setSearchProgress("");
+        }
       }
     }, 300);
 
@@ -202,6 +259,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
     <Drawer
       open={open}
       onClose={onClose}
+      destroyOnClose
       placement="right"
       width={360}
       closable={false}
@@ -246,11 +304,19 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
         />
       </div>
 
-      {/* Results count */}
-      {searchQuery.trim() && !loading && (
+      {/* Results count / search progress */}
+      {searchQuery.trim() && (
         <div className={styles.resultsCount}>
           <Typography.Text type="secondary">
-            {t("chat.search.resultsCount", { count: searchResults.length })}
+            {loading && searchProgress
+              ? t("chat.search.searching", {
+                  progress: searchProgress,
+                })
+              : loading
+              ? t("chat.search.loading")
+              : t("chat.search.resultsCount", {
+                  count: searchResults.length,
+                })}
           </Typography.Text>
         </div>
       )}
@@ -259,13 +325,13 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({ open, onClose }) => {
       <div className={styles.listWrapper}>
         <div className={styles.topGradient} />
         <div className={styles.list}>
-          {loading ? (
+          {loading && searchResults.length === 0 ? (
             <div
               style={{ display: "flex", justifyContent: "center", padding: 40 }}
             >
               <Spin />
             </div>
-          ) : searchQuery.trim() && searchResults.length === 0 ? (
+          ) : searchQuery.trim() && !loading && searchResults.length === 0 ? (
             <Empty
               description={t("chat.search.noResults")}
               style={{ marginTop: 40 }}

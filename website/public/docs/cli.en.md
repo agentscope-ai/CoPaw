@@ -88,6 +88,87 @@ qwenpaw daemon version
 qwenpaw daemon logs -n 50
 ```
 
+### qwenpaw doctor
+
+Read-only diagnostics for your install: root `config.json` validation,
+workspaces, `agent.json`, channels, MCP, static console bundle, API
+reachability, active LLM / per-agent model checks, and more. **`doctor` by
+itself does not repair files** — use the separate **`doctor fix`** subcommand
+when you intend to change disk (that path creates backups by default).
+
+```bash
+qwenpaw doctor                      # Default checks
+qwenpaw doctor --deep               # Extra: enabled-channel probes + local llama notes
+qwenpaw doctor --port 8088          # Force API target (see note below)
+qwenpaw doctor fix --dry-run        # Preview planned fixes (no writes)
+qwenpaw doctor fix -y --only …      # Apply allowlisted fixes (see --help)
+```
+
+| Option          | Applies to | Purpose                                                               |
+| --------------- | ---------- | --------------------------------------------------------------------- |
+| `--timeout`     | `doctor`   | HTTP timeout for API / connectivity checks (default 5s)               |
+| `--llm-timeout` | `doctor`   | Timeout for model “ping” checks (default 15s)                         |
+| `--deep`        | `doctor`   | Outbound probes for enabled channels; extra notes for `qwenpaw-local` |
+
+**Which host/port does `doctor` hit?** Global `qwenpaw --host` / `--port`
+apply to every subcommand, including `doctor`. If you omit them, the CLI
+fills missing values from **`last_api` in `config.json`** (updated when
+`qwenpaw app` last ran). Only when `last_api` is absent do you get
+`127.0.0.1:8088`. If checks target the wrong port, pass `--port` explicitly or
+update `last_api`.
+
+**`doctor fix`** applies conservative repairs under the working directory
+only.
+
+#### Recommended workflow (preview before apply)
+
+```bash
+qwenpaw doctor fix --dry-run
+# Narrow to the exact ids you want
+qwenpaw doctor fix --dry-run --only ensure-working-dir,ensure-workspace-dirs
+
+# Apply after you confirm the plan
+qwenpaw doctor fix --only ensure-working-dir,ensure-workspace-dirs
+```
+
+- `--dry-run` prints planned operations and does not write files.
+- Read-only validations in the plan (such as jobs.json validation) can still
+  return non-zero exit codes on FAIL (useful for CI gates).
+
+#### Fix ids at a glance
+
+Pass comma-separated ids with `--only`.
+
+- Common safe examples:
+  - `ensure-working-dir` - create working directory if missing
+  - `ensure-workspace-dirs` - create missing agent workspace directories
+- For the full list of fix ids and risk semantics, run:
+  - `qwenpaw doctor fix --help`
+- When `qwenpaw doctor` detects issues, output includes matching fix hints,
+  including suggested `doctor fix --dry-run --only ...` commands.
+
+#### Applying risky ids safely
+
+```bash
+qwenpaw doctor fix --dry-run --only seed-missing-agent-json,reset-invalid-agent-json
+qwenpaw doctor fix -y --only seed-missing-agent-json,reset-invalid-agent-json
+```
+
+- Risky ids require `-y` only when applying (without `--dry-run`).
+- `--non-interactive` allows only safe + read-only + skill-sync ids and still
+  rejects risky ids even with `-y`.
+
+#### Backups and restore
+
+By default, `doctor fix` writes backups to:
+
+- `doctor-fix-backups/<timestamp>/files/`
+
+Restore by copying files from the `files/` subtree back into your working
+directory using the same relative paths.
+
+> Avoid `--no-backup` unless you are sure you do not need rollback.
+
 ---
 
 ## Models & environment variables
@@ -306,15 +387,27 @@ When agents have the **multi_agent_collaboration** skill enabled, they can autom
 
 **Alias:** You can use `qwenpaw agent` (singular) as a shorthand for `qwenpaw agents`.
 
-| Command               | What it does                                                                 |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `qwenpaw agents list` | List all configured agents with their IDs, names, descriptions, workspaces   |
-| `qwenpaw agents chat` | Communicate with another agent (bidirectional, supports multi-turn dialogue) |
+| Command                 | What it does                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `qwenpaw agents list`   | List all configured agents with their IDs, names, descriptions, workspaces   |
+| `qwenpaw agents create` | Create a new agent configuration and workspace locally                       |
+| `qwenpaw agents delete` | Delete a configured agent (stops it if running, removes from agent list)     |
+| `qwenpaw agents chat`   | Communicate with another agent (bidirectional, supports multi-turn dialogue) |
 
 ```bash
 # List all agents
 qwenpaw agents list
 qwenpaw agent list  # Same with singular alias
+
+# Create a new agent
+qwenpaw agents create --name "Data Analyst"
+qwenpaw agents create --name "Helper" --template coder --skill web_search --skill pdf_reader
+qwenpaw agents create --name "GPT Bot" --provider-id openai --model-id gpt-4
+
+# Delete an agent (default agent cannot be deleted)
+qwenpaw agents delete my_agent
+qwenpaw agents delete my_agent --remove-workspace  # Also remove workspace directory
+qwenpaw agents delete my_agent --yes                # Skip confirmation
 
 # Chat with another agent (real-time mode, one-shot)
 qwenpaw agents chat \
@@ -521,18 +614,27 @@ Extend QwenPaw's capabilities with skills (PDF reading, web search, etc.).
 
 ### qwenpaw skills
 
-| Command                 | What it does                                      |
-| ----------------------- | ------------------------------------------------- |
-| `qwenpaw skills list`   | Show all skills and their enabled/disabled status |
-| `qwenpaw skills config` | Interactively enable/disable skills (checkbox UI) |
+| Command                    | What it does                                              |
+| -------------------------- | --------------------------------------------------------- |
+| `qwenpaw skills install`   | Install a skill from a supported URL source               |
+| `qwenpaw skills uninstall` | Remove a skill from the skill pool or one agent workspace |
+| `qwenpaw skills list`      | Show all skills and their enabled/disabled status         |
+| `qwenpaw skills config`    | Interactively enable/disable skills (checkbox UI)         |
+| `qwenpaw skills info`      | Show local details for one workspace skill                |
 
 **Multi-Agent Support:** All commands support the `--agent-id` parameter (defaults to `default`).
 
 ```bash
+qwenpaw skills install https://skills.sh/owner/repo/skill  # Import into the local skill pool
+qwenpaw skills install https://skills.sh/owner/repo/skill --agent-id abc123  # Import directly into a specific agent workspace
+qwenpaw skills uninstall skill-creator  # Remove from the local skill pool
+qwenpaw skills uninstall skill-creator --agent-id abc123  # Remove from a specific agent workspace
 qwenpaw skills list                   # See default agent's skills
 qwenpaw skills list --agent-id abc123 # See specific agent's skills
 qwenpaw skills config                 # Configure default agent
 qwenpaw skills config --agent-id abc123 # Configure specific agent
+qwenpaw skills info [skill_name]               # See default agent's skill details
+qwenpaw skills info [skill_name] --agent-id abc123 # See specific agent's skill details
 ```
 
 In the interactive UI: ↑/↓ to navigate, Space to toggle, Enter to confirm.
@@ -604,18 +706,30 @@ See [Config & Working Directory](./config) and [Multi-Agent](./multi-agent) for 
 
 ## Command overview
 
-| Command            | Subcommands                                                                          | Requires server? |
-| ------------------ | ------------------------------------------------------------------------------------ | :--------------: |
-| `qwenpaw init`     | —                                                                                    |        No        |
-| `qwenpaw app`      | —                                                                                    |  — (starts it)   |
-| `qwenpaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` |        No        |
-| `qwenpaw env`      | `list` · `set` · `delete`                                                            |        No        |
-| `qwenpaw channels` | `list` · `send` · `install` · `add` · `remove` · `config`                            |     **Yes**      |
-| `qwenpaw agents`   | `list` · `chat`                                                                      |     **Yes**      |
-| `qwenpaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`          |     **Yes**      |
-| `qwenpaw chats`    | `list` · `get` · `create` · `update` · `delete`                                      |     **Yes**      |
-| `qwenpaw skills`   | `list` · `config`                                                                    |        No        |
-| `qwenpaw clean`    | —                                                                                    |        No        |
+| Command             | Subcommands                                                                          | Requires server? |
+| ------------------- | ------------------------------------------------------------------------------------ | :--------------: |
+| `qwenpaw init`      | —                                                                                    |        No        |
+| `qwenpaw app`       | —                                                                                    |  — (starts it)   |
+| `qwenpaw desktop`   | —                                                                                    |  — (starts it)   |
+| `qwenpaw doctor`    | `fix`                                                                                |        No        |
+| `qwenpaw daemon`    | `status` · `restart` · `reload-config` · `version` · `logs`                          |        No        |
+| `qwenpaw models`    | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` |        No        |
+| `qwenpaw env`       | `list` · `set` · `delete`                                                            |        No        |
+| `qwenpaw channels`  | `list` · `send` · `install` · `add` · `remove` · `config`                            |     **Yes**      |
+| `qwenpaw agents`    | `list` · `create` · `delete` · `chat`                                                |    Partial ¹     |
+| `qwenpaw cron`      | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`          |     **Yes**      |
+| `qwenpaw chats`     | `list` · `get` · `create` · `update` · `delete`                                      |     **Yes**      |
+| `qwenpaw skills`    | `install` · `uninstall` · `list` · `config` · `info`                                 |        No        |
+| `qwenpaw task`      | —                                                                                    |        No        |
+| `qwenpaw auth`      | `reset-password`                                                                     |        No        |
+| `qwenpaw plugin`    | `install` · `list` · `info` · `uninstall` · `validate`                               |        No        |
+| `qwenpaw acp`       | —                                                                                    |        No        |
+| `qwenpaw clean`     | —                                                                                    |        No        |
+| `qwenpaw shutdown`  | —                                                                                    |        No        |
+| `qwenpaw update`    | —                                                                                    |        No        |
+| `qwenpaw uninstall` | —                                                                                    |        No        |
+
+¹ `create` does not require server; `list`, `delete`, and `chat` require server.
 
 ---
 

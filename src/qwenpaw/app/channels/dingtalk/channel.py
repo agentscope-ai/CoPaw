@@ -141,6 +141,7 @@ class DingTalkChannel(BaseChannel):
         client_secret: str,
         bot_prefix: str,
         message_type: str = "markdown",
+        cron_message_type: str = "markdown",
         card_template_id: str = "",
         card_template_key: str = "content",
         robot_code: str = "",
@@ -156,6 +157,7 @@ class DingTalkChannel(BaseChannel):
         filter_thinking: bool = False,
         require_mention: bool = False,
         card_auto_layout: bool = False,
+        at_sender_on_reply: bool = False,
     ):
         super().__init__(
             process,
@@ -174,10 +176,14 @@ class DingTalkChannel(BaseChannel):
         self.client_secret = client_secret
         self.bot_prefix = bot_prefix
         self.message_type = (message_type or "markdown").strip().lower()
+        self.cron_message_type = (
+            (cron_message_type or "markdown").strip().lower()
+        )
         self.card_template_id = card_template_id or ""
         self.card_template_key = card_template_key or "content"
         self.robot_code = robot_code or self.client_id
         self.card_auto_layout = card_auto_layout
+        self.at_sender_on_reply = at_sender_on_reply
         self._workspace_dir = (
             Path(workspace_dir).expanduser() if workspace_dir else None
         )
@@ -245,6 +251,10 @@ class DingTalkChannel(BaseChannel):
             client_secret=os.getenv("DINGTALK_CLIENT_SECRET", ""),
             bot_prefix=os.getenv("DINGTALK_BOT_PREFIX", ""),
             message_type=os.getenv("DINGTALK_MESSAGE_TYPE", "markdown"),
+            cron_message_type=os.getenv(
+                "DINGTALK_CRON_MESSAGE_TYPE",
+                "markdown",
+            ),
             card_template_id=os.getenv("DINGTALK_CARD_TEMPLATE_ID", ""),
             card_template_key=os.getenv(
                 "DINGTALK_CARD_TEMPLATE_KEY",
@@ -260,6 +270,11 @@ class DingTalkChannel(BaseChannel):
             deny_message=os.getenv("DINGTALK_DENY_MESSAGE", ""),
             require_mention=os.getenv("DINGTALK_REQUIRE_MENTION", "0") == "1",
             card_auto_layout=os.getenv("DINGTALK_CARD_AUTO_LAYOUT", "0")
+            == "1",
+            at_sender_on_reply=os.getenv(
+                "DINGTALK_AT_SENDER_ON_REPLY",
+                "0",
+            )
             == "1",
         )
 
@@ -281,6 +296,11 @@ class DingTalkChannel(BaseChannel):
             client_secret=config.client_secret or "",
             bot_prefix=config.bot_prefix or "",
             message_type=getattr(config, "message_type", "markdown"),
+            cron_message_type=getattr(
+                config,
+                "cron_message_type",
+                "markdown",
+            ),
             card_template_id=getattr(config, "card_template_id", ""),
             card_template_key=getattr(config, "card_template_key", "content"),
             robot_code=(
@@ -298,6 +318,11 @@ class DingTalkChannel(BaseChannel):
             filter_thinking=filter_thinking,
             require_mention=config.require_mention,
             card_auto_layout=getattr(config, "card_auto_layout", False),
+            at_sender_on_reply=getattr(
+                config,
+                "at_sender_on_reply",
+                False,
+            ),
         )
 
     # ---------------------------
@@ -728,25 +753,13 @@ class DingTalkChannel(BaseChannel):
             None,
         )
 
-    @staticmethod
-    def _is_base64_url(url: str) -> bool:
-        """True when *url* is a ``data:…;base64,`` URI."""
-        return (
-            isinstance(url, str)
-            and url.startswith("data:")
-            and "base64," in url
-        )
-
     def _parts_to_single_text(
         self,
         parts: List[OutgoingContentPart],
         bot_prefix: str = "",
     ) -> str:
-        """Build one reply text from parts.
-
-        Base64 data-URIs are replaced with a short
-        placeholder to avoid exceeding DingTalk's
-        message size limit.
+        """
+        Build one reply text from parts.
         """
         text_parts: List[str] = []
         for p in parts:
@@ -755,32 +768,6 @@ class DingTalkChannel(BaseChannel):
                 text_parts.append(p.text or "")
             elif t == ContentType.REFUSAL and getattr(p, "refusal", None):
                 text_parts.append(p.refusal or "")
-            elif t == ContentType.IMAGE and getattr(p, "image_url", None):
-                url = p.image_url
-                if self._is_base64_url(url):
-                    text_parts.append("[Image]")
-                else:
-                    text_parts.append(f"[Image: {url}]")
-            elif t == ContentType.VIDEO and getattr(p, "video_url", None):
-                url = p.video_url
-                if self._is_base64_url(url):
-                    text_parts.append("[Video]")
-                else:
-                    text_parts.append(f"[Video: {url}]")
-            elif t == ContentType.FILE and (
-                getattr(p, "file_url", None) or getattr(p, "file_id", None)
-            ):
-                url_or_id = getattr(p, "file_url", None) or getattr(
-                    p,
-                    "file_id",
-                    None,
-                )
-                if self._is_base64_url(url_or_id or ""):
-                    text_parts.append("[File]")
-                else:
-                    text_parts.append(f"[File: {url_or_id}]")
-            elif t == ContentType.AUDIO and getattr(p, "data", None):
-                text_parts.append("[Audio]")
         body = "\n".join(text_parts) if text_parts else ""
         if bot_prefix and body:
             body = bot_prefix + "  " + body
@@ -864,12 +851,37 @@ class DingTalkChannel(BaseChannel):
         session_webhook: str,
         body: str,
         bot_prefix: str = "",
+        at_user_ids: Optional[List[str]] = None,
+        at_dingtalk_ids: Optional[List[str]] = None,
     ) -> bool:
         """Send one text message via DingTalk sessionWebhook. Returns True
-        on success."""
+        on success.
+
+        When ``at_user_ids`` or ``at_dingtalk_ids`` is provided, the
+        ``at`` field is added to the webhook payload so that the
+        mentioned users receive a push notification.  The @mention text
+        is also prepended to the message body (DingTalk requires both).
+        """
         text = (bot_prefix + "  " + body) if body else bot_prefix
+
+        # Build at payload and prepend @mention text
+        at_payload: Optional[Dict[str, Any]] = None
+        if at_user_ids or at_dingtalk_ids:
+            at_payload = {}
+            mentions = []
+            if at_user_ids:
+                at_payload["atUserIds"] = at_user_ids
+                mentions.extend(f"@{uid}" for uid in at_user_ids)
+            if at_dingtalk_ids:
+                at_payload["atDingtalkIds"] = at_dingtalk_ids
+                mentions.extend(f"@{did}" for did in at_dingtalk_ids)
+            text = " ".join(mentions) + "\n" + text
+
         if len(text) > 3500:
-            payload = {"msgtype": "text", "text": {"content": text}}
+            payload: Dict[str, Any] = {
+                "msgtype": "text",
+                "text": {"content": text},
+            }
         else:
             norm = dingtalk_markdown.normalize_dingtalk_markdown(text)
             payload = {
@@ -879,6 +891,10 @@ class DingTalkChannel(BaseChannel):
                     "text": norm,
                 },
             }
+
+        if at_payload:
+            payload["at"] = at_payload
+
         return await self._send_payload_via_session_webhook(
             session_webhook,
             payload,
@@ -911,9 +927,17 @@ class DingTalkChannel(BaseChannel):
             len(text),
         )
 
+        if len(text) > 3500:
+            msg_key = "sampleText"
+            msg_param = json.dumps({"content": text})
+        else:
+            norm = dingtalk_markdown.normalize_dingtalk_markdown(text)
+            msg_key = "sampleMarkdown"
+            msg_param = json.dumps({"title": f"💬{norm[:10]}...", "text": norm})
+
         return await self._send_robot_message(
-            msg_key="sampleText",
-            msg_param=json.dumps({"content": text}),
+            msg_key=msg_key,
+            msg_param=msg_param,
             conversation_id=conversation_id,
             is_group=is_group,
             sender_staff_id=sender_staff_id,
@@ -1764,6 +1788,62 @@ class DingTalkChannel(BaseChannel):
             len(text_parts),
             len(media_parts),
         )
+
+        # ---------- AI Card path (cron / proactive sends) ----------
+        if self._cron_ai_card_enabled() and body.strip():
+            params = await self._resolve_open_api_params_from_handle(
+                to_handle,
+                meta,
+            )
+            conversation_id = params["conversation_id"]
+            if conversation_id:
+                card_meta = {
+                    "conversation_id": conversation_id,
+                    "conversation_type": params["conversation_type"],
+                    "sender_staff_id": params["sender_staff_id"],
+                    "is_group": params["conversation_type"] == "group",
+                }
+                try:
+                    card = await self._create_ai_card(
+                        conversation_id,
+                        meta=card_meta,
+                        inbound=False,
+                        force=True,
+                    )
+                    if card:
+                        await self._stream_ai_card(
+                            card,
+                            body.strip(),
+                            finalize=True,
+                        )
+                        logger.info(
+                            "dingtalk send_content_parts: "
+                            "AI card sent ok, conversation_id=%s",
+                            conversation_id,
+                        )
+                        # Send media parts separately via Open API
+                        for i, part in enumerate(media_parts):
+                            logger.info(
+                                "dingtalk send_content_parts: "
+                                "sending media part %s/%s via Open API "
+                                "(AI card path) type=%s",
+                                i + 1,
+                                len(media_parts),
+                                getattr(part, "type", None),
+                            )
+                            await self._send_media_part_via_open_api(
+                                part,
+                                conversation_id=conversation_id,
+                                conversation_type=params["conversation_type"],
+                                sender_staff_id=params["sender_staff_id"],
+                            )
+                        return
+                except Exception:
+                    logger.exception(
+                        "dingtalk send_content_parts: AI card failed, "
+                        "falling back to webhook/Open API",
+                    )
+
         if session_webhook and (body.strip() or media_parts):
             text_ok = True
             if body.strip():
@@ -1866,33 +1946,11 @@ class DingTalkChannel(BaseChannel):
                 ):
                     self._reply_sync(m, SENT_VIA_WEBHOOK)
                 return
-            # Open API unavailable: append text placeholders so the user
-            # is at least aware of the attachments.
-            for p in media_parts:
-                pt = getattr(p, "type", None)
-                if pt == ContentType.IMAGE and getattr(
-                    p,
-                    "image_url",
-                    None,
-                ):
-                    body += f"\n[Image: {p.image_url}]"
-                elif pt == ContentType.FILE and (
-                    getattr(p, "file_url", None) or getattr(p, "file_id", None)
-                ):
-                    furl = getattr(p, "file_url", None) or getattr(
-                        p,
-                        "file_id",
-                        None,
-                    )
-                    body += f"\n[File: {furl}]"
-                elif pt == ContentType.VIDEO and getattr(
-                    p,
-                    "video_url",
-                    None,
-                ):
-                    body += f"\n[Video: {p.video_url}]"
-                elif pt == ContentType.AUDIO and getattr(p, "data", None):
-                    body += "\n[Audio]"
+            logger.warning(
+                "dingtalk send_content_parts: no webhook and no "
+                "conversation_id, skipping %s media part(s)",
+                len(media_parts),
+            )
 
         if (
             m.get("reply_loop") is not None
@@ -2083,6 +2141,7 @@ class DingTalkChannel(BaseChannel):
         last_response = None
         accumulated_parts: list = []
         _acked_early = False
+        _at_sent = False  # Track whether @mention has been sent
         conversation_id = str(meta.get("conversation_id") or "")
         incoming_msg_id = str(meta.get("message_id") or "")
 
@@ -2108,6 +2167,19 @@ class DingTalkChannel(BaseChannel):
 
         card: Optional[ActiveAICard] = None
         card_full_text = ""
+        # Build @mention prefix for AI card content.
+        # DingTalk STREAM cards require <a atId=userId>nick</a> in the
+        # Markdown body to trigger the @ notification.
+        card_at_prefix = ""
+        if (
+            self.at_sender_on_reply
+            and meta.get("is_group", False)
+            and meta.get("sender_staff_id", "")
+        ):
+            at_id = meta["sender_staff_id"]
+            at_nick = meta.get("sender_nick", "") or at_id
+            card_at_prefix = f"<a atId={at_id}>{at_nick}</a>\n"
+
         if use_ai_card:
             try:
                 card = await self._create_ai_card(
@@ -2142,7 +2214,7 @@ class DingTalkChannel(BaseChannel):
                 parts = self._message_to_content_parts(event)
                 body = self._parts_to_single_text(
                     parts,
-                    bot_prefix="",
+                    bot_prefix=bot_prefix,
                 )
                 if use_ai_card and card:
                     next_text = self._merge_ai_card_text(
@@ -2154,7 +2226,7 @@ class DingTalkChannel(BaseChannel):
                             card_full_text = next_text
                             await self._stream_ai_card(
                                 card,
-                                card_full_text,
+                                card_at_prefix + card_full_text,
                                 finalize=False,
                             )
                     except Exception:
@@ -2185,10 +2257,31 @@ class DingTalkChannel(BaseChannel):
                     )
                 elif use_multi and parts and session_webhook:
                     if body.strip():
+                        # Resolve @mention for the first message.
+                        at_uids = None
+                        at_dids = None
+                        is_group = meta.get("is_group", False)
+                        if (
+                            self.at_sender_on_reply
+                            and not _at_sent
+                            and is_group
+                        ):
+                            staff_id = meta.get("sender_staff_id", "")
+                            dingtalk_id = meta.get(
+                                "sender_dingtalk_id",
+                                "",
+                            )
+                            if staff_id:
+                                at_uids = [staff_id]
+                            elif dingtalk_id:
+                                at_dids = [dingtalk_id]
+                            _at_sent = True
                         await self._send_via_session_webhook(
                             session_webhook,
                             body.strip(),
                             bot_prefix="",
+                            at_user_ids=at_uids,
+                            at_dingtalk_ids=at_dids,
                         )
                         if not _acked_early:
                             self._ack_early(
@@ -2236,7 +2329,7 @@ class DingTalkChannel(BaseChannel):
                     final_text = bot_prefix + f"Error: {err_msg}"
                 await self._stream_ai_card(
                     card,
-                    final_text,
+                    card_at_prefix + final_text,
                     finalize=True,
                 )
             except Exception:
@@ -2377,13 +2470,7 @@ class DingTalkChannel(BaseChannel):
                 to_handle=to_handle,
             )
             async for event in core_iter:
-                # SSE serialization
-                if hasattr(event, "model_dump_json"):
-                    data = event.model_dump_json()
-                elif hasattr(event, "json"):
-                    data = event.json()
-                else:
-                    data = json.dumps({"text": str(event)})
+                data = self._serialize_event_for_sse(event)
                 yield f"data: {data}\n\n"
 
                 obj = getattr(event, "object", None)
@@ -2567,6 +2654,31 @@ class DingTalkChannel(BaseChannel):
             except asyncio.TimeoutError:
                 pass
 
+    async def health_check(self) -> Dict[str, Any]:
+        """Check DingTalk stream client and HTTP session status."""
+        if not self.enabled:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "DingTalk channel is disabled.",
+            }
+        issues = []
+        if self._client is None:
+            issues.append("Stream client not initialized")
+        if self._http is None or self._http.closed:
+            issues.append("HTTP session not available")
+        if issues:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "; ".join(issues),
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "DingTalk stream client and HTTP session are active.",
+        }
+
     async def start(self) -> None:
         if not self.enabled:
             logger.debug("disabled by env DINGTALK_CHANNEL_ENABLED=0")
@@ -2690,6 +2802,14 @@ class DingTalkChannel(BaseChannel):
             and bool(self.robot_code)
         )
 
+    def _cron_ai_card_enabled(self) -> bool:
+        """Check if AI Card is enabled for cron/proactive sends."""
+        return (
+            self.cron_message_type == "card"
+            and bool(self.card_template_id)
+            and bool(self.robot_code)
+        )
+
     # ---- Emotion reaction helpers ----
 
     async def _send_emotion(
@@ -2806,16 +2926,20 @@ class DingTalkChannel(BaseChannel):
         conversation_id: str,
         meta: Optional[Dict[str, Any]] = None,
         inbound: bool = True,
+        force: bool = False,
     ) -> Optional[ActiveAICard]:
-        if not self._ai_card_enabled() or self._card_sdk is None:
+        if self._card_sdk is None or (
+            not force and not self._ai_card_enabled()
+        ):
             logger.warning(
                 "dingtalk create ai card skipped: enabled=%s sdk_ready=%s "
-                "message_type=%s has_template=%s has_robot=%s",
+                "message_type=%s has_template=%s has_robot=%s force=%s",
                 self._ai_card_enabled(),
                 self._card_sdk is not None,
                 self.message_type,
                 bool(self.card_template_id),
                 bool(self.robot_code),
+                force,
             )
             return None
         token = await self._get_access_token()
@@ -2838,6 +2962,15 @@ class DingTalkChannel(BaseChannel):
         )
         runtime = tea_util_models.RuntimeOptions()
 
+        # Resolve @mention for AI card in group chat.
+        # card_at_user_ids on CreateCardRequest accepts List[str] of
+        # enterprise userId (senderStaffId).  Only set when available.
+        card_at_user_ids: Optional[List[str]] = None
+        card_user_id_type: Optional[int] = None
+        if self.at_sender_on_reply and is_group and sender_staff_id:
+            card_at_user_ids = [sender_staff_id]
+            card_user_id_type = 1
+
         create_request = dingtalk_card_models.CreateCardRequest(
             card_template_id=self.card_template_id,
             out_track_id=card_instance_id,
@@ -2855,6 +2988,8 @@ class DingTalkChannel(BaseChannel):
                     support_forward=True,
                 )
             ),
+            card_at_user_ids=card_at_user_ids,
+            user_id_type=card_user_id_type,
         )
 
         logger.info(

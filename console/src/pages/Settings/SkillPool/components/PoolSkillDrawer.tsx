@@ -4,6 +4,7 @@ import type { PoolSkillSpec } from "../../../../api/types";
 import {
   getPoolBuiltinStatusLabel,
   getPoolBuiltinStatusTone,
+  isSkillBuiltin,
 } from "@/utils/skill";
 import { MAX_TAGS, MAX_TAG_LENGTH } from "../../../Agent/Skills/components";
 import { MarkdownCopy } from "../../../../components/MarkdownCopy/MarkdownCopy";
@@ -19,11 +20,13 @@ interface PoolSkillDrawerProps {
   drawerContent: string;
   showMarkdown: boolean;
   configText: string;
+  availableTags?: string[];
   onClose: () => void;
   onSave: () => void;
   onContentChange: (content: string) => void;
   onShowMarkdownChange: (value: boolean) => void;
   onConfigTextChange: (text: string) => void;
+  onChangeBuiltinLanguage?: (skill: PoolSkillSpec, language: string) => void;
   validateFrontmatter: (_: unknown, value: string) => Promise<void>;
 }
 
@@ -34,11 +37,13 @@ export function PoolSkillDrawer({
   drawerContent,
   showMarkdown,
   configText,
+  availableTags = [],
   onClose,
   onSave,
   onContentChange,
   onShowMarkdownChange,
   onConfigTextChange,
+  onChangeBuiltinLanguage,
   validateFrontmatter,
 }: PoolSkillDrawerProps) {
   const { t } = useTranslation();
@@ -76,6 +81,33 @@ export function PoolSkillDrawer({
               {getPoolBuiltinStatusLabel(activeSkill.sync_status, t)}
             </div>
           </div>
+          {isSkillBuiltin(activeSkill.source) &&
+            (activeSkill.available_builtin_languages?.length ?? 0) > 1 &&
+            onChangeBuiltinLanguage && (
+              <div className={styles.infoSection}>
+                <div className={styles.infoLabel}>
+                  {t("skillPool.builtinLanguage")}
+                </div>
+                <div className={styles.languageToggle}>
+                  {activeSkill.available_builtin_languages?.map((lang) => (
+                    <Button
+                      key={lang}
+                      size="small"
+                      type={
+                        activeSkill.builtin_language === lang
+                          ? "primary"
+                          : "default"
+                      }
+                      onClick={() =>
+                        void onChangeBuiltinLanguage(activeSkill, lang)
+                      }
+                    >
+                      {lang === "zh" ? "中文" : "English"}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
         </div>
       )}
       <Form form={form} layout="vertical">
@@ -124,7 +156,10 @@ export function PoolSkillDrawer({
         >
           <Select
             mode="tags"
-            open={false}
+            options={availableTags.map((tag) => ({
+              label: tag,
+              value: tag,
+            }))}
             placeholder={t("skillPool.tagsPlaceholder")}
             maxCount={MAX_TAGS}
           />

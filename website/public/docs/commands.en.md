@@ -90,13 +90,14 @@ User requested help building a user authentication system, login endpoint implem
 
 Commands for viewing and managing conversation history.
 
-| Command         | Response Content              |
-| --------------- | ----------------------------- |
-| `/history`      | 📋 Message list + Token stats |
-| `/message`      | 📄 Specified message details  |
-| `/compact_str`  | 📝 Compressed summary content |
-| `/dump_history` | 📁 Exported history file path |
-| `/load_history` | ✅ History load result        |
+| Command             | Response Content              |
+| ------------------- | ----------------------------- |
+| `/history`          | 📋 Message list + Token stats |
+| `/message`          | 📄 Specified message details  |
+| `/compact_str`      | 📝 Compressed summary content |
+| `/summarize_status` | 📊 Summary task status        |
+| `/dump_history`     | 📁 Exported history file path |
+| `/load_history`     | ✅ History load result        |
 
 ---
 
@@ -203,6 +204,33 @@ User requested help building a user authentication system, login endpoint implem
 - No summary has been generated yet
 - Use /compact or wait for auto-compaction
 ```
+
+---
+
+### /summarize_status - View Summary Task Status
+
+Display the running status of all background summary tasks, including task ID, start time, and execution results.
+
+```
+/summarize_status
+```
+
+**Example response:**
+
+```
+**Summary Task Status**
+
+- **task-001**
+  - Start: 2024-01-15 10:30:00
+  - Status: completed
+  - Result: User requested help building a user authentication system...
+- **task-002**
+  - Start: 2024-01-15 10:35:00
+  - Status: failed
+  - Error: Summary generation timeout
+```
+
+> 💡 Using `/compact` or `/new` automatically starts a summary task in the background. Use this command to check its execution status.
 
 ---
 
@@ -514,7 +542,12 @@ Send `/daemon <subcommand>` or short names (e.g., `/status`) in chat, or run `qw
 | `/daemon reload-config`             | Re-read and validate configuration file                                                   | ✅   | ✅       |
 | `/daemon version`                   | Version number, working directory, and log path                                           | ✅   | ✅       |
 | `/daemon logs` or `/daemon logs 50` | View last N lines of log (default 100, max 2000, from `qwenpaw.log` in working directory) | ✅   | ✅       |
-| `/daemon approve`                   | Approve pending tool execution (tool-guard scenario)                                      | ✅   | ❌       |
+| `/approval approve [request_id]`    | Approve pending tool execution (or queue head if no ID)                                   | ✅   | ❌       |
+| `/approval deny [request_id]`       | Deny pending tool execution with optional reason                                          | ✅   | ❌       |
+| `/approval list`                    | List all pending approval requests                                                        | ✅   | ❌       |
+| `/approval cancel <request_id>`     | Cancel a specific approval request                                                        | ✅   | ❌       |
+| `/approve`                          | Shorthand for `/approval approve`                                                         | ✅   | ❌       |
+| `/deny`                             | Shorthand for `/approval deny`                                                            | ✅   | ❌       |
 
 ---
 
@@ -603,23 +636,36 @@ qwenpaw daemon logs -n 200   # From terminal, specify 200 lines
 
 ---
 
-### /daemon approve - Approve Tool Execution
+### /approval - Tool Execution Approval Commands
 
-Quickly approve pending tool execution. When tool execution requires manual approval (tool-guard scenario), use this command to approve.
+Manage tool guard approval requests. When `approval_level` is set to `STRICT` or `SMART`, tools with CRITICAL or HIGH findings enter a pending-approval flow. Use these commands to approve, deny, list, or cancel requests.
 
 **Usage:**
 
 ```
-/daemon approve            # In chat
+/approval approve [request_id]           # Approve specific request or queue head
+/approval deny [request_id] [reason]     # Deny with optional reason
+/approval list                           # List pending approvals (current session)
+/approval list --all                     # List all pending approvals (all sessions)
+/approval cancel <request_id>            # Cancel a specific request
 ```
 
-> 💡 **Tip**: This command only works in chat. When the Agent prompts for tool execution approval, send this command to quickly approve.
+**Shorthands:**
+
+```
+/approve                                 # Same as /approval approve
+/approve <request_id>                    # Same as /approval approve <request_id>
+/deny                                    # Same as /approval deny
+/deny <request_id> <reason>              # Same as /approval deny <request_id> <reason>
+```
+
+> `/approval list` shows pending approvals for the current session (including child sessions). Use `--all` or `-a` to see all sessions for this agent.
 
 ---
 
 ### Terminal Usage
 
-All daemon commands support terminal usage (except `/stop` and `/daemon approve` which only work in chat):
+All daemon commands support terminal usage (except `/stop` and `/approval` which only work in chat):
 
 ```bash
 qwenpaw daemon status
@@ -635,3 +681,305 @@ qwenpaw daemon logs -n 50
 qwenpaw daemon status --agent-id abc123
 qwenpaw daemon version --agent-id abc123
 ```
+
+---
+
+## Mission Mode - Autonomous Execution for Complex Tasks
+
+Mission Mode is an autonomous execution mode designed for **long-running, complex tasks**, inspired by [Claude Code](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) and [Ralph Loop](https://github.com/snarktank/ralph). It decomposes large tasks into multiple user stories and completes them through a **master agent → worker agents → verifier agents** pipeline, ensuring quality and reliability.
+
+### Core Features
+
+- 📋 **Two-Phase Design**: Phase 1 generates PRD (Product Requirements Document), Phase 2 executes autonomously
+- 🔒 **Code-Level Control**: Master agent's implementation tools are disabled, can only dispatch workers to prevent context pollution
+- ✅ **Independent Verification**: Each story is verified by a dedicated verifier agent to ensure all acceptance criteria are met
+- 🔄 **Auto-Iteration**: Failed stories are automatically retried until all complete or max iterations reached
+- 🌐 **Multi-Language**: Error messages automatically switch between Chinese and English based on agent config
+
+### Use Cases
+
+**✅ Suitable for Mission Mode:**
+
+- Building complete feature modules (e.g., user authentication system, file manager)
+- Refactoring large codebases (e.g., migrating to a new framework)
+- Batch tasks (e.g., adding unit tests to multiple components)
+- Tasks requiring multiple iterations and verification
+
+**❌ Not suitable for Mission Mode:**
+
+- Simple code changes (e.g., fixing a single bug)
+- Tasks requiring real-time interaction (e.g., debugging)
+- Exploratory tasks (e.g., "research best practices")
+
+### Basic Usage
+
+#### Start a Mission
+
+```bash
+/mission <task description>
+```
+
+**Example:**
+
+```
+/mission Create a CLI TODO app in Python with add, delete, list, and mark-complete features, saving data to local JSON file
+```
+
+**Optional Parameters:**
+
+- `--max-iterations N`: Set max Phase 2 iterations (range 1-100, default 20)
+- `--verify <command>`: Custom verification command (e.g., `pytest`)
+
+```
+/mission Create Web API --max-iterations 30 --verify "pytest tests/"
+```
+
+#### Phase 1: PRD Generation
+
+The agent will:
+
+1. Explore the codebase and understand existing structure
+2. Decompose the task into multiple user stories
+3. Generate `prd.json` file with acceptance criteria for each story
+
+**PRD Example:**
+
+```json
+{
+  "project": "todo-cli-app",
+  "description": "Command-line TODO application",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add Task Feature",
+      "description": "As a user, I want to add new tasks...",
+      "acceptanceCriteria": [
+        "Command 'todo add <task>' successfully adds task",
+        "Task is saved to todos.json file"
+      ],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+```
+
+#### Phase 2: Confirm and Execute
+
+**Confirm PRD:**
+
+After reviewing the PRD, send a confirmation message to enter Phase 2:
+
+```
+Confirm, start execution
+```
+
+**Or, if modifications are needed:**
+
+```
+Please split US-001 into two stories: one for adding and one for persistence
+```
+
+The agent will modify the PRD and wait for confirmation again.
+
+**Phase 2 Execution Flow:**
+
+1. **Master Dispatch**: Dispatches worker agents for each story
+2. **Worker Implementation**: Creates/modifies files, runs tests
+3. **Verifier Validation**: Independent agent verifies all acceptance criteria
+4. **Update PRD**: Passed stories are marked `passes: true`
+5. **Auto-Iteration**: Failed stories are re-dispatched until all complete
+
+#### Check Progress
+
+```bash
+/mission status
+```
+
+**Output Example:**
+
+```
+**Mission Status** — mission-20260415-123456
+- Session: e2e-abc123
+- Phase: execution
+- Project: todo-cli-app
+- Progress: 2/4 stories passed
+- Loop dir: ~/.copaw/workspaces/default/missions/mission-20260415-123456
+
+  ✅ US-001: Add Task Feature
+  ✅ US-002: List Tasks Feature
+  ⬜ US-003: Delete Task Feature
+  ⬜ US-004: Mark Complete Feature
+```
+
+#### List All Missions
+
+```bash
+/mission list
+```
+
+### Working Directory Structure
+
+Each mission creates a working directory under `~/.copaw/workspaces/default/missions/mission-<timestamp>/`:
+
+```
+mission-20260415-123456/
+├── prd.json              # Product Requirements Document
+├── loop_config.json      # Configuration and state
+├── task.md               # Original task description
+├── progress.txt          # Progress log (Codebase Patterns)
+└── <implementation files>
+```
+
+### Important Notes
+
+1. **Session Isolation**: Each session's missions are independent and won't interfere with each other
+2. **PRD Schema Validation**: Phase 2 startup enforces PRD format validation to ensure schema compliance
+3. **Tool Restrictions**: In Phase 2, master agent **cannot** directly use `edit_file`, `browser_use` and other implementation tools, must delegate to workers
+4. **Iteration Limit**: Automatically stops after reaching `--max-iterations` to avoid infinite loops
+5. **Git Support**: If working directory is a Git repo, agent will automatically commit changes (optional)
+6. **⚠️ Tool Guard Bypass**:
+   - **Worker and verifier agents automatically bypass the security tool guard** (disabled via `--background` mode)
+   - This is necessary because background sessions cannot respond to `/approve` interactive prompts
+   - The master agent itself will also bypass the guard
+   - **Security Warning**: All worker operations occur within `missions/<mission-xxx>/` directory, but it is still recommended to **only use Mission Mode in fully trusted codebases**
+   - Sensitive operations (e.g., deleting files, executing shell commands) will execute directly without manual approval
+
+### Advanced Usage
+
+#### Custom Verification Command
+
+```
+/mission Add unit tests --verify "npm test"
+```
+
+Verification phase will run `npm test` to check if tests pass.
+
+#### Increase Iterations (Complex Tasks)
+
+```
+/mission Refactor entire auth module --max-iterations 50
+```
+
+#### Mid-Execution Intervention
+
+During Phase 2, you can send messages to interact with master agent:
+
+```
+Pause - US-003 implementation has issues, please fix before continuing
+```
+
+### Troubleshooting
+
+**Issue: PRD format incorrect**
+
+```
+⚠️ **Cannot enter Phase 2**: prd.json format errors:
+  - Missing required field: userStories
+
+Please fix the PRD format before confirming.
+```
+
+**Solution**: Check `prd.json`, ensure it contains `userStories` array with required fields for each story.
+
+**Issue: Max iterations reached**
+
+```
+⚠️ **Mission reached max iterations** (20). 2/4 stories passed.
+```
+
+**Solutions**:
+
+1. Use `/mission status` to check remaining stories
+2. Increase `--max-iterations` and restart
+3. Or manually complete remaining work
+
+### Comparison with Other Modes
+
+| Mode             | Use Case                  | Agent Behavior                 | Tool Access              |
+| ---------------- | ------------------------- | ------------------------------ | ------------------------ |
+| **Normal Chat**  | Simple tasks, quick fixes | Single agent executes directly | All tools available      |
+| **Mission Mode** | Complex, long-term tasks  | Master dispatches workers      | Master has limited tools |
+
+---
+
+## Plan Mode
+
+Plan Mode provides structured task planning and step-by-step execution. For full documentation, see [Plan Mode](./plan).
+
+| Command               | Description                                                    | Chat |
+| --------------------- | -------------------------------------------------------------- | ---- |
+| `/plan`               | Show plan mode status (enabled/disabled) and current plan info | ✅   |
+| `/plan <description>` | Create a new structured plan and begin step-by-step execution  | ✅   |
+
+---
+
+## Proactive Mode - Proactive Notification Mode
+
+Proactive Mode is an intelligent feature that allows the AI agent to actively analyze the user's current session context and screen activities after detecting that the user has been inactive for a prolonged period, and provide relevant assistance and information.
+
+### Core Features
+
+- 🤖 **Intelligent Detection**: Monitors session activity status and triggers when inactivity is detected for a set period
+- 🧠 **Context Analysis**: Analyzes user's conversation history and current screen content to identify potential needs
+- 🔍 **Goal Extraction**: Extracts topics that the user may be focusing on from conversation history
+- 💬 **Proactive Response**: Generates helpful and relevant proactive messages based on analysis results
+
+### Important Notice
+
+**Please be aware of the following risks before enabling this mode:**
+
+- **Tool Protection Bypass**: In this mode, the Agent **bypasses standard tool protection mechanisms**. This means the Agent has higher system privileges and execution freedom.
+- **Privacy and Environment Access**: The Agent **reads historical session memory** to understand context and **may take screenshots** to obtain current runtime environment information. Please ensure use in a trusted environment and protect sensitive information.
+- This mode is **disabled by default**. It only takes effect when actively enabled by the user and can be disabled after being turned on.
+
+### Basic Usage
+
+#### Enable Proactive Mode
+
+```bash
+/proactive
+/proactive on
+/proactive <minutes>
+```
+
+**Example:**
+
+```bash
+/proactive      # Default 30 minutes, trigger proactive notification after 30 minutes of inactivity
+/proactive on   # Same as above, default 30 minutes
+/proactive 60   # Trigger proactive notification after 60 minutes
+```
+
+#### Disable Proactive Mode
+
+```bash
+/proactive off
+```
+
+### How It Works
+
+1. **Monitoring Phase**: Continuously monitors user activity, recording the last activity timestamp
+2. **Analysis Phase**: When inactivity exceeding the set time is detected, analyzes recent conversation history
+3. **Task Extraction**: Identifies topics the user may be concerned about
+4. **Query Execution**: Uses tools like browser, file reading, command execution to obtain relevant information
+5. **Response Generation**: Generates friendly and relevant proactive assistance information
+
+#### Context Awareness
+
+- Focuses only on user-initiated messages, ignoring system messages
+- Avoids repeatedly sending proactive messages on the same topics
+- Prioritizes frequent and recently mentioned topics
+
+### Important Notes
+
+1. **Resource Consumption**: Enables regular context analysis after activation, which may increase computational resource usage
+2. **Distraction Control**: If the user does not respond to proactive messages, no consecutive proactive messages will be sent
+3. **Model Dependency**: Function effectiveness depends on the AI model capability used; multimodal-enabled models can better utilize screen analysis features
+
+### Typical Use Cases
+
+- New information acquisition during research processes
+- Supplementary knowledge provision during learning processes
+
+---

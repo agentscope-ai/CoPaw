@@ -81,43 +81,23 @@
   color: #999;
 }
 
-.importHintBlock {
-  margin-bottom: 12px;
+.noSearchResults {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 24px;
+  color: rgba(20, 20, 19, 0.45);
 }
 
-.importHintTitle {
-  margin: 0;
-  font-size: 13px;
-  color: #666;
+.noSearchResultsIcon {
+  font-size: 40px;
+  opacity: 0.6;
 }
 
-.importHintList {
-  margin: 8px 0;
-  padding: 0 0 0 20px;
-  font-size: 12px;
-  color: #999;
-}
-
-.importUrlInput {
-  width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  outline: none;
+.noSearchResultsText {
   font-size: 14px;
-}
-
-.importUrlError {
-  margin-top: 8px;
-  color: #ff4d4f;
-  font-size: 13px;
-}
-
-.importLoadingText {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #666;
 }
 
 .skillsGrid {
@@ -339,7 +319,6 @@
   font-size: 15px;
   font-weight: 600;
   color: rgba(20, 20, 19, 0.88);
-  font-family: Inter;
   line-height: 22px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -661,16 +640,6 @@
   }
 }
 
-.importHubModal {
-  :global {
-    .qwenpaw-btn-primary:disabled {
-      background-color: #f5f5f5 !important;
-      color: rgba(0, 0, 0, 0.25) !important;
-      border-color: #d9d9d9 !important;
-    }
-  }
-}
-
 /* Pool Transfer Modal */
 .poolTransferModal {
   :global {
@@ -755,6 +724,7 @@
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
+  min-width: 0;
 
   &:hover {
     border-color: #ff7f16;
@@ -787,10 +757,15 @@
 }
 
 .pickerCardTitle {
+  display: block;
+  width: 100%;
   font-size: 14px;
   font-weight: 500;
   color: #1a1a1a;
-  word-break: break-all;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pickerCardMeta {
@@ -810,6 +785,7 @@
   padding: 8px 10px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .compactPickerCheck {
@@ -823,6 +799,7 @@
 .compactPickerTitle {
   font-size: 12px;
   line-height: 1.25;
+  width: 100%;
   padding-right: 18px;
 }
 
@@ -836,15 +813,42 @@
 }
 
 .searchContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   max-width: 600px;
 }
 
-.searchSelect {
-  width: 100%;
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-secondary, #d9d9d9);
+  border-radius: 6px;
+  font-size: 14px;
+  color: rgba(20, 20, 19, 0.88);
+  background: var(--color-bg-base, #ffffff);
+  outline: none;
+  transition: border-color 0.2s;
+
+  &::placeholder {
+    color: rgba(20, 20, 19, 0.25);
+  }
+
+  &:focus {
+    border-color: #ff7f16;
+  }
+}
+
+.tagSelect {
+  min-width: 160px;
+  max-width: 240px;
 
   :global {
     .ant-select-selector {
+      height: 36px !important;
       min-height: 36px;
       padding: 2px 4px;
     }
@@ -863,6 +867,13 @@
       font-size: 12px;
     }
   }
+}
+
+.tagSelectEmpty {
+  padding: 24px 16px;
+  text-align: center;
+  color: rgba(20, 20, 19, 0.35);
+  font-size: 13px;
 }
 
 .filterGroup {
@@ -1119,27 +1130,12 @@
     color: rgba(255, 255, 255, 0.35);
   }
 
-  /* Import modal hints */
-  .importHintTitle {
-    color: rgba(255, 255, 255, 0.55);
-  }
-
-  .importHintList {
-    color: rgba(255, 255, 255, 0.35);
-  }
-
-  .importUrlInput {
-    background: #2a2a2a;
-    border-color: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.85);
-
-    &::placeholder {
-      color: rgba(255, 255, 255, 0.25);
-    }
-  }
-
-  .importLoadingText {
+  .noSearchResults {
     color: rgba(255, 255, 255, 0.45);
+  }
+
+  .tagSelectEmpty {
+    color: rgba(255, 255, 255, 0.35);
   }
 
   /* Skill card */
@@ -1266,8 +1262,23 @@
     color: rgba(255, 255, 255, 0.88);
   }
 
-  /* Search select - dark mode */
-  .searchSelect {
+  /* Search input - dark mode */
+  .searchInput {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.88);
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.25);
+    }
+
+    &:focus {
+      border-color: #ff7f16;
+    }
+  }
+
+  /* Tag select - dark mode */
+  .tagSelect {
     :global {
       .ant-select-selector {
         background: #2a2a2a;

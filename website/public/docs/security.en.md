@@ -10,7 +10,7 @@ QwenPaw's security system consists of three core security layers:
 Security Architecture:
 ├─ Tool Guard — Runtime tool call protection
 │  Detects dangerous command patterns, injection attacks, and malicious operations
-│  using regex-based rules
+│  using YAML regex rules plus a quote-aware shell evasion guardian
 │
 ├─ File Guard — Sensitive file access control
 │  Blocks agent access to protected files and directories
@@ -24,7 +24,7 @@ Security Architecture:
 
 **Key concepts**:
 
-- **Tool Guard** inspects tool calls in real-time before execution, using regex rules to detect dangerous patterns
+- **Tool Guard** inspects tool calls in real-time before execution, using YAML regex rules and a dedicated shell evasion guardian to detect dangerous patterns
 - **File Guard** operates independently to protect sensitive files and directories from unauthorized access
 - **Skill Scanner** runs before skills are enabled to detect malicious code and security threats
 - **Web Authentication** (optional) controls access to the Console interface
@@ -37,14 +37,14 @@ The **Tool Guard** scans tool parameters **before** the agent invokes a tool, de
 
 ### How it works
 
-1. When the agent calls a tool, the Tool Guard inspects relevant parameters. Built-in regex rules primarily target **`execute_shell_command`**.
-2. Regex rules detect dangerous patterns, for example:
+1. When the agent calls a tool, the Tool Guard inspects relevant parameters. Checks primarily target **`execute_shell_command`**, combining built-in **YAML rules** (regex signatures) with **`ShellEvasionGuardian`** (quote-aware heuristics for obfuscation and parser differentials).
+2. Together they flag dangerous patterns, for example:
    - `rm -rf /` — Dangerous file deletion
    - SQL-injection-like fragments
    - Command substitution `$(...)` or `` `...` ``
    - Path traversal `../`
    - Privilege escalation `sudo`, `su`
-   - Reverse shells, fork bombs, etc.
+   - Reverse shells, fork bombs, obfuscated flags, Unicode whitespace tricks, etc.
      (Exact coverage depends on built-in and custom rules.)
 3. Each rule has an independent severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 4. For CRITICAL or HIGH findings: in the Console / interactive sessions, the tool call enters a pending-approval flow — you approve or reject before it runs. In non-interactive contexts without a session, findings are logged and execution may still proceed — use **`denied_tools`** to hard-block specific tools or tighten rules when needed.
@@ -61,19 +61,29 @@ In `config.json`:
       "guarded_tools": null,
       "denied_tools": [],
       "custom_rules": [],
-      "disabled_rules": []
+      "disabled_rules": [],
+      "shell_evasion_checks": {
+        "command_substitution": false,
+        "obfuscated_flags": false,
+        "backslash_escaped_whitespace": false,
+        "backslash_escaped_operators": false,
+        "newlines": false,
+        "comment_quote_desync": false,
+        "quoted_newline": false
+      }
     }
   }
 }
 ```
 
-| Field            | Description                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`        | Enable or disable Tool Guard entirely. Can also be set via the `QWENPAW_TOOL_GUARD_ENABLED` environment variable (takes precedence).                  |
-| `guarded_tools`  | Specify guard scope:<br>• `null` (default) — guard all built-in tools<br>• `[]` — guard nothing<br>• `["tool_a", "tool_b"]` — guard only listed tools |
-| `denied_tools`   | Tools that are always blocked regardless of parameters.                                                                                               |
-| `custom_rules`   | User-defined regex rules (see format below).                                                                                                          |
-| `disabled_rules` | Built-in rule IDs to disable.                                                                                                                         |
+| Field                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`              | Enable or disable Tool Guard entirely. Can also be set via the `QWENPAW_TOOL_GUARD_ENABLED` environment variable (takes precedence).                                                                                                                                                                                                                                                                                                  |
+| `guarded_tools`        | Specify guard scope:<br>• `null` (default) — guard all built-in tools<br>• `[]` — guard nothing<br>• `["tool_a", "tool_b"]` — guard only listed tools                                                                                                                                                                                                                                                                                 |
+| `denied_tools`         | Tools that are always blocked regardless of parameters.                                                                                                                                                                                                                                                                                                                                                                               |
+| `custom_rules`         | User-defined regex rules (see format below).                                                                                                                                                                                                                                                                                                                                                                                          |
+| `disabled_rules`       | Built-in YAML rule IDs to disable (applies to `TOOL_CMD_*` rules only).                                                                                                                                                                                                                                                                                                                                                               |
+| `shell_evasion_checks` | Per-check toggles for the shell evasion guardian. A dict mapping check names to `true`/`false`. **All checks default to `false` (disabled).** Toggle individual checks on from the Console under Settings → Security → Tool Guard, or set them here. Available keys: `command_substitution`, `obfuscated_flags`, `backslash_escaped_whitespace`, `backslash_escaped_operators`, `newlines`, `comment_quote_desync`, `quoted_newline`. |
 
 #### Custom rule format
 
@@ -142,6 +152,27 @@ Each custom rule is a JSON object with the following fields:
 }
 ```
 
+### Execution level (approval_level)
+
+Each agent has an `approval_level` field (in `agent.json`) that controls how Tool Guard handles findings:
+
+| Level      | Behavior                                                               |
+| ---------- | ---------------------------------------------------------------------- |
+| **STRICT** | All tool calls require manual approval before execution                |
+| **SMART**  | Low-risk tool calls are auto-allowed; high-risk calls require approval |
+| **AUTO**   | Only tool calls flagged by guard rules require approval (default)      |
+| **OFF**    | Tool Guard is disabled for this agent; all tool calls execute directly |
+
+Configure in `agent.json`:
+
+```json
+{
+  "approval_level": "AUTO"
+}
+```
+
+Or change it in the Console under **Settings → Agents** in the agent's configuration card.
+
 ### Console management
 
 In the Console under **Settings → Security → Tool Guard** tab, you can:
@@ -186,10 +217,17 @@ Tool Guard includes the following built-in detection rules (for `execute_shell_c
 
 **Code Execution (CRITICAL/HIGH):**
 
-| Rule ID                    | Severity | Detection Target                    | Description                                       |
-| -------------------------- | -------- | ----------------------------------- | ------------------------------------------------- |
-| `TOOL_CMD_PIPE_TO_SHELL`   | CRITICAL | `curl/wget ... \| bash/sh` patterns | Downloads and immediately executes remote scripts |
-| `TOOL_CMD_OBFUSCATED_EXEC` | HIGH     | `base64 -d \| bash` patterns        | Executes base64-encoded commands                  |
+| Rule ID                       | Severity | Detection Target                                                               | Description                                                                                     |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `TOOL_CMD_PIPE_TO_SHELL`      | CRITICAL | `curl/wget ... \| bash/sh` patterns                                            | Downloads and immediately executes remote scripts                                               |
+| `TOOL_CMD_OBFUSCATED_EXEC`    | HIGH     | `base64 -d \| bash` patterns                                                   | Executes base64-encoded commands                                                                |
+| `TOOL_CMD_IFS_INJECTION`      | HIGH     | `$IFS`, `${...IFS...}`                                                         | Token splitting that can evade naive word-boundary checks                                       |
+| `TOOL_CMD_CONTROL_CHARS`      | CRITICAL | Non-printable control characters (for example NUL)                             | Characters that can hide metacharacters from simple scans                                       |
+| `TOOL_CMD_UNICODE_WHITESPACE` | HIGH     | NBSP, ideographic space, and other Unicode whitespace                          | Whitespace that parsers and Bash may treat differently                                          |
+| `TOOL_CMD_PROC_ENVIRON`       | HIGH     | `/proc/self/environ`, `/proc/<pid>/environ`                                    | Reads process environment blobs (secrets, tokens), often chained with execution or exfiltration |
+| `TOOL_CMD_JQ_SYSTEM`          | HIGH     | `jq` with `system(`                                                            | Shell execution embedded in jq programs                                                         |
+| `TOOL_CMD_JQ_FILE_FLAGS`      | HIGH     | `jq` `-f` / `--from-file`, `--rawfile`, `--slurpfile`, `-L`, `--library-path`  | Reading arbitrary files or loading external jq code paths                                       |
+| `TOOL_CMD_ZSH_DANGEROUS`      | HIGH     | `zmodload`, `emulate ... -c`, `sysopen` / `zpty` / `ztcp`, `zf_*`, `fc ... -e` | zsh builtins that enable raw I/O, network, or execution paths beyond typical binary checks      |
 
 **Privilege Escalation (CRITICAL/HIGH):**
 
@@ -204,11 +242,28 @@ Tool Guard includes the following built-in detection rules (for `execute_shell_c
 | ------------------------ | ---------------------------------- | --------------------------------------------- |
 | `TOOL_CMD_REVERSE_SHELL` | `/dev/tcp`, `nc -e`, `socat EXEC:` | Establishes reverse shells or network tunnels |
 
+### Shell evasion guardian
+
+The engine also runs **`ShellEvasionGuardian`** on `execute_shell_command`. It tracks quoting state to catch obfuscation that pure line- or regex-only checks can miss (for example command substitution outside single quotes, `$'...'` / `$"..."` tricks, backslash-escaped whitespace or shell operators—with a carve-out for common `find ... -exec ... {} \;`—raw newlines or `\r` that split commands while skipping heredocs, `#` comment / quote desync, and quoted newlines followed by `#`-looking lines). Reported rule IDs (severity **HIGH**):
+
+| Rule ID                              | Description                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| `SHELL_EVASION_COMMAND_SUBSTITUTION` | Backticks or command / process substitution–style patterns outside `'`...`'` |
+| `SHELL_EVASION_OBFUSCATED_FLAGS`     | ANSI-C or locale quoting, empty-quote flag tricks, or quoted flag tokens     |
+| `SHELL_EVASION_BACKSLASH_WHITESPACE` | Backslash-escaped space or tab outside quotes                                |
+| `SHELL_EVASION_BACKSLASH_OPERATOR`   | Backslash before `; \| & < >` outside quotes                                 |
+| `SHELL_EVASION_NEWLINE`              | Carriage return or unquoted newline before further command text              |
+| `SHELL_EVASION_COMMENT_QUOTE_DESYNC` | Quote characters inside an unquoted `#` comment line                         |
+| `SHELL_EVASION_QUOTED_NEWLINE`       | Newline inside quotes where the next segment looks like a `#` comment line   |
+
+**Configuration note:** `disabled_rules` in `config.json` applies only to YAML rule IDs (typically `TOOL_CMD_*`). It does **not** control `SHELL_EVASION_*` findings. Shell evasion checks are controlled independently via the `shell_evasion_checks` config (see below). Turning off Tool Guard entirely disables all guardians, including this one.
+
 **Usage recommendations**:
 
 - Keep CRITICAL level rules enabled; these represent the most dangerous operations
 - HIGH level rules can be adjusted based on actual use cases; some legitimate operations may trigger them
-- Use `disabled_rules` config to disable rules that don't apply to your use case
+- Use `disabled_rules` config to disable YAML `TOOL_CMD_*` rules that don't apply to your use case
+- Use `shell_evasion_checks` to toggle individual shell evasion checks (all disabled by default)
 - Use `custom_rules` to add organization-specific security rules
 
 ---
@@ -570,6 +625,26 @@ QwenPaw supports optional web login authentication to protect the Console from u
 | `QWENPAW_AUTH_USERNAME` | Pre-set admin username for auto-registration | Optional |
 | `QWENPAW_AUTH_PASSWORD` | Pre-set admin password for auto-registration | Optional |
 
+### Auth-bypass host whitelist
+
+In `config.json`, the `security.allow_no_auth_hosts` field specifies client IP addresses that can access API endpoints without authentication, even when authentication is enabled:
+
+```json
+{
+  "security": {
+    "allow_no_auth_hosts": ["127.0.0.1", "::1"]
+  }
+}
+```
+
+| Field                 | Type          | Default                | Description                                                                          |
+| --------------------- | ------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| `allow_no_auth_hosts` | array[string] | `["127.0.0.1", "::1"]` | Client IP addresses allowed to access `/api/*` routes without authentication tokens. |
+
+This can also be managed from the Console under **Settings → Security**.
+
+> **Security warning**: Adding non-localhost addresses to this list means those IPs can access the full API without credentials. Use with caution and only for trusted hosts on private networks.
+
 **Configuration notes**:
 
 - `QWENPAW_AUTH_ENABLED=true` is the only required variable to enable authentication
@@ -631,6 +706,7 @@ docker run -e QWENPAW_AUTH_ENABLED=true \
   -p 127.0.0.1:8088:8088 \
   -v qwenpaw-data:/app/working \
   -v qwenpaw-secrets:/app/working.secret \
+  -v qwenpaw-backups:/app/working.backups \
   agentscope/qwenpaw:latest
 ```
 
@@ -651,6 +727,7 @@ services:
     volumes:
       - qwenpaw-data:/app/working
       - qwenpaw-secrets:/app/working.secret
+      - qwenpaw-backups:/app/working.backups
 ```
 
 #### Environment file (.env)
@@ -675,7 +752,7 @@ unset QWENPAW_AUTH_ENABLED
 qwenpaw app
 
 # Docker — simply remove the -e flag. The example below includes volumes for persistence.
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 ```
 
 ### Password reset

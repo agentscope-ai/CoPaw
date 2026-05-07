@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Modal, Form } from "@agentscope-ai/design";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import { useTranslation } from "react-i18next";
@@ -6,6 +13,7 @@ import api from "../../../api";
 import { invalidateSkillCache } from "../../../api/modules/skill";
 import type {
   BuiltinImportSpec,
+  BuiltinUpdateNotice,
   PoolSkillSpec,
   WorkspaceSkillSummary,
 } from "../../../api/types";
@@ -21,11 +29,65 @@ import { useSkillFilter } from "../../Agent/Skills/useSkillFilter";
 export type PoolMode = "broadcast" | "create" | "edit";
 
 const SKILL_POOL_ZIP_MAX_MB = 100;
+type BuiltinSkillLanguage = "en" | "zh";
+interface BuiltinImportSelection {
+  skill_name: string;
+  language: BuiltinSkillLanguage;
+}
+
+type BroadcastConflict =
+  | {
+      skill_name: string;
+      workspace_id: string;
+      workspace_name: string;
+      reason: "conflict";
+    }
+  | {
+      skill_name: string;
+      workspace_id: string;
+      workspace_name: string;
+      reason: "builtin_upgrade";
+      current_version_text: string;
+      source_version_text: string;
+    }
+  | {
+      skill_name: string;
+      workspace_id: string;
+      workspace_name: string;
+      reason: "language_switch";
+      source_language: string;
+      current_language: string;
+    };
+
+const BUILTIN_NOTICE_ACK_STORAGE_KEY = "qwenpaw.skill-pool.builtin-notice.ack";
+
+function readBuiltinNoticeAcknowledgement(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(BUILTIN_NOTICE_ACK_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeBuiltinNoticeAcknowledgement(fingerprint: string): void {
+  if (typeof window === "undefined" || !fingerprint) return;
+  try {
+    localStorage.setItem(BUILTIN_NOTICE_ACK_STORAGE_KEY, fingerprint);
+  } catch {
+    // Ignore storage failures and fall back to in-memory state.
+  }
+}
 
 export function useSkillPool() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [skills, setSkills] = useState<PoolSkillSpec[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSkillSummary[]>([]);
+  const [builtinNotice, setBuiltinNotice] =
+    useState<BuiltinUpdateNotice | null>(null);
+  const [builtinNoticeAck, setBuiltinNoticeAck] = useState<string>(() =>
+    readBuiltinNoticeAcknowledgement(),
+  );
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<PoolMode | null>(null);
   const [activeSkill, setActiveSkill] = useState<PoolSkillSpec | null>(null);
@@ -57,20 +119,39 @@ export function useSkillPool() {
     filteredSkills,
   } = useSkillFilter(skills);
 
+  const builtinLanguage: BuiltinSkillLanguage = i18n.language?.startsWith("zh")
+    ? "zh"
+    : "en";
+
   const sortedSkills = useMemo(
     () => filteredSkills.slice().sort((a, b) => a.name.localeCompare(b.name)),
     [filteredSkills],
   );
+  const hasUnseenBuiltinNotice = useMemo(
+    () =>
+      Boolean(
+        builtinNotice?.has_updates &&
+          builtinNotice.fingerprint &&
+          builtinNotice.fingerprint !== builtinNoticeAck,
+      ),
+    [builtinNotice, builtinNoticeAck],
+  );
+  const builtinNoticeTotal = builtinNotice?.total_changes || 0;
 
-  const allCategories = useMemo(() => {
-    const cats = new Set<string>();
-    skills.forEach((s) => {
-      if (s.tags) {
-        s.tags.forEach((tag) => cats.add(tag));
-      }
-    });
-    return Array.from(cats).sort();
-  }, [skills]);
+  const confirmOverwrite = useCallback(
+    (title: string, content: ReactNode) =>
+      new Promise<boolean>((resolve) => {
+        Modal.confirm({
+          title,
+          content,
+          okText: t("common.confirm"),
+          cancelText: t("common.cancel"),
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      }),
+    [t],
+  );
 
   const togglePoolSelect = (name: string) => {
     setSelectedPoolSkills((prev) => {
@@ -105,37 +186,56 @@ export function useSkillPool() {
   // Use ref to cache data and avoid unnecessary reloads
   const dataLoadedRef = useRef(false);
 
-  const loadData = useCallback(async (forceReload = false) => {
-    if (dataLoadedRef.current && !forceReload) return;
+  const markBuiltinNoticeSeen = useCallback(
+    (fingerprint?: string) => {
+      const nextFingerprint = String(
+        fingerprint || builtinNotice?.fingerprint || "",
+      ).trim();
+      if (!nextFingerprint) return;
+      writeBuiltinNoticeAcknowledgement(nextFingerprint);
+      setBuiltinNoticeAck(nextFingerprint);
+    },
+    [builtinNotice],
+  );
 
-    setLoading(true);
-    try {
-      const [poolSkills, workspaceSummaries] = await Promise.all([
-        api.listSkillPoolSkills(),
-        api.listSkillWorkspaces(),
-      ]);
-      setSkills(poolSkills);
-      setWorkspaces(workspaceSummaries);
-      dataLoadedRef.current = true;
-    } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : "Failed to load skill pool",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadData = useCallback(
+    async (forceReload = false) => {
+      if (dataLoadedRef.current && !forceReload) return;
+
+      setLoading(true);
+      try {
+        const [poolSkills, workspaceSummaries, notice] = await Promise.all([
+          api.listSkillPoolSkills(),
+          api.listSkillWorkspaces(),
+          api.getPoolBuiltinNotice(),
+        ]);
+        setSkills(poolSkills);
+        setWorkspaces(workspaceSummaries);
+        setBuiltinNotice(notice);
+        dataLoadedRef.current = true;
+      } catch (error) {
+        message.error(
+          error instanceof Error ? error.message : "Failed to load skill pool",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [message],
+  );
 
   const handleRefresh = useCallback(async () => {
     setLoading(true);
     try {
       invalidateSkillCache({ pool: true, workspaces: true });
-      const [poolSkills, workspaceSummaries] = await Promise.all([
+      const [poolSkills, workspaceSummaries, notice] = await Promise.all([
         api.refreshSkillPool(),
         api.listSkillWorkspaces(),
+        api.getPoolBuiltinNotice(),
       ]);
       setSkills(poolSkills);
       setWorkspaces(workspaceSummaries);
+      setBuiltinNotice(notice);
       dataLoadedRef.current = true;
     } catch (error) {
       message.error(
@@ -144,7 +244,7 @@ export function useSkillPool() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     void loadData();
@@ -176,9 +276,16 @@ export function useSkillPool() {
   const openImportBuiltin = async () => {
     try {
       setImportBuiltinLoading(true);
-      const sources = await api.listPoolBuiltinSources();
+      const [sources, notice] = await Promise.all([
+        api.listPoolBuiltinSources(),
+        api.getPoolBuiltinNotice(),
+      ]);
       setBuiltinSources(sources);
+      setBuiltinNotice(notice);
       setImportBuiltinModalOpen(true);
+      if (notice.has_updates && notice.fingerprint) {
+        markBuiltinNoticeSeen(notice.fingerprint);
+      }
     } catch (error) {
       message.error(
         error instanceof Error
@@ -200,6 +307,25 @@ export function useSkillPool() {
     setImportModalOpen(false);
   };
 
+  const getBuiltinImportStatusLabel = useCallback(
+    (status?: string, language?: string) => {
+      switch (status) {
+        case "outdated":
+          return t("skillPool.importStatusOutdated");
+        case "language_switch":
+          return t("skillPool.importStatusLanguageSwitchTo", {
+            language:
+              language === "zh" ? t("skillPool.langZh") : t("skillPool.langEn"),
+          });
+        case "conflict":
+          return t("skillPool.importStatusConflict");
+        default:
+          return "";
+      }
+    },
+    [t],
+  );
+
   const openEdit = (skill: PoolSkillSpec) => {
     setMode("edit");
     setActiveSkill(skill);
@@ -212,10 +338,10 @@ export function useSkillPool() {
     });
   };
 
-  const closeDrawer = () => {
+  const closeDrawer = useCallback(() => {
     setMode(null);
     setActiveSkill(null);
-  };
+  }, []);
 
   const handleDrawerContentChange = (content: string) => {
     setDrawerContent(content);
@@ -250,120 +376,151 @@ export function useSkillPool() {
     targetWorkspaceIds: string[],
   ) => {
     try {
+      const conflicts: BroadcastConflict[] = [];
       for (const skillName of broadcastSkillNames) {
-        let renameMap: Record<string, string> = {};
-
-        while (true) {
-          try {
-            await api.downloadSkillPoolSkill({
-              skill_name: skillName,
-              targets: targetWorkspaceIds.map((workspace_id) => ({
-                workspace_id,
-                target_name: renameMap[workspace_id] || undefined,
-              })),
-            });
-            break;
-          } catch (error) {
-            if (handleScanError(error, t)) return;
-            const detail = parseErrorDetail(error);
-            const conflicts = Array.isArray(detail?.conflicts)
-              ? detail.conflicts
-              : [];
-            if (!conflicts.length) {
-              throw error;
-            }
-
-            const builtinUpgrades = conflicts.filter(
-              (c: { reason?: string }) => c.reason === "builtin_upgrade",
-            );
-            const regularConflicts = conflicts.filter(
-              (c: { reason?: string }) => c.reason !== "builtin_upgrade",
-            );
-
-            let needsOverwrite = false;
-            if (builtinUpgrades.length > 0) {
-              const confirmed = await new Promise<boolean>((resolve) => {
-                Modal.confirm({
-                  title: t("skills.builtinUpgradeTitle"),
-                  content: t("skills.builtinUpgradeContent", {
-                    name: skillName,
-                  }),
-                  okText: t("common.confirm"),
-                  cancelText: t("common.cancel"),
-                  onOk: () => resolve(true),
-                  onCancel: () => resolve(false),
-                });
-              });
-              if (!confirmed) return;
-              needsOverwrite = true;
-            }
-
-            if (regularConflicts.length > 0) {
-              const renameItems = regularConflicts
-                .map(
-                  (c: { workspace_id?: string; suggested_name?: string }) => {
-                    if (!c.workspace_id || !c.suggested_name) {
-                      return null;
-                    }
-                    const w = workspaces.find(
-                      (ws) => ws.agent_id === c.workspace_id,
-                    );
-                    const workspaceLabel = getAgentDisplayName(
-                      {
-                        id: c.workspace_id,
-                        name: w?.agent_name ?? "",
-                      },
-                      t,
-                    );
-                    return {
-                      key: c.workspace_id,
-                      label: workspaceLabel,
-                      suggested_name: c.suggested_name,
-                    };
-                  },
-                )
-                .filter(
-                  (
-                    item,
-                  ): item is {
-                    key: string;
-                    label: string;
-                    suggested_name: string;
-                  } => item !== null,
-                );
-
-              if (!renameItems.length && !needsOverwrite) {
-                throw error;
-              }
-
-              if (renameItems.length) {
-                const nextRenameMap = await showConflictRenameModal(
-                  renameItems.map((item) => ({
-                    ...item,
-                    suggested_name: renameMap[item.key] || item.suggested_name,
-                  })),
-                );
-                if (!nextRenameMap) return;
-                renameMap = { ...renameMap, ...nextRenameMap };
-              }
-            }
-
-            if (!needsOverwrite && !regularConflicts.length) {
-              throw error;
-            }
-
-            if (needsOverwrite) {
-              await api.downloadSkillPoolSkill({
-                skill_name: skillName,
-                targets: targetWorkspaceIds.map((workspace_id) => ({
-                  workspace_id,
-                  target_name: renameMap[workspace_id] || undefined,
-                })),
-                overwrite: true,
-              });
-              break;
-            }
+        try {
+          await api.downloadSkillPoolSkill({
+            skill_name: skillName,
+            targets: targetWorkspaceIds.map((workspace_id) => ({
+              workspace_id,
+            })),
+            preview_only: true,
+          });
+        } catch (error) {
+          if (handleScanError(error, t)) return;
+          const detail = parseErrorDetail(error);
+          const returnedConflicts = Array.isArray(detail?.conflicts)
+            ? detail.conflicts
+            : [];
+          if (!returnedConflicts.length) {
+            throw error;
           }
+          conflicts.push(
+            ...returnedConflicts.map((conflict): BroadcastConflict => {
+              const base = {
+                skill_name: conflict.skill_name || skillName,
+                workspace_id: conflict.workspace_id || "",
+                workspace_name:
+                  conflict.workspace_name ||
+                  getAgentDisplayName(
+                    {
+                      id: conflict.workspace_id || "",
+                      name:
+                        workspaces.find(
+                          (workspace) =>
+                            workspace.agent_id === conflict.workspace_id,
+                        )?.agent_name ?? "",
+                    },
+                    t,
+                  ),
+              };
+              if (conflict.reason === "builtin_upgrade") {
+                return {
+                  ...base,
+                  reason: "builtin_upgrade" as const,
+                  current_version_text: conflict.current_version_text || "",
+                  source_version_text: conflict.source_version_text || "",
+                };
+              }
+              if (conflict.reason === "language_switch") {
+                return {
+                  ...base,
+                  reason: "language_switch" as const,
+                  source_language: conflict.source_language || "",
+                  current_language: conflict.current_language || "",
+                };
+              }
+              return { ...base, reason: "conflict" as const };
+            }),
+          );
+        }
+      }
+      if (conflicts.length > 0) {
+        const allBuiltinUpgrades = conflicts.every(
+          (conflict) => conflict.reason === "builtin_upgrade",
+        );
+        const allLanguageSwitch = conflicts.every(
+          (conflict) => conflict.reason === "language_switch",
+        );
+        const title = allBuiltinUpgrades
+          ? t("skills.builtinUpgradeTitle")
+          : allLanguageSwitch
+          ? t("skills.languageSwitchTitle")
+          : t("skillPool.overwriteConfirm");
+        const subtitle = allBuiltinUpgrades
+          ? t("skillPool.builtinOverwriteTargetsContent")
+          : allLanguageSwitch
+          ? t("skills.languageSwitchContent")
+          : t("skillPool.overwriteTargetsContent");
+        const confirmed = await confirmOverwrite(
+          title,
+          <div style={{ display: "grid", gap: 8 }}>
+            <div>{subtitle}</div>
+            {conflicts.map((conflict) => (
+              <div
+                key={`${conflict.skill_name}-${conflict.workspace_id || ""}`}
+              >
+                <strong>{conflict.skill_name}</strong>
+                {"  "}
+                <span>{conflict.workspace_name}</span>
+                {conflict.reason === "builtin_upgrade" ? (
+                  <>
+                    {"  "}
+                    {t("skillPool.currentVersion")}:{" "}
+                    {conflict.current_version_text || "-"}
+                    {"  ->  "}
+                    {t("skillPool.sourceVersion")}:{" "}
+                    {conflict.source_version_text || "-"}
+                  </>
+                ) : null}
+                {conflict.reason === "language_switch" ? (
+                  <>
+                    {"  "}
+                    {conflict.current_language === "zh"
+                      ? t("skillPool.langZh")
+                      : t("skillPool.langEn")}
+                    {"  →  "}
+                    {conflict.source_language === "zh"
+                      ? t("skillPool.langZh")
+                      : t("skillPool.langEn")}
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>,
+        );
+        if (!confirmed) return;
+      }
+      for (const skillName of broadcastSkillNames) {
+        const overwriteTargetIds = new Set(
+          conflicts
+            .filter((conflict) => conflict.skill_name === skillName)
+            .map((conflict) => conflict.workspace_id)
+            .filter((workspaceId): workspaceId is string =>
+              Boolean(workspaceId),
+            ),
+        );
+        const cleanTargetIds = targetWorkspaceIds.filter(
+          (workspaceId) => !overwriteTargetIds.has(workspaceId),
+        );
+
+        if (cleanTargetIds.length > 0) {
+          await api.downloadSkillPoolSkill({
+            skill_name: skillName,
+            targets: cleanTargetIds.map((workspace_id) => ({
+              workspace_id,
+            })),
+          });
+        }
+
+        if (overwriteTargetIds.size > 0) {
+          await api.downloadSkillPoolSkill({
+            skill_name: skillName,
+            targets: Array.from(overwriteTargetIds).map((workspace_id) => ({
+              workspace_id,
+            })),
+            overwrite: true,
+          });
         }
       }
       message.success(t("skillPool.broadcastSuccess"));
@@ -390,14 +547,14 @@ export function useSkillPool() {
   };
 
   const handleImportBuiltins = async (
-    selectedNames: string[],
+    selections: BuiltinImportSelection[],
     overwriteConflicts: boolean = false,
   ) => {
-    if (selectedNames.length === 0) return;
+    if (selections.length === 0) return;
     try {
       setImportBuiltinLoading(true);
       const result = await api.importSelectedPoolBuiltins({
-        skill_names: selectedNames,
+        imports: selections,
         overwrite_conflicts: overwriteConflicts,
       });
       const imported = Array.isArray(result.imported) ? result.imported : [];
@@ -432,14 +589,20 @@ export function useSkillPool() {
             <div style={{ display: "grid", gap: 8 }}>
               <div>{t("skillPool.importBuiltinConflictContent")}</div>
               {conflicts.map((item) => (
-                <div key={item.skill_name}>
+                <div key={`${item.skill_name}-${item.language || "en"}`}>
                   <strong>{item.skill_name}</strong>
                   {"  "}
-                  {t("skillPool.currentVersion")}:{" "}
-                  {item.current_version_text || "-"}
-                  {"  ->  "}
-                  {t("skillPool.sourceVersion")}:{" "}
-                  {item.source_version_text || "-"}
+                  {getBuiltinImportStatusLabel(item.status, item.language)}
+                  {item.status !== "language_switch" ? (
+                    <>
+                      {"  "}
+                      {t("skillPool.currentVersion")}:{" "}
+                      {item.current_version_text || "-"}
+                      {"  ->  "}
+                      {t("skillPool.sourceVersion")}:{" "}
+                      {item.source_version_text || "-"}
+                    </>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -447,7 +610,7 @@ export function useSkillPool() {
           okText: t("common.confirm"),
           cancelText: t("common.cancel"),
           onOk: async () => {
-            await handleImportBuiltins(selectedNames, true);
+            await handleImportBuiltins(selections, true);
           },
         });
         return;
@@ -461,6 +624,44 @@ export function useSkillPool() {
       setImportBuiltinLoading(false);
     }
   };
+
+  const handleBuiltinLanguageSwitch = useCallback(
+    async (skill: PoolSkillSpec, language: string) => {
+      const normalized = language === "zh" ? "zh" : "en";
+      if (skill.builtin_language === normalized) return;
+      const confirmed = await confirmOverwrite(
+        t("skillPool.builtinLanguageChangeTitle"),
+        t("skillPool.builtinLanguageChangeContent", {
+          name: skill.name,
+          language:
+            normalized === "zh" ? t("skillPool.langZh") : t("skillPool.langEn"),
+        }),
+      );
+      if (!confirmed) return;
+      try {
+        await api.updatePoolBuiltin(skill.name, normalized);
+        message.success(
+          t("skillPool.builtinLanguageChangeSuccess", {
+            name: skill.name,
+            language:
+              normalized === "zh"
+                ? t("skillPool.langZh")
+                : t("skillPool.langEn"),
+          }),
+        );
+        closeDrawer();
+        invalidateSkillCache({ pool: true });
+        await loadData(true);
+      } catch (error) {
+        message.error(
+          error instanceof Error
+            ? error.message
+            : t("skillPool.builtinLanguageChangeFailed"),
+        );
+      }
+    },
+    [closeDrawer, confirmOverwrite, loadData, message, t],
+  );
 
   const handleSavePoolSkill = async () => {
     const values = await form.validateFields().catch(() => null);
@@ -482,7 +683,7 @@ export function useSkillPool() {
 
     if (!skillName || !skillContent.trim()) return;
 
-    try {
+    const persistPoolSkill = async (overwrite = false) => {
       const result =
         mode === "edit"
           ? await api.saveSkillPoolSkill({
@@ -490,6 +691,7 @@ export function useSkillPool() {
               content: skillContent,
               source_name: activeSkill?.name,
               config: parsedConfig,
+              overwrite,
             })
           : await api
               .createSkillPoolSkill({
@@ -530,9 +732,35 @@ export function useSkillPool() {
         api.getSkillScanner,
         t,
       );
+    };
+
+    try {
+      await persistPoolSkill();
     } catch (error) {
       if (handleScanError(error, t)) return;
       const detail = parseErrorDetail(error);
+      if (mode === "edit" && detail?.reason === "conflict") {
+        const confirmed = await confirmOverwrite(
+          t("skillPool.overwriteConfirm"),
+          <div style={{ display: "grid", gap: 8 }}>
+            <div>{t("skills.overwriteExistingList")}</div>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li>{skillName}</li>
+            </ul>
+          </div>,
+        );
+        if (!confirmed) return;
+        try {
+          await persistPoolSkill(true);
+        } catch (retryError) {
+          message.error(
+            retryError instanceof Error
+              ? retryError.message
+              : t("common.save") + " failed",
+          );
+        }
+        return;
+      }
       if (detail?.suggested_name) {
         const renameMap = await showConflictRenameModal([
           {
@@ -599,7 +827,6 @@ export function useSkillPool() {
     while (true) {
       try {
         const result = await api.uploadSkillPoolZip(file, {
-          overwrite: false,
           rename_map: renameMap,
         });
         if (result.count > 0) {
@@ -656,7 +883,6 @@ export function useSkillPool() {
       setImporting(true);
       const result = await api.importPoolSkillFromHub({
         bundle_url: url,
-        overwrite: false,
         target_name: targetName,
       });
       message.success(`${t("common.create")}: ${result.name}`);
@@ -757,6 +983,10 @@ export function useSkillPool() {
     zipInputRef,
     importBuiltinModalOpen,
     builtinSources,
+    builtinLanguage,
+    builtinNotice,
+    builtinNoticeTotal,
+    hasUnseenBuiltinNotice,
     importBuiltinLoading,
     importModalOpen,
     importing,
@@ -769,7 +999,6 @@ export function useSkillPool() {
     searchTags,
     setSearchTags,
     allTags,
-    allCategories,
     form,
     drawerContent,
     showMarkdown,
@@ -792,6 +1021,7 @@ export function useSkillPool() {
     validateFrontmatter,
     handleBroadcast,
     handleImportBuiltins,
+    handleBuiltinLanguageSwitch,
     handleSavePoolSkill,
     handleDelete,
     handleZipImport,

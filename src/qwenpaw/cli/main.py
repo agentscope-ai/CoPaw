@@ -96,6 +96,7 @@ class LazyGroup(click.Group):
     cls=LazyGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
     lazy_subcommands={
+        "acp": ("qwenpaw.cli.acp_cmd", "acp_cmd", ".acp_cmd"),
         "app": ("qwenpaw.cli.app_cmd", "app_cmd", ".app_cmd"),
         "channels": (
             "qwenpaw.cli.channels_cmd",
@@ -141,6 +142,7 @@ class LazyGroup(click.Group):
             ".plugin_commands",
         ),
         "task": ("qwenpaw.cli.task_cmd", "task_cmd", ".task_cmd"),
+        "doctor": ("qwenpaw.cli.doctor_cmd", "doctor_cmd", ".doctor_cmd"),
     },
 )
 @click.version_option(version=__version__, prog_name="QwenPaw")

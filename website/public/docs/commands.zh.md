@@ -90,13 +90,14 @@
 
 查看和管理对话历史的命令。
 
-| 命令            | 返回内容                 |
-| --------------- | ------------------------ |
-| `/history`      | 📋 消息列表 + Token 统计 |
-| `/message`      | 📄 指定消息详情          |
-| `/compact_str`  | 📝 压缩摘要内容          |
-| `/dump_history` | 📁 历史导出文件路径      |
-| `/load_history` | ✅ 历史加载结果          |
+| 命令                | 返回内容                 |
+| ------------------- | ------------------------ |
+| `/history`          | 📋 消息列表 + Token 统计 |
+| `/message`          | 📄 指定消息详情          |
+| `/compact_str`      | 📝 压缩摘要内容          |
+| `/summarize_status` | 📊 摘要任务状态          |
+| `/dump_history`     | 📁 历史导出文件路径      |
+| `/load_history`     | ✅ 历史加载结果          |
 
 ---
 
@@ -203,6 +204,33 @@
 - No summary has been generated yet
 - Use /compact or wait for auto-compaction
 ```
+
+---
+
+### /summarize_status - 查看摘要任务状态
+
+显示所有后台摘要任务的运行状态，包括任务 ID、开始时间和执行结果。
+
+```
+/summarize_status
+```
+
+**返回示例：**
+
+```
+**Summary Task Status**
+
+- **task-001**
+  - Start: 2024-01-15 10:30:00
+  - Status: completed
+  - Result: 用户请求帮助构建用户认证系统...
+- **task-002**
+  - Start: 2024-01-15 10:35:00
+  - Status: failed
+  - Error: Summary generation timeout
+```
+
+> 💡 使用 `/compact` 或 `/new` 时会自动在后台启动摘要任务，可通过此命令查看其执行情况。
 
 ---
 
@@ -513,7 +541,12 @@ Use `/model openai:gpt-4o` to switch to this model.
 | `/daemon reload-config`             | 重新读取并校验配置文件                                                       | ✅   | ✅   |
 | `/daemon version`                   | 版本号、工作目录与日志路径                                                   | ✅   | ✅   |
 | `/daemon logs` 或 `/daemon logs 50` | 查看最近 N 行日志（默认 100 行，最大 2000 行，来自工作目录下 `qwenpaw.log`） | ✅   | ✅   |
-| `/daemon approve`                   | 批准待审的工具调用（工具审批场景）                                           | ✅   | ❌   |
+| `/approval approve [request_id]`    | 批准待审的工具调用（无 ID 则批准队首）                                       | ✅   | ❌   |
+| `/approval deny [request_id]`       | 拒绝待审的工具调用，可附理由                                                 | ✅   | ❌   |
+| `/approval list`                    | 列出所有待审批请求                                                           | ✅   | ❌   |
+| `/approval cancel <request_id>`     | 取消指定审批请求                                                             | ✅   | ❌   |
+| `/approve`                          | `/approval approve` 的快捷方式                                               | ✅   | ❌   |
+| `/deny`                             | `/approval deny` 的快捷方式                                                  | ✅   | ❌   |
 
 ---
 
@@ -602,23 +635,36 @@ qwenpaw daemon logs -n 200   # 在终端指定 200 行
 
 ---
 
-### `/daemon approve` - 批准工具调用
+### `/approval` - 工具执行审批命令
 
-快速批准待审的工具调用。当工具调用需要人工审批时（tool-guard 场景），使用此命令批准执行。
+管理工具审批请求。当 `approval_level` 设为 `STRICT` 或 `SMART` 时，存在 CRITICAL 或 HIGH 级别发现的工具调用会进入待审批队列，使用这些命令进行批准、拒绝、列表查看或取消操作。
 
 **用法：**
 
 ```
-/daemon approve            # 在对话中
+/approval approve [request_id]           # 批准指定请求或队首请求
+/approval deny [request_id] [reason]     # 拒绝并附理由
+/approval list                           # 列出当前会话的待审批项
+/approval list --all                     # 列出所有会话的待审批项
+/approval cancel <request_id>            # 取消指定请求
 ```
 
-> 💡 **提示**：此命令仅在对话中有效。当 Agent 提示需要批准工具调用时，发送此命令即可快速批准。
+**快捷方式：**
+
+```
+/approve                                 # 等同于 /approval approve
+/approve <request_id>                    # 等同于 /approval approve <request_id>
+/deny                                    # 等同于 /approval deny
+/deny <request_id> <reason>              # 等同于 /approval deny <request_id> <reason>
+```
+
+> `/approval list` 显示当前会话（含子会话）的待审批项。使用 `--all` 或 `-a` 查看该 Agent 所有会话的待审批项。
 
 ---
 
 ### 终端使用
 
-所有 daemon 命令都支持在终端中使用（除 `/stop` 和 `/daemon approve` 仅在对话中有效）：
+所有 daemon 命令都支持在终端中使用（除 `/stop` 和 `/approval` 仅在对话中有效）：
 
 ```bash
 qwenpaw daemon status
@@ -634,3 +680,305 @@ qwenpaw daemon logs -n 50
 qwenpaw daemon status --agent-id abc123
 qwenpaw daemon version --agent-id abc123
 ```
+
+---
+
+## Mission Mode - 复杂任务自主执行
+
+Mission Mode 是一个专为**长期、复杂任务**设计的自主执行模式，灵感来自 [Claude Code](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) 和 [Ralph Loop](https://github.com/snarktank/ralph)。它将大型任务拆解为多个用户故事（user stories），并通过 **master agent → worker agents → verifier agents** 的流水线完成，确保质量和可靠性。
+
+### 核心特性
+
+- 📋 **两阶段设计**：Phase 1 生成 PRD（产品需求文档），Phase 2 自动执行
+- 🔒 **代码级控制**：Master agent 禁用实现工具，只能调度 worker，防止上下文污染
+- ✅ **独立验证**：每个 story 由专门的 verifier agent 验证，确保通过所有验收标准
+- 🔄 **自动迭代**：未通过的 story 自动重试，直到所有 story 完成或达到最大迭代次数
+- 🌐 **多语言支持**：自动根据 agent 配置返回中文或英文错误消息
+
+### 适用场景
+
+**✅ 适合 Mission Mode 的任务：**
+
+- 构建完整的功能模块（如用户认证系统、文件管理器）
+- 重构大型代码库（如迁移到新框架）
+- 批量任务（如为多个组件添加单元测试）
+- 需要多次迭代验证的任务
+
+**❌ 不适合 Mission Mode 的任务：**
+
+- 简单的代码修改（如修改一个 bug）
+- 需要实时交互的任务（如调试）
+- 探索性任务（如"研究最佳实践"）
+
+### 基本用法
+
+#### 启动 Mission
+
+```bash
+/mission <任务描述>
+```
+
+**示例：**
+
+```
+/mission 创建一个命令行 TODO 应用，使用 Python，支持添加、删除、列出和标记完成任务，数据保存到本地 JSON 文件
+```
+
+**可选参数：**
+
+- `--max-iterations N`: 设置 Phase 2 最大迭代次数（范围 1-100，默认 20）
+- `--verify <command>`: 自定义验证命令（如 `pytest`）
+
+```
+/mission 创建 Web API --max-iterations 30 --verify "pytest tests/"
+```
+
+#### Phase 1: PRD 生成
+
+Agent 会：
+
+1. 探索代码库，理解现有结构
+2. 将任务拆解为多个用户故事
+3. 生成 `prd.json` 文件，包含每个 story 的验收标准
+
+**PRD 示例：**
+
+```json
+{
+  "project": "todo-cli-app",
+  "description": "命令行 TODO 应用",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "添加任务功能",
+      "description": "As a user, I want to add new tasks...",
+      "acceptanceCriteria": [
+        "命令 'todo add <task>' 可成功添加任务",
+        "任务保存到 todos.json 文件"
+      ],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+```
+
+#### Phase 2: 确认并执行
+
+**确认 PRD：**
+
+查看 PRD 后，发送确认消息进入 Phase 2：
+
+```
+确认，开始执行
+```
+
+**或者，如果需要修改：**
+
+```
+请把 US-001 拆分为两个 story，分别处理添加和持久化
+```
+
+Agent 会修改 PRD，再次等待确认。
+
+**Phase 2 执行流程：**
+
+1. **Master 调度**：分派 worker agent 执行每个 story
+2. **Worker 实现**：创建/修改文件，运行测试
+3. **Verifier 验证**：独立 agent 验证是否通过所有验收标准
+4. **更新 PRD**：通过的 story 标记 `passes: true`
+5. **自动迭代**：未通过的 story 重新分派，直到全部完成
+
+#### 查看进度
+
+```bash
+/mission status
+```
+
+**输出示例：**
+
+```
+**Mission Status** — mission-20260415-123456
+- Session: e2e-abc123
+- Phase: execution
+- Project: todo-cli-app
+- Progress: 2/4 stories passed
+- Loop dir: ~/.copaw/workspaces/default/missions/mission-20260415-123456
+
+  ✅ US-001: 添加任务功能
+  ✅ US-002: 列出任务功能
+  ⬜ US-003: 删除任务功能
+  ⬜ US-004: 标记完成功能
+```
+
+#### 列出所有 Mission
+
+```bash
+/mission list
+```
+
+### 工作目录结构
+
+每个 mission 在 `~/.copaw/workspaces/default/missions/mission-<timestamp>/` 下创建工作目录：
+
+```
+mission-20260415-123456/
+├── prd.json              # 产品需求文档
+├── loop_config.json      # 配置和状态
+├── task.md               # 原始任务描述
+├── progress.txt          # 进度日志（Codebase Patterns）
+└── <实现产出的文件>
+```
+
+### 注意事项
+
+1. **Session 隔离**：每个 session 的 mission 相互独立，不会互相干扰
+2. **PRD 格式校验**：Phase 2 启动前会强制校验 PRD 格式，确保符合 schema
+3. **工具限制**：Phase 2 中，master agent **不能**直接使用 `edit_file`、`browser_use` 等实现工具，只能通过 worker 完成
+4. **迭代上限**：达到 `--max-iterations` 后自动停止，避免无限循环
+5. **Git 支持**：如果工作目录是 Git 仓库，agent 会自动 commit 变更（可选）
+6. **⚠️ 工具安全护栏绕过**：
+   - **Worker 和 verifier agents 会自动绕过安全护栏**（通过 `--background` 模式自动禁用）
+   - 这是因为后台 session 无法响应 `/approve` 交互提示
+   - Master agent 也会绕过护栏保护
+   - **安全提示**：所有 worker 操作都在 `missions/<mission-xxx>/` 目录下进行，但仍建议**仅在完全信任的代码仓库中使用 Mission Mode**
+   - 敏感操作（如删除文件、执行 shell 命令）会直接执行，无需人工审批
+
+### 高级用法
+
+#### 自定义验证命令
+
+```
+/mission 添加单元测试 --verify "npm test"
+```
+
+验证阶段会运行 `npm test` 检查是否通过。
+
+#### 增加迭代次数（复杂任务）
+
+```
+/mission 重构整个认证模块 --max-iterations 50
+```
+
+#### 中途介入
+
+Phase 2 执行过程中，可以随时发送消息与 master agent 交互：
+
+```
+暂停一下，US-003 的实现有问题，请修复后再继续
+```
+
+### 故障排查
+
+**问题：PRD 格式不正确**
+
+```
+⚠️ **无法进入 Phase 2**: prd.json 格式错误:
+  - Missing required field: userStories
+
+请修正 PRD 格式后再确认。
+```
+
+**解决**：检查 `prd.json`，确保包含 `userStories` 数组，每个 story 有必需字段。
+
+**问题：达到最大迭代次数**
+
+```
+⚠️ **Mission reached max iterations** (20). 2/4 stories passed.
+```
+
+**解决**：
+
+1. 使用 `/mission status` 查看剩余 story
+2. 增加 `--max-iterations` 重新启动
+3. 或手动完成剩余工作
+
+### 与其他模式的对比
+
+| 模式             | 适用场景           | Agent 行为          | 工具使用        |
+| ---------------- | ------------------ | ------------------- | --------------- |
+| **普通对话**     | 简单任务、快速修改 | 单 agent 直接执行   | 所有工具可用    |
+| **Mission Mode** | 复杂、长期任务     | Master 调度 workers | Master 限制工具 |
+
+---
+
+## Plan Mode - 计划模式
+
+计划模式提供结构化的任务规划和分步执行能力。完整文档请参见 [计划模式](./plan)。
+
+| 命令               | 说明                                        | 对话 |
+| ------------------ | ------------------------------------------- | ---- |
+| `/plan`            | 显示计划模式状态（启用/禁用）及当前计划信息 | ✅   |
+| `/plan <任务描述>` | 创建新的结构化计划并开始分步执行            | ✅   |
+
+---
+
+## Proactive Mode - 主动提醒模式
+
+Proactive Mode（主动提醒模式）是一个智能化的功能，允许 AI 代理在检测到用户长时间未活动后，主动分析用户当前的会话上下文和屏幕活动，并提供相关的帮助和信息。
+
+### 核心特性
+
+- 🤖 **智能检测**：监控用户会话活动状态，当检测到设定时间内的无活动时触发
+- 🧠 **上下文分析**：分析用户的对话历史和当前屏幕内容，识别潜在需求
+- 🔍 **目标提取**：从对话历史中提取用户可能关注的高频或近期主题
+- 💬 **主动响应**：基于分析结果，自动生成友好且相关的主动帮助信息
+
+### 重要提示
+
+**启用此模式前请务必知悉以下风险：**
+
+- **工具防护绕过**：在此模式下，Agent会绕过标准的工具防护机制，Agent 拥有更高的系统权限和执行自由度
+- **隐私与环境访问**：Agent会读取历史会话记忆以理解上下文，并可能进行截屏以获取当前的运行环境信息。请确保在可信环境中使用，并注意敏感信息的保护
+- 本模式默认不启用，仅在用户主动开启时才生效，且可在开启后关闭
+
+### 基本用法
+
+#### 启用主动提醒模式
+
+```bash
+/proactive
+/proactive on
+/proactive <分钟数>
+```
+
+**示例：**
+
+```bash
+/proactive      # 默认30分钟后如果没有活动则触发主动提醒
+/proactive on   # 同上，默认30分钟
+/proactive 60   # 60分钟后触发主动提醒
+```
+
+#### 停用主动提醒模式
+
+```bash
+/proactive off
+```
+
+### 工作原理
+
+1. **监控阶段**：持续监控用户活动，记录最后活动时间戳
+2. **分析阶段**：当检测到超过设定的空闲时间后，分析最近的对话历史
+3. **任务提取**：识别用户可能关心的主题和目标
+4. **查询执行**：使用浏览器、文件读取、命令执行等工具获取相关信息
+5. **响应生成**：生成友好且相关的主动帮助信息
+
+#### 上下文感知
+
+- 仅关注用户发起的消息，忽略系统消息
+- 避免重复发送相同主题的主动提醒
+- 优先处理高频和近期提到的主题
+
+### 注意事项
+
+1. **资源消耗**：启用后会定期分析上下文，可能增加计算资源使用
+2. **干扰控制**：如果用户在收到主动消息后未回应，则不会连续发送新的主动消息
+3. **模型依赖**：功能效果取决于所使用的AI模型能力，支持多媒体的模型能更好利用屏幕分析功能
+
+### 典型应用场景
+
+- 研究过程中的新信息获取
+- 学习过程中的补充知识提供
+
+---

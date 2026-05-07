@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
@@ -44,7 +44,10 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
-from ..utils import split_text
+from ..utils import file_url_to_local_path, split_text
+
+if TYPE_CHECKING:
+    import concurrent.futures
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,7 @@ RECONNECT_DELAYS = [1, 2, 5, 10, 30, 60]
 RATE_LIMIT_DELAY = 60
 QUICK_DISCONNECT_THRESHOLD = 5
 MAX_QUICK_DISCONNECT_COUNT = 3
+_RECOVERABLE_WS_WINERRORS = frozenset({10053, 10054, 10060})
 
 DEFAULT_API_BASE = "https://api.sgroup.qq.com"
 TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
@@ -200,6 +204,22 @@ class QQApiError(RuntimeError):
         self.status = status
         self.data = data
         super().__init__(f"API {path} {status}: {data}")
+
+
+def _is_recoverable_ws_os_error(exc: OSError) -> bool:
+    """Return True for socket errors that should trigger reconnect.
+
+    On Windows, transient remote/local disconnects often surface as plain
+    ``OSError`` subclasses such as ``ConnectionAbortedError`` with WinError
+    10053, which should be treated the same as a closed WebSocket.
+    """
+
+    if isinstance(
+        exc,
+        (ConnectionAbortedError, ConnectionResetError, BrokenPipeError),
+    ):
+        return True
+    return getattr(exc, "winerror", None) in _RECOVERABLE_WS_WINERRORS
 
 
 def _sanitize_qq_text(text: str) -> tuple[str, bool]:
@@ -643,7 +663,9 @@ class QQChannel(BaseChannel):
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
         media_dir: str = "",
+        workspace_dir: Path | None = None,
         max_reconnect_attempts: int = 100,
+        ack_message: str = "",
     ):
         super().__init__(
             process,
@@ -657,10 +679,18 @@ class QQChannel(BaseChannel):
         self.client_secret = client_secret
         self.bot_prefix = bot_prefix
         self._markdown_enabled = markdown_enabled
-        self._media_dir = (
-            Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
+        self._workspace_dir = (
+            Path(workspace_dir).expanduser() if workspace_dir else None
         )
+        # Use workspace-specific media dir if workspace_dir is provided
+        if not media_dir and self._workspace_dir:
+            self._media_dir = self._workspace_dir / "media"
+        elif media_dir:
+            self._media_dir = Path(media_dir).expanduser()
+        else:
+            self._media_dir = _DEFAULT_MEDIA_DIR
         self._max_reconnect_attempts = max_reconnect_attempts
+        self._ack_message = ack_message
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws_thread: Optional[threading.Thread] = None
@@ -779,6 +809,7 @@ class QQChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        workspace_dir: Path | None = None,
     ) -> "QQChannel":
         return cls(
             process=process,
@@ -792,11 +823,13 @@ class QQChannel(BaseChannel):
             filter_tool_messages=filter_tool_messages,
             filter_thinking=filter_thinking,
             media_dir=getattr(config, "media_dir", ""),
+            workspace_dir=workspace_dir,
             max_reconnect_attempts=getattr(
                 config,
                 "max_reconnect_attempts",
                 100,
             ),
+            ack_message=getattr(config, "ack_message", ""),
         )
 
     def _resolve_send_path(
@@ -1212,12 +1245,37 @@ class QQChannel(BaseChannel):
         for att in attachments:
             url = att.get("url", "")
             file_name = att.get("filename", "")
+
+            # QQ Voice Message ASR Support
+            # Check if attachment is a voice message and has ASR text.
+            att_type = att.get("content_type", att.get("type", ""))
+            file_ext = Path(file_name).suffix.lower()
+            is_voice = att_type == "voice" or file_ext in {
+                ".amr",
+                ".silk",
+                ".slk",
+            }
+
+            if is_voice:
+                asr_text = att.get("asr_refer_text", "")
+                if asr_text:
+                    # Use platform-side ASR text directly,
+                    # skipping audio download.
+                    parts.append(
+                        TextContent(type=ContentType.TEXT, text=asr_text),
+                    )
+                    continue
+                # No ASR text available: prefer the pre-converted WAV URL so
+                # the transcription pipeline can process it without needing
+                # SILK decoding.  Fall back to the original AMR/SILK URL.
+                voice_wav_url = att.get("voice_wav_url", "")
+                if voice_wav_url:
+                    url = voice_wav_url
+                    file_name = file_name.rsplit(".", 1)[0] + ".wav"
+
             if not url:
                 continue
-            att_type = att.get(
-                "content_type",
-                att.get("type", ""),
-            )
+
             resolved = self._resolve_attachment_type(
                 att_type,
                 file_name,
@@ -1262,8 +1320,126 @@ class QQChannel(BaseChannel):
         )
 
     # ------------------------------------------------------------------
+    # Instant acknowledgment
+    # ------------------------------------------------------------------
+
+    async def _send_ack_async(
+        self,
+        message_type: str,
+        sender_id: str,
+        msg_id: str,
+        group_openid: str = "",
+        guild_id: str = "",
+        channel_id: str = "",
+    ) -> None:
+        """Send ACK message entirely on the async event loop."""
+        token = await self._get_access_token_async()
+        path, use_seq, seq_key = self._resolve_send_path(
+            message_type,
+            sender_id,
+            channel_id or None,
+            group_openid or None,
+            guild_id=guild_id or None,
+        )
+        await _send_message_async(
+            self._http,
+            token,
+            path,
+            self._ack_message,
+            msg_id or None,
+            use_markdown=False,
+            use_msg_seq=use_seq,
+            seq_key=seq_key,
+        )
+
+    def _schedule_ack(
+        self,
+        message_type: str,
+        sender_id: str,
+        msg_id: str,
+        group_openid: str = "",
+        guild_id: str = "",
+        channel_id: str = "",
+    ) -> None:
+        """Schedule a fire-and-forget ACK from the sync WS thread.
+
+        Sends ``self._ack_message`` as an instant text reply so the
+        user knows the bot received their message.  The entire
+        operation (token + HTTP send) runs on the async event loop,
+        so the WS thread is never blocked.  Failure is logged at
+        debug level but never interrupts normal message handling.
+        """
+        if not self._ack_message:
+            return
+        loop = self._loop
+        if not (loop and loop.is_running() and self._http):
+            return
+        coro = self._send_ack_async(
+            message_type,
+            sender_id,
+            msg_id,
+            group_openid=group_openid,
+            guild_id=guild_id,
+            channel_id=channel_id,
+        )
+        try:
+            fut = asyncio.run_coroutine_threadsafe(coro, loop)
+            fut.add_done_callback(self._on_ack_done)
+        except Exception:
+            logger.debug(
+                "qq ack failed to schedule for %s sender=%s",
+                message_type,
+                sender_id[:16] if sender_id else "?",
+            )
+
+    @staticmethod
+    def _on_ack_done(fut: "concurrent.futures.Future[None]") -> None:
+        """Silently log exceptions from fire-and-forget ACK futures."""
+        exc = fut.exception()
+        if exc:
+            logger.debug("qq ack send error: %r", exc)
+
+    # ------------------------------------------------------------------
     # WebSocket: message event handling
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _find_quoted_element(
+        d: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Find the quoted msg_elements entry by matching ref_msg_idx."""
+        msg_elements = d.get("msg_elements")
+        if not msg_elements or not isinstance(msg_elements, list):
+            return None
+
+        scene_ext = (d.get("message_scene") or {}).get("ext") or []
+
+        ref_idx: str = ""
+        own_idx: str = ""
+        for entry in scene_ext:
+            if isinstance(entry, str):
+                if entry.startswith("ref_msg_idx="):
+                    ref_idx = entry[len("ref_msg_idx=") :]
+                elif entry.startswith("msg_idx="):
+                    own_idx = entry[len("msg_idx=") :]
+
+        if not ref_idx:
+            return None
+
+        for elem in msg_elements:
+            if not isinstance(elem, dict):
+                continue
+            if elem.get("msg_idx") == ref_idx:
+                return elem
+
+        for elem in msg_elements:
+            if not isinstance(elem, dict):
+                continue
+            elem_idx = elem.get("msg_idx", "")
+            if elem_idx and elem_idx != own_idx:
+                return elem
+
+        return None
 
     def _handle_msg_event(
         self,
@@ -1298,12 +1474,51 @@ class QQChannel(BaseChannel):
         }
         for key in spec.extra_meta_keys:
             meta[key] = d.get(key, "")
+        self._schedule_ack(
+            spec.message_type,
+            sender,
+            msg_id,
+            group_openid=d.get("group_openid", ""),
+            guild_id=d.get("guild_id", ""),
+            channel_id=d.get("channel_id", ""),
+        )
+
+        # Extract quoted message (text + attachments) from msg_elements.
+        text_parts: List[str] = []
+        content_parts: List[Any] = []
+        quoted_elem = self._find_quoted_element(d)
+        if quoted_elem is not None:
+            quoted_text = (quoted_elem.get("content") or "").strip()
+            quoted_attachments = quoted_elem.get("attachments") or []
+            if quoted_text:
+                text_parts.insert(0, f"[quoted message: {quoted_text}]")
+            if quoted_attachments:
+                quoted_media = self._parse_qq_attachments(quoted_attachments)
+                if quoted_media:
+                    content_parts.extend(quoted_media)
+                else:
+                    text_parts.insert(0, "[quoted media: download failed]")
+            if not quoted_text and not quoted_attachments:
+                text_parts.insert(0, "[quoted message]")
+            logger.info(
+                "qq quoted message detected, text=%r attachments=%d",
+                quoted_text[:100] if quoted_text else "",
+                len(quoted_attachments),
+            )
+        if text:
+            text_parts.append(text)
+        combined_text = "\n".join(text_parts).strip()
+
+        if combined_text:
+            content_parts.insert(
+                0,
+                TextContent(type=ContentType.TEXT, text=combined_text),
+            )
+
         native = {
             "channel_id": "qq",
             "sender_id": sender,
-            "content_parts": [
-                TextContent(type=ContentType.TEXT, text=text),
-            ],
+            "content_parts": content_parts,
             "meta": meta,
         }
         request = self.build_agent_request_from_native(native)
@@ -1319,7 +1534,7 @@ class QQChannel(BaseChannel):
             spec.message_type,
             sender,
             extra_str,
-            text[:100],
+            combined_text[:100],
         )
 
     # ------------------------------------------------------------------
@@ -1494,8 +1709,12 @@ class QQChannel(BaseChannel):
                     break
         except websocket.WebSocketConnectionClosedException:
             pass
-        except OSError:
-            if not self._stop_event.is_set():
+        except OSError as e:
+            if self._stop_event.is_set():
+                pass
+            elif _is_recoverable_ws_os_error(e):
+                logger.warning("qq ws connection lost, reconnecting: %s", e)
+            else:
                 raise
         except Exception as e:
             logger.exception("qq ws loop: %s", e)
@@ -1542,6 +1761,34 @@ class QQChannel(BaseChannel):
         finally:
             self._stop_event.set()
             logger.info("qq ws thread stopped")
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check QQ WebSocket and HTTP session status."""
+        if not self.enabled:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "QQ channel is disabled.",
+            }
+        issues = []
+        ws_thread_alive = (
+            self._ws_thread is not None and self._ws_thread.is_alive()
+        )
+        if not ws_thread_alive:
+            issues.append("WebSocket thread is not running")
+        if self._http is None or self._http.closed:
+            issues.append("HTTP session not available")
+        if issues:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "; ".join(issues),
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "QQ WebSocket and HTTP session are active.",
+        }
 
     async def start(self) -> None:
         if not self.enabled:
@@ -1636,7 +1883,7 @@ class QQChannel(BaseChannel):
 
         # file:// protocol → treat as local file
         if raw.startswith("file://"):
-            resolved = raw[7:]  # strip "file://"
+            resolved = file_url_to_local_path(raw) or raw
             if os.path.isfile(resolved):
                 local_path = resolved
             else:
@@ -1655,8 +1902,24 @@ class QQChannel(BaseChannel):
     @staticmethod
     def _content_type_to_media_type(
         content_type: Any,
+        source_path: str = "",
     ) -> Optional[int]:
-        """Map ContentType to QQ rich-media file_type integer."""
+        """Map ContentType to QQ rich-media file_type integer.
+
+        Distinguishes between voice messages and regular files based on
+        file extension:
+        - Voice messages (.amr, .silk, .slk) -> _MEDIA_TYPE_AUDIO (3)
+        - Regular audio files (.mp3, .wav, .m4a, etc.) -> _MEDIA_TYPE_FILE (4)
+        - Other files -> _MEDIA_TYPE_FILE (4)
+        """
+        # QQ voice message formats
+        _VOICE_EXTS = {".amr", ".silk", ".slk"}
+
+        if source_path:
+            ext = Path(source_path).suffix.lower()
+            if ext in _VOICE_EXTS:
+                return _MEDIA_TYPE_AUDIO
+
         mapping = {
             ContentType.IMAGE: _MEDIA_TYPE_IMAGE,
             ContentType.VIDEO: _MEDIA_TYPE_VIDEO,
@@ -1834,7 +2097,10 @@ class QQChannel(BaseChannel):
         token: str,
     ) -> None:
         """Upload + send rich media for c2c or group scenarios."""
-        media_type = self._content_type_to_media_type(content_type)
+        media_type = self._content_type_to_media_type(
+            content_type,
+            source_path=url or local_path or "",
+        )
         if media_type is None:
             logger.warning(
                 "qq _send_media_c2c_or_group: unknown content_type=%s",

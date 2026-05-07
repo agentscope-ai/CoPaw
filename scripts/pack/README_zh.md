@@ -10,7 +10,7 @@
 ## 系统要求
 
 - **Windows**: Windows 10 或更高版本
-- **macOS**: macOS 14 (Sonoma) 或更高版本，推荐 Apple Silicon (M1/M2/M3/M4) 以获得 MLX 支持
+- **macOS**: macOS 14 (Sonoma) 或更高版本，推荐 Apple Silicon (M1/M2/M3/M4)
 
 ## 前置
 
@@ -47,10 +47,10 @@ CREATE_ZIP=1 bash ./scripts/pack/build_macos.sh   # 同时生成 .zip
 ```bash
 # 在仓库根目录执行，强制只用打包环境（不用系统 conda / PYTHONPATH）。路径按需改。
 APP_ENV="$(pwd)/dist/QwenPaw.app/Contents/Resources/env"
-PYTHONPATH= PYTHONHOME="$APP_ENV" "$APP_ENV/bin/python" -m qwenpaw desktop
+PYTHONNOUSERSITE=1 PYTHONPATH= PYTHONHOME="$APP_ENV" "$APP_ENV/bin/python" -m qwenpaw desktop
 ```
 
-所有标准输出和错误（包括 Python traceback）都会打在终端里；可加 `--log-level debug` 查看更详细日志。
+`PYTHONNOUSERSITE=1` 可防止 Python 加载 `~/.local/lib/pythonX.Y/site-packages` 中的包，避免与打包环境冲突。所有标准输出和错误（包括 Python traceback）都会打在终端里；可加 `--log-level debug` 查看更详细日志。
 
 若**双击** .app 没有任何窗口出现，启动器会把 stderr/stdout 写入 `~/.qwenpaw/desktop.log`，可打开该文件查看报错。
 

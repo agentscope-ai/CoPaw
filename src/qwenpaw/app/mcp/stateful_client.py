@@ -64,6 +64,7 @@ class StdIOStatefulClient(StatefulClientBase):
             "ignore",
             "replace",
         ] = "strict",
+        read_timeout_seconds: float = 60 * 5,
     ) -> None:
         """Initialize the StdIO MCP client.
 
@@ -75,6 +76,7 @@ class StdIOStatefulClient(StatefulClientBase):
             cwd: The working directory to use when spawning the process
             encoding: The text encoding used when sending/receiving messages
             encoding_error_handler: The text encoding error handler
+            read_timeout_seconds: The read timeout seconds
 
         Raises:
             TypeError: If name or command is not a string
@@ -95,6 +97,7 @@ class StdIOStatefulClient(StatefulClientBase):
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
         )
+        self.read_timeout_seconds = read_timeout_seconds
 
         # Lifecycle management
         self._lifecycle_task: asyncio.Task | None = None
@@ -374,6 +377,7 @@ class HttpStatefulClient(StatefulClientBase):
         self.headers = headers
         self.timeout = timeout
         self.sse_read_timeout = sse_read_timeout
+        self.read_timeout_seconds = sse_read_timeout
         self.client_kwargs = client_kwargs
 
         # Lifecycle management

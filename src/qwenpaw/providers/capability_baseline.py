@@ -175,6 +175,16 @@ class ExpectedCapabilityRegistry:
         self._register(
             ExpectedCapability(
                 provider_id="aliyun-codingplan",
+                model_id="qwen3.6-plus",
+                expected_image=True,
+                expected_video=True,
+                doc_url=_acp_doc,
+                note="Qwen3.6-Plus is natively multimodal (image+video)",
+            ),
+        )
+        self._register(
+            ExpectedCapability(
+                provider_id="aliyun-codingplan",
                 model_id="qwen3.5-plus",
                 expected_image=True,
                 expected_video=True,
@@ -512,6 +522,26 @@ class ExpectedCapabilityRegistry:
                 note="DeepSeek-R1 reasoning model: no multimodal",
             ),
         )
+        self._register(
+            ExpectedCapability(
+                provider_id="deepseek",
+                model_id="deepseek-v4-flash",
+                expected_image=False,
+                expected_video=False,
+                doc_url=_ds_api_doc,
+                note="DeepSeek-V4 Flash: text-only",
+            ),
+        )
+        self._register(
+            ExpectedCapability(
+                provider_id="deepseek",
+                model_id="deepseek-v4-pro",
+                expected_image=False,
+                expected_video=False,
+                doc_url=_ds_api_doc,
+                note="DeepSeek-V4 Pro reasoning model: no multimodal",
+            ),
+        )
 
         # ---------------------------------------------------------------
         # 9. Anthropic
@@ -611,14 +641,6 @@ class ExpectedCapabilityRegistry:
 
         # ---------------------------------------------------------------
         # 15. LM Studio — no predefined models (dynamic discovery)
-        # ---------------------------------------------------------------
-
-        # ---------------------------------------------------------------
-        # 16. llama.cpp — models discovered via local scan
-        # ---------------------------------------------------------------
-
-        # ---------------------------------------------------------------
-        # 17. MLX (Apple Silicon) — models discovered via local scan
         # ---------------------------------------------------------------
 
 

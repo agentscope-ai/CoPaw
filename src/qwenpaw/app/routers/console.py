@@ -2,6 +2,7 @@
 """Console APIs: push messages, chat, and file upload for chat."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -13,7 +14,9 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from starlette.responses import StreamingResponse
 
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
+from ...utils.logging import LOG_FILE_PATH
 from ..agent_context import get_agent_for_request
+from ..runner.title_generator import generate_and_update_title
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/console", tags=["console"])
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_DEBUG_LOG_LINES = 1000
 
 
 def _safe_filename(name: str) -> str:
@@ -29,13 +33,42 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", base)[:200] or "file"
 
 
+def _extract_placeholder_name(content_parts: list) -> tuple[str, str]:
+    """Return ``(placeholder_name, first_user_text)`` for a new chat.
+
+    The placeholder name shows up in the session drawer immediately while a
+    background task asks the model for a real title. Content shapes match
+    ``channels/base.py::_extract_chat_name``: dict blocks like
+    ``{"type": "text", "text": "..."}``, raw strings, and objects with a
+    ``.text`` attribute. Anything else (audio/image/file blocks) is treated
+    as media and gets the generic "Media Message" placeholder.
+    """
+    if not content_parts:
+        return "New Chat", ""
+    content = content_parts[0]
+    if not content:
+        return "Media Message", ""
+    if isinstance(content, str):
+        first_text = content
+    elif isinstance(content, dict):
+        text = content.get("text", "")
+        first_text = text if isinstance(text, str) else ""
+    elif hasattr(content, "text"):
+        first_text = content.text or ""
+    else:
+        first_text = ""
+    if not first_text:
+        return "Media Message", ""
+    return first_text[:10], first_text
+
+
 def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
     """Extract run_key (ChatSpec.id), session_id, and native payload.
 
     run_key must be ChatSpec.id (chat_id) so it matches list_chats/get_chat.
     """
     if isinstance(request_data, AgentRequest):
-        channel_id = request_data.channel or "console"
+        channel_id = getattr(request_data, "channel", None) or "console"
         sender_id = request_data.user_id or "default"
         session_id = request_data.session_id or "default"
         content_parts = (
@@ -63,6 +96,33 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
         },
     }
     return native_payload
+
+
+def _tail_text_file(
+    path: Path,
+    *,
+    lines: int = 200,
+    max_bytes: int = 512 * 1024,
+) -> str:
+    """Read the last N lines from a text file with bounded memory."""
+    path = Path(path)
+    if not path.exists() or not path.is_file():
+        return ""
+    try:
+        size = path.stat().st_size
+        if size == 0:
+            return ""
+        with open(path, "rb") as f:
+            if size <= max_bytes:
+                data = f.read()
+            else:
+                f.seek(max(size - max_bytes, 0))
+                data = f.read()
+        text = data.decode("utf-8", errors="replace")
+        return "\n".join(text.splitlines()[-lines:])
+    except Exception:
+        logger.exception("Failed to read backend debug log file")
+        return ""
 
 
 @router.post(
@@ -94,13 +154,9 @@ async def post_console_chat(
         sender_id=native_payload["sender_id"],
         channel_meta=native_payload["meta"],
     )
-    name = "New Chat"
-    if len(native_payload["content_parts"]) > 0:
-        content = native_payload["content_parts"][0]
-        if content:
-            name = content.text[:10]
-        else:
-            name = "Media Message"
+    name, first_text = _extract_placeholder_name(
+        native_payload["content_parts"],
+    )
     chat = await workspace.chat_manager.get_or_create_chat(
         session_id,
         native_payload["sender_id"],
@@ -108,6 +164,19 @@ async def post_console_chat(
         name=name,
     )
     tracker = workspace.task_tracker
+
+    # Kick off an LLM-backed title generation in the background when the chat
+    # was just created with the truncated placeholder. This runs detached so
+    # the streaming response is never blocked by title generation latency.
+    if first_text and chat.name == name:
+        asyncio.create_task(
+            generate_and_update_title(
+                workspace=workspace,
+                chat_id=chat.id,
+                user_message=first_text,
+                placeholder_name=name,
+            ),
+        )
 
     is_reconnect = False
     if isinstance(request_data, dict):
@@ -158,8 +227,42 @@ async def post_console_chat_stop(
     chat_id: str = Query(..., description="Chat id (ChatSpec.id) to stop"),
 ) -> dict:
     """Stop the running chat. Only stops when called."""
+    logger.debug("[STOP API] Received stop request for chat_id=%s", chat_id)
     workspace = await get_agent_for_request(request)
+
+    # Try to stop with the provided chat_id first
+    logger.debug(
+        "[STOP API] Got workspace, calling task_tracker.request_stop...",
+    )
     stopped = await workspace.task_tracker.request_stop(chat_id)
+
+    # If not found, the chat_id might be a session_id (timestamp)
+    # Try to resolve it to the actual chat UUID
+    if not stopped:
+        logger.debug(
+            "[STOP API] chat_id not found in tracker, trying to resolve "
+            "from session_id...",
+        )
+        chat_manager = getattr(workspace.runner, "_chat_manager", None)
+        if chat_manager:
+            resolved_chat_id = await chat_manager.get_chat_id_by_session(
+                session_id=chat_id,
+                channel="console",
+            )
+            if resolved_chat_id:
+                logger.debug(
+                    "[STOP API] Resolved session_id=%s to chat_id=%s",
+                    chat_id[:12] if len(chat_id) >= 12 else chat_id,
+                    resolved_chat_id,
+                )
+                stopped = await workspace.task_tracker.request_stop(
+                    resolved_chat_id,
+                )
+
+    logger.debug(
+        "[STOP API] task_tracker.request_stop returned: stopped=%s",
+        stopped,
+    )
     return {"stopped": stopped}
 
 
@@ -198,18 +301,89 @@ async def post_console_upload(
     }
 
 
+@router.get(
+    "/debug/backend-logs",
+    response_model=dict,
+    summary="Read backend daemon logs for debug page",
+)
+async def get_backend_debug_logs(
+    lines: int = Query(
+        200,
+        ge=20,
+        le=MAX_DEBUG_LOG_LINES,
+        description="Number of trailing log lines to return",
+    ),
+) -> dict:
+    """Return the tail of the project log file for the debug UI."""
+    log_path = LOG_FILE_PATH.resolve()
+    try:
+        st = log_path.stat()
+        return {
+            "path": str(log_path),
+            "exists": True,
+            "lines": lines,
+            "updated_at": st.st_mtime,
+            "size": st.st_size,
+            "content": _tail_text_file(log_path, lines=lines),
+        }
+    except FileNotFoundError:
+        return {
+            "path": str(log_path),
+            "exists": False,
+            "lines": lines,
+            "updated_at": None,
+            "size": 0,
+            "content": "",
+        }
+
+
 @router.get("/push-messages")
 async def get_push_messages(
     session_id: str | None = Query(None, description="Optional session id"),
 ):
     """
-    Return pending push messages. Without session_id: recent messages
-    (all sessions, last 60s), not consumed so every tab sees them.
+    Return pending push messages and ALL approval requests.
+
+    Messages:
+    - With session_id: consumed messages for that session
+    - Without session_id: recent messages (all sessions, last 60s)
+
+    Approvals:
+    - Always returns ALL pending approvals across all sessions
+    - Frontend filters by current session_id for display
+    - Includes session_id in each approval for filtering
     """
     from ..console_push_store import get_recent, take
+    from ..approvals import get_approval_service
 
+    # Get messages (session-specific or global)
     if session_id:
         messages = await take(session_id)
     else:
         messages = await get_recent()
-    return {"messages": messages}
+
+    # Get ALL pending approvals (not filtered by session)
+    approval_svc = get_approval_service()
+    # pylint: disable=protected-access
+    async with approval_svc._lock:
+        all_pending = list(approval_svc._pending.values())
+
+    # Serialize approval data with root_session_id for frontend filtering
+    approvals_data = [
+        {
+            "request_id": p.request_id,
+            "session_id": p.session_id,
+            "root_session_id": p.root_session_id,
+            "agent_id": p.agent_id,
+            "tool_name": p.tool_name,
+            "severity": p.severity,
+            "findings_count": p.findings_count,
+            "findings_summary": p.result_summary,
+            "tool_params": p.extra.get("tool_call", {}).get("input", {}),
+            "created_at": p.created_at,
+            "timeout_seconds": p.timeout_seconds,
+        }
+        for p in all_pending
+    ]
+
+    return {"messages": messages, "pending_approvals": approvals_data}

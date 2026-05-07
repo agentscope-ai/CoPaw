@@ -81,6 +81,84 @@ qwenpaw daemon version
 qwenpaw daemon logs -n 50
 ```
 
+### qwenpaw doctor
+
+对当前安装做**只读**检查：根目录 `config.json` 校验、工作区、`agent.json`、
+频道、MCP、控制台静态资源、HTTP API 可达性、活跃模型与各 Agent 模型连通性
+等。**单独运行 `doctor` 不会修复磁盘**；需要改文件时请使用子命令
+**`qwenpaw doctor fix`**（默认会在 `doctor-fix-backups/` 下备份后再写）。
+
+```bash
+qwenpaw doctor                      # 默认检查
+qwenpaw doctor --deep               # 额外：已启用频道出站探测 + 本地 llama 提示
+qwenpaw doctor --port 8088          # 强制指定 API 端口（见下文说明）
+qwenpaw doctor fix --dry-run        # 仅打印计划，不写盘
+qwenpaw doctor fix -y --only …      # 应用白名单内的修复项（详见 --help）
+```
+
+| 选项            | 作用对象 | 说明                                               |
+| --------------- | -------- | -------------------------------------------------- |
+| `--timeout`     | `doctor` | API / 连通性相关 HTTP 超时（默认 5 秒）            |
+| `--llm-timeout` | `doctor` | 模型连通性检测超时（默认 15 秒）                   |
+| `--deep`        | `doctor` | 对已启用频道做出站探测；`qwenpaw-local` 时附加说明 |
+
+**`doctor` 连的是哪个 host/port？** 根命令上的 `qwenpaw --host` /
+`--port` 对所有子命令生效（含 `doctor`）。若未指定，CLI 会用
+**`config.json` 里持久化的 `last_api`**（一般在 `qwenpaw app` 启动时写入）
+补全缺省项；**仅当没有 `last_api` 时**才回落到 `127.0.0.1:8088`。若发现
+检查打到了错误端口，可显式加 `--port`，或改配置里的 `last_api`。
+
+**`doctor fix`** 只会在工作目录范围内做保守修复。
+
+#### 推荐流程（先预览，再执行）
+
+```bash
+qwenpaw doctor fix --dry-run
+# 缩小到你明确想执行的修复项
+qwenpaw doctor fix --dry-run --only ensure-working-dir,ensure-workspace-dirs
+
+# 确认计划无误后再执行
+qwenpaw doctor fix --only ensure-working-dir,ensure-workspace-dirs
+```
+
+- `--dry-run` 仅打印计划，不写盘。
+- 若计划里包含只读校验（如 jobs.json 校验），FAIL 时仍会返回非 0 退出码
+  （便于 CI 使用）。
+
+#### 修复项（fix ids）
+
+可通过 `--only` 传入逗号分隔的 id。
+
+- 常见安示例：
+  - `ensure-working-dir`：工作目录不存在时创建
+  - `ensure-workspace-dirs`：创建缺失的 agent workspace 目录
+- 完整 fix ids 列表与风险说明请查看：
+  - `qwenpaw doctor fix --help`
+- 当 `qwenpaw doctor` 检测到问题时，输出里会给出对应的修复提示（含建议
+  的 `doctor fix --dry-run --only ...` 命令）。
+
+#### 修复项的安全执行方式
+
+示例：
+
+```bash
+qwenpaw doctor fix --dry-run --only seed-missing-agent-json,reset-invalid-agent-json
+qwenpaw doctor fix -y --only seed-missing-agent-json,reset-invalid-agent-json
+```
+
+- `-y` 仅在真实执行（不带 `--dry-run`）时生效。
+- `--non-interactive` 只允许安全 + 只读 + 技能同步类修复项
+
+#### 备份与恢复
+
+默认会写备份到：
+
+- `doctor-fix-backups/<时间戳>/files/`
+
+恢复时，将 `files/` 子树中的文件按相同相对路径复制回工作目录即可。
+
+> 除非你非常确定不需要回滚，否则不建议使用 `--no-backup`。
+
 ---
 
 ## 模型与环境变量
@@ -296,15 +374,27 @@ qwenpaw channels send \
 
 **别名：** 可以用 `qwenpaw agent`（单数）作为 `qwenpaw agents` 的简写。
 
-| 命令                  | 说明                                             |
-| --------------------- | ------------------------------------------------ |
-| `qwenpaw agents list` | 列出所有已配置的智能体（ID、名称、描述、工作区） |
-| `qwenpaw agents chat` | 与另一个智能体通信（双向，支持多轮对话）         |
+| 命令                    | 说明                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| `qwenpaw agents list`   | 列出所有已配置的智能体（ID、名称、描述、工作区）           |
+| `qwenpaw agents create` | 创建新的智能体配置和工作区（本地操作，无需服务运行）       |
+| `qwenpaw agents delete` | 删除已配置的智能体（若正在运行则先停止，从智能体列表移除） |
+| `qwenpaw agents chat`   | 与另一个智能体通信（双向，支持多轮对话）                   |
 
 ```bash
 # 列出所有智能体
 qwenpaw agents list
 qwenpaw agent list  # 单数别名效果相同
+
+# 创建新的智能体
+qwenpaw agents create --name "数据分析师"
+qwenpaw agents create --name "助手" --template coder --skill web_search --skill pdf_reader
+qwenpaw agents create --name "GPT Bot" --provider-id openai --model-id gpt-4
+
+# 删除智能体（默认智能体不可删除）
+qwenpaw agents delete my_agent
+qwenpaw agents delete my_agent --remove-workspace  # 同时删除工作区目录
+qwenpaw agents delete my_agent --yes                # 跳过确认
 
 # 与另一个智能体对话（实时模式，单次）
 qwenpaw agents chat \
@@ -509,18 +599,27 @@ qwenpaw chats delete <chat_id>
 
 ### qwenpaw skills
 
-| 命令                    | 说明                              |
-| ----------------------- | --------------------------------- |
-| `qwenpaw skills list`   | 列出所有技能及启用/禁用状态       |
-| `qwenpaw skills config` | 交互式启用/禁用技能（复选框界面） |
+| 命令                       | 说明                               |
+| -------------------------- | ---------------------------------- |
+| `qwenpaw skills install`   | 从受支持的 URL 来源安装技能        |
+| `qwenpaw skills uninstall` | 从技能池或单个智能体工作区移除技能 |
+| `qwenpaw skills list`      | 列出所有技能及启用/禁用状态        |
+| `qwenpaw skills config`    | 交互式启用/禁用技能（复选框界面）  |
+| `qwenpaw skills info`      | 查看某个 workspace 技能的本地详情  |
 
 **多智能体支持：** 所有命令都支持 `--agent-id` 参数（默认为 `default`）。
 
 ```bash
+qwenpaw skills install https://skills.sh/owner/repo/skill  # 导入到本地技能池
+qwenpaw skills install https://skills.sh/owner/repo/skill --agent-id abc123  # 直接导入到特定智能体工作区
+qwenpaw skills uninstall skill-creator  # 从本地技能池移除
+qwenpaw skills uninstall skill-creator --agent-id abc123  # 从特定智能体工作区移除
 qwenpaw skills list                   # 看默认智能体的技能
 qwenpaw skills list --agent-id abc123 # 看特定智能体的技能
 qwenpaw skills config                 # 交互式配置默认智能体
 qwenpaw skills config --agent-id abc123 # 交互式配置特定智能体
+qwenpaw skills info [skill_name]               # 看默认智能体的技能详情
+qwenpaw skills info [skill_name] --agent-id abc123 # 看特定智能体的技能详情
 ```
 
 交互界面中：↑/↓ 选择、空格 切换、回车 确认。确认前会预览变更。
@@ -591,18 +690,30 @@ qwenpaw --host 0.0.0.0 --port 9090 cron list
 
 ## 命令总览
 
-| 命令               | 子命令                                                                               |  需要服务运行？   |
-| ------------------ | ------------------------------------------------------------------------------------ | :---------------: |
-| `qwenpaw init`     | —                                                                                    |        否         |
-| `qwenpaw app`      | —                                                                                    | —（启动服务本身） |
-| `qwenpaw models`   | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` |        否         |
-| `qwenpaw env`      | `list` · `set` · `delete`                                                            |        否         |
-| `qwenpaw channels` | `list` · `send` · `install` · `add` · `remove` · `config`                            |      **是**       |
-| `qwenpaw agents`   | `list` · `chat`                                                                      |      **是**       |
-| `qwenpaw cron`     | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`          |      **是**       |
-| `qwenpaw chats`    | `list` · `get` · `create` · `update` · `delete`                                      |      **是**       |
-| `qwenpaw skills`   | `list` · `config`                                                                    |        否         |
-| `qwenpaw clean`    | —                                                                                    |        否         |
+| 命令                | 子命令                                                                               |  需要服务运行？   |
+| ------------------- | ------------------------------------------------------------------------------------ | :---------------: |
+| `qwenpaw init`      | —                                                                                    |        否         |
+| `qwenpaw app`       | —                                                                                    | —（启动服务本身） |
+| `qwenpaw desktop`   | —                                                                                    | —（启动服务本身） |
+| `qwenpaw doctor`    | `fix`                                                                                |        否         |
+| `qwenpaw daemon`    | `status` · `restart` · `reload-config` · `version` · `logs`                          |        否         |
+| `qwenpaw models`    | `list` · `config` · `config-key` · `set-llm` · `download` · `local` · `remove-local` |        否         |
+| `qwenpaw env`       | `list` · `set` · `delete`                                                            |        否         |
+| `qwenpaw channels`  | `list` · `send` · `install` · `add` · `remove` · `config`                            |      **是**       |
+| `qwenpaw agents`    | `list` · `create` · `delete` · `chat`                                                |    部分需要 ¹     |
+| `qwenpaw cron`      | `list` · `get` · `state` · `create` · `delete` · `pause` · `resume` · `run`          |      **是**       |
+| `qwenpaw chats`     | `list` · `get` · `create` · `update` · `delete`                                      |      **是**       |
+| `qwenpaw skills`    | `install` · `uninstall` · `list` · `config` · `info`                                 |        否         |
+| `qwenpaw task`      | —                                                                                    |        否         |
+| `qwenpaw auth`      | `reset-password`                                                                     |        否         |
+| `qwenpaw plugin`    | `install` · `list` · `info` · `uninstall` · `validate`                               |        否         |
+| `qwenpaw acp`       | —                                                                                    |        否         |
+| `qwenpaw clean`     | —                                                                                    |        否         |
+| `qwenpaw shutdown`  | —                                                                                    |        否         |
+| `qwenpaw update`    | —                                                                                    |        否         |
+| `qwenpaw uninstall` | —                                                                                    |        否         |
+
+¹ `create` 不需要服务运行；`list`、`delete`、`chat` 需要服务运行。
 
 ---
 

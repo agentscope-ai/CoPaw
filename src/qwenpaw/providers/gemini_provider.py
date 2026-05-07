@@ -16,8 +16,10 @@ from google.genai import types as genai_types
 from qwenpaw.providers.multimodal_prober import (
     ProbeResult,
     _PROBE_IMAGE_B64,
+    _IMAGE_PROBE_PROMPT,
     _PROBE_VIDEO_URL,
     _is_media_keyword_error,
+    evaluate_image_probe_answer,
 )
 from qwenpaw.providers.provider import ModelInfo, Provider
 
@@ -142,7 +144,8 @@ class GeminiProvider(Provider):
     async def probe_model_multimodal(
         self,
         model_id: str,
-        timeout: float = 10,
+        timeout: float = 60,
+        image_only: bool = False,
     ) -> ProbeResult:
         """Probe multimodal support using Gemini generateContent API.
 
@@ -150,6 +153,13 @@ class GeminiProvider(Provider):
         modality is probed independently with a minimal payload.
         """
         img_ok, img_msg = await self._probe_image_support(model_id, timeout)
+        if image_only:
+            return ProbeResult(
+                supports_image=img_ok,
+                supports_video=False,
+                image_message=img_msg,
+                video_message="Skipped: image_only=True",
+            )
         vid_ok, vid_msg = await self._probe_video_support(model_id, timeout)
         return ProbeResult(
             supports_image=img_ok,
@@ -187,41 +197,18 @@ class GeminiProvider(Provider):
                             data=image_bytes,
                         ),
                     ),
-                    genai_types.Part(
-                        text=(
-                            "What is the single dominant color of this "
-                            "image? Reply with ONLY the color name, "
-                            "nothing else."
-                        ),
-                    ),
+                    genai_types.Part(text=_IMAGE_PROBE_PROMPT),
                 ],
                 config=genai_types.GenerateContentConfig(
                     max_output_tokens=20,
                 ),
             )
-            answer = (response.text or "").lower().strip()
-            if any(kw in answer for kw in ("red", "红")):
-                result = True, f"Image supported (answer={answer!r})"
-                elapsed = time.monotonic() - start_time
-                logger.info(
-                    "Image probe done: model=%s result=%s %.2fs",
-                    model_id,
-                    result[0],
-                    elapsed,
-                )
-                return result
-            result = (
-                False,
-                f"Model did not recognise image (answer={answer!r})",
-            )
-            elapsed = time.monotonic() - start_time
-            logger.info(
-                "Image probe done: model=%s result=%s %.2fs",
+            answer = response.text or ""
+            return evaluate_image_probe_answer(
+                answer,
                 model_id,
-                result[0],
-                elapsed,
+                start_time,
             )
-            return result
         except genai_errors.APIError as e:
             elapsed = time.monotonic() - start_time
             logger.warning(

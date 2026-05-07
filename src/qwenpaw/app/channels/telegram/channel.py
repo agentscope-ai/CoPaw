@@ -10,7 +10,7 @@ import logging
 import re
 import uuid
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from telegram import BotCommand
 from telegram.constants import ParseMode
@@ -57,7 +57,10 @@ _TYPING_TIMEOUT_S = 180
 _RECONNECT_INITIAL_S = 2.0
 _RECONNECT_MAX_S = 30.0
 _RECONNECT_FACTOR = 1.8
-_POLL_WATCHDOG_INTERVAL_S = 30
+_POLLING_STATUS_CHECK_INTERVAL_S = 15
+_POLLING_NETWORK_RETRY_BASE_S = 5.0
+_POLLING_NETWORK_RETRY_MAX_S = 60.0
+_POLLING_CONFLICT_RETRY_DELAY_S = 10.0
 
 _MEDIA_ATTRS: list[tuple[str, type, Any, str]] = [
     ("document", FileContent, ContentType.FILE, "file_url"),
@@ -73,6 +76,16 @@ class _FileTooLargeError(Exception):
 
 class _MediaFileUnavailableError(Exception):
     """Raised when a media file cannot be found or resolved."""
+
+
+class _PollingReconnectRequested(Exception):
+    """Raised when polling should be reconnected by the outer loop."""
+
+    def __init__(self, reason: str, *, attempt: int, delay: float):
+        super().__init__(reason)
+        self.reason = reason
+        self.attempt = attempt
+        self.delay = delay
 
 
 async def _download_telegram_file(
@@ -305,16 +318,27 @@ class TelegramChannel(BaseChannel):
         self._http_proxy = http_proxy or ""
         self._http_proxy_auth = http_proxy_auth or ""
         self.bot_prefix = bot_prefix
-        self._media_dir = (
-            Path(media_dir).expanduser() if media_dir else _DEFAULT_MEDIA_DIR
-        )
         self._workspace_dir = (
             Path(workspace_dir).expanduser() if workspace_dir else None
         )
+        # Use workspace-specific media dir if workspace_dir is provided
+        if not media_dir and self._workspace_dir:
+            self._media_dir = self._workspace_dir / "media"
+        elif media_dir:
+            self._media_dir = Path(media_dir).expanduser()
+        else:
+            self._media_dir = _DEFAULT_MEDIA_DIR
         self._show_typing = show_typing
         self._typing_tasks: dict[str, asyncio.Task] = {}
+        self._is_processing: dict[str, bool] = {}
         self._task: Optional[asyncio.Task] = None
         self._application = None
+        self._polling_error_task: Optional[asyncio.Task] = None
+        self._pending_reconnect_reason: Optional[str] = None
+        self._pending_reconnect_attempt = 0
+        self._pending_reconnect_delay_s = _RECONNECT_INITIAL_S
+        self._polling_network_error_count = 0
+        self._polling_conflict_count = 0
         if self.enabled and self._bot_token:
             try:
                 self._application = self._build_application()
@@ -429,6 +453,7 @@ class TelegramChannel(BaseChannel):
             }
             if self._enqueue is not None:
                 self._start_typing(chat_id)
+                self._is_processing[chat_id] = True
                 self._enqueue(native)
             else:
                 logger.warning("telegram: _enqueue not set, message dropped")
@@ -451,6 +476,83 @@ class TelegramChannel(BaseChannel):
             pending = self._pending_content_by_session.pop(session_id, [])
             return True, pending + list(content_parts)
         return super()._apply_no_text_debounce(session_id, content_parts)
+
+    @staticmethod
+    def _looks_like_polling_conflict(error: Exception) -> bool:
+        """Return True for Telegram getUpdates conflict errors."""
+        text = str(error).lower()
+        return (
+            error.__class__.__name__.lower() == "conflict"
+            or "terminated by other getupdates request" in text
+            or "another bot instance is running" in text
+        )
+
+    @staticmethod
+    def _looks_like_network_error(error: Exception) -> bool:
+        """Return True for transient polling transport errors."""
+        if isinstance(error, (NetworkError, TimedOut, OSError)):
+            return True
+        return error.__class__.__name__.lower() == "connectionerror"
+
+    def _plan_polling_reconnect(
+        self,
+        reason: str,
+    ) -> tuple[int, float]:
+        """Update retry state and return ``(attempt, delay_s)``."""
+        if reason == "conflict":
+            self._polling_conflict_count += 1
+            self._polling_network_error_count = 0
+            return (
+                self._polling_conflict_count,
+                _POLLING_CONFLICT_RETRY_DELAY_S,
+            )
+
+        self._polling_network_error_count += 1
+        self._polling_conflict_count = 0
+        attempt = self._polling_network_error_count
+        delay = min(
+            _POLLING_NETWORK_RETRY_BASE_S * (2 ** (attempt - 1)),
+            _POLLING_NETWORK_RETRY_MAX_S,
+        )
+        return attempt, delay
+
+    def _reset_polling_reconnect_state(self) -> None:
+        """Reset conflict/network retry counters after a clean reconnect."""
+        self._polling_network_error_count = 0
+        self._polling_conflict_count = 0
+
+    async def _request_polling_reconnect(
+        self,
+        app: Any,
+        *,
+        reason: str,
+        error: Exception,
+    ) -> None:
+        """Stop polling so the outer reconnect loop can rebuild it cleanly."""
+        if self._pending_reconnect_reason:
+            return
+        attempt, delay = self._plan_polling_reconnect(reason)
+        self._pending_reconnect_reason = reason
+        self._pending_reconnect_attempt = attempt
+        self._pending_reconnect_delay_s = delay
+        logger.warning(
+            "telegram: polling %s, requesting reconnect "
+            "(attempt %d, next delay %.1fs): %s",
+            reason,
+            attempt,
+            delay,
+            error,
+        )
+        updater = getattr(app, "updater", None)
+        if updater and getattr(updater, "running", False):
+            try:
+                await updater.stop()
+            except Exception as stop_err:
+                logger.debug(
+                    "telegram: failed stopping updater after %s: %s",
+                    reason,
+                    stop_err,
+                )
 
     @classmethod
     def from_env(
@@ -616,6 +718,8 @@ class TelegramChannel(BaseChannel):
             return
         message_thread_id = meta.get("message_thread_id")
         self._stop_typing(chat_id)
+        if self._is_processing.get(to_handle, False):
+            self._start_typing(chat_id)
         chunks = self._chunk_text(text)
         for chunk in chunks:
             html_chunk = markdown_to_telegram_html(chunk)
@@ -672,6 +776,8 @@ class TelegramChannel(BaseChannel):
             return
         message_thread_id = meta.get("message_thread_id")
         self._stop_typing(chat_id)
+        if self._is_processing.get(to_handle, False):
+            self._start_typing(chat_id)
 
         part_type = getattr(part, "type", None)
         try:
@@ -768,6 +874,60 @@ class TelegramChannel(BaseChannel):
         except Exception:
             logger.exception("telegram send_media failed")
 
+    async def on_event_message_completed(
+        self,
+        request,
+        to_handle: str,
+        event,
+        send_meta: dict,
+    ) -> None:
+        """Message completed — send content but keep typing active."""
+        await super().on_event_message_completed(
+            request,
+            to_handle,
+            event,
+            send_meta,
+        )
+        # Re-start typing after sending, in case more tool calls follow.
+        if self._is_processing.get(to_handle, False):
+            self._start_typing(to_handle)
+
+    async def _on_process_completed(
+        self,
+        request,
+        to_handle: str,
+        send_meta: dict,
+    ) -> None:
+        """All events done — clear processing flag and stop typing."""
+        self._is_processing.pop(to_handle, None)
+        self._stop_typing(to_handle)
+        await super()._on_process_completed(request, to_handle, send_meta)
+
+    async def _on_consume_error(
+        self,
+        request,
+        to_handle: str,
+        err_text: str,
+    ) -> None:
+        """Error or cancellation — clear processing flag and stop typing."""
+        self._is_processing.pop(to_handle, None)
+        self._stop_typing(to_handle)
+        await super()._on_consume_error(request, to_handle, err_text)
+
+    async def _consume_with_tracker(
+        self,
+        request,
+        payload,
+    ) -> None:
+        """Wrap parent to ensure typing cleanup on cancellation."""
+        to_handle = self.get_to_handle_from_request(request)
+        try:
+            await super()._consume_with_tracker(request, payload)
+        except asyncio.CancelledError:
+            self._is_processing.pop(to_handle, None)
+            self._stop_typing(to_handle)
+            raise
+
     async def _send_media_value(
         self,
         *,
@@ -858,7 +1018,33 @@ class TelegramChannel(BaseChannel):
     async def _polling_cycle(self, app) -> None:
         """Run one polling lifecycle: init → poll → watchdog."""
 
+        self._pending_reconnect_reason = None
+        self._pending_reconnect_attempt = 0
+        self._pending_reconnect_delay_s = _RECONNECT_INITIAL_S
+        self._polling_error_task = None
+
         def _on_poll_error(exc) -> None:
+            if (
+                self._polling_error_task
+                and not self._polling_error_task.done()
+            ):
+                return
+            if self._looks_like_polling_conflict(exc):
+                self._polling_error_task = app.create_task(
+                    self._request_polling_reconnect(
+                        app,
+                        reason="conflict",
+                        error=exc,
+                    ),
+                )
+            elif self._looks_like_network_error(exc):
+                self._polling_error_task = app.create_task(
+                    self._request_polling_reconnect(
+                        app,
+                        reason="network error",
+                        error=exc,
+                    ),
+                )
             app.create_task(
                 app.process_error(error=exc, update=None),
             )
@@ -886,6 +1072,14 @@ class TelegramChannel(BaseChannel):
                 command="history",
                 description="Show conversation history",
             ),
+            BotCommand(
+                command="model",
+                description="Show or switch AI model",
+            ),
+            BotCommand(
+                command="stop",
+                description="Stop the current task",
+            ),
         ]
         try:
             await app.bot.set_my_commands(commands)
@@ -899,15 +1093,40 @@ class TelegramChannel(BaseChannel):
             )
 
         await app.updater.start_polling(
-            bootstrap_retries=-1,
+            bootstrap_retries=0,
             allowed_updates=["message", "edited_message"],
             error_callback=_on_poll_error,
         )
         await app.start()
+        self._reset_polling_reconnect_state()
         logger.info("telegram: polling started (receiving updates)")
 
         while getattr(app.updater, "running", False):
-            await asyncio.sleep(_POLL_WATCHDOG_INTERVAL_S)
+            await asyncio.sleep(_POLLING_STATUS_CHECK_INTERVAL_S)
+
+        if self._polling_error_task:
+            try:
+                await self._polling_error_task
+            except Exception:
+                logger.debug(
+                    "telegram: polling error task failed",
+                    exc_info=True,
+                )
+            finally:
+                self._polling_error_task = None
+
+        if self._pending_reconnect_reason:
+            reason = self._pending_reconnect_reason
+            attempt = self._pending_reconnect_attempt
+            delay = self._pending_reconnect_delay_s
+            self._pending_reconnect_reason = None
+            self._pending_reconnect_attempt = 0
+            self._pending_reconnect_delay_s = _RECONNECT_INITIAL_S
+            raise _PollingReconnectRequested(
+                reason,
+                attempt=attempt,
+                delay=delay,
+            )
 
         logger.warning("telegram: updater stopped unexpectedly")
 
@@ -939,6 +1158,15 @@ class TelegramChannel(BaseChannel):
                 self._application = self._build_application()
                 await self._polling_cycle(self._application)
                 delay = _RECONNECT_INITIAL_S
+            except _PollingReconnectRequested as exc:
+                logger.warning(
+                    "telegram: polling reconnect requested (%s, attempt %d); "
+                    "reconnecting in %.1fs",
+                    exc.reason,
+                    exc.attempt,
+                    exc.delay,
+                )
+                delay = exc.delay
             except asyncio.CancelledError:
                 logger.debug("telegram: polling cancelled")
                 raise
@@ -966,6 +1194,33 @@ class TelegramChannel(BaseChannel):
             await asyncio.sleep(delay)
             delay = min(delay * _RECONNECT_FACTOR, _RECONNECT_MAX_S)
 
+    async def health_check(self) -> Dict[str, Any]:
+        """Check Telegram polling task status."""
+        if not self.enabled:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "Telegram channel is disabled.",
+            }
+        if not self._bot_token:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "Telegram bot token is not configured.",
+            }
+        task_alive = self._task is not None and not self._task.done()
+        if not task_alive:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "Telegram polling task is not running.",
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "Telegram polling task is running.",
+        }
+
     async def start(self) -> None:
         if not self.enabled or not self._bot_token:
             logger.debug(
@@ -992,6 +1247,7 @@ class TelegramChannel(BaseChannel):
             self._task = None
         for cid in list(self._typing_tasks):
             self._stop_typing(cid)
+        self._is_processing.clear()
         if self._application:
             await self._teardown_application(self._application)
 

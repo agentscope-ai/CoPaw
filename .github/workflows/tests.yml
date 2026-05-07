@@ -58,6 +58,8 @@ jobs:
 
       - name: Build console frontend
         shell: bash
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
         run: |
           cd console && npm ci && npm run build
 
@@ -78,14 +80,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            pip install -e ".[dev,local,ollama]"
-            pip install 'mlx-lm>=0.10.0' || echo "mlx-lm install skipped"
-            pip install --only-binary=llama-cpp-python 'llama-cpp-python>=0.3.0' || \
-              echo "⚠️ llama-cpp-python prebuilt wheel not available, skipping"
-          else
-            pip install -e ".[dev,full]"
-          fi
+          pip install -e ".[dev,full]"
 
       - name: Run all unit tests
         shell: bash
@@ -122,6 +117,8 @@ jobs:
 
       - name: Build console frontend
         shell: bash
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
         run: |
           cd console && npm ci && npm run build
 
@@ -142,20 +139,13 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            pip install -e ".[dev,local,ollama]"
-            pip install 'mlx-lm>=0.10.0' || echo "mlx-lm install skipped"
-            pip install --only-binary=llama-cpp-python 'llama-cpp-python>=0.3.0' || \
-              echo "⚠️ llama-cpp-python prebuilt wheel not available, skipping"
-          else
-            pip install -e ".[dev,full]"
-          fi
+          pip install -e ".[dev,full]"
 
       - name: Check if integrated tests exist
         id: check-integrated
         shell: bash
         run: |
-          if [ -d "tests/integrated" ] && compgen -G "tests/integrated/*.py" > /dev/null; then
+          if [ -d "tests/integration" ] && compgen -G "tests/integration/*.py" > /dev/null; then
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
@@ -165,7 +155,7 @@ jobs:
         if: steps.check-integrated.outputs.has_tests == 'true'
         shell: bash
         run: |
-          pytest tests/integrated -v
+          pytest tests/integration -v
 
   coverage-report:
     name: Coverage Report
@@ -190,6 +180,8 @@ jobs:
 
       - name: Build console frontend
         shell: bash
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
         run: |
           cd console && npm ci && npm run build
 

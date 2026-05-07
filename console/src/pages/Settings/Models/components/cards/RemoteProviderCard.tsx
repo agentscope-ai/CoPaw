@@ -7,7 +7,7 @@ import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import { useAppMessage } from "../../../../../hooks/useAppMessage";
 import styles from "../../index.module.less";
-import { providerIcon } from "../providerIcon";
+import { ProviderIcon } from "../ProviderIconComponent";
 
 interface RemoteProviderCardProps {
   provider: ProviderInfo;
@@ -22,7 +22,6 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
 }: RemoteProviderCardProps) {
   const { t } = useTranslation();
   const { message } = useAppMessage();
-  const [isHover, setIsHover] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modelManageOpen, setModelManageOpen] = useState(false);
 
@@ -95,21 +94,10 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
     : "none";
 
   return (
-    <Card
-      hoverable
-      onMouseEnter={() => setIsHover(true)}
-      onMouseLeave={() => setIsHover(false)}
-      className={`${styles.providerCard} ${
-        isAvailable ? styles.enabledCard : ""
-      } ${isHover ? styles.hover : styles.normal}`}
-    >
+    <Card hoverable className={styles.providerCard}>
       {/* Card Header with Icon and Status */}
       <div className={styles.cardHeaderRow}>
-        <img
-          src={providerIcon(provider.id)}
-          alt={provider.name}
-          className={styles.providerIcon}
-        />
+        <ProviderIcon providerId={provider.id} size={32} />
         <div className={styles.cardStatusHeader}>
           <span
             className={styles.statusDot}
@@ -168,44 +156,41 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
         </div>
       </div>
 
-      {/* Actions - only show on hover */}
-      {isHover && (
-        <div className={styles.cardActions}>
+      <div className={styles.cardActions}>
+        <Button
+          type="default"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            setModelManageOpen(true);
+          }}
+          className={styles.actionBtn}
+        >
+          {t("models.models")}
+        </Button>
+        <Button
+          type="default"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            setModalOpen(true);
+          }}
+          className={styles.actionBtn}
+        >
+          {t("models.settings")}
+        </Button>
+        {provider.is_custom && (
           <Button
             type="default"
             size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              setModelManageOpen(true);
-            }}
+            danger
+            onClick={handleDeleteProvider}
             className={styles.actionBtn}
           >
-            {t("models.models")}
+            {t("common.delete")}
           </Button>
-          <Button
-            type="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              setModalOpen(true);
-            }}
-            className={styles.actionBtn}
-          >
-            {t("models.settings")}
-          </Button>
-          {provider.is_custom && (
-            <Button
-              type="default"
-              size="small"
-              danger
-              onClick={handleDeleteProvider}
-              className={styles.actionBtn}
-            >
-              {t("common.delete")}
-            </Button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       <ProviderConfigModal
         provider={provider}

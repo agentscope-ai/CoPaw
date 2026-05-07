@@ -8,11 +8,13 @@ import { Button, Modal, Result, Tooltip } from "antd";
 import { useAppMessage } from "../../hooks/useAppMessage";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { SparkCopyLine, SparkAttachmentLine } from "@agentscope-ai/icons";
+import { usePlugins } from "../../plugins/PluginContext";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import sessionApi from "./sessionApi";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
+import { agentApi } from "../../api/modules/agent";
 import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { providerApi } from "../../api/modules/provider";
@@ -26,6 +28,29 @@ import { IconButton } from "@agentscope-ai/design";
 import ChatActionGroup from "./components/ChatActionGroup";
 import ChatHeaderTitle from "./components/ChatHeaderTitle";
 import ChatSessionInitializer from "./components/ChatSessionInitializer";
+import { ApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
+import { commandsApi } from "../../api/modules/commands";
+import { useApprovalContext } from "../../contexts/ApprovalContext";
+import { planApi } from "../../api/modules/plan";
+
+interface ApprovalMessageData {
+  requestId: string;
+  sessionId: string;
+  rootSessionId?: string;
+  agentId: string;
+  toolName: string;
+  severity: string;
+  findingsCount: number;
+  findingsSummary: string;
+  toolParams: Record<string, unknown>;
+  createdAt: number;
+  timeoutSeconds: number;
+}
+
+import WhisperSpeechButton, {
+  WhisperSpeechButtonRef,
+} from "./components/WhisperSpeechButton";
+
 import {
   toDisplayUrl,
   copyText,
@@ -61,6 +86,46 @@ interface CommandSuggestion {
   description: string;
 }
 
+function messageRequestsHistoryClear(message: unknown): boolean {
+  if (!message || typeof message !== "object") return false;
+  const metadata = (message as Record<string, unknown>).metadata;
+  if (!metadata || typeof metadata !== "object") return false;
+
+  const meta = metadata as Record<string, unknown>;
+  if (meta.clear_history === true) return true;
+
+  const nested = meta.metadata;
+  return (
+    !!nested &&
+    typeof nested === "object" &&
+    (nested as Record<string, unknown>).clear_history === true
+  );
+}
+
+function payloadRequestsHistoryClear(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+
+  const record = payload as Record<string, unknown>;
+  const candidates: unknown[] = [];
+
+  if (record.object === "message") {
+    candidates.push(record);
+  }
+
+  if (record.object === "response" && Array.isArray(record.output)) {
+    candidates.push(...record.output);
+  }
+
+  return candidates.some(messageRequestsHistoryClear);
+}
+
+function payloadCompletesResponse(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+
+  const record = payload as Record<string, unknown>;
+  return record.object === "response" && record.status === "completed";
+}
+
 function renderSuggestionLabel(command: string, description: string) {
   return (
     <div className={styles.suggestionLabel}>
@@ -93,11 +158,13 @@ function useIMEComposition(isChatActive: () => boolean) {
 
     const handleCompositionEnd = () => {
       if (!isChatActive()) return;
-      // Use a slightly longer delay for Safari on macOS, which fires keydown
-      // after compositionend within the same event loop tick.
+      // Small delay for Safari on macOS, which fires keydown after
+      // compositionend within the same event loop tick.  Keep this as
+      // short as possible so fast typists who hit Space+Enter in quick
+      // succession are not blocked.
       setTimeout(() => {
         isComposingRef.current = false;
-      }, 200);
+      }, 50);
     };
 
     const suppressImeEnter = (e: KeyboardEvent) => {
@@ -234,16 +301,33 @@ function useMessageHistoryNavigation(
   const historyIndexRef = useRef<number>(-1);
   const draftRef = useRef<string>("");
 
+  /** Cached user messages to avoid re-computing on every keydown */
+  const userMessagesCacheRef = useRef<string[]>([]);
+  const cachedMessageCountRef = useRef<number>(0);
+
   const getUserMessagesWithText = useCallback((): string[] => {
     if (!chatRef.current?.messages?.getMessages) return [];
 
     const allMessages = chatRef.current.messages.getMessages();
     if (!Array.isArray(allMessages)) return [];
 
-    return allMessages
+    const currentCount = allMessages.length;
+    if (
+      userMessagesCacheRef.current.length > 0 &&
+      cachedMessageCountRef.current === currentCount
+    ) {
+      return userMessagesCacheRef.current;
+    }
+
+    const userMessages = allMessages
       .filter((msg) => msg.role === "user")
       .map((msg) => extractTextFromMessage(msg))
       .filter((text) => text.trim().length > 0);
+
+    userMessagesCacheRef.current = userMessages;
+    cachedMessageCountRef.current = currentCount;
+
+    return userMessages;
   }, [chatRef]);
 
   interface MessageResult {
@@ -276,6 +360,9 @@ function useMessageHistoryNavigation(
     return null;
   };
 
+  const isSuggestionPopupOpen = (textarea: HTMLTextAreaElement): boolean =>
+    textarea.value.startsWith("/");
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isChatActive()) return;
@@ -296,6 +383,8 @@ function useMessageHistoryNavigation(
       const userMessages = getUserMessagesWithText();
 
       if (e.key === "ArrowUp") {
+        if (isSuggestionPopupOpen(textarea)) return;
+
         const cursorPosition = textarea.selectionStart || 0;
         const textBeforeCursor = textarea.value.substring(0, cursorPosition);
         const lineBreaks = textBeforeCursor.split("\n").length - 1;
@@ -408,15 +497,195 @@ export default function ChatPage() {
   }, [location.pathname]);
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
+  const { toolRenderConfig } = usePlugins();
   const [refreshKey, setRefreshKey] = useState(0);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
   const { message } = useAppMessage();
+  const { approvals } = useApprovalContext();
+  const [approvalRequests, setApprovalRequests] = useState<
+    Map<string, ApprovalMessageData>
+  >(new Map());
+  const [planEnabled, setPlanEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    planApi
+      .getPlanConfig()
+      .then((cfg) => {
+        if (!cancelled) setPlanEnabled(cfg.enabled);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent]);
 
   const isChatActiveRef = useRef(false);
   isChatActiveRef.current =
     location.pathname === "/" || location.pathname.startsWith("/chat");
 
   const isChatActive = useCallback(() => isChatActiveRef.current, []);
+
+  // Consume approvals from Context and filter by current session
+  useEffect(() => {
+    // Get current session ID from multiple sources
+    // During new session creation, chatId may be empty but window.currentSessionId gets set
+    const currentSessionId = window.currentSessionId || chatId || "";
+
+    // Filter approvals by root_session_id (includes children sessions)
+    console.debug(
+      "[Approval] Filtering approvals:",
+      "currentSessionId=",
+      currentSessionId,
+      "chatId=",
+      chatId,
+      "window.currentSessionId=",
+      window.currentSessionId,
+      "approvals=",
+      approvals.map((a) => ({
+        tool: a.tool_name,
+        session: a.session_id.slice(0, 8),
+        root: a.root_session_id.slice(0, 8),
+      })),
+    );
+
+    // If no session ID yet, check if we have approvals that could tell us the session
+    // (e.g., first message sent, approval arrives before session ID is set in window)
+    let effectiveSessionId = currentSessionId;
+    if (!effectiveSessionId && approvals.length > 0) {
+      // Use the root_session_id from the first approval as a hint
+      // This handles the race condition where approval arrives before session ID is propagated
+      effectiveSessionId = approvals[0].root_session_id;
+      console.log(
+        "[Approval] No session ID yet, using first approval's root_session_id:",
+        effectiveSessionId,
+      );
+    }
+
+    const sessionApprovals = effectiveSessionId
+      ? approvals.filter(
+          (approval) => approval.root_session_id === effectiveSessionId,
+        )
+      : approvals; // Show all if no session ID (fallback)
+
+    console.debug(
+      "[Approval] After filtering:",
+      sessionApprovals.length,
+      "approval(s)",
+    );
+
+    // Convert to map for display
+    const newMap = new Map<string, ApprovalMessageData>();
+    for (const approval of sessionApprovals) {
+      newMap.set(approval.request_id, {
+        requestId: approval.request_id,
+        sessionId: approval.session_id,
+        rootSessionId: approval.root_session_id,
+        agentId: approval.agent_id,
+        toolName: approval.tool_name,
+        severity: approval.severity,
+        findingsCount: approval.findings_count,
+        findingsSummary: approval.findings_summary,
+        toolParams: approval.tool_params,
+        createdAt: approval.created_at,
+        timeoutSeconds: approval.timeout_seconds,
+      });
+    }
+
+    setApprovalRequests(newMap);
+  }, [approvals, chatId]);
+
+  const handleApprove = useCallback(
+    async (requestId: string) => {
+      console.log("[Approval] handleApprove called:", requestId);
+      console.log(
+        "[Approval] Current requests map size:",
+        approvalRequests.size,
+      );
+      const request = approvalRequests.get(requestId);
+      if (!request) {
+        console.error("[Approval] Request not found:", requestId);
+        return;
+      }
+
+      // Use currentSessionId (root session) instead of request.sessionId (sub-agent session)
+      const rootSessionId = window.currentSessionId || chatId || "";
+      console.log("[Approval] Sending approve command:", {
+        requestId,
+        rootSessionId,
+        subAgentSessionId: request.sessionId,
+      });
+
+      try {
+        // Add exit animation class
+        const cardElement = document.querySelector(
+          `[data-approval-id="${requestId}"]`,
+        );
+        if (cardElement) {
+          cardElement.classList.add("approvalCardExit");
+        }
+
+        await commandsApi.sendApprovalCommand(
+          "approve",
+          requestId,
+          rootSessionId,
+        );
+        console.log("[Approval] Approve command sent successfully");
+        message.success(t("approval.approved"));
+
+        // Delay removal to let animation complete
+        // Backend will remove from pending list, next poll will update UI
+        setTimeout(() => {
+          setApprovalRequests((prev) => {
+            const next = new Map(prev);
+            next.delete(requestId);
+            return next;
+          });
+        }, 300); // Match animation duration
+      } catch (error) {
+        message.error(t("approval.approveFailed"));
+        console.error("[Approval] Failed to approve:", error);
+      }
+    },
+    [approvalRequests, chatId, t, message],
+  );
+
+  const handleDeny = useCallback(
+    async (requestId: string) => {
+      const request = approvalRequests.get(requestId);
+      if (!request) return;
+
+      // Use currentSessionId (root session) instead of request.sessionId (sub-agent session)
+      const rootSessionId = window.currentSessionId || chatId || "";
+
+      try {
+        // Add exit animation class
+        const cardElement = document.querySelector(
+          `[data-approval-id="${requestId}"]`,
+        );
+        if (cardElement) {
+          cardElement.classList.add("approvalCardExit");
+        }
+
+        await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
+        message.success(t("approval.denied"));
+
+        // Delay removal to let animation complete
+        // Backend will remove from pending list, next poll will update UI
+        setTimeout(() => {
+          setApprovalRequests((prev) => {
+            const next = new Map(prev);
+            next.delete(requestId);
+            return next;
+          });
+        }, 300); // Match animation duration
+      } catch (error) {
+        message.error(t("approval.denyFailed"));
+        console.error("Failed to deny:", error);
+      }
+    },
+    [approvalRequests, chatId, t, message],
+  );
 
   // Use custom hooks for better separation of concerns
   const isComposingRef = useIMEComposition(isChatActive);
@@ -433,10 +702,64 @@ export default function ChatPage() {
   const chatIdRef = useRef(chatId);
   const navigateRef = useRef(navigate);
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
+  const pendingClearHistoryRef = useRef(false);
+  const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
+  const [whisperEnabled, setWhisperEnabled] = useState(false);
+
+  // Check if Whisper transcription is configured
+  useEffect(() => {
+    agentApi
+      .getTranscriptionProviderType()
+      .then((res) => {
+        setWhisperEnabled(res.transcription_provider_type !== "disabled");
+      })
+      .catch(() => setWhisperEnabled(false));
+  }, []);
+
+  const handleWhisperTranscription = useCallback((text: string) => {
+    const senderContainer = document.querySelector('[class*="sender"]');
+    const textarea = senderContainer?.querySelector(
+      "textarea",
+    ) as HTMLTextAreaElement | null;
+    if (textarea) {
+      const currentValue = textarea.value || "";
+      const newValue = currentValue ? `${currentValue} ${text}` : text;
+      setTextareaValue(textarea, newValue);
+      textarea.focus();
+    }
+  }, []);
 
   useMessageHistoryNavigation(chatRef, isChatActive, isComposingRef);
+
+  // Shortcut key for voice recording (Ctrl+Shift+M or Cmd+Shift+M on Mac)
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      if (!isChatActive()) return;
+      // Check for Ctrl+Shift+M (Windows/Linux) or Cmd+Shift+M (Mac)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "m"
+      ) {
+        e.preventDefault();
+        if (whisperEnabled) {
+          whisperSpeechRef.current?.toggleRecording();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
+  }, [isChatActive, whisperEnabled]);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
+
+  const scheduleHistoryClear = useCallback(() => {
+    queueMicrotask(() => {
+      if (!pendingClearHistoryRef.current) return;
+      pendingClearHistoryRef.current = false;
+      chatRef.current?.messages.removeAllMessages();
+    });
+  }, []);
 
   // Tell sessionApi which session to put first in getSessionList, so the library's
   // useMount auto-selects the correct session without an extra getSession round-trip.
@@ -699,16 +1022,23 @@ export default function ChatPage() {
         description: t("chat.commands.compact.description"),
       },
       {
-        command: "/approve",
-        value: "approve",
-        description: t("chat.commands.approve.description"),
+        command: "/mission",
+        value: "mission",
+        description: t("chat.commands.mission.description"),
       },
       {
-        command: "/deny",
-        value: "deny",
-        description: t("chat.commands.deny.description"),
+        command: "/skills",
+        value: "skills",
+        description: t("chat.commands.skills.description"),
       },
     ];
+    if (planEnabled) {
+      commandSuggestions.push({
+        command: "/plan",
+        value: "plan ",
+        description: t("chat.commands.plan.description"),
+      });
+    }
 
     const handleBeforeSubmit = async () => {
       if (isComposingRef.current) return false;
@@ -737,13 +1067,18 @@ export default function ChatPage() {
       welcome: {
         ...i18nConfig.welcome,
         nick: "QwenPaw",
-        avatar:
-          "https://gw.alicdn.com/imgextra/i2/O1CN01pyXzjQ1EL1PuZMlSd_!!6000000000334-2-tps-288-288.png",
+        avatar: "/qwenpaw.png",
       },
       sender: {
         ...(i18nConfig as any)?.sender,
         beforeSubmit: handleBeforeSubmit,
-        allowSpeech: true,
+        allowSpeech: !whisperEnabled,
+        prefix: whisperEnabled ? (
+          <WhisperSpeechButton
+            ref={whisperSpeechRef}
+            onTranscription={handleWhisperTranscription}
+          />
+        ) : undefined,
         attachments: {
           trigger: function (props: any) {
             const tooltipKey = multimodalCaps.supportsMultimodal
@@ -777,16 +1112,40 @@ export default function ChatPage() {
       api: {
         ...defaultConfig.api,
         fetch: customFetch,
+        responseParser: (chunk: string) => {
+          const payload = JSON.parse(chunk) as Record<string, unknown>;
+
+          if (payloadRequestsHistoryClear(payload)) {
+            pendingClearHistoryRef.current = true;
+            if (payloadCompletesResponse(payload)) {
+              scheduleHistoryClear();
+            }
+          }
+          return payload as any;
+        },
         replaceMediaURL: (url: string) => {
           return toDisplayUrl(url);
         },
         cancel(data: { session_id: string }) {
+          console.log(
+            "[Cancel] Cancel button clicked, session_id:",
+            data.session_id,
+          );
           const chatId =
             sessionApi.getRealIdForSession(data.session_id) ?? data.session_id;
+          console.log("[Cancel] Resolved chat_id:", chatId);
           if (chatId) {
-            chatApi.stopChat(chatId).catch((err) => {
-              console.error("Failed to stop chat:", err);
-            });
+            console.log("[Cancel] Calling stopChat API...");
+            chatApi
+              .stopChat(chatId)
+              .then(() => {
+                console.log("[Cancel] stopChat API succeeded");
+              })
+              .catch((err) => {
+                console.error("[Cancel] Failed to stop chat:", err);
+              });
+          } else {
+            console.warn("[Cancel] No chat_id found, cannot stop");
           }
         },
         async reconnect(data: { session_id: string; signal?: AbortSignal }) {
@@ -808,6 +1167,8 @@ export default function ChatPage() {
           });
         },
       },
+      customToolRenderConfig:
+        Object.keys(toolRenderConfig).length > 0 ? toolRenderConfig : undefined,
       actions: {
         list: [
           {
@@ -824,7 +1185,17 @@ export default function ChatPage() {
         replace: true,
       },
     } as unknown as IAgentScopeRuntimeWebUIOptions;
-  }, [customFetch, copyResponse, handleFileUpload, t, isDark, multimodalCaps]);
+  }, [
+    customFetch,
+    copyResponse,
+    handleFileUpload,
+    t,
+    isDark,
+    multimodalCaps,
+    toolRenderConfig,
+    scheduleHistoryClear,
+    planEnabled,
+  ]);
 
   return (
     <div
@@ -842,6 +1213,73 @@ export default function ChatPage() {
           options={options}
         />
       </div>
+
+      {/* Render approval cards as overlays */}
+      {Array.from(approvalRequests.values()).map((request) => (
+        <div
+          key={request.requestId}
+          data-approval-id={request.requestId}
+          style={{
+            position: "fixed",
+            bottom: 80,
+            right: 24,
+            zIndex: 1000,
+            maxWidth: 480,
+            width: "calc(100vw - 48px)",
+          }}
+        >
+          <ApprovalCard
+            requestId={request.requestId}
+            toolName={request.toolName}
+            severity={request.severity}
+            findingsCount={request.findingsCount}
+            findingsSummary={request.findingsSummary}
+            toolParams={request.toolParams}
+            createdAt={request.createdAt}
+            timeoutSeconds={request.timeoutSeconds}
+            sessionId={request.sessionId}
+            rootSessionId={request.rootSessionId}
+            onApprove={handleApprove}
+            onDeny={handleDeny}
+            onCancel={() => {
+              console.log("[Chat] onCancel called for approval card");
+              const sessionId = window.currentSessionId || "";
+
+              // Use the same fallback chain as customFetch:
+              // 1. sessionApi.getRealIdForSession (UUID from backend)
+              // 2. chatIdRef.current (URL param)
+              // 3. sessionId (timestamp fallback)
+              const resolvedChatId =
+                sessionApi.getRealIdForSession(sessionId) ??
+                chatIdRef.current ??
+                sessionId;
+
+              console.log(
+                "[Chat] Resolved chat_id for stop:",
+                resolvedChatId,
+                "from session_id:",
+                sessionId,
+                "chatIdRef:",
+                chatIdRef.current,
+              );
+
+              if (resolvedChatId) {
+                console.log("[Chat] Calling stopChat with:", resolvedChatId);
+                chatApi
+                  .stopChat(resolvedChatId)
+                  .then(() => {
+                    console.log("[Chat] stopChat succeeded");
+                  })
+                  .catch((err) => {
+                    console.error("[Chat] stopChat failed:", err);
+                  });
+              } else {
+                console.warn("[Chat] No chat_id resolved, cannot cancel task");
+              }
+            }}
+          />
+        </div>
+      ))}
 
       <Modal
         open={showModelPrompt}

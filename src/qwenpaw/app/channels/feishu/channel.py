@@ -66,6 +66,7 @@ from .utils import (
     sender_display_string,
     short_session_id_from_full_id,
 )
+from .card_handler import FeishuCardHandler
 
 
 # Compatibility for setuptools>=82 where pkg_resources may be absent.
@@ -101,6 +102,17 @@ else:
         )
         _declare_namespace_patched = True
 
+
+class _EventLoopProxy:
+    """Resolve ``lark_oapi.ws.client.loop`` to the calling thread's loop."""
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return getattr(asyncio.get_running_loop(), name)
+        except RuntimeError:
+            return getattr(asyncio.get_event_loop(), name)
+
+
 try:
     import lark_oapi as lark
     from lark_oapi.api.contact.v3 import GetUserRequest
@@ -118,6 +130,9 @@ try:
         GetMessageResourceRequest,
         P2ImMessageReceiveV1,
     )
+    import lark_oapi.ws.client as _ws_mod
+
+    _ws_mod.loop = _EventLoopProxy()
 except ImportError:  # pragma: no cover - optional dependency may be missing
     lark = None  # type: ignore[assignment]
     GetUserRequest = None  # type: ignore[assignment]
@@ -240,6 +255,10 @@ class FeishuChannel(BaseChannel):
         # open_id -> nickname (from Contact API) for sender display
         self._nickname_cache: Dict[str, str] = {}
         self._nickname_cache_lock = asyncio.Lock()
+
+        # All interactive-card logic (outbound rendering + inbound
+        # card.action.trigger dispatch) lives in the card handler.
+        self._card_handler = FeishuCardHandler(self)
 
     @classmethod
     def from_env(
@@ -1909,6 +1928,31 @@ class FeishuChannel(BaseChannel):
         if last_msg_id:
             await self._add_reaction(last_msg_id, "DONE")
 
+    # ------------------------------------------------------------------
+    # Interactive cards (tool_guard approval, etc.)
+    # ------------------------------------------------------------------
+
+    async def on_event_message_completed(  # type: ignore[override]
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+    ) -> None:
+        """Render card-flagged events via the card handler; else default."""
+        if await self._card_handler.try_send_card_for_event(
+            to_handle,
+            event,
+            send_meta,
+        ):
+            return
+        await super().on_event_message_completed(
+            request,
+            to_handle,
+            event,
+            send_meta,
+        )
+
     async def send(
         self,
         to_handle: str,
@@ -1966,68 +2010,8 @@ class FeishuChannel(BaseChannel):
                 receive_id_type,
             )
 
-    def _create_ws_client(self) -> Any:
-        """Create a fresh ``lark.ws.Client`` with loop-isolated internals.
-
-        The SDK uses a module-level ``loop`` for ``create_task`` calls,
-        which causes cross-loop errors when multiple agents run in
-        separate threads.  We patch ``_connect`` and
-        ``_receive_message_loop`` to swap in the running loop before
-        delegating to the originals.
-        """
-        event_handler = (
-            lark.EventDispatcherHandler.builder(
-                self.encrypt_key,
-                self.verification_token,
-            )
-            .register_p2_im_message_receive_v1(self._on_message_sync)
-            .build()
-        )
-        client = lark.ws.Client(
-            self.app_id,
-            self.app_secret,
-            event_handler=event_handler,
-            log_level=lark.LogLevel.INFO,
-            domain=(
-                lark.LARK_DOMAIN
-                if self.domain == "lark"
-                else lark.FEISHU_DOMAIN
-            ),
-        )
-
-        _original_connect = client._connect
-        _original_recv_loop = client._receive_message_loop
-
-        async def _patched_connect() -> None:
-            import lark_oapi.ws.client as _ws_mod
-
-            saved, _ws_mod.loop = _ws_mod.loop, asyncio.get_running_loop()
-            try:
-                await _original_connect()
-            finally:
-                _ws_mod.loop = saved
-
-        async def _patched_receive_message_loop() -> None:
-            import lark_oapi.ws.client as _ws_mod
-
-            saved, _ws_mod.loop = _ws_mod.loop, asyncio.get_running_loop()
-            try:
-                await _original_recv_loop()
-            finally:
-                _ws_mod.loop = saved
-
-        client._connect = _patched_connect
-        client._receive_message_loop = _patched_receive_message_loop
-        return client
-
     def _run_ws_forever(self) -> None:
-        """Run WebSocket with automatic reconnection (exponential backoff).
-
-        Each iteration creates a fresh event loop and ``ws.Client``, then
-        drives the connection directly (``_connect`` → ``_ping_loop`` →
-        ``_select``) instead of calling the SDK's ``start()`` which relies
-        on a shared module-level ``loop``.
-        """
+        """Run WebSocket with exponential-backoff reconnection."""
         retry_delay = FEISHU_WS_INITIAL_RETRY_DELAY
 
         while not self._stop_event.is_set() and not self._closed:
@@ -2035,7 +2019,36 @@ class FeishuChannel(BaseChannel):
             asyncio.set_event_loop(self._ws_loop)
             connection_started = False
             try:
-                self._ws_client = self._create_ws_client()
+                event_handler = (
+                    lark.EventDispatcherHandler.builder(
+                        self.encrypt_key,
+                        self.verification_token,
+                    )
+                    .register_p2_im_message_receive_v1(
+                        self._on_message_sync,
+                    )
+                    .register_p2_im_message_reaction_created_v1(
+                        lambda _evt: None,
+                    )
+                    .register_p2_im_message_reaction_deleted_v1(
+                        lambda _evt: None,
+                    )
+                    .register_p2_card_action_trigger(
+                        self._card_handler.handle_card_action,
+                    )
+                    .build()
+                )
+                self._ws_client = lark.ws.Client(
+                    self.app_id,
+                    self.app_secret,
+                    event_handler=event_handler,
+                    log_level=lark.LogLevel.INFO,
+                    domain=(
+                        lark.LARK_DOMAIN
+                        if self.domain == "lark"
+                        else lark.FEISHU_DOMAIN
+                    ),
+                )
 
                 async def _select() -> None:
                     while True:
@@ -2174,6 +2187,34 @@ class FeishuChannel(BaseChannel):
 
         # Final cleanup signal
         self._stop_event.set()
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check Feishu WebSocket and SDK client status."""
+        if not self.enabled:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "Feishu channel is disabled.",
+            }
+        issues = []
+        if self._client is None:
+            issues.append("Feishu SDK client not initialized")
+        ws_thread_alive = (
+            self._ws_thread is not None and self._ws_thread.is_alive()
+        )
+        if not ws_thread_alive:
+            issues.append("WebSocket thread is not running")
+        if issues:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "; ".join(issues),
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "Feishu SDK client and WebSocket are active.",
+        }
 
     async def start(self) -> None:
         if not self.enabled:

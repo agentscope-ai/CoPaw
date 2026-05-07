@@ -18,6 +18,7 @@ $NsiPath = Join-Path $PackDir "desktop.nsi"
 # See: issue.md, scripts/pack/WINDOWS_FIX.md
 $CondaUnpackAffectedPackages = @(
   "huggingface_hub"  # Uses Windows extended-length path prefix (\\?\)
+  "discord.py"       # ARG_NAME_SUBREGEX contains \\?\* which gets corrupted
 )
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
@@ -116,6 +117,10 @@ if (Test-Path $CondaUnpack) {
     if ($LASTEXITCODE -ne 0) {
       throw "CRITICAL: huggingface_hub still has import errors after reinstall. See issue.md"
     }
+    & $pythonExe -c "import discord; print('✓ discord.py import OK')"
+    if ($LASTEXITCODE -ne 0) {
+      throw "CRITICAL: discord.py still has import errors after reinstall."
+    }
     Write-Host "[build_win] ✓ conda-unpack corruption fixed successfully."
   } else {
     Write-Host "[build_win] WARN: wheels_cache not found at $WheelsCache" -ForegroundColor Yellow
@@ -158,6 +163,9 @@ $LauncherBat = Join-Path $EnvRoot "QwenPaw Desktop.bat"
 @echo off
 cd /d "%~dp0"
 
+REM Isolate packaged Python from user site-packages to prevent conflicts
+set "PYTHONNOUSERSITE=1"
+
 REM Preserve system PATH for accessing system commands
 REM Prepend packaged env to PATH so packaged Python takes precedence
 set "PATH=%~dp0;%~dp0Scripts;%PATH%"
@@ -191,6 +199,9 @@ $DebugBat = Join-Path $EnvRoot "QwenPaw Desktop (Debug).bat"
 @echo off
 cd /d "%~dp0"
 
+REM Isolate packaged Python from user site-packages to prevent conflicts
+set "PYTHONNOUSERSITE=1"
+
 REM Preserve system PATH for accessing system commands
 REM Prepend packaged env to PATH so packaged Python takes precedence
 set "PATH=%~dp0;%~dp0Scripts;%PATH%"
@@ -218,6 +229,7 @@ echo ====================================
 echo Working Directory: %cd%
 echo Python: "%~dp0python.exe"
 echo PATH: %PATH%
+echo PYTHONNOUSERSITE: %PYTHONNOUSERSITE%
 echo Log Level: %QWENPAW_LOG_LEVEL%
 echo SSL_CERT_FILE: %SSL_CERT_FILE%
 echo REQUESTS_CA_BUNDLE: %REQUESTS_CA_BUNDLE%

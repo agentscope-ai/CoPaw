@@ -56,13 +56,25 @@
   -ms-overflow-style: none;
   /* IE and Edge */
 
+  // Agent-scoped section: selector + Chat + Control + Workspace
+  .agentScopedSection {
+    background: rgba(43, 18, 0, 0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 4px;
+
+    :global {
+      .qwenpaw-menu {
+        background: transparent !important;
+      }
+    }
+  }
   // AgentSelector container - fixed at top
   .agentSelectorContainer {
     position: sticky;
     top: 0;
     z-index: 10;
-    background: #f9f8f4;
-    margin-bottom: 12px;
+    margin-bottom: 4px;
   }
 
   // Menu takes remaining space
@@ -129,7 +141,6 @@
 
   :global {
     .qwenpaw-menu {
-      background: #f9f8f4 !important;
       border-inline-end: 0 !important;
     }
 
@@ -197,9 +208,10 @@
   background: #1a1a1a !important;
   border-right-color: rgba(255, 255, 255, 0.08) !important;
 
-  // AgentSelector container - fixed at top (dark mode)
-  .agentSelectorContainer {
-    background: #1a1a1a;
+  // Agent-scoped section (dark mode)
+  .agentScopedSection {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   :global {
@@ -406,8 +418,7 @@
 }
 
 .updateModalBanner {
-  background: url("https://gw.alicdn.com/imgextra/i3/O1CN013Tuw5Y1sFbMMVSqt7_!!6000000005737-2-tps-960-146.png")
-    no-repeat center top;
+  background: url("/public/qwenpawBack.png") no-repeat center top;
   background-size: contain;
   padding: 48px 28px 0px;
   display: flex;
@@ -439,7 +450,6 @@
 }
 
 .updateModalBannerTitle {
-  font-family: Newsreader;
   font-size: 32px;
   font-weight: 500;
   line-height: 64.78px;

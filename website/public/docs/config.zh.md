@@ -221,14 +221,24 @@ $QWENPAW_SECRET_DIR/                       # 默认 ~/.qwenpaw.secret
   },
   "security": {
     "tool_guard": {
-      "enabled": true
+      "enabled": true,
+      "shell_evasion_checks": {
+        "command_substitution": false,
+        "obfuscated_flags": false,
+        "backslash_escaped_whitespace": false,
+        "backslash_escaped_operators": false,
+        "newlines": false,
+        "comment_quote_desync": false,
+        "quoted_newline": false
+      }
     },
     "file_guard": {
       "enabled": true
     },
     "skill_scanner": {
       "mode": "warn"
-    }
+    },
+    "allow_no_auth_hosts": ["127.0.0.1", "::1"]
   },
   "last_dispatch": null
 }
@@ -302,9 +312,11 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 **基础运行参数：**
 
-| 字段        | 类型 | 默认值 | 说明                                            |
-| ----------- | ---- | ------ | ----------------------------------------------- |
-| `max_iters` | int  | `100`  | ReAct Agent 推理-执行循环的最大轮数（必须 ≥ 1） |
+| 字段                         | 类型  | 默认值  | 说明                                                                                      |
+| ---------------------------- | ----- | ------- | ----------------------------------------------------------------------------------------- |
+| `max_iters`                  | int   | `100`   | ReAct Agent 推理-执行循环的最大轮数（必须 ≥ 1）                                           |
+| `shell_command_timeout`      | float | `60.0`  | `execute_shell_command` 的默认超时时间（秒）。LLM 可在每次调用时通过 timeout 参数覆盖此值 |
+| `auto_continue_on_text_only` | bool  | `false` | 启用后,若模型只返回文本而未调用工具,Agent 会自动重试最多两轮推理                          |
 
 **LLM 重试与限流：**
 
@@ -322,53 +334,63 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 **上下文管理：**
 
-| 字段                 | 类型   | 默认值          | 说明                                                  |
-| -------------------- | ------ | --------------- | ----------------------------------------------------- |
-| `max_input_length`   | int    | `131072` (128K) | 模型上下文窗口的最大输入长度（token 数，必须 ≥ 1000） |
-| `history_max_length` | int    | `10000`         | `/history` 命令输出的最大长度（字符数）               |
-| `context_compact`    | object | _（见下方）_    | 上下文压缩配置对象                                    |
+| 字段                       | 类型   | 默认值          | 说明                                                  |
+| -------------------------- | ------ | --------------- | ----------------------------------------------------- |
+| `max_input_length`         | int    | `131072` (128K) | 模型上下文窗口的最大输入长度（token 数，必须 ≥ 1000） |
+| `history_max_length`       | int    | `10000`         | `/history` 命令输出的最大长度（字符数）               |
+| `context_manager_backend`  | string | `"light"`       | 上下文管理器后端类型                                  |
+| `memory_manager_backend`   | string | `"remelight"`   | 记忆管理器后端类型                                    |
+| `light_context_config`     | object | _（见下方）_    | Light 上下文管理器配置                                |
+| `reme_light_memory_config` | object | _（见下方）_    | ReMeLight 记忆管理器配置                              |
 
-**上下文压缩配置（`context_compact` 对象）：**
+**Light 上下文配置（`light_context_config` 对象）：**
 
-| 字段                           | 类型   | 默认值      | 说明                                                                              |
-| ------------------------------ | ------ | ----------- | --------------------------------------------------------------------------------- |
-| `context_compact_enabled`      | bool   | `true`      | 是否启用自动上下文压缩                                                            |
-| `memory_compact_ratio`         | float  | `0.75`      | 触发压缩的阈值比例（相对于 `max_input_length`）。当上下文长度达到此比例时触发压缩 |
-| `memory_reserve_ratio`         | float  | `0.1`       | 压缩后保留的最近上下文比例，确保连续性                                            |
-| `compact_with_thinking_block`  | bool   | `true`      | 压缩时是否包含思考块                                                              |
-| `token_count_model`            | string | `"default"` | 用于 token 计数的模型                                                             |
-| `token_count_use_mirror`       | bool   | `false`     | token 计数时是否使用 HuggingFace 镜像                                             |
-| `token_count_estimate_divisor` | float  | `4.0`       | 基于字节的 token 估算除数（byte_len / divisor）                                   |
+| 字段                           | 类型   | 默认值     | 说明                                            |
+| ------------------------------ | ------ | ---------- | ----------------------------------------------- |
+| `dialog_path`                  | string | `"dialog"` | 对话持久化目录（相对于工作目录）                |
+| `token_count_estimate_divisor` | float  | `4.0`      | 基于字节的 token 估算除数（byte_len / divisor） |
 
-**工具结果压缩配置（`tool_result_compact` 对象）：**
+**Light 上下文压缩配置（`light_context_config.context_compact_config` 对象）：**
 
-| 字段               | 类型 | 默认值  | 说明                                      |
-| ------------------ | ---- | ------- | ----------------------------------------- |
-| `enabled`          | bool | `true`  | 是否启用工具结果压缩                      |
-| `recent_n`         | int  | `2`     | 最近 N 条消息使用 `recent_max_bytes` 阈值 |
-| `old_max_bytes`    | int  | `3000`  | 旧消息的工具结果字节阈值                  |
-| `recent_max_bytes` | int  | `50000` | 最近消息的工具结果字节阈值                |
-| `retention_days`   | int  | `5`     | 工具结果文件保留天数                      |
+| 字段                          | 类型  | 默认值 | 说明                                            |
+| ----------------------------- | ----- | ------ | ----------------------------------------------- |
+| `enabled`                     | bool  | `true` | 是否启用自动上下文压缩                          |
+| `compact_threshold_ratio`     | float | `0.8`  | 触发压缩的阈值比例（相对于 `max_input_length`） |
+| `reserve_threshold_ratio`     | float | `0.1`  | 压缩时保留的最近上下文比例                      |
+| `compact_with_thinking_block` | bool  | `true` | 压缩时是否包含思考块                            |
 
-**记忆配置：**
+**Light 工具结果修剪配置（`light_context_config.tool_result_pruning_config` 对象）：**
 
-| 字段                     | 类型   | 默认值        | 说明                                           |
-| ------------------------ | ------ | ------------- | ---------------------------------------------- |
-| `memory_summary`         | object | _（见下方）_  | 记忆总结与搜索配置对象                         |
-| `embedding_config`       | object | _（见下方）_  | Embedding 模型配置对象（用于语义检索）         |
-| `memory_manager_backend` | string | `"remelight"` | 记忆管理器后端类型（当前仅支持 `"remelight"`） |
+| 字段                           | 类型 | 默认值  | 说明                       |
+| ------------------------------ | ---- | ------- | -------------------------- |
+| `enabled`                      | bool | `true`  | 是否启用工具结果修剪       |
+| `pruning_recent_n`             | int  | `2`     | 最近 N 条消息使用较高阈值  |
+| `pruning_old_msg_max_bytes`    | int  | `3000`  | 旧消息的工具结果字节阈值   |
+| `pruning_recent_msg_max_bytes` | int  | `50000` | 最近消息的工具结果字节阈值 |
+| `offload_retention_days`       | int  | `5`     | 工具结果文件保留天数       |
 
-**记忆总结配置（`memory_summary` 对象）：**
+**ReMeLight 记忆配置（`reme_light_memory_config` 对象）：**
 
-| 字段                            | 类型  | 默认值  | 说明                                                       |
-| ------------------------------- | ----- | ------- | ---------------------------------------------------------- |
-| `memory_summary_enabled`        | bool  | `true`  | 是否在压缩时启用记忆总结                                   |
-| `force_memory_search`           | bool  | `false` | 是否在每轮对话时强制搜索记忆                               |
-| `force_max_results`             | int   | `1`     | 强制记忆搜索时返回的最大结果数                             |
-| `force_min_score`               | float | `0.3`   | 强制记忆搜索时的最低相关度分数（0.0 - 1.0）                |
-| `rebuild_memory_index_on_start` | bool  | `false` | 启动时是否清空并重建记忆搜索索引。false 时仅监控新文件变化 |
+| 字段                            | 类型        | 默认值         | 说明                                                     |
+| ------------------------------- | ----------- | -------------- | -------------------------------------------------------- |
+| `summarize_when_compact`        | bool        | `true`         | 是否在上下文压缩时启用记忆总结                           |
+| `auto_memory_interval`          | int \| null | `null`         | 每隔 N 次用户查询触发自动记忆。null 表示禁用定期自动记忆 |
+| `dream_cron`                    | string      | `"0 23 * * *"` | 梦境记忆优化任务的 Cron 表达式（空字符串禁用）           |
+| `rebuild_memory_index_on_start` | bool        | `false`        | 启动时是否重建记忆搜索索引                               |
+| `recursive_file_watcher`        | bool        | `false`        | 是否递归监控记忆目录                                     |
+| `auto_memory_search_config`     | object      | _（见下方）_   | 自动记忆搜索配置                                         |
+| `embedding_model_config`        | object      | _（见下方）_   | Embedding 模型配置                                       |
 
-**Embedding 配置（`embedding_config` 对象）：**
+**自动记忆搜索配置（`reme_light_memory_config.auto_memory_search_config` 对象）：**
+
+| 字段          | 类型  | 默认值  | 说明                                        |
+| ------------- | ----- | ------- | ------------------------------------------- |
+| `enabled`     | bool  | `false` | 是否在每轮对话时自动执行记忆搜索            |
+| `max_results` | int   | `1`     | 自动搜索时最多返回的结果数                  |
+| `min_score`   | float | `0.1`   | 自动搜索时的最低相关性分数阈值（0.0 - 1.0） |
+| `timeout`     | float | `10.0`  | 自动搜索超时时间（秒）                      |
+
+**Embedding 配置（`reme_light_memory_config.embedding_model_config` 对象）：**
 
 | 字段               | 类型   | 默认值     | 说明                                                |
 | ------------------ | ------ | ---------- | --------------------------------------------------- |
@@ -417,6 +439,24 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 ---
 
+#### `plan` — 计划模式配置
+
+| 字段      | 类型 | 默认值  | 说明             |
+| --------- | ---- | ------- | ---------------- |
+| `enabled` | bool | `false` | 是否启用计划模式 |
+
+启用后,智能体支持 `/plan` 命令进行结构化任务规划与执行。详见 [计划模式](./plan)。
+
+---
+
+#### `approval_level` — 工具执行安全级别
+
+| 字段             | 类型   | 默认值   | 说明                                                                          |
+| ---------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `approval_level` | string | `"AUTO"` | 工具执行安全级别: `STRICT`、`SMART`、`AUTO`、`OFF`。详见 [安全](./security)。 |
+
+---
+
 #### `tools` — 工具配置
 
 控制智能体可用的内置工具。每个工具可以单独启用/禁用，配置是否显示给用户，以及是否异步执行。
@@ -434,6 +474,12 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 - **`tool_guard`** — 工具守卫（运行时检测危险命令和注入攻击）
 - **`file_guard`** — 文件守卫（保护敏感文件访问）
 - **`skill_scanner`** — 技能扫描器（技能启用前扫描恶意代码）
+
+顶层字段：
+
+| 字段                  | 类型     | 默认值                 | 说明                                                  |
+| --------------------- | -------- | ---------------------- | ----------------------------------------------------- |
+| `allow_no_auth_hosts` | string[] | `["127.0.0.1", "::1"]` | IP 白名单，绕过 Web 登录认证。默认允许 localhost 访问 |
 
 > **完整配置说明：** 每个模块的详细字段说明、安全规则、自定义规则配置等请参见 [安全](./security)。
 
@@ -467,29 +513,33 @@ QwenPaw 需要 LLM 提供商才能运行。配置存储在 `$QWENPAW_SECRET_DIR/
 
 **内置提供商列表：**
 
-| 提供商                        | ID                      | 说明                   |
-| ----------------------------- | ----------------------- | ---------------------- |
-| QwenPaw Local                 | `qwenpaw-local`         | 本地 llama.cpp 后端    |
-| Ollama                        | `ollama`                | 本地 Ollama 服务       |
-| LM Studio                     | `lmstudio`              | 本地 LM Studio 服务    |
-| ModelScope（魔搭）            | `modelscope`            | 魔搭社区模型服务       |
-| DashScope（灵积）             | `dashscope`             | 阿里云灵积模型服务     |
-| 阿里云百炼 Coding Plan        | `aliyun-codingplan`     | 阿里云百炼 Coding Plan |
-| OpenAI                        | `openai`                | OpenAI API             |
-| Azure OpenAI                  | `azure-openai`          | Azure OpenAI Service   |
-| Anthropic                     | `anthropic`             | Anthropic Claude API   |
-| Google Gemini                 | `gemini`                | Google Gemini API      |
-| DeepSeek                      | `deepseek`              | DeepSeek API           |
-| Kimi（China）                 | `kimi-cn`               | Moonshot Kimi 国内版   |
-| Kimi（International）         | `kimi-intl`             | Moonshot Kimi 国际版   |
-| MiniMax（China）              | `minimax-cn`            | MiniMax 国内版         |
-| MiniMax（International）      | `minimax`               | MiniMax 国际版         |
-| Zhipu（BigModel）             | `zhipu-cn`              | 智谱国内版标准 API     |
-| Zhipu Coding Plan（BigModel） | `zhipu-cn-codingplan`   | 智谱国内版 Coding Plan |
-| Zhipu（Z.AI）                 | `zhipu-intl`            | 智谱国际版标准 API     |
-| Zhipu Coding Plan（Z.AI）     | `zhipu-intl-codingplan` | 智谱国际版 Coding Plan |
-| OpenCode                      | `opencode`              | OpenCode Zen 模型服务  |
-| 自定义                        | `custom`                | 自定义 OpenAI 兼容服务 |
+| 提供商                                  | ID                       | 说明                          |
+| --------------------------------------- | ------------------------ | ----------------------------- |
+| QwenPaw Local                           | `qwenpaw-local`          | 本地 llama.cpp 后端           |
+| Ollama                                  | `ollama`                 | 本地 Ollama 服务              |
+| LM Studio                               | `lmstudio`               | 本地 LM Studio 服务           |
+| OpenRouter                              | `openrouter`             | OpenRouter 模型聚合平台       |
+| ModelScope（魔搭）                      | `modelscope`             | 魔搭社区模型服务              |
+| DashScope（灵积）                       | `dashscope`              | 阿里云灵积模型服务            |
+| 阿里云百炼 Coding Plan（China）         | `aliyun-codingplan`      | 阿里云百炼 Coding Plan        |
+| 阿里云百炼 Coding Plan（International） | `aliyun-codingplan-intl` | 阿里云百炼 Coding Plan 国际版 |
+| OpenAI                                  | `openai`                 | OpenAI API                    |
+| Azure OpenAI                            | `azure-openai`           | Azure OpenAI Service          |
+| Anthropic                               | `anthropic`              | Anthropic Claude API          |
+| Google Gemini                           | `gemini`                 | Google Gemini API             |
+| DeepSeek                                | `deepseek`               | DeepSeek API                  |
+| Kimi（China）                           | `kimi-cn`                | Moonshot Kimi 国内版          |
+| Kimi（International）                   | `kimi-intl`              | Moonshot Kimi 国际版          |
+| MiniMax（China）                        | `minimax-cn`             | MiniMax 国内版                |
+| MiniMax（International）                | `minimax`                | MiniMax 国际版                |
+| Zhipu（BigModel）                       | `zhipu-cn`               | 智谱国内版标准 API            |
+| Zhipu Coding Plan（BigModel）           | `zhipu-cn-codingplan`    | 智谱国内版 Coding Plan        |
+| Zhipu（Z.AI）                           | `zhipu-intl`             | 智谱国际版标准 API            |
+| Zhipu Coding Plan（Z.AI）               | `zhipu-intl-codingplan`  | 智谱国际版 Coding Plan        |
+| OpenCode                                | `opencode`               | OpenCode Zen 模型服务         |
+| SiliconFlow（China）                    | `siliconflow-cn`         | 硅基流动国内版                |
+| SiliconFlow（International）            | `siliconflow-intl`       | 硅基流动国际版                |
+| 自定义                                  | `custom`                 | 自定义 OpenAI 兼容服务        |
 
 > **完整配置说明：** 每个提供商的详细配置方式、`providers.json` 字段结构、模型发现等请参见 [模型](./models)。
 

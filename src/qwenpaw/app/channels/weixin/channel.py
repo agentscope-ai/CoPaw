@@ -45,7 +45,7 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
-from ..utils import split_text
+from ..utils import file_url_to_local_path, split_text
 from .client import ILinkClient, _DEFAULT_BASE_URL
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ class WeixinChannel(BaseChannel):
         base_url: str = "",
         bot_prefix: str = "",
         media_dir: str = "",
+        workspace_dir: Path | None = None,
         on_reply_sent: OnReplySent = None,
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
@@ -84,6 +85,8 @@ class WeixinChannel(BaseChannel):
         group_policy: str = "open",
         allow_from: Optional[List[str]] = None,
         deny_message: str = "",
+        message_merge_enabled: bool = False,
+        message_merge_delay_ms: int = 0,
     ):
         super().__init__(
             process,
@@ -108,9 +111,25 @@ class WeixinChannel(BaseChannel):
         self._context_tokens_file = (
             self._bot_token_file.parent / "weixin_context_tokens.json"
         )
-        self._media_dir = (
-            Path(media_dir).expanduser() if media_dir else DEFAULT_MEDIA_DIR
+        self._workspace_dir = (
+            Path(workspace_dir).expanduser() if workspace_dir else None
         )
+        # Use workspace-specific media dir if workspace_dir is provided
+        if not media_dir and self._workspace_dir:
+            self._media_dir = self._workspace_dir / "media"
+        elif media_dir:
+            self._media_dir = Path(media_dir).expanduser()
+        else:
+            self._media_dir = DEFAULT_MEDIA_DIR
+
+        # Message merge settings (mitigates 10-msg context_token limit)
+        self._message_merge_enabled = message_merge_enabled
+        self._message_merge_delay_ms = max(message_merge_delay_ms, 0)
+        # Merge buffer (WeChat iLink is single-chat only, one buffer suffices)
+        self._merge_buffer: List[OutgoingContentPart] = []
+        self._merge_meta: Optional[Dict[str, Any]] = None
+        self._merge_timer: Optional[asyncio.TimerHandle] = None
+        self._merge_to_handle: str = ""
 
         self._client: Optional[ILinkClient] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -181,6 +200,7 @@ class WeixinChannel(BaseChannel):
         show_tool_details: bool = True,
         filter_tool_messages: bool = False,
         filter_thinking: bool = False,
+        workspace_dir: Path | None = None,
     ) -> "WeixinChannel":
         return cls(
             process=process,
@@ -190,6 +210,7 @@ class WeixinChannel(BaseChannel):
             base_url=getattr(config, "base_url", "") or "",
             bot_prefix=getattr(config, "bot_prefix", "") or "",
             media_dir=getattr(config, "media_dir", None) or "",
+            workspace_dir=workspace_dir,
             on_reply_sent=on_reply_sent,
             show_tool_details=show_tool_details,
             filter_tool_messages=filter_tool_messages,
@@ -198,6 +219,17 @@ class WeixinChannel(BaseChannel):
             group_policy=getattr(config, "group_policy", "open") or "open",
             allow_from=getattr(config, "allow_from", []) or [],
             deny_message=getattr(config, "deny_message", "") or "",
+            message_merge_enabled=getattr(
+                config,
+                "message_merge_enabled",
+                False,
+            ),
+            message_merge_delay_ms=getattr(
+                config,
+                "message_merge_delay_ms",
+                0,
+            )
+            or 0,
         )
 
     # ------------------------------------------------------------------
@@ -672,6 +704,19 @@ class WeixinChannel(BaseChannel):
                 else:
                     text_parts.append(f"[unsupported type: {item_type}]")
 
+                # Handle quoted (replied-to) message if present.
+                # When a user replies to a message in WeChat, the item
+                # contains a ``ref_msg`` field whose ``message_item``
+                # mirrors the structure of a normal item (type 1-5).
+                ref_msg = item.get("ref_msg")
+                if ref_msg:
+                    await self._process_quoted_ref_msg(
+                        ref_msg,
+                        text_parts,
+                        content_parts,
+                        client,
+                    )
+
             text = "\n".join(text_parts).strip()
             if text:
                 content_parts.insert(
@@ -715,11 +760,12 @@ class WeixinChannel(BaseChannel):
                 self._user_context_tokens[from_user_id] = context_token
                 self._save_context_tokens()
 
-            # Start typing indicator for this user
+            # Start "typing..." indicator immediately and keep refreshing
+            # until send_content_parts finishes the reply.
             if from_user_id and context_token:
 
-                async def _start_typing_async():
-                    # Stop any existing typing indicator to prevent task leak
+                async def _start_typing_on_receive():
+                    # Stop any existing typing indicator first
                     with self._typing_stop_lock:
                         old_stop = self._typing_stop_funcs.pop(
                             from_user_id,
@@ -737,7 +783,7 @@ class WeixinChannel(BaseChannel):
 
                 if self._loop and self._loop.is_running():
                     asyncio.run_coroutine_threadsafe(
-                        _start_typing_async(),
+                        _start_typing_on_receive(),
                         self._loop,
                     )
 
@@ -761,6 +807,141 @@ class WeixinChannel(BaseChannel):
 
         except Exception:
             logger.exception("weixin _on_message failed")
+
+    async def _process_quoted_ref_msg(
+        self,
+        ref_msg: Dict[str, Any],
+        text_parts: List[str],
+        content_parts: List[Any],
+        client: ILinkClient,
+    ) -> None:
+        """Process a quoted (replied-to) message from ``ref_msg``.
+
+        Extracts text and media from the referenced message and prepends
+        quoted text to *text_parts* / appends media to *content_parts*,
+        following the same pattern used by the WeCom and Feishu channels.
+
+        Args:
+            ref_msg: The ``ref_msg`` dict from an inbound item.
+            text_parts: Mutable list of text strings to prepend quoted text.
+            content_parts: Mutable list of content parts to append media.
+            client: The ILinkClient used for downloading media.
+        """
+        quoted_item = ref_msg.get("message_item") or {}
+        quoted_type = quoted_item.get("type", 0)
+
+        if quoted_type == 1:
+            # Quoted text
+            quoted_text = (
+                (quoted_item.get("text_item") or {}).get("text", "").strip()
+            )
+            if quoted_text:
+                text_parts.insert(0, f"[quoted message: {quoted_text}]")
+
+        elif quoted_type == 2:
+            # Quoted image
+            img_item = quoted_item.get("image_item") or {}
+            media = img_item.get("media") or {}
+            encrypt_query_param = media.get("encrypt_query_param", "")
+            aeskey_hex = img_item.get("aeskey", "")
+            if aeskey_hex:
+                aes_key = _b64.b64encode(
+                    bytes.fromhex(aeskey_hex),
+                ).decode()
+            else:
+                aes_key = media.get("aes_key", "")
+            if encrypt_query_param:
+                path = await self._download_media(
+                    client,
+                    "",
+                    aes_key,
+                    "image.jpg",
+                    encrypt_query_param=encrypt_query_param,
+                )
+                if path:
+                    content_parts.append(
+                        ImageContent(
+                            type=ContentType.IMAGE,
+                            image_url=path,
+                        ),
+                    )
+                else:
+                    text_parts.insert(0, "[quoted image: download failed]")
+            else:
+                text_parts.insert(0, "[quoted image: no url]")
+
+        elif quoted_type == 3:
+            # Quoted voice — use ASR transcription
+            voice_item = quoted_item.get("voice_item") or {}
+            asr_text = (
+                voice_item.get("text_item", {}).get("text", "").strip()
+                if isinstance(voice_item.get("text_item"), dict)
+                else voice_item.get("text", "").strip()
+            )
+            if asr_text:
+                text_parts.insert(0, f"[quoted voice: {asr_text}]")
+            else:
+                text_parts.insert(0, "[quoted voice: no transcription]")
+
+        elif quoted_type == 4:
+            # Quoted file
+            file_item = quoted_item.get("file_item") or {}
+            filename = file_item.get("file_name", "file.bin") or "file.bin"
+            media = file_item.get("media") or {}
+            encrypt_query_param = media.get("encrypt_query_param", "")
+            aes_key = media.get("aes_key", "")
+            if encrypt_query_param:
+                path = await self._download_media(
+                    client,
+                    "",
+                    aes_key,
+                    filename,
+                    encrypt_query_param=encrypt_query_param,
+                )
+                if path:
+                    content_parts.append(
+                        FileContent(
+                            type=ContentType.FILE,
+                            file_url=path,
+                        ),
+                    )
+                else:
+                    text_parts.insert(0, "[quoted file: download failed]")
+            else:
+                text_parts.insert(0, "[quoted file: no url]")
+
+        elif quoted_type == 5:
+            # Quoted video
+            video_item = quoted_item.get("video_item") or {}
+            media = video_item.get("media") or {}
+            encrypt_query_param = media.get("encrypt_query_param", "")
+            aes_key = media.get("aes_key", "")
+            if encrypt_query_param:
+                path = await self._download_media(
+                    client,
+                    "",
+                    aes_key,
+                    "video.mp4",
+                    encrypt_query_param=encrypt_query_param,
+                )
+                if path:
+                    content_parts.append(
+                        VideoContent(
+                            type=ContentType.VIDEO,
+                            video_url=path,
+                        ),
+                    )
+                else:
+                    text_parts.insert(0, "[quoted video: download failed]")
+            else:
+                text_parts.insert(0, "[quoted video: no url]")
+
+        else:
+            if quoted_type:
+                text_parts.insert(
+                    0,
+                    f"[quoted message: unsupported type {quoted_type}]",
+                )
 
     # ------------------------------------------------------------------
     # Media download helper
@@ -815,7 +996,18 @@ class WeixinChannel(BaseChannel):
         if not _client or not to_user_id or not text:
             return
         try:
-            await _client.send_text(to_user_id, text, context_token)
+            resp = await _client.send_text(to_user_id, text, context_token)
+            if isinstance(resp, dict):
+                ret = resp.get("ret", 0)
+                errcode = resp.get("errcode", 0)
+                if ret != 0 or errcode != 0:
+                    logger.warning(
+                        "weixin send_text rejected: "
+                        "ret=%s errcode=%s to_user_id=%s",
+                        ret,
+                        errcode,
+                        to_user_id,
+                    )
         except Exception:
             logger.exception("weixin _send_text_direct failed")
 
@@ -842,8 +1034,7 @@ class WeixinChannel(BaseChannel):
 
         try:
             # Convert URL to local path if it's a file:// URL
-            if file_path.startswith("file://"):
-                file_path = file_path[7:]
+            file_path = file_url_to_local_path(file_path) or file_path
 
             # Check if file exists
             path_obj = Path(file_path)
@@ -887,15 +1078,136 @@ class WeixinChannel(BaseChannel):
                 file_path[:60],
             )
 
+    def _stop_typing_for_user(self, user_id: str) -> None:
+        """Stop typing indicator and remove from tracking dict."""
+        with self._typing_stop_lock:
+            stop_func = self._typing_stop_funcs.pop(user_id, None)
+        if stop_func:
+            stop_func()
+
+    # ------------------------------------------------------------------
+    # Message merge helpers (mitigates 10-msg context_token limit)
+    #
+    # WeChat iLink Bot is single-chat only (no group chat), so a single
+    # instance-level buffer is sufficient — no per-session keying needed.
+    # ------------------------------------------------------------------
+
+    async def _buffer_parts_for_merge(
+        self,
+        to_handle: str,
+        parts: List[OutgoingContentPart],
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Append parts to the merge buffer.
+
+        In full-merge mode (delay_ms == 0) nothing is flushed here; the
+        caller is responsible for flushing at the end of the request.
+
+        In delay-merge mode (delay_ms > 0) a timer is (re)started; when
+        it fires the buffer is flushed automatically.
+        """
+        # Insert a newline separator between existing buffer and new parts
+        # so that merged messages are visually separated in the final output.
+        if self._merge_buffer and parts:
+            self._merge_buffer.append(
+                TextContent(type=ContentType.TEXT, text="\n"),
+            )
+        self._merge_buffer.extend(parts)
+        self._merge_meta = dict(meta or {})
+        self._merge_to_handle = to_handle
+
+        if self._message_merge_delay_ms > 0:
+            if self._merge_timer is not None:
+                self._merge_timer.cancel()
+
+            loop = asyncio.get_running_loop()
+            delay_sec = self._message_merge_delay_ms / 1000.0
+            self._merge_timer = loop.call_later(
+                delay_sec,
+                lambda: asyncio.ensure_future(
+                    self._flush_merge_buffer(to_handle),
+                ),
+            )
+
+    async def _flush_merge_buffer(
+        self,
+        to_handle: str,
+    ) -> None:
+        """Flush the merge buffer: send all accumulated parts at once."""
+        if self._merge_timer is not None:
+            self._merge_timer.cancel()
+            self._merge_timer = None
+
+        buffered_parts = self._merge_buffer
+        buffered_meta = self._merge_meta
+        self._merge_buffer = []
+        self._merge_meta = None
+
+        if not buffered_parts:
+            return
+
+        await self._send_content_parts_immediate(
+            to_handle,
+            buffered_parts,
+            buffered_meta,
+        )
+
     async def send_content_parts(
         self,
         to_handle: str,
         parts: List[OutgoingContentPart],
         meta: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Send agent response content back to the WeChat user."""
+        """Send agent response content back to the WeChat user.
+
+        When message merging is enabled, text parts are buffered and
+        sent together (either at the end of the request or after a
+        configurable delay window).  Media parts are always sent
+        immediately since they cannot be merged into text.
+        """
         if not self.enabled:
             return
+
+        if self._message_merge_enabled:
+            # Separate text/refusal parts (mergeable) from media (immediate)
+            text_parts: List[OutgoingContentPart] = []
+            media_parts: List[OutgoingContentPart] = []
+            for part in parts:
+                part_type = getattr(part, "type", None) or (
+                    part.get("type") if isinstance(part, dict) else None
+                )
+                if part_type in (ContentType.TEXT, ContentType.REFUSAL):
+                    text_parts.append(part)
+                else:
+                    media_parts.append(part)
+
+            # Buffer text parts for later merge
+            if text_parts:
+                await self._buffer_parts_for_merge(
+                    to_handle,
+                    text_parts,
+                    meta,
+                )
+
+            # Media parts are sent immediately (cannot be merged)
+            if media_parts:
+                await self._send_content_parts_immediate(
+                    to_handle,
+                    media_parts,
+                    meta,
+                )
+            return
+
+        # Merging disabled: send everything immediately
+        await self._send_content_parts_immediate(to_handle, parts, meta)
+
+    async def _send_content_parts_immediate(
+        self,
+        to_handle: str,
+        parts: List[OutgoingContentPart],
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Actually send content parts to WeChat (no merge buffering)."""
         m = meta or {}
         to_user_id = (
             m.get("weixin_from_user_id")
@@ -909,28 +1221,6 @@ class WeixinChannel(BaseChannel):
         if not to_user_id:
             logger.warning("weixin send_content_parts: no to_user_id")
             return
-
-        # Stop any existing typing indicator before starting a new one
-        # (prevents multiple typing loops running simultaneously)
-        with self._typing_stop_lock:
-            old_stop = self._typing_stop_funcs.pop(to_user_id, None)
-        if old_stop:
-            old_stop()
-
-        # Start typing indicator for this reply
-        # (like Telegram/Mattermost: restart typing for each send)
-        stop_typing = None
-        if to_user_id and context_token:
-            try:
-                stop_typing = await self.start_typing(
-                    to_user_id,
-                    context_token,
-                )
-                # Store stop function for cleanup
-                with self._typing_stop_lock:
-                    self._typing_stop_funcs[to_user_id] = stop_typing
-            except Exception as e:
-                logger.warning(f"weixin start_typing failed: {e}")
 
         prefix = m.get("bot_prefix", "") or self.bot_prefix or ""
         text_parts: List[str] = []
@@ -985,22 +1275,63 @@ class WeixinChannel(BaseChannel):
                         video_url,
                         ContentType.VIDEO,
                     )
+            elif t == ContentType.AUDIO:
+                # Send audio as file (WeChat has no dedicated audio send)
+                audio_url = getattr(p, "data", None) or (
+                    p.get("data") if isinstance(p, dict) else None
+                )
+                if audio_url and not audio_url.startswith("data:"):
+                    await self._send_media_file(
+                        to_user_id,
+                        context_token,
+                        audio_url,
+                        ContentType.FILE,
+                    )
 
         body = "\n".join(text_parts).strip()
         if prefix and body:
             body = prefix + "  " + body
 
         if not body:
-            if stop_typing:
-                stop_typing()
             return
 
         for chunk in split_text(body):
             await self._send_text_direct(to_user_id, chunk, context_token)
 
-        # Stop typing indicator after sending all messages
-        if stop_typing:
-            stop_typing()
+    async def _on_process_completed(
+        self,
+        request: Any,
+        to_handle: str,
+        send_meta: Dict[str, Any],
+    ) -> None:
+        """Flush merge buffer (if any) and stop typing indicator."""
+        # Flush any remaining merged messages before finishing
+        if self._message_merge_enabled:
+            await self._flush_merge_buffer(to_handle)
+
+        user_id = (
+            (send_meta or {}).get("weixin_from_user_id")
+            or self._parse_user_id_from_handle(to_handle)
+            or ""
+        )
+        if user_id:
+            self._stop_typing_for_user(user_id)
+
+    async def _on_consume_error(
+        self,
+        request: Any,
+        to_handle: str,
+        err_text: str,
+    ) -> None:
+        """Flush merge buffer, stop typing, and send error message."""
+        # Flush any buffered messages before sending the error
+        if self._message_merge_enabled:
+            await self._flush_merge_buffer(to_handle)
+
+        user_id = self._parse_user_id_from_handle(to_handle) or ""
+        if user_id:
+            self._stop_typing_for_user(user_id)
+        await super()._on_consume_error(request, to_handle, err_text)
 
     async def send(
         self,
@@ -1126,8 +1457,7 @@ class WeixinChannel(BaseChannel):
         logger.info(f"weixin start_typing called for user_id={user_id}")
         ticket = await self._get_typing_ticket(user_id, context_token)
         if not ticket:
-            logger.warning(f"weixin start_typing: no ticket for {user_id}")
-            # Return empty function if no ticket
+            logger.debug("weixin start_typing: no ticket for %s", user_id)
             return lambda: None
 
         stop_event = asyncio.Event()
@@ -1135,98 +1465,107 @@ class WeixinChannel(BaseChannel):
 
         async def refresh_typing():
             """Refresh typing indicator every 5 seconds."""
-            logger.info(f"weixin refresh_typing task started for {user_id}")
+            logger.debug("weixin refresh_typing started for %s", user_id)
             while not stop_event.is_set():
-                try:
-                    await self._client.sendtyping(user_id, ticket, status=1)
-                    logger.info(
-                        "weixin refresh_typing: sent typing status "
-                        f"for {user_id}",
+                client = self._client
+                if client is None:
+                    logger.debug(
+                        "weixin refresh_typing: client gone, exiting "
+                        "for %s",
+                        user_id,
                     )
-                except Exception as e:
-                    logger.warning(f"weixin sendtyping refresh failed: {e}")
-                # Wait for 5 seconds or until stop
+                    break
+                try:
+                    await client.sendtyping(user_id, ticket, status=1)
+                except Exception as exc:
+                    logger.debug(
+                        "weixin sendtyping refresh failed: %s",
+                        exc,
+                    )
                 try:
                     await asyncio.wait_for(
                         stop_event.wait(),
                         timeout=5.0,
                     )
                 except asyncio.TimeoutError:
-                    pass  # Timeout, continue refreshing
-                # If wait_for completes without timeout, stop_event was set,
-                # so loop will exit
-            logger.info(f"weixin refresh_typing task stopped for {user_id}")
+                    pass
+            logger.debug("weixin refresh_typing stopped for %s", user_id)
 
-        # Start refresh task in background
-        task = None
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = self._loop
-
-        logger.info(
-            f"weixin start_typing: loop={loop}, "
-            f"is_running={loop.is_running() if loop else False}",
-        )
-        if loop and loop.is_running():
-            task = asyncio.create_task(refresh_typing())
-            logger.info(f"weixin start_typing: refresh task created: {task}")
-        else:
-            logger.warning(
-                "weixin start_typing: no event loop "
-                "available for refresh task",
-            )
+        # Create the background refresh task.
+        # The reference is held by the stop() closure via stop_event;
+        # we do not need to store it separately.
+        asyncio.create_task(refresh_typing())
 
         # Send initial typing status
-        try:
-            logger.info(
-                f"weixin sending initial typing status for {user_id} "
-                f"with ticket={ticket[:20]}...",
-            )
-            await self._client.sendtyping(user_id, ticket, status=1)
-            logger.info(
-                "weixin initial typing status sent successfully "
-                f"for {user_id}",
-            )
-        except Exception as e:
-            logger.warning(f"weixin sendtyping initial failed: {e}")
+        client = self._client
+        if client:
+            try:
+                await client.sendtyping(user_id, ticket, status=1)
+            except Exception as exc:
+                logger.debug("weixin sendtyping initial failed: %s", exc)
 
         def stop(send_cancel: bool = True):
-            """Stop typing indicator.
-
-            Args:
-                send_cancel: If True, send explicit cancel (status=2) to
-                    immediately hide typing indicator. Set to False to let
-                    it timeout naturally.
-            """
+            """Stop the typing indicator and cancel the refresh task."""
             nonlocal stop_called
             if stop_called:
                 return
             stop_called = True
             stop_event.set()
 
-            # Send cancel status to immediately hide typing indicator
             if send_cancel:
+                client = self._client
+                if client:
 
-                async def _cancel():
+                    async def _cancel():
+                        try:
+                            await client.sendtyping(
+                                user_id,
+                                ticket,
+                                status=2,
+                            )
+                        except Exception:
+                            pass
+
                     try:
-                        await self._client.sendtyping(
-                            user_id,
-                            ticket,
-                            status=2,
-                        )
-                    except Exception as e:
-                        logger.debug(f"weixin sendtyping cancel failed: {e}")
-
-                # Run cancel in background
-                if loop and loop.is_running():
-                    asyncio.create_task(_cancel())
+                        asyncio.ensure_future(_cancel())
+                    except RuntimeError:
+                        pass
 
         return stop
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check WeChat long-poll client status."""
+        if not self.enabled:
+            return {
+                "channel": self.channel,
+                "status": "disabled",
+                "detail": "WeChat channel is disabled.",
+            }
+        issues = []
+        if self._client is None:
+            issues.append("WeChat client not initialized")
+        if not self.bot_token:
+            issues.append("Bot token not available (not logged in)")
+        poll_thread_alive = (
+            self._poll_thread is not None and self._poll_thread.is_alive()
+        )
+        if not poll_thread_alive:
+            issues.append("Long-poll thread is not running")
+        if issues:
+            return {
+                "channel": self.channel,
+                "status": "unhealthy",
+                "detail": "; ".join(issues),
+            }
+        return {
+            "channel": self.channel,
+            "status": "healthy",
+            "detail": "WeChat client is connected and polling.",
+        }
 
     async def start(self) -> None:
         if not self.enabled:
@@ -1295,6 +1634,17 @@ class WeixinChannel(BaseChannel):
         if self._poll_thread:
             self._poll_thread.join(timeout=10)
         self._poll_thread = None
+
+        # Stop all active typing indicators before closing the client
+        with self._typing_stop_lock:
+            stop_funcs = list(self._typing_stop_funcs.values())
+            self._typing_stop_funcs.clear()
+        for func in stop_funcs:
+            try:
+                func()
+            except Exception:
+                pass
+
         if self._client:
             await self._client.stop()
         self._client = None
