@@ -1,47 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../../../api";
 import type { InboxEvent } from "../../../api/modules/console";
-import type {
-  ApprovalItem,
-  HarvestInstance,
-  InboxSummary,
-  PushMessage,
-} from "../types";
+import type { HarvestInstance, InboxSummary, PushMessage } from "../types";
 
 const PUSH_POLLING_INTERVAL_MS = 6000;
-
-const MOCK_APPROVALS: ApprovalItem[] = [
-  {
-    id: "approval-1",
-    type: "tool_call",
-    title: "Execute Shell Command",
-    description: "Agent wants to run `npm install @testing-library/react`",
-    requestedBy: "Agent-001",
-    requestedAt: new Date(Date.now() - 5 * 60 * 1000),
-    priority: "normal",
-    status: "pending",
-  },
-  {
-    id: "approval-2",
-    type: "file_access",
-    title: "File Access Request",
-    description: "Agent wants to read `/etc/config/database.yml`",
-    requestedBy: "Agent-002",
-    requestedAt: new Date(Date.now() - 15 * 60 * 1000),
-    priority: "high",
-    status: "pending",
-  },
-  {
-    id: "approval-3",
-    type: "config_change",
-    title: "Configuration Change",
-    description: "Agent wants to update shell permission policy",
-    requestedBy: "Agent-001",
-    requestedAt: new Date(Date.now() - 30 * 60 * 1000),
-    priority: "urgent",
-    status: "pending",
-  },
-];
 
 const MOCK_HARVESTS: HarvestInstance[] = [
   {
@@ -161,14 +123,13 @@ const mapEventToPushMessage = (event: InboxEvent): PushMessage => ({
 
 export const useInboxData = () => {
   const [summary, setSummary] = useState<InboxSummary>({
-    approvals: { total: MOCK_APPROVALS.length, urgent: 1 },
+    approvals: { total: 0, urgent: 0 },
     pushMessages: { total: 0, unread: 0 },
     harvests: {
       total: MOCK_HARVESTS.length,
       active: MOCK_HARVESTS.filter((h) => h.status === "active").length,
     },
   });
-  const [approvals, setApprovals] = useState<ApprovalItem[]>(MOCK_APPROVALS);
   const [pushMessages, setPushMessages] = useState<PushMessage[]>([]);
   const [harvests] = useState<HarvestInstance[]>(MOCK_HARVESTS);
 
@@ -232,51 +193,16 @@ export const useInboxData = () => {
     }));
   }, []);
 
-  const approveRequest = useCallback((approvalId: string) => {
-    setApprovals((prev) =>
-      prev.map((item) =>
-        item.id === approvalId ? { ...item, status: "approved" } : item,
-      ),
-    );
-  }, []);
-
-  const rejectRequest = useCallback((approvalId: string) => {
-    setApprovals((prev) =>
-      prev.map((item) =>
-        item.id === approvalId ? { ...item, status: "rejected" } : item,
-      ),
-    );
-  }, []);
-
   const triggerHarvest = useCallback((harvestId: string) => {
     console.info("triggerHarvest", harvestId);
   }, []);
 
-  const pendingApprovals = useMemo(
-    () => approvals.filter((item) => item.status === "pending"),
-    [approvals],
-  );
-
-  useEffect(() => {
-    setSummary((prev) => ({
-      ...prev,
-      approvals: {
-        total: pendingApprovals.length,
-        urgent: pendingApprovals.filter((item) => item.priority === "urgent")
-          .length,
-      },
-    }));
-  }, [pendingApprovals]);
-
   return {
     summary,
-    approvals: pendingApprovals,
     pushMessages,
     harvests,
     markMessageAsRead,
     deleteMessage,
-    approveRequest,
-    rejectRequest,
     triggerHarvest,
     refreshPushMessages: loadPushMessages,
   };

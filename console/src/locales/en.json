@@ -2053,6 +2053,8 @@
   },
   "approval": {
     "title": "Security Approval Required",
+    "ownerAgent": "Owner Agent",
+    "executingAgent": "Executing Agent",
     "tool": "Tool",
     "severity": "Severity",
     "findings": "Findings",
@@ -2065,7 +2067,9 @@
     "denied": "Tool call denied",
     "approveFailed": "Failed to approve",
     "cancelTask": "Cancel Task",
-    "denyFailed": "Failed to deny"
+    "denyFailed": "Failed to deny",
+    "timeoutAutoDenied": "Timed out, auto denied",
+    "acknowledge": "Got it"
   },
   "plan": {
     "title": "Plan",

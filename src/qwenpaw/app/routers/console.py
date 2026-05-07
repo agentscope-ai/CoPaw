@@ -381,6 +381,7 @@ async def get_push_messages(
             "request_id": p.request_id,
             "session_id": p.session_id,
             "root_session_id": p.root_session_id,
+            "owner_agent_id": p.owner_agent_id,
             "agent_id": p.agent_id,
             "tool_name": p.tool_name,
             "severity": p.severity,

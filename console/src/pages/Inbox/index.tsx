@@ -22,9 +22,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { ApprovalCard as GlobalApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
+import { useApprovalContext } from "../../contexts/ApprovalContext";
 import api from "../../api";
+import { commandsApi } from "../../api/modules/commands";
+import { chatApi } from "../../api/modules/chat";
+import sessionApi from "../Chat/sessionApi";
 import {
-  ApprovalCard,
   CreateHarvestModal,
   HarvestCard,
   MagazineStackViewer,
@@ -217,17 +221,53 @@ export default function InboxPage() {
   const [expandedTraceMap, setExpandedTraceMap] = useState<
     Record<string, boolean>
   >({});
+  const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
     summary,
-    approvals,
     pushMessages,
     harvests,
     markMessageAsRead,
     deleteMessage,
-    approveRequest,
-    rejectRequest,
     triggerHarvest,
   } = useInboxData();
+  const urgentApprovalCount = useMemo(
+    () =>
+      pendingApprovals.filter((item) =>
+        ["high", "critical"].includes(item.severity?.toLowerCase?.() || ""),
+      ).length,
+    [pendingApprovals],
+  );
+
+  const handleApproveRequest = async (
+    requestId: string,
+    rootSessionId: string,
+  ) => {
+    await commandsApi.sendApprovalCommand("approve", requestId, rootSessionId);
+    setApprovals((prev) =>
+      prev.filter((item) => item.request_id !== requestId),
+    );
+    message.success(t("approval.approved"));
+  };
+
+  const handleRejectRequest = async (
+    requestId: string,
+    rootSessionId: string,
+  ) => {
+    await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
+    setApprovals((prev) =>
+      prev.filter((item) => item.request_id !== requestId),
+    );
+    message.success(t("approval.denied"));
+  };
+
+  const handleCancelTask = async (rootSessionId: string) => {
+    const resolvedChatId =
+      sessionApi.getRealIdForSession(rootSessionId) ?? rootSessionId;
+    await chatApi.stopChat(resolvedChatId);
+    setApprovals((prev) =>
+      prev.filter((item) => item.root_session_id !== rootSessionId),
+    );
+  };
   const traceEvents = useMemo<TraceDisplayItem[]>(() => {
     if (!traceData) return [];
     const normalized = traceData.events
@@ -397,21 +437,58 @@ export default function InboxPage() {
         <span className={styles.tabLabel}>
           <PackageOpen size={16} />
           {t("inbox.tabApprovals")}
-          {summary.approvals.urgent > 0 && (
-            <Badge count={summary.approvals.urgent} />
-          )}
+          {urgentApprovalCount > 0 && <Badge count={urgentApprovalCount} />}
         </span>
       ),
       children: (
         <div className={styles.tabContent}>
-          {approvals.length > 0 ? (
+          {pendingApprovals.length > 0 ? (
             <div className={styles.cardList}>
-              {approvals.map((approval) => (
-                <ApprovalCard
-                  key={approval.id}
-                  approval={approval}
-                  onApprove={approveRequest}
-                  onReject={rejectRequest}
+              {pendingApprovals.map((approval) => (
+                <GlobalApprovalCard
+                  key={approval.request_id}
+                  requestId={approval.request_id}
+                  agentId={approval.agent_id}
+                  ownerAgentId={approval.owner_agent_id}
+                  showInboxAgentContext
+                  toolName={approval.tool_name}
+                  severity={approval.severity}
+                  findingsCount={approval.findings_count}
+                  findingsSummary={approval.findings_summary}
+                  toolParams={approval.tool_params}
+                  createdAt={approval.created_at}
+                  timeoutSeconds={approval.timeout_seconds}
+                  sessionId={approval.session_id}
+                  rootSessionId={approval.root_session_id}
+                  onApprove={() =>
+                    handleApproveRequest(
+                      approval.request_id,
+                      approval.root_session_id,
+                    )
+                  }
+                  onDeny={() =>
+                    handleRejectRequest(
+                      approval.request_id,
+                      approval.root_session_id,
+                    )
+                  }
+                  onCancel={() => {
+                    void handleCancelTask(approval.root_session_id);
+                  }}
+                  onAcknowledge={(requestId) => {
+                    return commandsApi
+                      .sendApprovalCommand(
+                        "deny",
+                        requestId,
+                        approval.root_session_id,
+                      )
+                      .catch(() => undefined)
+                      .then(() => {
+                        setApprovals((prev) =>
+                          prev.filter((item) => item.request_id !== requestId),
+                        );
+                      });
+                  }}
                 />
               ))}
             </div>

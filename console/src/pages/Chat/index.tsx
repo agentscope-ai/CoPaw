@@ -512,7 +512,7 @@ export default function ChatPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const runtimeLoadingBridgeRef = useRef<RuntimeLoadingBridgeApi | null>(null);
   const { message } = useAppMessage();
-  const { approvals } = useApprovalContext();
+  const { approvals, setApprovals } = useApprovalContext();
   const [approvalRequests, setApprovalRequests] = useState<
     Map<string, ApprovalMessageData>
   >(new Map());
@@ -609,6 +609,9 @@ export default function ChatPage() {
           requestId,
           rootSessionId,
         );
+        setApprovals((prev) =>
+          prev.filter((item) => item.request_id !== requestId),
+        );
         message.success(t("approval.approved"));
 
         // Delay removal to let exit animation complete
@@ -624,7 +627,7 @@ export default function ChatPage() {
         console.error("Failed to approve:", error);
       }
     },
-    [approvalRequests, chatId, t, message],
+    [approvalRequests, chatId, t, message, setApprovals],
   );
 
   const handleDeny = useCallback(
@@ -645,6 +648,9 @@ export default function ChatPage() {
         }
 
         await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
+        setApprovals((prev) =>
+          prev.filter((item) => item.request_id !== requestId),
+        );
         message.success(t("approval.denied"));
 
         // Delay removal to let animation complete
@@ -661,7 +667,7 @@ export default function ChatPage() {
         console.error("Failed to deny:", error);
       }
     },
-    [approvalRequests, chatId, t, message],
+    [approvalRequests, chatId, t, message, setApprovals],
   );
 
   // Use custom hooks for better separation of concerns
@@ -1195,6 +1201,7 @@ export default function ChatPage() {
         >
           <ApprovalCard
             requestId={request.requestId}
+            agentId={request.agentId}
             toolName={request.toolName}
             severity={request.severity}
             findingsCount={request.findingsCount}
@@ -1207,16 +1214,31 @@ export default function ChatPage() {
             onApprove={handleApprove}
             onDeny={handleDeny}
             onCancel={() => {
-              const sessionId = window.currentSessionId || "";
+              const sessionId =
+                request.rootSessionId || window.currentSessionId || "";
               const resolvedChatId =
                 sessionApi.getRealIdForSession(sessionId) ??
                 chatIdRef.current ??
                 sessionId;
 
               if (resolvedChatId) {
-                chatApi.stopChat(resolvedChatId).catch((err) => {
-                  console.error("Failed to stop chat:", err);
-                });
+                console.log("[Chat] Calling stopChat with:", resolvedChatId);
+                chatApi
+                  .stopChat(resolvedChatId)
+                  .then(() => {
+                    console.log("[Chat] stopChat succeeded");
+                    setApprovals((prev) =>
+                      prev.filter(
+                        (item) =>
+                          item.root_session_id !== request.rootSessionId,
+                      ),
+                    );
+                  })
+                  .catch((err) => {
+                    console.error("[Chat] stopChat failed:", err);
+                  });
+              } else {
+                console.warn("[Chat] No chat_id resolved, cannot cancel task");
               }
             }}
           />

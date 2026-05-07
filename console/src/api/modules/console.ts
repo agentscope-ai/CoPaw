@@ -37,6 +37,7 @@ export interface PendingApproval {
   request_id: string;
   session_id: string;
   root_session_id: string;
+  owner_agent_id?: string;
   agent_id: string;
   tool_name: string;
   severity: string;

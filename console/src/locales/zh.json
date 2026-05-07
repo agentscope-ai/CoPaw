@@ -2061,6 +2061,8 @@
   },
   "approval": {
     "title": "安全审批",
+    "ownerAgent": "归属Agent",
+    "executingAgent": "执行Agent",
     "tool": "工具",
     "severity": "严重性",
     "findings": "发现",
@@ -2073,7 +2075,9 @@
     "denied": "已拒绝工具调用",
     "approveFailed": "批准失败",
     "cancelTask": "取消任务",
-    "denyFailed": "拒绝失败"
+    "denyFailed": "拒绝失败",
+    "timeoutAutoDenied": "已超时，自动拒绝",
+    "acknowledge": "我知道了"
   },
   "plan": {
     "title": "计划",

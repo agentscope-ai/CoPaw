@@ -99,7 +99,13 @@ export function PushMessageCard({
           ) : null}
           <Popconfirm
             title={t("inbox.deleteMessageConfirm")}
-            onConfirm={() => onDelete(message.id)}
+            onConfirm={(event) => {
+              event?.stopPropagation();
+              onDelete(message.id);
+            }}
+            onCancel={(event) => {
+              event?.stopPropagation();
+            }}
             okText={t("common.confirm")}
             cancelText={t("common.cancel")}
           >

@@ -408,7 +408,11 @@ class AgentRunner(Runner):
                 "user_id": user_id,
                 "channel": channel,
                 "agent_id": self.agent_id,
+                "root_agent_id": self.agent_id,
             }
+            payload_context = getattr(request, "request_context", None)
+            if isinstance(payload_context, dict):
+                base_request_context.update(payload_context)
 
             # Extract root_session_id from request payload (agent chat)
             payload_root_session = getattr(request, "root_session_id", "")
