@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from typing import Any, Dict
 
 from .models import CronJobSpec
@@ -70,11 +69,10 @@ class CronExecutor:
         if share_session:
             req["session_id"] = target_session_id or f"cron:{job.id}"
         else:
-            run_id = uuid.uuid4().hex[:8]
             req["session_id"] = (
-                f"{target_session_id}:cron:{job.id}:{run_id}"
+                f"{target_session_id}:cron:{job.id}"
                 if target_session_id
-                else f"cron:{run_id}"
+                else f"cron:{job.id}"
             )
 
         async def _run() -> None:
