@@ -84,6 +84,44 @@ DASHSCOPE_MODELS: List[ModelInfo] = [
     ),
 ]
 
+ALIYUN_TOKENPLAN_MODELS: List[ModelInfo] = [
+    ModelInfo(
+        id="qwen3.6-plus",
+        name="Qwen3.6 Plus",
+        supports_image=True,
+        supports_video=True,
+        probe_source="documentation",
+    ),
+    ModelInfo(
+        id="glm-5",
+        name="GLM-5",
+        supports_image=False,
+        supports_video=False,
+        probe_source="documentation",
+    ),
+    ModelInfo(
+        id="MiniMax-M2.5",
+        name="MiniMax M2.5",
+        supports_image=False,
+        supports_video=False,
+        probe_source="documentation",
+    ),
+    ModelInfo(
+        id="deepseek-v3.2",
+        name="DeepSeek-V3.2",
+        supports_image=False,
+        supports_video=False,
+        probe_source="documentation",
+    ),
+    ModelInfo(
+        id="kimi-k2.5",
+        name="Kimi K2.5",
+        supports_image=True,
+        supports_video=True,
+        probe_source="documentation",
+    ),
+]
+
 ALIYUN_CODINGPLAN_MODELS: List[ModelInfo] = [
     ModelInfo(
         id="qwen3.6-plus",
@@ -686,6 +724,18 @@ PROVIDER_ALIYUN_CODINGPLAN_INTL = OpenAIProvider(
     freeze_url=True,
 )
 
+PROVIDER_ALIYUN_TOKENPLAN = OpenAIProvider(
+    id="aliyun-tokenplan",
+    name="Aliyun Token Plan",
+    base_url=(
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    ),
+    api_key_prefix="sk-sp",
+    models=ALIYUN_TOKENPLAN_MODELS,
+    support_connection_check=False,
+    freeze_url=True,
+)
+
 PROVIDER_ZHIPU_CN = OpenAIProvider(
     id="zhipu-cn",
     name="Zhipu (BigModel)",
@@ -944,6 +994,7 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
         self._add_builtin(PROVIDER_DASHSCOPE)
         self._add_builtin(PROVIDER_ALIYUN_CODINGPLAN)
         self._add_builtin(PROVIDER_ALIYUN_CODINGPLAN_INTL)
+        self._add_builtin(PROVIDER_ALIYUN_TOKENPLAN)
         self._add_builtin(PROVIDER_OPENCODE)
         self._add_builtin(PROVIDER_OPENAI)
         self._add_builtin(PROVIDER_AZURE_OPENAI)
