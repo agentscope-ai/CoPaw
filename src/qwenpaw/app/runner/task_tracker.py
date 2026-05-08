@@ -15,7 +15,8 @@ import json
 import logging
 import weakref
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Callable, Coroutine
+from datetime import datetime, timezone
+from typing import Any, AsyncGenerator, Callable, Coroutine, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ class _RunState:
     task: asyncio.Future
     queues: list[asyncio.Queue] = field(default_factory=list)
     buffer: list[str] = field(default_factory=list)
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
 
 
 class TaskTracker:
@@ -42,6 +45,8 @@ class TaskTracker:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._runs: dict[str, _RunState] = {}
+        self._global_last_run_at: Optional[datetime] = None
+        self._global_last_finish_at: Optional[datetime] = None
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -54,6 +59,32 @@ class TaskTracker:
         if state is None or state.task.done():
             return "idle"
         return "running"
+
+    async def get_global_status(self) -> dict:
+        """Get global agent status summary.
+
+        Returns:
+            dict with keys:
+                - status: 'idle' | 'running'
+                - running_task_count: int
+                - last_run_at: Optional[datetime]
+                - last_finish_at: Optional[datetime]
+        """
+        async with self._lock:
+            active_tasks = [
+                run_key
+                for run_key, state in self._runs.items()
+                if not state.task.done()
+            ]
+            running_count = len(active_tasks)
+            status = "running" if running_count > 0 else "idle"
+
+            return {
+                "status": status,
+                "running_task_count": running_count,
+                "last_run_at": self._global_last_run_at,
+                "last_finish_at": self._global_last_finish_at,
+            }
 
     async def has_active_tasks(self) -> bool:
         """Check if any tasks are currently running.
@@ -241,7 +272,16 @@ class TaskTracker:
             tracker_ref = weakref.ref(self)
 
             async def _producer() -> None:
+                start_time = datetime.now(timezone.utc)
+
                 try:
+                    tracker = tracker_ref()
+                    if tracker is not None:
+                        async with tracker.lock:
+                            run.start_time = start_time
+                            # pylint: disable=protected-access
+                            tracker._global_last_run_at = start_time
+
                     async for sse in stream_fn(payload):
                         tracker = tracker_ref()
                         if tracker is None:
@@ -265,9 +305,13 @@ class TaskTracker:
                             for q in run.queues:
                                 q.put_nowait(err_sse)
                 finally:
+                    finish_time = datetime.now(timezone.utc)
                     tracker = tracker_ref()
                     if tracker is not None:
                         async with tracker.lock:
+                            run.finish_time = finish_time
+                            # pylint: disable=protected-access
+                            tracker._global_last_finish_at = finish_time
                             for q in run.queues:
                                 q.put_nowait(_SENTINEL)
                             # pylint: disable=protected-access
