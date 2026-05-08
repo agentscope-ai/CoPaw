@@ -64,7 +64,7 @@ _RESTORE_LOCK_FILE = ".qwenpaw_restore.lock"
 _LOCK_REGION_SIZE = 1
 _LOCK_RETRY_INTERVAL_SECONDS = 0.1
 _LOCK_TIMEOUT_SECONDS_ENV = "QWENPAW_RESTORE_LOCK_TIMEOUT_SECONDS"
-_LOCK_TIMEOUT_SECONDS = 3600.0
+_LOCK_TIMEOUT_SECONDS = 300.0
 
 # Per-destination threading locks.  The dict itself is guarded by _LOCKS_GUARD.
 _LOCKS: dict[str, threading.Lock] = {}
@@ -114,9 +114,7 @@ def _acquire_file_lock(handle: BinaryIO, lock_path: Path) -> None:
             except OSError:
                 time.sleep(_LOCK_RETRY_INTERVAL_SECONDS)
         else:
-            raise TimeoutError(
-                f"Timed out waiting for restore lock: {lock_path}",
-            )
+            _raise_restore_lock_timeout(lock_path)
         return
 
     import fcntl
@@ -128,9 +126,16 @@ def _acquire_file_lock(handle: BinaryIO, lock_path: Path) -> None:
         except OSError:
             time.sleep(_LOCK_RETRY_INTERVAL_SECONDS)
     else:
-        raise TimeoutError(
-            f"Timed out waiting for restore lock: {lock_path}",
-        )
+        _raise_restore_lock_timeout(lock_path)
+
+
+def _raise_restore_lock_timeout(lock_path: Path) -> None:
+    raise TimeoutError(
+        "Timed out waiting to acquire restore lock after "
+        f"{_restore_lock_timeout_seconds():g}s: {lock_path}. "
+        "Another restore or startup cleanup may still be running; "
+        f"set {_LOCK_TIMEOUT_SECONDS_ENV} to wait longer.",
+    )
 
 
 def _restore_lock_timeout_seconds() -> float:
