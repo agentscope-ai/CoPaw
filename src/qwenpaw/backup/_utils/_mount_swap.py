@@ -55,7 +55,7 @@ _VALID_STATES = frozenset(
 class SwapPreparation(Enum):
     """Result of preparing a restore destination for commit."""
 
-    READY_TO_INSTALL = "ready_to_install"
+    DST_NOT_EXISTS = "dst_not_exists"
     ORIGINAL_MOVED_TO_OLD = "original_moved_to_old"
     CONTENT_SWAP_COMPLETED = "content_swap_completed"
 
@@ -93,7 +93,7 @@ def prepare_destination_for_swap(
     completed and the caller should return.
     """
     if not dst.exists():
-        return SwapPreparation.READY_TO_INSTALL
+        return SwapPreparation.DST_NOT_EXISTS
 
     if is_mount_point(dst):
         swap_mount_point_contents(dst, tmp_dst)
