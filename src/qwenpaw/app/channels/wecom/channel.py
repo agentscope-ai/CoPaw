@@ -43,7 +43,7 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
-from .card_handler import WecomCardHandler
+from .cards import WecomCardHandler
 from .utils import compress_image_for_wecom, format_markdown_tables
 from ..utils import file_url_to_local_path, split_text
 
