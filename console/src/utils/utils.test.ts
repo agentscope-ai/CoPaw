@@ -11,10 +11,7 @@ const t = (key: string) => key; // test t function: returns the key as-is
 describe("getAgentDisplayName", () => {
   it('returns i18n key when id is "default" and name is the default placeholder', () => {
     expect(
-      getAgentDisplayName(
-        { id: "default", name: "Default Agent" },
-        t as any,
-      ),
+      getAgentDisplayName({ id: "default", name: "Default Agent" }, t as any),
     ).toBe("agent.defaultDisplayName");
   });
 
