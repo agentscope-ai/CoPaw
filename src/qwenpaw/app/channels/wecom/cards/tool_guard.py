@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""WeCom tool-guard approval card.
+# pylint: disable=protected-access
+"""WeCom tool-guard approval card (self-contained).
 
-Self-contained module: card builders + callback parser + outbound
-``render`` + inbound ``handle`` are all defined here.  The dispatcher
-reads ``NAME`` / ``MESSAGE_TYPE`` / ``TASK_ID_PREFIX`` and wires
-``render`` / ``handle`` into its lookup tables.
+Builders + callback parser + outbound ``render`` + inbound ``handle``
+all live here; the dispatcher reads the module-level metadata
+(``NAME`` / ``MESSAGE_TYPE`` / ``TASK_ID_PREFIX``) plus ``render`` /
+``handle`` to wire it in.
 
-Reference:
-* card structure  – https://developer.work.weixin.qq.com/document/path/101032
-* card callback   – https://developer.work.weixin.qq.com/document/path/101027
+Refs: https://developer.work.weixin.qq.com/document/path/101032
+      https://developer.work.weixin.qq.com/document/path/101027
 """
 from __future__ import annotations
 
@@ -44,11 +44,12 @@ TASK_ID_PREFIX = "tg_approval_"
 # Constants (internal)
 # =====================================================================
 
-# Button key values.
+# Button key prefixes encoded into the JSON payload of each button.
 APPROVE_KEY = "approve"
 DENY_KEY = "deny"
 
-# Placeholder url for the resolved card's required card_action.
+# Placeholder url for the resolved card's required card_action.  WeCom
+# rejects ``text_notice`` cards without a card_action of type 1 or 2.
 _RESOLVED_CARD_URL = "https://qwenpaw.agentscope.io"
 
 
@@ -70,11 +71,8 @@ def _build_button_key(
     severity: str,
     session_ctx: Dict[str, Any],
 ) -> str:
-    """Encode action + ctx into a button ``key`` (max 1024 bytes).
-
-    The callback returns ``event_key`` which equals the clicked button's
-    ``key``, so we can recover routing info statelessly.
-    """
+    """Encode action + ctx into a button ``key`` (≤1024 bytes); the
+    callback returns it verbatim as ``event_key``."""
     payload = json.dumps(
         {
             "a": action,
@@ -115,16 +113,22 @@ def build_approval_card(
                 "text": "Approve",
                 "style": 1,
                 "key": _build_button_key(
-                    APPROVE_KEY, request_id, tool_name,
-                    severity_lower, ctx,
+                    APPROVE_KEY,
+                    request_id,
+                    tool_name,
+                    severity_lower,
+                    ctx,
                 ),
             },
             {
                 "text": "Deny",
                 "style": 2,
                 "key": _build_button_key(
-                    DENY_KEY, request_id, tool_name,
-                    severity_lower, ctx,
+                    DENY_KEY,
+                    request_id,
+                    tool_name,
+                    severity_lower,
+                    ctx,
                 ),
             },
         ],
@@ -176,10 +180,8 @@ def parse_card_event(
 ) -> Optional[Dict[str, Any]]:
     """Extract tool-guard fields from a ``template_card_event`` callback.
 
-    The dispatcher routes by ``task_id`` prefix before calling this
-    parser, so we don't re-validate the prefix here.  Returns ``None``
-    only when the ``event_key`` payload is malformed or the action is
-    unknown.
+    Returns ``None`` when ``event_key`` is malformed or the action is
+    unknown.  Prefix routing is the dispatcher's job.
     """
     event = event_body.get("event") or {}
     tce = event.get("template_card_event") or event
@@ -202,7 +204,8 @@ def parse_card_event(
         "tool_name": str(ctx.get("tool") or ""),
         "severity": str(ctx.get("sev") or "medium"),
         "session_ctx": {
-            k: v for k, v in ctx.items()
+            k: v
+            for k, v in ctx.items()
             if k not in ("a", "rid", "tool", "sev")
         },
         "user_id": str(from_info.get("userid") or ""),
@@ -223,15 +226,15 @@ async def render(
 ) -> bool:
     """Render a tool-guard event as a button_interaction card.
 
-    Streams the full guard details first (reusing the active "🤔
-    Thinking..." stream when present, to avoid leaving an empty bubble),
-    then posts the approval card.
+    Streams the full guard details first (reusing the active processing
+    stream when present, to avoid leaving an empty bubble), then posts
+    the approval card.
     """
     request_id = str(meta.get("approval_request_id") or "")
     if not request_id:
         return False
 
-    if not channel.enabled or not channel._client:  # noqa: SLF001
+    if not channel.enabled or not channel._client:
         return False
 
     frame = send_meta.get("wecom_frame")
@@ -252,14 +255,12 @@ async def render(
         session_ctx=session_ctx,
     )
 
-    # Step 1: stream out the full tool_guard details, reusing the
-    # active processing stream when available.
+    # Stream the guard details first, then post the button card.
     await context.send_stream_detail(channel, frame, send_meta, body_text)
-
-    # Step 2: post the button card as a separate reply.
     try:
-        await channel._client.reply_template_card(  # noqa: SLF001
-            frame, template_card,
+        await channel._client.reply_template_card(
+            frame,
+            template_card,
         )
         logger.info(
             "wecom approval card sent: request_id=%s tool=%s",
@@ -305,7 +306,12 @@ async def handle(
 
     # 1. Replace the card with a resolved-state card (must be <5s).
     await _update_card_resolved(
-        channel, frame, task_id, tool_name, action, user_id,
+        channel,
+        frame,
+        task_id,
+        tool_name,
+        action,
+        user_id,
     )
 
     # 2. Inject /approval command into the message queue.
@@ -327,7 +333,7 @@ async def _update_card_resolved(
     operator_display: str,
 ) -> None:
     """Replace the approval card with a resolved status card."""
-    if not channel._client:  # noqa: SLF001
+    if not channel._client:
         return
 
     resolved_card = build_resolved_card(
@@ -338,8 +344,9 @@ async def _update_card_resolved(
     )
 
     try:
-        await channel._client.update_template_card(  # noqa: SLF001
-            frame, resolved_card,
+        await channel._client.update_template_card(
+            frame,
+            resolved_card,
         )
         logger.info(
             "wecom approval card updated: task_id=%s action=%s",
@@ -370,8 +377,7 @@ def _enqueue_approval_command(
     enqueue = getattr(channel, "_enqueue", None)
     if enqueue is None:
         logger.warning(
-            "wecom card action: channel enqueue not set, "
-            "dropping %s %s",
+            "wecom card action: channel enqueue not set, dropping %s %s",
             action,
             request_id[:8],
         )

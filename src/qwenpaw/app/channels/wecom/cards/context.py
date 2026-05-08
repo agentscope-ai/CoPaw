@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 """Shared helpers used by individual card kinds.
 
-These functions deal with WeCom-specific message plumbing (extracting
-metadata / body text from runtime ``Msg`` objects, building routing
-context for stateless callbacks, gracefully draining the active
-"🤔 Thinking..." stream before sending a card).
-
-They take ``channel`` as an explicit argument instead of being attached
-to :class:`~.dispatcher.WecomCardHandler`, so each card module can use
-them without reaching into dispatcher internals.
+Covers WeCom-specific plumbing: extracting metadata / body text from
+runtime ``Msg`` objects, building stateless routing context for
+callbacks, and draining the active "🤔 Thinking..." stream before
+sending a card.  Each helper takes ``channel`` explicitly so card
+modules don't reach into dispatcher internals.
 """
 from __future__ import annotations
 
@@ -28,11 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 def extract_meta(event: Any) -> Optional[Dict[str, Any]]:
-    """Return the original ``Msg.metadata`` dict or ``None``.
-
-    Tolerates the ``metadata.metadata`` nesting introduced by the
-    runtime when re-wrapping events.
-    """
+    """Return the original ``Msg.metadata`` dict, unwrapping the
+    ``metadata.metadata`` nesting the runtime introduces."""
     metadata = getattr(event, "metadata", None) or {}
     if not isinstance(metadata, dict):
         return None
@@ -42,11 +37,8 @@ def extract_meta(event: Any) -> Optional[Dict[str, Any]]:
 
 
 def extract_body_text(content: Any) -> str:
-    """Flatten a runtime ``Message.content`` into a plain text string.
-
-    ``content`` may be a string, a list of ``TextContent`` objects, or
-    a list of ``{"type": "text", "text": "..."}`` dicts.
-    """
+    """Flatten ``Message.content`` (str / list of TextContent / list of
+    ``{"type": "text", "text": ...}`` dicts) into a plain string."""
     if not content:
         return ""
     if isinstance(content, str):
@@ -71,11 +63,8 @@ def build_session_ctx(
     to_handle: str,
     send_meta: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Collect the routing info needed to re-inject a card callback.
-
-    The returned dict is encoded into the button's ``key`` so the
-    inbound handler can recover the original session/sender/chat.
-    """
+    """Routing info encoded into the button ``key`` so the inbound
+    handler can recover the original session/sender/chat."""
     session_id = ""
     handle = (to_handle or "").strip()
     if handle.startswith("wecom:"):
@@ -100,23 +89,12 @@ async def send_stream_detail(
     send_meta: Dict[str, Any],
     body_text: str,
 ) -> None:
-    """Stream ``body_text`` to the user, gracefully reusing the active
-    "🤔 Thinking..." processing stream when present (so we don't leave
-    an empty bubble behind in the chat).
-
-    If the channel attached a ``wecom_processing_stream_id`` to
-    ``send_meta``, we cancel its keepalive task and reuse that
-    ``stream_id`` to write the final content; otherwise we generate a
-    fresh one.
-    """
-    processing_sid = send_meta.pop(
-        "wecom_processing_stream_id", "",
-    )
+    """Stream ``body_text`` to the user, reusing the active processing
+    stream id (when present) so no empty bubble is left behind."""
+    processing_sid = send_meta.pop("wecom_processing_stream_id", "")
     if processing_sid:
         # Cancel keepalive first so it doesn't race our finish frame.
-        keepalive = channel._keepalive_tasks.pop(  # noqa: SLF001
-            processing_sid, None,
-        )
+        keepalive = channel._keepalive_tasks.pop(processing_sid, None)
         if keepalive and not keepalive.done():
             keepalive.cancel()
             try:
@@ -128,7 +106,7 @@ async def send_stream_detail(
 
     stream_id = processing_sid or generate_req_id("stream")
     try:
-        await channel._client.reply_stream(  # noqa: SLF001
+        await channel._client.reply_stream(
             frame,
             stream_id=stream_id,
             content=body_text,

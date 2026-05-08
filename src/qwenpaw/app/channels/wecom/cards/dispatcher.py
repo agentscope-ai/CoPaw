@@ -1,26 +1,18 @@
 # -*- coding: utf-8 -*-
-"""WeCom interactive template-card dispatcher.
+# pylint: disable=protected-access
+"""WeCom interactive template-card dispatcher (routing-only).
 
-This module is **routing-only** — it knows nothing about specific card
-kinds.  Each card kind lives in its own module under :mod:`.` and is
-registered into the dispatcher's lookup tables in :meth:`_register_kinds`.
-
-Architecture
-------------
 Two lookup tables drive the dispatch:
 
-* ``_by_message_type``    — outbound: matches an outgoing event's
-  ``metadata.message_type`` to a ``render`` coroutine.
-* ``_by_task_id_prefix``  — inbound: matches the ``task_id`` prefix of
-  the clicked card to a ``handle`` coroutine.
+* ``_by_message_type``   — outbound: ``metadata.message_type`` → ``render``.
+* ``_by_task_id_prefix`` — inbound:  ``task_id`` prefix       → ``handle``.
 
-Public entry-points called by :class:`~..channel.WecomChannel`:
+Public entry-points (called by :class:`~..channel.WecomChannel`):
 :meth:`try_send_card_for_event` and :meth:`handle_template_card_event_sync`.
 
-Adding a new card kind: drop a module under :mod:`.` exposing module-
-level metadata (``NAME`` / ``MESSAGE_TYPE`` / ``TASK_ID_PREFIX``) and
-two coroutines (``render`` / ``handle``), then register it in
-:meth:`_register_kinds`.
+Adding a new card kind: drop a module exposing ``NAME`` /
+``MESSAGE_TYPE`` / ``TASK_ID_PREFIX`` plus ``render`` / ``handle``,
+then register it in :meth:`_register_kinds`.
 """
 from __future__ import annotations
 
@@ -99,25 +91,15 @@ class WecomCardHandler:
             )
         if kind.task_id_prefix in self._by_task_id_prefix:
             logger.warning(
-                "wecom card: task_id_prefix %r already registered, "
-                "overriding",
+                "wecom card: task_id_prefix %r already registered,"
+                " overriding",
                 kind.task_id_prefix,
             )
         self._by_message_type[kind.message_type] = kind
         self._by_task_id_prefix[kind.task_id_prefix] = kind
 
     def _register_kinds(self) -> None:
-        """Register every built-in card kind.
-
-        Each card module exposes module-level metadata
-        (``NAME`` / ``MESSAGE_TYPE`` / ``TASK_ID_PREFIX``) and two
-        coroutines (``render(channel, ...)`` / ``handle(channel, frame)``).
-        We wrap them in a :class:`CardKind` here so the dispatch wiring
-        stays in one place.
-
-        Adding a new card kind: drop a module exposing the metadata and
-        coroutines, then add one block below.
-        """
+        """Register every built-in card kind."""
         from . import tool_guard
 
         self.register(
@@ -142,8 +124,8 @@ class WecomCardHandler:
     ) -> bool:
         """Render ``event`` as a template card if any kind matches.
 
-        Returns ``True`` when a card was sent (the caller should then
-        skip the default text rendering), ``False`` otherwise.
+        Returns ``True`` when a card was sent so the caller can skip
+        the default text rendering.
         """
         meta = context.extract_meta(event)
         if meta is None:
@@ -153,7 +135,11 @@ class WecomCardHandler:
             return False
         try:
             return await kind.render(
-                self._channel, to_handle, event, send_meta, meta,
+                self._channel,
+                to_handle,
+                event,
+                send_meta,
+                meta,
             )
         except Exception:
             logger.exception(
@@ -163,12 +149,9 @@ class WecomCardHandler:
             return False
 
     def handle_template_card_event_sync(self, frame: Any) -> None:
-        """Sync entry called from the WS thread on a card event.
-
-        Routes by ``task_id`` prefix to the registered handler and
-        dispatches to the main event loop for async processing.
-        """
-        loop = self._channel._loop  # noqa: SLF001
+        """Sync entry called from the WS thread; routes by ``task_id``
+        prefix and dispatches to the main loop."""
+        loop = self._channel._loop
         if not loop or not loop.is_running():
             logger.warning(
                 "wecom card event: main loop not running, drop event",
