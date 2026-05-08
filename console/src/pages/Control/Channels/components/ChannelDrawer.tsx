@@ -277,11 +277,40 @@ export function ChannelDrawer({
             </Form.Item>
             <Form.Item
               name="access_token"
-              label="Access Token"
-              rules={[{ required: true }]}
+              label="Access Token (optional, or use password login)"
+              rules={[{ required: false }]}
             >
               <Input.Password placeholder="syt_..." />
             </Form.Item>
+            <Form.Item
+              name="device_name"
+              label="Device Name"
+              rules={[{ required: true }]}
+            >
+              <Input placeholder="device_id" />
+            </Form.Item>
+            <Form.Item
+              name="encryption"
+              label="Enable End-to-End Encryption (You need verfiy the device after enable E2EE)"
+              rules={[{ required: true }]}
+            >
+              <Switch />
+            </Form.Item>
+            <Form.Item
+              name="username"
+              label="Username"
+              rules={[{ required: false }]}
+            >
+              <Input placeholder="Matrix Username (optional, blank to use user_id)" />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[{ required: false }]}
+            >
+              <Input.Password placeholder="Matrix Password (optional, for password login)" />
+            </Form.Item>
+       
           </>
         );
 
