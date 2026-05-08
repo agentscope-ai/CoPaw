@@ -494,9 +494,12 @@ export function RemoteModelManageModal({
           }
         }
 
-        setBatchAdding(false);
-        setSelectedRemoteModelIds(new Set());
-        await onSaved();
+        try {
+          await onSaved();
+        } finally {
+          setBatchAdding(false);
+          setSelectedRemoteModelIds(new Set());
+        }
 
         if (failureCount === 0) {
           message.success(t("models.allModelsAdded", { count: successCount }));
