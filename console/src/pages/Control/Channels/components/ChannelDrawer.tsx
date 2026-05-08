@@ -310,7 +310,7 @@ export function ChannelDrawer({
             >
               <Input.Password placeholder="Matrix Password (optional, for password login)" />
             </Form.Item>
-       
+
           </>
         );
 

@@ -3,6 +3,7 @@
 MatrixChannel: QwenPaw BaseChannel implementation for Matrix (via matrix-nio).
 
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -178,7 +179,7 @@ class MatrixChannelConfig:
         self.user_id: str = raw.get("user_id", "")
         self.access_token: str = raw.get("access_token", "")
         # username/password fallback (rarely used in hiclaw)
-        self.username: str = (raw.get("username") or self.user_id or "")
+        self.username: str = raw.get("username") or self.user_id or ""
         self.password: str = raw.get("password") or ""
         self.device_name: str = raw.get("device_name", "qwenpaw-worker")
         self.device_id: str = raw.get("device_id", "")
@@ -391,16 +392,12 @@ class MatrixChannel(BaseChannel):
             "detail": "Matrix client is connected.",
         }
 
-    # pylint: disable=too-many-branches
-    async def start(self) -> None:
-        if not self._cfg.homeserver:
-            logger.warning(
-                "MatrixChannel: homeserver not configured, skipping",
-            )
-            return
-        login_user = (self._cfg.username or self._cfg.user_id or "").strip()
-        has_password_creds = bool(login_user and self._cfg.password)
-        has_token_cred = bool(self._cfg.access_token)
+    def _restore_auth_state_before_start(
+        self,
+        *,
+        has_password_creds: bool,
+        has_token_cred: bool,
+    ) -> None:
         # Auth source priority:
         # 1) Explicit username/password from config/UI
         # 2) Explicit access_token from config/UI
@@ -435,6 +432,7 @@ class MatrixChannel(BaseChannel):
                 restore_identity=True,
             )
 
+    def _init_async_client(self, resolved_device_id: str) -> None:
         # E2EE: when encryption is enabled, provide store_path so matrix-nio
         # persists Olm/Megolm keys, and set config to auto-trust all devices
         # (appropriate for bot use cases where interactive verification is
@@ -454,163 +452,185 @@ class MatrixChannel(BaseChannel):
             store_path=str(store_path) if store_path else "",
             config=client_config,
         )
-        resolved_device_id = (
-            self._cfg.device_id
-            or self._derive_device_id_from_name(self._cfg.device_name)
-        )
         if resolved_device_id:
             self._client.device_id = resolved_device_id
 
-        # Login
-        if has_password_creds:
-            # matrix-nio login() signature differs across versions. Build
-            # kwargs from runtime signature to avoid argument collisions.
-            login_sig = inspect.signature(self._client.login)
-            login_kwargs: dict[str, Any] = {}
-            login_params = login_sig.parameters
-            if "user" in login_params:
-                login_kwargs["user"] = login_user
-            elif "user_id" in login_params:
-                login_kwargs["user_id"] = login_user
-            if "password" in login_params:
-                login_kwargs["password"] = self._cfg.password
-            if "device_name" in login_params and self._cfg.device_name:
-                login_kwargs["device_name"] = self._cfg.device_name
-            if "device_id" in login_params:
-                stable_device_id = (
-                    self._client.device_id
-                    or resolved_device_id
-                    or ""
-                )
-                if stable_device_id:
-                    login_kwargs["device_id"] = stable_device_id
-
-            # For nio versions that derive username from client.user.
-            if "user" not in login_params and "user_id" not in login_params:
-                self._client.user = login_user
-
-            login_attempts: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-            if login_kwargs:
-                login_attempts.append(((), login_kwargs))
-            login_attempts.append(
-                (
-                    (self._cfg.password,),
-                    {
-                        "device_name": self._cfg.device_name,
-                        **(
-                            {"device_id": resolved_device_id}
-                            if resolved_device_id
-                            else {}
-                        ),
-                    },
-                ),
+    def _password_login_kwargs_for_nio(
+        self,
+        login_user: str,
+        resolved_device_id: str,
+    ) -> dict[str, Any]:
+        # matrix-nio login() signature differs across versions. Build
+        # kwargs from runtime signature to avoid argument collisions.
+        login_sig = inspect.signature(self._client.login)
+        login_kwargs: dict[str, Any] = {}
+        login_params = login_sig.parameters
+        if "user" in login_params:
+            login_kwargs["user"] = login_user
+        elif "user_id" in login_params:
+            login_kwargs["user_id"] = login_user
+        if "password" in login_params:
+            login_kwargs["password"] = self._cfg.password
+        if "device_name" in login_params and self._cfg.device_name:
+            login_kwargs["device_name"] = self._cfg.device_name
+        if "device_id" in login_params:
+            stable_device_id = (
+                self._client.device_id or resolved_device_id or ""
             )
-            login_attempts.append(
-                (
-                    (login_user, self._cfg.password),
-                    {
-                        "device_name": self._cfg.device_name,
-                        **(
-                            {"device_id": resolved_device_id}
-                            if resolved_device_id
-                            else {}
-                        ),
-                    },
-                ),
-            )
+            if stable_device_id:
+                login_kwargs["device_id"] = stable_device_id
+        # For nio versions that derive username from client.user.
+        if "user" not in login_params and "user_id" not in login_params:
+            self._client.user = login_user
+        return login_kwargs
 
-            last_exc: Optional[TypeError] = None
-            resp: Any = None
-            for args, kwargs in login_attempts:
-                try:
-                    resp = await self._client.login(*args, **kwargs)
-                    last_exc = None
-                    break
-                except TypeError as exc:
-                    last_exc = exc
-                    continue
+    def _password_login_attempts(
+        self,
+        login_user: str,
+        login_kwargs: dict[str, Any],
+        resolved_device_id: str,
+    ) -> list[tuple[tuple[Any, ...], dict[str, Any]]]:
+        login_attempts: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        if login_kwargs:
+            login_attempts.append(((), login_kwargs))
+        login_attempts.append(
+            (
+                (self._cfg.password,),
+                {
+                    "device_name": self._cfg.device_name,
+                    **(
+                        {"device_id": resolved_device_id}
+                        if resolved_device_id
+                        else {}
+                    ),
+                },
+            ),
+        )
+        login_attempts.append(
+            (
+                (login_user, self._cfg.password),
+                {
+                    "device_name": self._cfg.device_name,
+                    **(
+                        {"device_id": resolved_device_id}
+                        if resolved_device_id
+                        else {}
+                    ),
+                },
+            ),
+        )
+        return login_attempts
 
-            if last_exc is not None:
-                raise last_exc
-            if isinstance(resp, LoginResponse):
-                self._user_id = resp.user_id
-                self._client.user_id = resp.user_id
-                self._client.user = resp.user_id
-                if getattr(resp, "device_id", None):
-                    self._client.device_id = resp.device_id
-                if getattr(resp, "access_token", None):
-                    self._client.access_token = resp.access_token
+    async def _try_password_login_variants(
+        self,
+        login_attempts: list[tuple[tuple[Any, ...], dict[str, Any]]],
+    ) -> tuple[Any, Optional[TypeError]]:
+        last_exc: Optional[TypeError] = None
+        for args, kwargs in login_attempts:
+            try:
+                resp = await self._client.login(*args, **kwargs)
+                return resp, None
+            except TypeError as exc:
+                last_exc = exc
+        return None, last_exc
+
+    def _handle_password_login_success(self, resp: LoginResponse) -> None:
+        self._user_id = resp.user_id
+        self._client.user_id = resp.user_id
+        self._client.user = resp.user_id
+        if getattr(resp, "device_id", None):
+            self._client.device_id = resp.device_id
+        if getattr(resp, "access_token", None):
+            self._client.access_token = resp.access_token
+        logger.info(
+            "MatrixChannel: logged in as %s (password, device=%s, "
+            "device_name=%s)",
+            self._user_id,
+            getattr(self._client, "device_id", ""),
+            self._cfg.device_name,
+        )
+        self._save_auth_state()
+        if self._cfg.encryption and self._client.store_path:
+            if self._client.device_id:
+                self._client.load_store()
                 logger.info(
-                    "MatrixChannel: logged in as %s (password, device=%s, "
-                    "device_name=%s)",
-                    self._user_id,
-                    getattr(self._client, "device_id", ""),
-                    self._cfg.device_name,
+                    "MatrixChannel: crypto store loaded from %s",
+                    self._client.store_path,
                 )
-                self._save_auth_state()
-                if self._cfg.encryption and self._client.store_path:
-                    if self._client.device_id:
-                        self._client.load_store()
-                        logger.info(
-                            "MatrixChannel: crypto store loaded from %s",
-                            self._client.store_path,
-                        )
-                    else:
-                        logger.warning(
-                            "MatrixChannel: password login returned no "
-                            "device_id; E2EE store may not be reusable",
-                        )
             else:
-                logger.error("MatrixChannel: password login failed: %s", resp)
-                return
-        elif self._cfg.access_token:
-            self._client.access_token = self._cfg.access_token
-            whoami = await self._client.whoami()
-            if isinstance(whoami, WhoamiResponse):
-                if self._cfg.user_id and self._cfg.user_id != whoami.user_id:
-                    logger.error(
-                        "MatrixChannel: configured user_id=%s does not match "
-                        "access_token owner=%s; refusing stale credentials",
-                        self._cfg.user_id,
-                        whoami.user_id,
+                logger.warning(
+                    "MatrixChannel: password login returned no "
+                    "device_id; E2EE store may not be reusable",
+                )
+
+    async def _login_with_password(
+        self,
+        login_user: str,
+        resolved_device_id: str,
+    ) -> bool:
+        login_kwargs = self._password_login_kwargs_for_nio(
+            login_user,
+            resolved_device_id,
+        )
+        attempts = self._password_login_attempts(
+            login_user,
+            login_kwargs,
+            resolved_device_id,
+        )
+        resp, last_exc = await self._try_password_login_variants(attempts)
+        if last_exc is not None:
+            raise last_exc
+        if isinstance(resp, LoginResponse):
+            self._handle_password_login_success(resp)
+            return True
+        logger.error("MatrixChannel: password login failed: %s", resp)
+        return False
+
+    async def _login_with_access_token(self) -> bool:
+        self._client.access_token = self._cfg.access_token
+        whoami = await self._client.whoami()
+        if isinstance(whoami, WhoamiResponse):
+            if self._cfg.user_id and self._cfg.user_id != whoami.user_id:
+                logger.error(
+                    "MatrixChannel: configured user_id=%s does not match "
+                    "access_token owner=%s; refusing stale credentials",
+                    self._cfg.user_id,
+                    whoami.user_id,
+                )
+                return False
+            self._user_id = whoami.user_id
+            self._client.user_id = whoami.user_id
+            self._client.user = whoami.user_id
+            # E2EE requires device_id to associate Olm keys with this
+            # device
+            if whoami.device_id:
+                self._client.device_id = whoami.device_id
+            logger.info(
+                "MatrixChannel: logged in as %s (token, device=%s)",
+                self._user_id,
+                whoami.device_id,
+            )
+            self._save_auth_state()
+            # Load crypto store after user_id and device_id are set
+            if self._cfg.encryption and self._client.store_path:
+                if self._client.device_id:
+                    self._client.load_store()
+                    logger.info(
+                        "MatrixChannel: crypto store loaded from %s",
+                        self._client.store_path,
                     )
-                    return
-                self._user_id = whoami.user_id
-                self._client.user_id = whoami.user_id
-                self._client.user = whoami.user_id
-                # E2EE requires device_id to associate Olm keys with this
-                # device
-                if whoami.device_id:
-                    self._client.device_id = whoami.device_id
-                logger.info(
-                    "MatrixChannel: logged in as %s (token, device=%s)",
-                    self._user_id,
-                    whoami.device_id,
-                )
-                self._save_auth_state()
-                # Load crypto store after user_id and device_id are set
-                if self._cfg.encryption and self._client.store_path:
-                    if self._client.device_id:
-                        self._client.load_store()
-                        logger.info(
-                            "MatrixChannel: crypto store loaded from %s",
-                            self._client.store_path,
-                        )
-                    else:
-                        logger.error(
-                            "MatrixChannel: E2EE enabled but whoami returned "
-                            "no device_id — encryption disabled "
-                            "(token may lack device scope)",
-                        )
-                        self._cfg.encryption = False
-            else:
-                logger.error("MatrixChannel: token login failed: %s", whoami)
-                return
-        else:
-            logger.error("MatrixChannel: no credentials configured")
-            return
+                else:
+                    logger.error(
+                        "MatrixChannel: E2EE enabled but whoami returned "
+                        "no device_id — encryption disabled "
+                        "(token may lack device scope)",
+                    )
+                    self._cfg.encryption = False
+            return True
+        logger.error("MatrixChannel: token login failed: %s", whoami)
+        return False
 
-        # Register event callbacks and start sync loop
+    def _register_plain_room_callbacks(self) -> None:
         self._client.add_event_callback(
             self._on_room_event,
             (RoomMessageText,),
@@ -625,51 +645,87 @@ class MatrixChannel(BaseChannel):
             ),
         )
 
-        # E2EE: upload device keys and register encrypted event callbacks
-        if self._cfg.encryption:
-            if self._client.should_upload_keys:
-                await self._client.keys_upload()
-                logger.info("MatrixChannel: E2E keys uploaded")
-            # Encrypted media events (decrypted by nio, delivered as
-            # RoomEncrypted* types)
-            self._client.add_event_callback(
-                self._on_room_encrypted_media_event,
-                (
-                    RoomEncryptedImage,
-                    RoomEncryptedAudio,
-                    RoomEncryptedVideo,
-                    RoomEncryptedFile,
-                ),
-            )
-            # Undecryptable events (missing session key)
-            self._client.add_event_callback(
-                self._on_megolm_event,
-                (MegolmEvent,),
-            )
-            self._client.add_to_device_callback(
-                self._on_key_verification_event,
-                (KeyVerificationEvent,),
-            )
-            self._client.add_to_device_callback(
-                self._on_to_device_probe_event,
-                (ToDeviceEvent,),
-            )
-            self._client.add_to_device_callback(
-                self._on_room_key_request_event,
-                (
-                    RoomKeyRequest,
-                    RoomKeyRequestCancellation,
-                ),
-            )
-            logger.info(
-                "MatrixChannel: key verification to-device callback registered",
-            )
-            logger.info(
-                "MatrixChannel: E2EE enabled, "
-                "encrypted event handlers registered",
-            )
+    async def _setup_e2ee_after_login(self) -> None:
+        if not self._cfg.encryption:
+            return
+        if self._client.should_upload_keys:
+            await self._client.keys_upload()
+            logger.info("MatrixChannel: E2E keys uploaded")
+        # Encrypted media events (decrypted by nio, delivered as
+        # RoomEncrypted* types)
+        self._client.add_event_callback(
+            self._on_room_encrypted_media_event,
+            (
+                RoomEncryptedImage,
+                RoomEncryptedAudio,
+                RoomEncryptedVideo,
+                RoomEncryptedFile,
+            ),
+        )
+        # Undecryptable events (missing session key)
+        self._client.add_event_callback(
+            self._on_megolm_event,
+            (MegolmEvent,),
+        )
+        self._client.add_to_device_callback(
+            self._on_key_verification_event,
+            (KeyVerificationEvent,),
+        )
+        self._client.add_to_device_callback(
+            self._on_to_device_probe_event,
+            (ToDeviceEvent,),
+        )
+        self._client.add_to_device_callback(
+            self._on_room_key_request_event,
+            (
+                RoomKeyRequest,
+                RoomKeyRequestCancellation,
+            ),
+        )
+        logger.info(
+            "MatrixChannel: key verification to-device "
+            "callback registered",
+        )
+        logger.info(
+            "MatrixChannel: E2EE enabled, "
+            "encrypted event handlers registered",
+        )
 
-        # Create shared HTTP client for media downloads
+    async def start(self) -> None:
+        if not self._cfg.homeserver:
+            logger.warning(
+                "MatrixChannel: homeserver not configured, skipping",
+            )
+            return
+        login_user = (self._cfg.username or self._cfg.user_id or "").strip()
+        has_password_creds = bool(login_user and self._cfg.password)
+        has_token_cred = bool(self._cfg.access_token)
+        self._restore_auth_state_before_start(
+            has_password_creds=has_password_creds,
+            has_token_cred=has_token_cred,
+        )
+        resolved_device_id = (
+            self._cfg.device_id
+            or self._derive_device_id_from_name(self._cfg.device_name)
+        )
+        self._init_async_client(resolved_device_id)
+
+        if has_password_creds:
+            if not await self._login_with_password(
+                login_user,
+                resolved_device_id,
+            ):
+                return
+        elif self._cfg.access_token:
+            if not await self._login_with_access_token():
+                return
+        else:
+            logger.error("MatrixChannel: no credentials configured")
+            return
+
+        self._register_plain_room_callbacks()
+        await self._setup_e2ee_after_login()
+
         self._http_client = httpx.AsyncClient(
             follow_redirects=True,
             timeout=60,
@@ -782,7 +838,10 @@ class MatrixChannel(BaseChannel):
             if device_id:
                 self._cfg.device_id = device_id
         except Exception as exc:
-            logger.warning("MatrixChannel: failed to persist auth state: %s", exc)
+            logger.warning(
+                "MatrixChannel: failed to persist auth state: %s",
+                exc,
+            )
 
     def _load_sync_token(self) -> Optional[str]:
         """Load persisted next_batch token from disk, or None.
@@ -856,8 +915,8 @@ class MatrixChannel(BaseChannel):
         """Complete the bot side of an Element SAS verification challenge."""
         if not self._client or not self._client.olm:
             logger.info(
-                "MatrixChannel: verification event received but olm is not ready "
-                "(event=%s, tx=%s, sender=%s)",
+                "MatrixChannel: verification event received "
+                "but olm is not ready (event=%s, tx=%s, sender=%s)",
                 type(event).__name__,
                 getattr(event, "transaction_id", ""),
                 getattr(event, "sender", ""),
@@ -904,8 +963,8 @@ class MatrixChannel(BaseChannel):
                     )
                 else:
                     logger.info(
-                        "MatrixChannel: key verification cancelled for unknown "
-                        "key verification tx=%s from %s (reason=%s)",
+                        "MatrixChannel: key verification cancelled for "
+                        "unknown key verification tx=%s from %s (reason=%s)",
                         event.transaction_id,
                         event.sender,
                         getattr(event, "reason", ""),
@@ -1211,7 +1270,7 @@ class MatrixChannel(BaseChannel):
         self,
         event: KeyVerificationStart,
     ) -> None:
-        """Re-process a start event after matrix-nio queried unknown devices."""
+        """Re-process start event after matrix-nio queried unknown devices."""
         assert self._client is not None
         assert self._client.olm is not None
 
@@ -1263,7 +1322,7 @@ class MatrixChannel(BaseChannel):
             self._format_sas_challenge(sas),
         )
 
-        # Receiving Key queues our share_key in nio; flush it before sending MAC.
+        # Receiving Key queues share_key in nio; flush it before sending MAC.
         await self._client.send_to_device_messages()
         try:
             resp = await self._client.confirm_short_auth_string(
@@ -1435,8 +1494,9 @@ class MatrixChannel(BaseChannel):
                         == "M_UNKNOWN_TOKEN"
                     ):
                         logger.error(
-                            "MatrixChannel: sync stopped due to unknown access "
-                            "token; please re-login (password or fresh token)",
+                            "MatrixChannel: sync stopped due to "
+                            "unknown access token; please re-login "
+                            "(password or fresh token)",
                         )
                         if self._client:
                             self._client.access_token = ""
@@ -2186,7 +2246,11 @@ class MatrixChannel(BaseChannel):
     # feeds allowlist / requireMention / history behavior.
     # ------------------------------------------------------------------
 
-    def _is_dm_room_fallback(self, room: Optional[MatrixRoom], sender_id: str) -> bool:
+    def _is_dm_room_fallback(
+        self,
+        room: Optional[MatrixRoom],
+        sender_id: str,
+    ) -> bool:
         """Best-effort DM check when joined_members API is unavailable."""
         if not room or not self._user_id:
             return False
@@ -2273,7 +2337,8 @@ class MatrixChannel(BaseChannel):
                 )
                 fallback = self._is_dm_room_fallback(room, sender_id)
                 logger.warning(
-                    "MatrixChannel: joined_members fallback for %s -> is_dm=%s",
+                    "MatrixChannel: joined_members fallback for %s "
+                    "-> is_dm=%s",
                     room_id,
                     fallback,
                 )
@@ -2870,7 +2935,8 @@ class MatrixChannel(BaseChannel):
         return False
 
     async def _prepare_room_send(self, room_id: str) -> None:
-        """Align local encryption flags with the homeserver before ``room_send``.
+        """Align local encryption flags with the homeserver before
+        ``room_send``.
 
         matrix-nio only wraps ``room_send`` as ``m.room.encrypted`` when
         ``client.rooms[room_id].encrypted`` is true. If incremental sync never
