@@ -140,7 +140,14 @@ export function useToolGuard() {
       auto_denied_rules: Array.from(autoDenyRules),
       shell_evasion_checks: shellEvasionChecks,
     };
-  }, [enabled, config, customRules, disabledRules, autoDenyRules, shellEvasionChecks]);
+  }, [
+    enabled,
+    config,
+    customRules,
+    disabledRules,
+    autoDenyRules,
+    shellEvasionChecks,
+  ]);
 
   return {
     config,
