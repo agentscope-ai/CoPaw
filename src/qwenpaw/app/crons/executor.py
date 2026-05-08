@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from typing import Any, Dict
 
 from .models import CronJobSpec
@@ -24,12 +25,13 @@ class CronExecutor:
         """
         target_user_id = job.dispatch.target.user_id
         target_session_id = job.dispatch.target.session_id
+        target_channel = job.dispatch.channel
         dispatch_meta: Dict[str, Any] = dict(job.dispatch.meta or {})
         logger.info(
             "cron execute: job_id=%s channel=%s task_type=%s "
             "target_user_id=%s target_session_id=%s",
             job.id,
-            job.dispatch.channel,
+            target_channel,
             job.task_type,
             target_user_id[:40] if target_user_id else "",
             target_session_id[:40] if target_session_id else "",
@@ -39,11 +41,11 @@ class CronExecutor:
             logger.info(
                 "cron send_text: job_id=%s channel=%s len=%s",
                 job.id,
-                job.dispatch.channel,
+                target_channel,
                 len(job.text or ""),
             )
             await self._channel_manager.send_text(
-                channel=job.dispatch.channel,
+                channel=target_channel,
                 user_id=target_user_id,
                 session_id=target_session_id,
                 text=job.text.strip(),
@@ -59,13 +61,26 @@ class CronExecutor:
         )
         assert job.request is not None
         req: Dict[str, Any] = job.request.model_dump(mode="json")
+
+        req["channel"] = target_channel
         req["user_id"] = target_user_id or "cron"
-        req["session_id"] = target_session_id or f"cron:{job.id}"
+
+        # Determine session_id based on share_session
+        share_session = job.runtime.share_session
+        if share_session:
+            req["session_id"] = target_session_id or f"cron:{job.id}"
+        else:
+            run_id = uuid.uuid4().hex[:8]
+            req["session_id"] = (
+                f"{target_session_id}:cron:{job.id}:{run_id}"
+                if target_session_id
+                else f"cron:{run_id}"
+            )
 
         async def _run() -> None:
             async for event in self._runner.stream_query(req):
                 await self._channel_manager.send_event(
-                    channel=job.dispatch.channel,
+                    channel=target_channel,
                     user_id=target_user_id,
                     session_id=target_session_id,
                     event=event,

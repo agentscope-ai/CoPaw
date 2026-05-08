@@ -105,6 +105,7 @@ async def run_command_path(  # pylint: disable=too-many-statements,too-many-bran
 
     session_id = getattr(request, "session_id", "") or ""
     user_id = getattr(request, "user_id", "") or ""
+    channel = getattr(request, "channel", "") or ""
 
     # Daemon path
     parsed = parse_daemon_query(query)
@@ -248,6 +249,7 @@ async def run_command_path(  # pylint: disable=too-many-statements,too-many-bran
     session_state = await runner.session.get_session_state_dict(
         session_id=session_id,
         user_id=user_id,
+        channel=channel.channel,
     )
     memory_state = session_state.get("agent", {}).get("memory", {})
     if memory is not None:
@@ -277,6 +279,7 @@ async def run_command_path(  # pylint: disable=too-many-statements,too-many-bran
             key="agent.memory",
             value=memory.state_dict(),
             user_id=user_id,
+            channel=channel.channel,
         )
 
         # Clear plan state when /clear or /new is used
@@ -291,6 +294,7 @@ async def run_command_path(  # pylint: disable=too-many-statements,too-many-bran
                     key="agent.plan_notebook",
                     value=_empty_nb.state_dict(),
                     user_id=user_id,
+                    channel=channel.channel,
                 )
                 logger.info(
                     "Cleared plan_notebook from session %s",
