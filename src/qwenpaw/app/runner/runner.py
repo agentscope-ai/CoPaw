@@ -620,6 +620,7 @@ class AgentRunner(Runner):
                     _states = await self.session.get_session_state_dict(
                         session_id=session_id,
                         user_id=user_id,
+                        channel=channel,
                         allow_not_exist=True,
                     )
                     _agent_st = _states.get("agent", {})
@@ -633,6 +634,7 @@ class AgentRunner(Runner):
                             key="agent.plan_notebook",
                             value=plan_notebook.state_dict(),
                             user_id=user_id,
+                            channel=channel,
                             create_if_not_exist=False,
                         )
                 except Exception:
@@ -645,6 +647,7 @@ class AgentRunner(Runner):
                 await self.session.load_session_state(
                     session_id=session_id,
                     user_id=user_id,
+                    channel=channel,
                     agent=agent,
                 )
             except KeyError as e:
@@ -768,6 +771,7 @@ class AgentRunner(Runner):
                 await self.session.save_session_state(
                     session_id=session_id,
                     user_id=user_id,
+                    channel=channel,
                     agent=agent,
                 )
 

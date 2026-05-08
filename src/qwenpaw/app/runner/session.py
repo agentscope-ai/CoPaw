@@ -212,25 +212,67 @@ class SafeJSONSession(SessionBase):
         """
         self.save_dir = save_dir
 
-    def _get_save_path(self, session_id: str, user_id: str) -> str:
+    def _get_save_path(
+        self,
+        session_id: str,
+        user_id: str,
+        channel: str = "",
+    ) -> str:
         """Return a filesystem-safe save path.
 
         Overrides the parent implementation to ensure the generated
         filename is valid on Windows, macOS and Linux.
+
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+            channel: Optional channel name for subdirectory separation
+
+        Returns:
+            Full path to the session file. If channel is provided,
+            uses channels/{channel}/ subdirectory structure.
         """
-        os.makedirs(self.save_dir, exist_ok=True)
         safe_sid = sanitize_filename(session_id)
         safe_uid = sanitize_filename(user_id) if user_id else ""
+
         if safe_uid:
-            file_path = f"{safe_uid}_{safe_sid}.json"
+            filename = f"{safe_uid}_{safe_sid}.json"
         else:
-            file_path = f"{safe_sid}.json"
-        return os.path.join(self.save_dir, file_path)
+            filename = f"{safe_sid}.json"
+
+        if channel:
+            safe_channel = sanitize_filename(channel)
+            target_dir = os.path.join(self.save_dir, safe_channel)
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = os.path.join(target_dir, filename)
+
+            legacy_path = os.path.join(self.save_dir, filename)
+            if not os.path.exists(target_path) and os.path.exists(legacy_path):
+                try:
+                    shutil.copy2(legacy_path, target_path)
+                    logger.info(
+                        "Migrated session file from %s to %s",
+                        legacy_path,
+                        target_path,
+                    )
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to migrate session file %s to %s: %s",
+                        legacy_path,
+                        target_path,
+                        exc,
+                    )
+
+            return target_path
+
+        os.makedirs(self.save_dir, exist_ok=True)
+        return os.path.join(self.save_dir, filename)
 
     async def save_session_state(
         self,
         session_id: str,
         user_id: str = "",
+        channel: str = "",
         **state_modules_mapping,
     ) -> None:
         """Save state modules to a JSON file using async I/O."""
@@ -238,7 +280,11 @@ class SafeJSONSession(SessionBase):
             name: state_module.state_dict()
             for name, state_module in state_modules_mapping.items()
         }
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
+        session_save_path = self._get_save_path(
+            session_id,
+            user_id=user_id,
+            channel=channel,
+        )
         with open(
             session_save_path,
             "w",
@@ -255,11 +301,16 @@ class SafeJSONSession(SessionBase):
         self,
         session_id: str,
         user_id: str = "",
+        channel: str = "",
         allow_not_exist: bool = True,
         **state_modules_mapping,
     ) -> None:
         """Load state modules from a JSON file using async I/O."""
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
+        session_save_path = self._get_save_path(
+            session_id,
+            user_id=user_id,
+            channel=channel,
+        )
         if os.path.exists(session_save_path):
             async with aiofiles.open(
                 session_save_path,
@@ -299,9 +350,14 @@ class SafeJSONSession(SessionBase):
         key: Union[str, Sequence[str]],
         value,
         user_id: str = "",
+        channel: str = "",
         create_if_not_exist: bool = True,
     ) -> None:
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
+        session_save_path = self._get_save_path(
+            session_id,
+            user_id=user_id,
+            channel=channel,
+        )
 
         if os.path.exists(session_save_path):
             async with aiofiles.open(
@@ -352,6 +408,7 @@ class SafeJSONSession(SessionBase):
         self,
         session_id: str,
         user_id: str = "",
+        channel: str = "",
         allow_not_exist: bool = True,
     ) -> dict:
         """Return the session state dict from the JSON file.
@@ -361,6 +418,8 @@ class SafeJSONSession(SessionBase):
                 The session id.
             user_id (`str`, default to `""`):
                 The user ID for the storage.
+            channel (`str`, default to `""`):
+                The channel name for subdirectory separation.
             allow_not_exist (`bool`, defaults to `True`):
                 Whether to allow the session to not exist. If `False`, raises
                 an error if the session does not exist.
@@ -371,7 +430,11 @@ class SafeJSONSession(SessionBase):
                 empty dict if the file does not exist and
                 `allow_not_exist=True`.
         """
-        session_save_path = self._get_save_path(session_id, user_id=user_id)
+        session_save_path = self._get_save_path(
+            session_id,
+            user_id=user_id,
+            channel=channel,
+        )
         if os.path.exists(session_save_path):
             async with aiofiles.open(
                 session_save_path,
