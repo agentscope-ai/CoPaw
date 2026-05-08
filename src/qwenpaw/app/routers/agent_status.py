@@ -57,13 +57,16 @@ async def get_agent_status(
     Raises:
         HTTPException: If agent not found (404)
     """
-    # Extract agent_id from request path
+    # Extract agent_id from request path (always present when mounted
+    # under /agents/{agentId})
     agent_id = request.path_params.get("agentId")
     if not agent_id:
-        config = load_config()
-        agent_id = config.agents.active_agent or "default"
+        raise HTTPException(
+            status_code=400,
+            detail="agentId is required",
+        )
 
-    # Load config to check enabled status
+    # Load config once to check agent existence and enabled status
     config = load_config()
     if agent_id not in config.agents.profiles:
         raise HTTPException(
@@ -84,6 +87,7 @@ async def get_agent_status(
         )
 
     # If enabled, get workspace and task tracker status
+    # get_agent_for_request will use the agent_id from request.path_params
     workspace = await get_agent_for_request(request)
     status_dict = await workspace.task_tracker.get_global_status()
     return AgentStatus(**status_dict)

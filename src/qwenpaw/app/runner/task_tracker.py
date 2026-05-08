@@ -71,12 +71,9 @@ class TaskTracker:
                 - last_finish_at: Optional[datetime]
         """
         async with self._lock:
-            active_tasks = [
-                run_key
-                for run_key, state in self._runs.items()
-                if not state.task.done()
-            ]
-            running_count = len(active_tasks)
+            running_count = sum(
+                1 for state in self._runs.values() if not state.task.done()
+            )
             status = "running" if running_count > 0 else "idle"
 
             return {
