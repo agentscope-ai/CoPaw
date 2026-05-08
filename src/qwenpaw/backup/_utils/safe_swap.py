@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ._mount_swap import (
+    SwapPreparation,
     prepare_destination_for_swap,
     recover_mount_point_swap,
     should_skip_restore_internal_path,
@@ -332,19 +333,23 @@ def _swap_directories(dst: Path, tmp_dst: Path, old_dst: Path) -> None:
             f"commit_tmp called without a valid staging directory: {tmp_dst}",
         )
 
-    handled, renamed_to_old = prepare_destination_for_swap(
+    preparation = prepare_destination_for_swap(
         dst,
         tmp_dst,
         old_dst,
     )
-    if handled:
+    if preparation is SwapPreparation.CONTENT_SWAP_COMPLETED:
         return
 
     try:
         tmp_dst.rename(dst)
     except OSError:
         # Roll back: restore original data if we moved it away.
-        if renamed_to_old and old_dst.exists() and not dst.exists():
+        if (
+            preparation is SwapPreparation.ORIGINAL_MOVED_TO_OLD
+            and old_dst.exists()
+            and not dst.exists()
+        ):
             try:
                 old_dst.rename(dst)
                 logger.warning(

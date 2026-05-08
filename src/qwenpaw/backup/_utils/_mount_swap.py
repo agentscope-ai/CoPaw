@@ -22,6 +22,7 @@ import errno
 import logging
 import os
 import shutil
+from enum import Enum
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,14 @@ _VALID_STATES = frozenset(
 )
 
 
+class SwapPreparation(Enum):
+    """Result of preparing a restore destination for commit."""
+
+    READY_TO_INSTALL = "ready_to_install"
+    ORIGINAL_MOVED_TO_OLD = "original_moved_to_old"
+    CONTENT_SWAP_COMPLETED = "content_swap_completed"
+
+
 def is_mount_point(path: Path) -> bool:
     """Return True when *path* is a filesystem mount point."""
     try:
@@ -77,22 +86,22 @@ def prepare_destination_for_swap(
     dst: Path,
     tmp_dst: Path,
     old_dst: Path,
-) -> tuple[bool, bool]:
+) -> SwapPreparation:
     """Prepare *dst* for normal rename swap, or handle mount fallback.
 
-    Returns ``(handled, renamed_to_old)``.  ``handled`` means the mount-point
-    content swap already completed and the caller should return.
+    ``CONTENT_SWAP_COMPLETED`` means the mount-point content swap already
+    completed and the caller should return.
     """
     if not dst.exists():
-        return False, False
+        return SwapPreparation.READY_TO_INSTALL
 
     if is_mount_point(dst):
         swap_mount_point_contents(dst, tmp_dst)
-        return True, False
+        return SwapPreparation.CONTENT_SWAP_COMPLETED
 
     try:
         dst.rename(old_dst)
-        return False, True
+        return SwapPreparation.ORIGINAL_MOVED_TO_OLD
     except OSError as exc:
         if not is_rename_blocked(exc):
             raise
@@ -101,7 +110,7 @@ def prepare_destination_for_swap(
             dst,
         )
         swap_mount_point_contents(dst, tmp_dst)
-        return True, False
+        return SwapPreparation.CONTENT_SWAP_COMPLETED
 
 
 def swap_mount_point_contents(dst: Path, tmp_dst: Path) -> None:
