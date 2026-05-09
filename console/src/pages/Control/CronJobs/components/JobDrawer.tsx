@@ -9,21 +9,29 @@ import {
   Checkbox,
 } from "@agentscope-ai/design";
 import { DatePicker, TimePicker } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
-import type { CronJobSpecOutput } from "../../../../api/types";
+import type {
+  CronDispatchTargetItem,
+  CronJobSpecOutput,
+} from "../../../../api/types";
 import { DEFAULT_FORM_VALUES } from "./constants";
 import { useTimezoneOptions } from "../../../../hooks/useTimezoneOptions";
 import styles from "../index.module.less";
 
 type CronJob = CronJobSpecOutput;
+type SelectOption = { value: string; label: string };
 
 interface JobDrawerProps {
   open: boolean;
   editingJob: CronJob | null;
   form: FormInstance<CronJob>;
   saving: boolean;
+  targetItems: CronDispatchTargetItem[];
+  targetChannels: string[];
+  targetsLoading: boolean;
+  onReloadTargets: () => Promise<void>;
   onClose: () => void;
   onSubmit: (values: CronJob) => void;
 }
@@ -33,20 +41,90 @@ export function JobDrawer({
   editingJob,
   form,
   saving,
+  targetItems,
+  targetChannels,
+  targetsLoading,
+  onReloadTargets,
   onClose,
   onSubmit,
 }: JobDrawerProps) {
   const { t } = useTranslation();
   const timezoneOptions = useTimezoneOptions();
   const [saveInboxTouched, setSaveInboxTouched] = useState(false);
+  const [channelSearch, setChannelSearch] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [sessionSearch, setSessionSearch] = useState("");
+  const selectedChannel = Form.useWatch(["dispatch", "channel"], form);
+  const selectedTargetUserId = Form.useWatch(
+    ["dispatch", "target", "user_id"],
+    form,
+  );
 
   const isEdit = !!editingJob;
 
   useEffect(() => {
     if (open) {
       setSaveInboxTouched(false);
+      setChannelSearch("");
+      setUserSearch("");
+      setSessionSearch("");
+      onReloadTargets().catch((error) =>
+        console.error("Failed to reload cron dispatch targets", error),
+      );
     }
-  }, [open, editingJob?.id]);
+  }, [open, editingJob?.id, onReloadTargets]);
+
+  const mergeOptions = (
+    values: Iterable<string>,
+    selectedValue?: string,
+    searchValue?: string,
+  ): SelectOption[] => {
+    const merged = new Set<string>();
+    Array.from(values).forEach((value) => {
+      if (value?.trim()) {
+        merged.add(value.trim());
+      }
+    });
+    if (selectedValue?.trim()) {
+      merged.add(selectedValue.trim());
+    }
+    if (searchValue?.trim()) {
+      merged.add(searchValue.trim());
+    }
+    return [...merged].sort().map((value) => ({ value, label: value }));
+  };
+
+  const channelOptions = useMemo(() => {
+    return mergeOptions(targetChannels, selectedChannel, channelSearch);
+  }, [channelSearch, selectedChannel, targetChannels]);
+
+  const userOptions = useMemo(() => {
+    const options = new Set<string>();
+    targetItems.forEach((item) => {
+      if (!selectedChannel || item.channel === selectedChannel) {
+        options.add(item.user_id);
+      }
+    });
+    return mergeOptions(options, selectedTargetUserId, userSearch);
+  }, [targetItems, selectedChannel, selectedTargetUserId, userSearch]);
+
+  const sessionOptions = useMemo(() => {
+    const options = new Set<string>();
+    targetItems.forEach((item) => {
+      if (
+        (!selectedChannel || item.channel === selectedChannel) &&
+        (!selectedTargetUserId || item.user_id === selectedTargetUserId)
+      ) {
+        options.add(item.session_id);
+      }
+    });
+    const selectedSessionId: string | undefined = form.getFieldValue([
+      "dispatch",
+      "target",
+      "session_id",
+    ]);
+    return mergeOptions(options, selectedSessionId, sessionSearch);
+  }, [form, selectedChannel, selectedTargetUserId, sessionSearch, targetItems]);
 
   return (
     <Drawer
@@ -542,7 +620,20 @@ export function JobDrawer({
           ]}
           tooltip={t("cronJobs.dispatchChannelTooltip")}
         >
-          <Input placeholder="console" />
+          <Select
+            showSearch
+            loading={targetsLoading}
+            placeholder="console"
+            options={channelOptions}
+            onSearch={setChannelSearch}
+            onBlur={() => setChannelSearch("")}
+            notFoundContent="输入自定义值后按 Enter"
+            filterOption={(input, option) =>
+              (option?.label?.toString() || "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          />
         </Form.Item>
 
         <Form.Item
@@ -551,7 +642,20 @@ export function JobDrawer({
           rules={[{ required: true, message: t("cronJobs.pleaseInputUserId") }]}
           tooltip={t("cronJobs.dispatchTargetUserIdTooltip")}
         >
-          <Input placeholder="admin" />
+          <Select
+            showSearch
+            loading={targetsLoading}
+            placeholder="admin"
+            options={userOptions}
+            onSearch={setUserSearch}
+            onBlur={() => setUserSearch("")}
+            notFoundContent="输入自定义值后按 Enter"
+            filterOption={(input, option) =>
+              (option?.label?.toString() || "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          />
         </Form.Item>
 
         <Form.Item
@@ -562,7 +666,20 @@ export function JobDrawer({
           ]}
           tooltip={t("cronJobs.dispatchTargetSessionIdTooltip")}
         >
-          <Input placeholder="default" />
+          <Select
+            showSearch
+            loading={targetsLoading}
+            placeholder="default"
+            options={sessionOptions}
+            onSearch={setSessionSearch}
+            onBlur={() => setSessionSearch("")}
+            notFoundContent="输入自定义值后按 Enter"
+            filterOption={(input, option) =>
+              (option?.label?.toString() || "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          />
         </Form.Item>
 
         <Form.Item

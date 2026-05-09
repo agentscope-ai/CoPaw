@@ -72,6 +72,17 @@ export interface CronJobExecutionRecord {
   trigger?: "scheduled" | "manual";
 }
 
+export interface CronDispatchTargetItem {
+  channel: string;
+  user_id: string;
+  session_id: string;
+}
+
+export interface CronDispatchTargetsResponse {
+  channels: string[];
+  items: CronDispatchTargetItem[];
+}
+
 export type CronJobSpecInputLegacy = Record<string, unknown>;
 export type CronJobSpecOutputLegacy = Record<string, unknown>;
 export type CronJobViewLegacy = Record<string, unknown>;

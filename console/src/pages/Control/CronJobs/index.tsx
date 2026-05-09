@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Button,
   Card,
@@ -18,6 +18,7 @@ import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import type {
+  CronDispatchTargetItem,
   CronJobExecutionRecord,
   CronJobSpecOutput,
 } from "../../../api/types";
@@ -90,6 +91,9 @@ function CronJobsPage() {
   const [userTimezone, setUserTimezone] = useState("UTC");
   const [form] = Form.useForm<CronJob>();
   const userTimezoneRef = useRef("UTC");
+  const [targetItems, setTargetItems] = useState<CronDispatchTargetItem[]>([]);
+  const [targetChannels, setTargetChannels] = useState<string[]>(["console"]);
+  const [targetsLoading, setTargetsLoading] = useState(false);
 
   const isOneTimeJob = (job: CronJob): job is OneTimeCronJob =>
     job.schedule?.type === "once" && typeof job.schedule?.run_at === "string";
@@ -106,6 +110,25 @@ function CronJobsPage() {
       })
       .catch((err) => console.error("Failed to fetch user timezone:", err));
   }, []);
+
+  const loadDispatchTargets = useCallback(async () => {
+    setTargetsLoading(true);
+    try {
+      const res = await api.listCronDispatchTargets();
+      setTargetItems(res?.items || []);
+      setTargetChannels(res?.channels?.length ? res.channels : ["console"]);
+    } catch (error) {
+      console.error("Failed to fetch cron dispatch targets", error);
+      setTargetItems([]);
+      setTargetChannels(["console"]);
+    } finally {
+      setTargetsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDispatchTargets();
+  }, [loadDispatchTargets]);
 
   const handleCreate = () => {
     setEditingJob(null);
@@ -702,6 +725,10 @@ function CronJobsPage() {
         editingJob={editingJob}
         form={form}
         saving={saving}
+        targetItems={targetItems}
+        targetChannels={targetChannels}
+        targetsLoading={targetsLoading}
+        onReloadTargets={loadDispatchTargets}
         onClose={handleDrawerClose}
         onSubmit={handleSubmit}
       />

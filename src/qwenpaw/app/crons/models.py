@@ -262,3 +262,14 @@ class CronExecutionRecord(BaseModel):
 class CronJobView(BaseModel):
     spec: CronJobSpec
     state: CronJobState = Field(default_factory=CronJobState)
+
+
+class CronDispatchTargetItem(BaseModel):
+    channel: str
+    user_id: str
+    session_id: str
+
+
+class CronDispatchTargetsResponse(BaseModel):
+    channels: list[str] = Field(default_factory=list)
+    items: list[CronDispatchTargetItem] = Field(default_factory=list)

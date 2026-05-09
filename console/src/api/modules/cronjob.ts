@@ -1,5 +1,6 @@
 import { request } from "../request";
 import type {
+  CronDispatchTargetsResponse,
   CronJobExecutionRecord,
   CronJobSpecInput,
   CronJobSpecOutput,
@@ -56,4 +57,17 @@ export const cronJobApi = {
     request<CronJobExecutionRecord[]>(
       `/cron/jobs/${encodeURIComponent(jobId)}/history`,
     ),
+
+  listCronDispatchTargets: (params?: {
+    channel?: string;
+    keyword?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.channel) searchParams.append("channel", params.channel);
+    if (params?.keyword) searchParams.append("keyword", params.keyword);
+    const query = searchParams.toString();
+    return request<CronDispatchTargetsResponse>(
+      `/cron/dispatch-targets${query ? `?${query}` : ""}`,
+    );
+  },
 };
