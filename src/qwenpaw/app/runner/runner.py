@@ -123,6 +123,22 @@ class AgentRunner(Runner):
         self.memory_manager: BaseMemoryManager | None = None
         self.context_manager: BaseContextManager | None = None
         self._task_tracker = task_tracker  # Task tracker for background tasks
+        self._agent_name: str | None = None
+
+    @property
+    def agent_name(self) -> str:
+        """Agent display name from config, cached after first access."""
+        if self._agent_name is None:
+            try:
+                cfg = load_agent_config(self.agent_id)
+                self._agent_name = cfg.name if cfg and cfg.name else "QwenPaw"
+            except Exception:
+                self._agent_name = "QwenPaw"
+        return self._agent_name
+
+    def invalidate_agent_name_cache(self) -> None:
+        """Clear cached agent_name so next access re-reads config."""
+        self._agent_name = None
 
     def set_chat_manager(self, chat_manager):
         """Set chat manager for auto-registration.
@@ -182,8 +198,8 @@ class AgentRunner(Runner):
         user_input = parts[1] if len(parts) > 1 else ""
         return (name, user_input) if name else None
 
-    @staticmethod
     def _maybe_inject_skill(
+        self,
         query: str | None,
         msgs: list,
         skills: dict,
@@ -231,7 +247,7 @@ class AgentRunner(Runner):
             desc = post.get("description") or "No description."
             logger.info("Skill info: %s", name)
             return Msg(
-                name="Friday",
+                name=self.agent_name,
                 role="assistant",
                 content=[
                     TextBlock(
@@ -419,6 +435,7 @@ class AgentRunner(Runner):
                 agent_id=self.agent_id,
                 rewrite_fn=self._rewrite_last_message_text,
                 session_id=session_id,
+                agent_name=self.agent_name,
             )
             if isinstance(mission_result, Msg):
                 yield mission_result, True
