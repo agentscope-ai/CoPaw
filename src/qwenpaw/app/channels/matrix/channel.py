@@ -683,8 +683,7 @@ class MatrixChannel(BaseChannel):
             ),
         )
         logger.info(
-            "MatrixChannel: key verification to-device "
-            "callback registered",
+            "MatrixChannel: key verification to-device callback registered",
         )
         logger.info(
             "MatrixChannel: E2EE enabled, "
