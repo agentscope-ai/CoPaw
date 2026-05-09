@@ -1,10 +1,7 @@
 import { Button, Form } from "@agentscope-ai/design";
 import { Spin } from "antd";
 import { useTheme } from "../../../../contexts/ThemeContext";
-import {
-  useChannelQrcode,
-  type ChannelQrcodeConfig,
-} from "./useChannelQrcode";
+import { useChannelQrcode, type ChannelQrcodeConfig } from "./useChannelQrcode";
 
 interface QrcodeAuthBlockProps extends ChannelQrcodeConfig {
   /** Form.Item label text */
@@ -53,9 +50,7 @@ export function QrcodeAuthBlock({
             style={{
               marginTop: 8,
               fontSize: 12,
-              color: isDark
-                ? "rgba(255,255,255,0.45)"
-                : "rgba(0,0,0,0.45)",
+              color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)",
             }}
           >
             {hintText}
