@@ -773,7 +773,8 @@ class TestMatrixChannelSend:
         matrix_channel,
         mock_async_client,
     ):
-        """When local room is not flagged encrypted, fetch m.room.encryption."""
+        """When local room is not flagged encrypted,
+        fetch m.room.encryption from server."""
         room_id = "!room:example.com"
         room = MagicMock()
         room.encrypted = False
