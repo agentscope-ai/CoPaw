@@ -12,7 +12,7 @@ import { Alert, ConfigProvider, Spin } from "antd";
 import { LinkOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import type { FormInstance } from "antd";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { getChannelLabel, type ChannelKey } from "./constants";
 import { useChannelQrcode } from "./useChannelQrcode";
 import styles from "../index.module.less";
@@ -200,6 +200,16 @@ export function ChannelDrawer({
       [message, t],
     ),
   });
+
+  // Stop all QR code polling when drawer closes
+  useEffect(() => {
+    if (!open) {
+      wechatQrcode.reset();
+      dingtalkQrcode.reset();
+      wecomQrcode.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // ── Access control fields (shared across multiple channels) ──────────────
 
