@@ -3259,54 +3259,17 @@ async def _action_batch(  # pylint: disable=too-many-nested-blocks
                 ] = f"Unknown batch sub-action: {sub_action}"
 
             # Parse helper response into step_result
-            if resp is not None:
+            if resp is not None and resp.content:
                 try:
-                    resp_data = json.loads(resp.content)
+                    # ToolResponse content is a list of TextBlocks; extract text from the first one
+                    raw_text = resp.content[0].text
+                    resp_data = json.loads(raw_text)
                     if isinstance(resp_data, dict):
-                        step_result["ok"] = resp_data.get("ok", False)
-                        if not step_result["ok"] and "error" in resp_data:
-                            step_result["error"] = resp_data["error"]
-                        if "message" in resp_data:
-                            step_result["message"] = resp_data["message"]
-                        if "url" in resp_data:
-                            step_result["url"] = resp_data["url"]
-                        if "snapshot" in resp_data:
-                            step_result["snapshot"] = resp_data["snapshot"]
-                        if "refs" in resp_data:
-                            step_result["refs"] = resp_data["refs"]
-                        if "result" in resp_data:
-                            step_result["result"] = resp_data["result"]
-                        if "path" in resp_data:
-                            step_result["path"] = resp_data["path"]
-                        if "filename" in resp_data:
-                            step_result["filename"] = resp_data["filename"]
-                except (json.JSONDecodeError, AttributeError):
-                    step_result["error"] = "Failed to parse action response"
-
-            # Parse helper response into step_result
-            if resp is not None:
-                try:
-                    resp_data = json.loads(resp.content)
-                    if isinstance(resp_data, dict):
-                        step_result["ok"] = resp_data.get("ok", False)
-                        if not step_result["ok"] and "error" in resp_data:
-                            step_result["error"] = resp_data["error"]
-                        if "message" in resp_data:
-                            step_result["message"] = resp_data["message"]
-                        if "url" in resp_data:
-                            step_result["url"] = resp_data["url"]
-                        if "snapshot" in resp_data:
-                            step_result["snapshot"] = resp_data["snapshot"]
-                        if "refs" in resp_data:
-                            step_result["refs"] = resp_data["refs"]
-                        if "result" in resp_data:
-                            step_result["result"] = resp_data["result"]
-                        if "path" in resp_data:
-                            step_result["path"] = resp_data["path"]
-                        if "filename" in resp_data:
-                            step_result["filename"] = resp_data["filename"]
-                except (json.JSONDecodeError, AttributeError):
-                    step_result["error"] = "Failed to parse action response"
+                        step_result.update(resp_data)
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    step_result[
+                        "error"
+                    ] = "Failed to parse sub-action response"
 
         except Exception as e:
             step_result["error"] = str(e)
