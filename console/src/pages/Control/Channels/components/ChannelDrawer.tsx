@@ -201,6 +201,34 @@ export function ChannelDrawer({
     ),
   });
 
+  // Feishu QR code hook
+  const feishuQrcode = useChannelQrcode({
+    channel: "feishu",
+    successStatus: "success",
+    successCredentialKey: "app_id",
+    pollInterval: 3000,
+    onSuccess: useCallback(
+      (credentials: Record<string, string>) => {
+        form.setFieldsValue({
+          app_id: credentials.app_id,
+          app_secret: credentials.app_secret,
+        });
+        message.success(t("channels.feishuAuthSuccess"));
+      },
+      [form, message, t],
+    ),
+    onError: useCallback(
+      (type: "fetch" | "expired") => {
+        if (type === "expired") {
+          message.warning(t("channels.feishuQrcodeExpired"));
+        } else {
+          message.error(t("channels.feishuQrcodeFailed"));
+        }
+      },
+      [message, t],
+    ),
+  });
+
   // ── Access control fields (shared across multiple channels) ──────────────
 
   const renderAccessControlFields = () => (
@@ -491,6 +519,49 @@ export function ChannelDrawer({
                   {t("channels.feishuInternational")}
                 </Select.Option>
               </Select>
+            </Form.Item>
+            <ConfigProvider prefixCls="ant">
+              <Alert
+                type="info"
+                showIcon
+                message={t("channels.feishuScanGuide")}
+                style={{ marginBottom: 16 }}
+              />
+            </ConfigProvider>
+            <Form.Item label={t("channels.feishuScanLogin")}>
+              <Button
+                type="primary"
+                block
+                loading={feishuQrcode.loading}
+                onClick={feishuQrcode.fetchQrcode}
+              >
+                {t("channels.feishuGetQrcode")}
+              </Button>
+              {feishuQrcode.loading && (
+                <div style={{ textAlign: "center", marginTop: 12 }}>
+                  <Spin />
+                </div>
+              )}
+              {feishuQrcode.qrcodeImg && !feishuQrcode.loading && (
+                <div style={{ textAlign: "center", marginTop: 12 }}>
+                  <img
+                    src={`data:image/png;base64,${feishuQrcode.qrcodeImg}`}
+                    alt="Feishu QR Code"
+                    style={{ width: 200, height: 200 }}
+                  />
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: isDark
+                        ? "rgba(255,255,255,0.45)"
+                        : "rgba(0,0,0,0.45)",
+                    }}
+                  >
+                    {t("channels.feishuScanHint")}
+                  </div>
+                </div>
+              )}
             </Form.Item>
             <Form.Item
               name="app_id"
@@ -1325,6 +1396,7 @@ export function ChannelDrawer({
       onClose={onClose}
       destroyOnClose
       footer={drawerFooter}
+      key={activeKey} // Force remount when switching channels
     >
       {activeKey && (
         <Form

@@ -23,7 +23,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-socks>=2.5.3",
     "onnxruntime<1.24",
-    "lark-oapi>=1.5.3",
+    "lark-oapi>=1.5.5",
     "python-telegram-bot>=20.0",
     "twilio>=9.10.2",
     "pywebview>=4.0",
