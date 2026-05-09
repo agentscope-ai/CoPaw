@@ -93,14 +93,22 @@ def _find_free_port(host: str = "127.0.0.1") -> int:
         return sock.getsockname()[1]
 
 
+def _connect_host_for_bind_host(host: str) -> str:
+    """Return a TCP connect target for a server bound to *host*."""
+    if host == "0.0.0.0":
+        return "127.0.0.1"
+    return host
+
+
 def _wait_for_http(host: str, port: int, timeout_sec: float = 300.0) -> bool:
     """Return True when something accepts TCP on host:port."""
+    connect_host = _connect_host_for_bind_host(host)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(2.0)
-                s.connect((host, port))
+                s.connect((connect_host, port))
                 return True
         except (OSError, socket.error):
             time.sleep(1)
@@ -159,7 +167,7 @@ def desktop_cmd(
     setup_logger(log_level)
 
     port = _find_free_port(host)
-    url = f"http://{host}:{port}"
+    url = f"http://{_connect_host_for_bind_host(host)}:{port}"
     click.echo(f"Starting QwenPaw app on {url} (port {port})")
     logger.info("Server subprocess starting...")
 
