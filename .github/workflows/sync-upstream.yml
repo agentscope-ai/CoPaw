@@ -1,0 +1,33 @@
+name: Sync with Upstream
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # Every 2 hours
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+      - name: Add Upstream Remote
+        run: git remote add upstream https://github.com/agentscope-ai/QwenPaw.git
+        
+      - name: Fetch and Merge Upstream
+        run: |
+          git fetch upstream
+          git checkout main
+          git merge upstream/main --no-edit || echo "Merge failed or conflict"
+          
+      - name: Push Changes
+        run: git push origin main
