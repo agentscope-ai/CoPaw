@@ -1,0 +1,18 @@
+{
+  "id": "memory-distill-tool",
+  "name": "Memory Distillation Tool",
+  "version": "1.0.0",
+  "description": "Advanced memory consolidation for agent daily notes. Features title-diffing distillation, incremental MEMORY.md updates, and three-tier memory classification.",
+  "author": "QwenPaw Community",
+  "entry": {
+    "backend": "plugin.py"
+  },
+  "dependencies": [],
+  "min_version": "1.1.6",
+  "meta": {
+    "tool_name": "consolidate_memory",
+    "tool_description": "Consolidate agent memory by distilling daily notes into MEMORY.md. Uses title-diffing to detect genuinely new information with ~92% noise reduction.",
+    "tool_icon": "🧠",
+    "requires_config": false
+  }
+}
