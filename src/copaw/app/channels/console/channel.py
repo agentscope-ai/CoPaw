@@ -25,6 +25,7 @@ from ....config.config import ConsoleConfig as ConsoleChannelConfig
 from ...console_push_store import append as push_store_append
 from ....constant import DEFAULT_MEDIA_DIR
 from ..base import (
+    AudioContent,
     BaseChannel,
     ContentType,
     FileContent,
@@ -215,11 +216,10 @@ class ConsoleChannel(BaseChannel):
                     None,
                 )
                 if url:
-                    # Todo: support local audio file
-                    return FileContent(
-                        type=ContentType.FILE,
-                        filename=getattr(part, "filename", None) or url,
-                        file_url=str(self._media_dir / url),
+                    return AudioContent(
+                        type=ContentType.AUDIO,
+                        data=str(self._media_dir / url),
+                        format=getattr(part, "format", None),
                     )
             elif content_type == ContentType.FILE:
                 url = getattr(part, "file_url", None)
@@ -381,7 +381,7 @@ class ConsoleChannel(BaseChannel):
             elif t == ContentType.VIDEO and getattr(p, "video_url", None):
                 print(f"{_YELLOW}🎬 [Video: {p.video_url}]{_RESET}")
             elif t == ContentType.AUDIO and getattr(p, "data", None):
-                print(f"{_YELLOW}🔊 [Audio]{_RESET}")
+                print(f"{_YELLOW}🔊 [Audio: {p.data}]{_RESET}")
             elif t == ContentType.FILE:
                 url = (
                     getattr(p, "file_url", None)
