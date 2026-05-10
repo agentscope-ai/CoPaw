@@ -166,7 +166,7 @@ async def download_file_from_base64(
         download_path.mkdir(parents=True, exist_ok=True)
 
         if not filename:
-            file_hash = hashlib.md5(file_content).hexdigest()
+            file_hash = hashlib.sha256(file_content).hexdigest()
             filename = f"file_{file_hash}"
 
         local_file_path = download_path / filename
@@ -215,7 +215,7 @@ async def download_file_from_url(
             filename = (
                 url_filename
                 if url_filename
-                else f"file_{hashlib.md5(url.encode()).hexdigest()}"
+                else f"file_{hashlib.sha256(url.encode()).hexdigest()}"
             )
         local_file_path = download_path / filename
         _download_remote_to_path(url, local_file_path)

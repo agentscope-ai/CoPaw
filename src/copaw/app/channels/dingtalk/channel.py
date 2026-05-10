@@ -2424,7 +2424,7 @@ class DingTalkChannel(BaseChannel):
         )
         if not url:
             return None
-        key = hashlib.md5(
+        key = hashlib.sha256(
             (download_code + robot_code).encode(),
         ).hexdigest()[:24]
         return await self._download_media_to_local(
