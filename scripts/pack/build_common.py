@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# pylint:disable=too-many-statements
 """
-Create a temporary conda env, install CoPaw from a wheel, run conda-pack.
+Create a temporary conda env, install QwenPaw from a wheel, run conda-pack.
 Used by build_macos.sh and build_win.ps1. Run from repo root.
 """
 from __future__ import annotations
@@ -15,7 +16,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ENV_PREFIX = "copaw_pack_"
+ENV_PREFIX = "qwenpaw_pack_"
 
 # Packages affected by conda-unpack bug on Windows (conda-pack Issue #154)
 # conda-unpack modifies Python source files to replace path prefixes, but uses
@@ -26,6 +27,7 @@ ENV_PREFIX = "copaw_pack_"
 # See: issue.md and https://github.com/conda/conda-pack/issues/154
 CONDA_UNPACK_AFFECTED_PACKAGES = [
     "huggingface_hub",  # file_download.py, _local_folder.py use Windows long path prefix
+    "discord.py",       # ARG_NAME_SUBREGEX contains \\?\* which gets corrupted
 ]
 
 
@@ -37,8 +39,16 @@ def _conda_exe() -> str:
     return "conda"
 
 
-def _run(cmd: list[str], cwd: Path | None = None) -> None:
-    subprocess.run(cmd, cwd=cwd or REPO_ROOT, check=True)
+def _run(
+    cmd: list[str],
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> None:
+    """Run command with optional environment variable overrides."""
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+    subprocess.run(cmd, cwd=cwd or REPO_ROOT, env=run_env, check=True)
 
 
 def _pick_wheel(wheel_arg: str | None) -> Path:
@@ -51,7 +61,7 @@ def _pick_wheel(wheel_arg: str | None) -> Path:
         return wheel_path
 
     wheels = sorted(
-        (REPO_ROOT / "dist").glob("copaw-*.whl"),
+        (REPO_ROOT / "dist").glob("qwenpaw-*.whl"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -64,7 +74,7 @@ def _pick_wheel(wheel_arg: str | None) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Conda-pack CoPaw (temp env).",
+        description="Conda-pack QwenPaw (temp env).",
     )
     parser.add_argument(
         "--output",
@@ -89,7 +99,7 @@ def main() -> int:
         default=None,
         help=(
             "Wheel path to install. If omitted, pick the newest "
-            "dist/copaw-*.whl."
+            "dist/qwenpaw-*.whl."
         ),
     )
     parser.add_argument(
@@ -122,6 +132,11 @@ def main() -> int:
                 "-y",
             ],
         )
+        # Install qwenpaw with all dependencies
+        # Scope CMAKE_ARGS to this specific command to avoid affecting other
+        # CMake-based packages. Only set if we need to compile from source.
+        install_env = {}
+
         _run(
             [
                 conda,
@@ -132,22 +147,9 @@ def main() -> int:
                 "-m",
                 "pip",
                 "install",
-                "--upgrade",
-                "pip",
+                f"qwenpaw[full] @ {wheel_uri}",
             ],
-        )
-        _run(
-            [
-                conda,
-                "run",
-                "-n",
-                env_name,
-                "python",
-                "-m",
-                "pip",
-                "install",
-                f"copaw[full] @ {wheel_uri}",
-            ],
+            env=install_env,
         )
         print("Verifying certifi is installed (required for SSL)...")
         _run(
@@ -184,6 +186,23 @@ def main() -> int:
                     str(wheels_cache),
                 ],
             )
+        # pip may uninstall/reinstall files owned by conda while resolving
+        # qwenpaw[full]. Restore conda-managed packaging tools before packing.
+        _run(
+            [
+                conda,
+                "run",
+                "-n",
+                env_name,
+                conda,
+                "install",
+                "-y",
+                "--force-reinstall",
+                "pip",
+                "setuptools",
+                "wheel",
+            ],
+        )
         _run(
             [
                 conda,

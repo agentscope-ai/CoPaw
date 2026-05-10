@@ -1,10 +1,47 @@
 import { request } from "../request";
 import { getApiUrl } from "../config";
+import { buildAuthHeaders } from "../authHeaders";
 import type { MdFileInfo, MdFileContent, DailyMemoryFile } from "../types";
+
+function getSelectedAgentId(): string {
+  try {
+    // Read from sessionStorage first (per-tab agent), fall back to localStorage
+    const agentStorage =
+      sessionStorage.getItem("qwenpaw-agent-storage") ||
+      localStorage.getItem("qwenpaw-agent-storage");
+    if (agentStorage) {
+      const parsed = JSON.parse(agentStorage);
+      const selectedAgent = parsed?.state?.selectedAgent;
+      if (selectedAgent) {
+        return selectedAgent;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to get selected agent from storage:", error);
+  }
+  return "default";
+}
+
+function generateFallbackFilename(): string {
+  const agentId = getSelectedAgentId();
+  const now = new Date();
+  const timestamp = now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..+/, "")
+    .replace("T", "_")
+    .slice(0, 15); // YYYYMMDD_HHMMSS
+  return `qwenpaw_workspace_${agentId}_${timestamp}.zip`;
+}
+
+export interface WorkspaceDownloadResult {
+  blob: Blob;
+  filename: string;
+}
 
 export const workspaceApi = {
   listFiles: () =>
-    request<MdFileInfo[]>("/agent/files").then((files) =>
+    request<MdFileInfo[]>("/workspace/files").then((files) =>
       files.map((file) => ({
         ...file,
         updated_at: new Date(file.modified_time).getTime(),
@@ -12,11 +49,11 @@ export const workspaceApi = {
     ),
 
   loadFile: (fileName: string) =>
-    request<MdFileContent>(`/agent/files/${encodeURIComponent(fileName)}`),
+    request<MdFileContent>(`/workspace/files/${encodeURIComponent(fileName)}`),
 
   saveFile: (fileName: string, content: string) =>
     request<Record<string, unknown>>(
-      `/agent/files/${encodeURIComponent(fileName)}`,
+      `/workspace/files/${encodeURIComponent(fileName)}`,
       {
         method: "PUT",
         body: JSON.stringify({ content }),
@@ -24,9 +61,10 @@ export const workspaceApi = {
     ),
 
   // Workspace package download
-  downloadWorkspace: async (): Promise<Blob> => {
+  downloadWorkspace: async (): Promise<WorkspaceDownloadResult> => {
     const response = await fetch(getApiUrl("/workspace/download"), {
       method: "GET",
+      headers: buildAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -35,7 +73,24 @@ export const workspaceApi = {
       );
     }
 
-    return await response.blob();
+    const blob = await response.blob();
+
+    // Extract filename from Content-Disposition header
+    const disposition = response.headers.get("Content-Disposition");
+    let filename: string;
+
+    if (disposition) {
+      const filenameMatch = disposition.match(/filename="(.+?)"/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1];
+      } else {
+        filename = generateFallbackFilename();
+      }
+    } else {
+      filename = generateFallbackFilename();
+    }
+
+    return { blob, filename };
   },
 
   // File upload functionality
@@ -47,6 +102,7 @@ export const workspaceApi = {
 
     const response = await fetch(getApiUrl("/workspace/upload"), {
       method: "POST",
+      headers: buildAuthHeaders(),
       body: formData,
     });
 
@@ -61,7 +117,7 @@ export const workspaceApi = {
   },
 
   listDailyMemory: () =>
-    request<MdFileInfo[]>("/agent/memory").then((files) =>
+    request<MdFileInfo[]>("/workspace/memory").then((files) =>
       files.map((file) => {
         const date = file.filename.replace(".md", "");
         return {
@@ -73,11 +129,11 @@ export const workspaceApi = {
     ),
 
   loadDailyMemory: (date: string) =>
-    request<MdFileContent>(`/agent/memory/${encodeURIComponent(date)}.md`),
+    request<MdFileContent>(`/workspace/memory/${encodeURIComponent(date)}.md`),
 
   saveDailyMemory: (date: string, content: string) =>
     request<Record<string, unknown>>(
-      `/agent/memory/${encodeURIComponent(date)}.md`,
+      `/workspace/memory/${encodeURIComponent(date)}.md`,
       {
         method: "PUT",
         body: JSON.stringify({ content }),
@@ -85,10 +141,11 @@ export const workspaceApi = {
     ),
 
   // System prompt files management
-  getSystemPromptFiles: () => request<string[]>("/agent/system-prompt-files"),
+  getSystemPromptFiles: () =>
+    request<string[]>("/workspace/system-prompt-files"),
 
   setSystemPromptFiles: (files: string[]) =>
-    request<string[]>("/agent/system-prompt-files", {
+    request<string[]>("/workspace/system-prompt-files", {
       method: "PUT",
       body: JSON.stringify(files),
     }),

@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { SaveOutlined } from "@ant-design/icons";
-import { Select, Button, message } from "@agentscope-ai/design";
+import { Select, Button, Card } from "@agentscope-ai/design";
 import type { ModelSlotRequest } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
+import { useAppMessage } from "../../../../../hooks/useAppMessage";
+import { confirmFreeModelSwitch } from "@/utils/freeModelSwitchWarning";
 import styles from "../../index.module.less";
 
 interface ModelsSectionProps {
   providers: Array<{
     id: string;
     name: string;
-    models?: Array<{ id: string; name: string }>;
-    extra_models?: Array<{ id: string; name: string }>;
+    models?: Array<{ id: string; name: string; is_free?: boolean }>;
+    extra_models?: Array<{ id: string; name: string; is_free?: boolean }>;
     base_url?: string;
     api_key?: string;
     is_custom: boolean;
@@ -41,6 +43,7 @@ export function ModelsSection({
     undefined,
   );
   const [dirty, setDirty] = useState(false);
+  const { message } = useAppMessage();
 
   const currentSlot = activeModels?.active_llm;
 
@@ -50,7 +53,6 @@ export function ModelsSection({
         const hasModels =
           (p.models?.length ?? 0) + (p.extra_models?.length ?? 0) > 0;
         if (!hasModels) return false;
-        if (p.is_local) return true;
         if (p.require_api_key === false) return !!p.base_url;
         if (p.is_custom) return !!p.base_url;
         if (p.require_api_key ?? true) return !!p.api_key;
@@ -88,9 +90,25 @@ export function ModelsSection({
   const handleSave = async () => {
     if (!selectedProviderId || !selectedModel) return;
 
+    const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+    const selectedModelInfo = [
+      ...(selectedProvider?.models ?? []),
+      ...(selectedProvider?.extra_models ?? []),
+    ].find((model) => model.id === selectedModel);
+
+    if (selectedProvider && selectedModelInfo) {
+      const confirmed = await confirmFreeModelSwitch({
+        provider: selectedProvider,
+        model: selectedModelInfo,
+        t,
+      });
+      if (!confirmed) return;
+    }
+
     const body: ModelSlotRequest = {
       provider_id: selectedProviderId,
       model: selectedModel,
+      scope: "global",
     };
 
     setSaving(true);
@@ -115,19 +133,7 @@ export function ModelsSection({
   const canSave = dirty && !!selectedProviderId && !!selectedModel;
 
   return (
-    <div className={styles.slotSection}>
-      <div className={styles.slotHeader}>
-        <h3 className={styles.slotTitle}>{t("models.llmConfiguration")}</h3>
-        {currentSlot?.provider_id && currentSlot?.model && (
-          <span className={styles.slotCurrent}>
-            {t("models.active", {
-              provider: currentSlot.provider_id,
-              model: currentSlot.model,
-            })}
-          </span>
-        )}
-      </div>
-
+    <Card className={styles.slotSection} title={t("models.defaultLlm")}>
       <div className={styles.slotForm}>
         <div className={styles.slotField}>
           <label className={styles.slotLabel}>{t("models.provider")}</label>
@@ -162,11 +168,10 @@ export function ModelsSection({
           />
         </div>
 
-        <div
-          className={styles.slotField}
-          style={{ flex: "0 0 auto", minWidth: "120px" }}
-        >
-          <label className={styles.slotLabel} style={{ visibility: "hidden" }}>
+        <div className={[styles.slotField, styles.slotActionField].join(" ")}>
+          <label
+            className={[styles.slotLabel, styles.visuallyHiddenLabel].join(" ")}
+          >
             {t("models.actions")}
           </label>
           <Button
@@ -181,6 +186,7 @@ export function ModelsSection({
           </Button>
         </div>
       </div>
-    </div>
+      <p className={styles.slotDescription}>{t("models.llmDescription")}</p>
+    </Card>
   );
 }

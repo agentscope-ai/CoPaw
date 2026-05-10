@@ -1,0 +1,33 @@
+export const CHANNELS = {
+  imessage: "imessage",
+  discord: "discord",
+  dingtalk: "dingtalk",
+  feishu: "feishu",
+  qq: "qq",
+  telegram: "telegram",
+  mattermost: "mattermost",
+  mqtt: "mqtt",
+  console: "console",
+  matrix: "matrix",
+  voice: "voice",
+  sip: "sip",
+  wecom: "wecom",
+  xiaoyi: "xiaoyi",
+};
+
+export const CHANNEL_COLORS: Record<string, string> = {
+  imessage: "geekblue",
+  discord: "blue",
+  dingtalk: "green",
+  feishu: "volcano",
+  qq: "gold",
+  telegram: "geekblue",
+  mattermost: "purple",
+  mqtt: "orange",
+  console: "green",
+  matrix: "red",
+  voice: "geekblue",
+  sip: "cyan",
+  wecom: "olive",
+  xiaoyi: "cyan",
+};

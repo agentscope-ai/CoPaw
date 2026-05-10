@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { Button, message, Switch, Input } from "@agentscope-ai/design";
+import { Button, Switch, Input } from "@agentscope-ai/design";
 import { CopyOutlined } from "@ant-design/icons";
 import { XMarkdown } from "@ant-design/x-markdown";
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
+import { useAppMessage } from "../../hooks/useAppMessage";
 import { stripFrontmatter } from "../../utils/markdown";
+import { mermaidComponents } from "../MermaidCodeBlock";
 import styles from "./index.module.less";
 
 interface MarkdownCopyProps {
@@ -52,6 +54,7 @@ export function MarkdownCopy({
   onContentChange,
 }: MarkdownCopyProps) {
   const { t } = useTranslation();
+  const { message } = useAppMessage();
   const [isCopying, setIsCopying] = useState(false);
   const [editContent, setEditContent] = useState(content);
   const [localShowMarkdown, setLocalShowMarkdown] = useState(showMarkdown);
@@ -176,6 +179,11 @@ export function MarkdownCopy({
           <XMarkdown
             content={markdownContent}
             {...defaultMarkdownViewerProps}
+            components={mermaidComponents}
+            dompurifyConfig={{
+              ADD_TAGS: ["pre", "code"],
+              ADD_ATTR: ["data-block", "data-state", "data-lang", "class"],
+            }}
           />
         </div>
       ) : (

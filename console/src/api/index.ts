@@ -5,6 +5,7 @@ export { request } from "./request";
 export { getApiUrl, getApiToken } from "./config";
 
 import { rootApi } from "./modules/root";
+import { acpApi } from "./modules/acp";
 import { channelApi } from "./modules/channel";
 import { heartbeatApi } from "./modules/heartbeat";
 import { cronJobApi } from "./modules/cronjob";
@@ -16,16 +17,21 @@ import { agentApi } from "./modules/agent";
 import { agentsApi } from "./modules/agents";
 import { workspaceApi } from "./modules/workspace";
 import { localModelApi } from "./modules/localModel";
-import { ollamaModelApi } from "./modules/ollamaModel";
 import { mcpApi } from "./modules/mcp";
 import { tokenUsageApi } from "./modules/tokenUsage";
+import { agentStatsApi } from "./modules/agentStats";
 import { toolsApi } from "./modules/tools";
 import { securityApi } from "./modules/security";
 import { userTimezoneApi } from "./modules/userTimezone";
+import { languageApi } from "./modules/language";
+import { backupApi } from "./modules/backup";
 
 export const api = {
   // Root
   ...rootApi,
+
+  // ACP
+  ...acpApi,
 
   // Channels
   ...channelApi,
@@ -60,14 +66,13 @@ export const api = {
   // Local Models
   ...localModelApi,
 
-  // Ollama Models
-  ...ollamaModelApi,
-
   // MCP Clients
   ...mcpApi,
 
   // Token Usage
   ...tokenUsageApi,
+  // Agent Statistics
+  ...agentStatsApi,
   // Tools
   ...toolsApi,
 
@@ -76,6 +81,12 @@ export const api = {
 
   // User Timezone
   ...userTimezoneApi,
+
+  // Language
+  ...languageApi,
+
+  // Backups
+  ...backupApi,
 };
 
 export default api;

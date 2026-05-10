@@ -1,7 +1,5 @@
 import dayjs from "dayjs";
 
-export { TIMEZONE_OPTIONS } from "../../../../constants/timezone";
-
 export const DEFAULT_FORM_VALUES = {
   enabled: false,
   schedule: {
@@ -12,6 +10,12 @@ export const DEFAULT_FORM_VALUES = {
   cronType: "daily",
   cronTime: dayjs().hour(9).minute(0),
   task_type: "agent" as const,
+  request: {
+    input: "",
+    session_id: "",
+    user_id: "",
+  },
+  text: "",
   dispatch: {
     type: "channel" as const,
     channel: "console",
@@ -22,6 +26,7 @@ export const DEFAULT_FORM_VALUES = {
     mode: "final" as const,
   },
   runtime: {
+    share_session: true,
     max_concurrency: 1,
     timeout_seconds: 120,
     misfire_grace_seconds: 60,

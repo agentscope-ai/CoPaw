@@ -1,23 +1,11 @@
 # 频道配置
 
-**频道** = 你和 CoPaw 在「哪里」对话：接钉钉就在钉钉里回，接 QQ 就在 QQ 里回。不熟悉这个词的话可以先看 [项目介绍](./intro)。
+**频道** = 你和 QwenPaw 在「哪里」对话：接钉钉就在钉钉里回，接 QQ 就在 QQ 里回。不熟悉这个词的话可以先看 [项目介绍](./intro)。
 
 配置频道有两种方式：
 
 - **控制台**（推荐）— 在 [控制台](./console) 的 **Control → Channels** 页面，点击频道卡片，在抽屉里启用并填写鉴权信息，保存即生效。
-- **手动编辑 `config.json`** — 默认在 `~/.copaw/config.json` （由 `copaw init` 生成），将需要的频道设 `enabled: true` 并填好鉴权信息；保存后自动重载，无需重启。
-
-所有频道都有如下通用字段:
-
-- **enabled** — 是否启用
-- **bot_prefix** — 机器人回复前缀（如 `[BOT]`），方便区分
-- **filter_tool_messages** — （可选，默认 `false`）过滤工具调用和输出消息，不发送给用户。设为 `true` 可隐藏工具执行详情。
-- **filter_thinking** — （可选，默认 `false`）过滤模型的思考/推理内容，不发送给用户。设为 `true` 可隐藏 thinking 内容。
-- **dm_policy** — （可选，默认 `"open"`）私聊访问策略。`"open"` 允许所有用户；`"allowlist"` 仅允许 `allow_from` 中的用户。
-- **group_policy** — （可选，默认 `"open"`）群聊访问策略。`"open"` 允许所有用户；`"allowlist"` 仅允许 `allow_from` 中的用户。
-- **allow_from** — （可选，默认 `[]`）允许与机器人交互的用户 ID 列表。仅当 `dm_policy` 或 `group_policy` 设为 `"allowlist"` 时生效。
-- **deny_message** — （可选，默认 `""`）被白名单拒绝的用户收到的自动回复消息。留空则不回复。
-- **require_mention** — （可选，默认 `false`）设为 `true` 时，机器人在群聊中仅响应被 @提及 的消息。白名单检查（`allow_from`）优先执行，通过后再检查是否被提及。
+- **手动编辑 `agent.json`** — 在智能体工作区的 `agent.json` 中（如 `~/.qwenpaw/workspaces/default/agent.json`），将需要的频道设 `enabled: true` 并填好鉴权信息；保存后自动重载，无需重启。
 
 下面按频道说明如何获取凭证并填写配置。
 
@@ -62,21 +50,21 @@
 
    ![client](https://img.alicdn.com/imgextra/i3/O1CN01JsRrwx1hJImLfM7O1_!!6000000004256-2-tps-2809-1585.png)
 
-7. （可选） **将服务器 IP 加入白名单** — 调用钉钉开放平台 API（如下载用户发送的图片和文件）时需要此配置。在应用设置中进入 **"安全设置→服务器出口 IP"**，添加运行 CoPaw 的机器的公网 IP。可在终端执行 `curl ifconfig.me` 查看公网 IP。若未配置白名单，图片和文件下载将报 `Forbidden.AccessDenied.IpNotInWhiteList` 错误。
+7. （可选） **将服务器 IP 加入白名单** — 调用钉钉开放平台 API（如下载用户发送的图片和文件）时需要此配置。在应用设置中进入 **"安全设置→服务器出口 IP"**，添加运行 QwenPaw 的机器的公网 IP。可在终端执行 `curl ifconfig.me` 查看公网 IP。若未配置白名单，图片和文件下载将报 `Forbidden.AccessDenied.IpNotInWhiteList` 错误。
 
 ### 绑定应用
 
-可以在console前端配置，或者修改`~/.copaw/config.json`。
+可以在console前端配置，或者修改智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）。
 
 **方法1**: 在console前端配置
 
 从“控制→频道”找到**DingTalk**，点击后填入刚刚获取的**Client ID**和**Client Secret**
 
-![console](https://img.alicdn.com/imgextra/i1/O1CN01uXrlyQ25Zpr5eVksk_!!6000000007541-2-tps-3451-1778.png)
+![console](https://img.alicdn.com/imgextra/i4/O1CN01YVQdZe1WsbXoxJOnJ_!!6000000002844-2-tps-3822-2070.png)
 
-**方法2**: 修改`~/.copaw/config.json`
+**方法2**: 修改 `agent.json`
 
-在 `config.json` 里找到 `channels.dingtalk`，填入对应信息，例如：
+在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）里找到 `channels.dingtalk`，填入对应信息：
 
 ```json
 "dingtalk": {
@@ -84,19 +72,29 @@
   "bot_prefix": "[BOT]",
   "client_id": "你的 Client ID",
   "client_secret": "你的 Client Secret",
-  "message_type": "markdown",
-  "card_template_id": "",
-  "card_template_key": "content",
-  "robot_code": "",
   "filter_tool_messages": false
 }
 ```
 
-- 若希望隐藏工具执行详情，可设置 `filter_tool_messages: true`。
-- AI Card 模式：将 `message_type` 设为 `card`，并填写 `card_template_id`；`card_template_key` 必须与钉钉模板变量名完全一致（默认 `content`）。
-- 群聊场景建议显式配置 `robot_code`；留空时 CoPaw 会回退使用 `client_id`。
+**钉钉专属字段说明：**
 
-保存后若服务已运行会自动重载；未运行则执行 `copaw app` 启动。
+| 字段                | 类型   | 默认值       | 说明                                                           |
+| ------------------- | ------ | ------------ | -------------------------------------------------------------- |
+| `client_id`         | string | `""`（必填） | 钉钉应用 Client ID（即 AppKey）                                |
+| `client_secret`     | string | `""`（必填） | 钉钉应用 Client Secret（即 AppSecret）                         |
+| `message_type`      | string | `"markdown"` | 消息类型：`"markdown"` 或 `"card"`（AI 卡片）                  |
+| `card_template_id`  | string | `""`         | AI 卡片模板 ID（当 `message_type` 为 `"card"` 时必填）         |
+| `card_template_key` | string | `"content"`  | AI 卡片模板变量名（必须与钉钉模板中的变量名完全一致）          |
+| `robot_code`        | string | `""`         | 机器人编码（群聊卡片场景建议配置，留空时回退使用 `client_id`） |
+| `media_dir`         | string | `null`       | 媒体文件下载目录（留空则不保存）                               |
+
+> **提示：**
+>
+> - 若希望隐藏工具执行详情，可设置 `filter_tool_messages: true`。
+> - AI Card 模式：将 `message_type` 设为 `card`，并填写 `card_template_id`；`card_template_key` 必须与钉钉模板变量名完全一致。
+> - 群聊场景建议显式配置 `robot_code`；留空时 QwenPaw 会回退使用 `client_id`。
+
+保存后若服务已运行会自动重载；未运行则执行 `qwenpaw app` 启动。
 
 ### 找到创建的应用
 
@@ -138,9 +136,9 @@
 
 ![id & secret](https://img.alicdn.com/imgextra/i2/O1CN01tWGGEE1PAuR7APQcs_!!6000000001801-2-tps-4082-2126.png)
 
-3. 在 `config.json` 中填写上述 **App ID** 和 **App Secret**（见下方「填写 config.json」），保存
+3. 在 `agent.json` 中填写上述 **App ID** 和 **App Secret**（见下方「填写 agent.json」），保存
 
-4. 执行 **`copaw app`** 启动 CoPAW 服务
+4. 执行 **`qwenpaw app`** 启动 QwenPaw 服务
 
 5. 回到飞书开放平台，在「能力」中启用 **机器人**
 
@@ -180,7 +178,7 @@
 
 7. 在「事件与回调」中，点击「事件配置」，选择订阅方式为**长连接（WebSocket）** 模式（无需公网 IP）
 
-> 注：**操作顺序**为先配置 App ID/Secret → 启动 `copaw app` → 再在开放平台配置长连接，如果此处仍显示错误，尝试先暂停 CoPaw 服务并重新启动 `copaw app`。
+> 注：**操作顺序**为先配置 App ID/Secret → 启动 `qwenpaw app` → 再在开放平台配置长连接，如果此处仍显示错误，尝试先暂停 QwenPaw 服务并重新启动 `qwenpaw app`。
 
 ![websocket](https://img.alicdn.com/imgextra/i2/O1CN01LQwKON1x7QMNP41kC_!!6000000006396-2-tps-4082-2126.png)
 
@@ -192,7 +190,21 @@
 
 ![result](https://img.alicdn.com/imgextra/i2/O1CN015GPfGr1BsxuoOXbYC_!!6000000000002-2-tps-4082-2126.png)
 
-9. 在「应用发布」的「版本管理与发布」中，**创建版本**，填写基础信息，**保存**并**发布**
+<div id="feishu-callback-config"></div>
+
+9. 在「事件与回调」中，点击「回调配置」，选择订阅方式为**长连接（WebSocket）** 模式（无需公网 IP）
+
+![websocket](https://img.alicdn.com/imgextra/i4/O1CN015r6kS71DLBxFDJQWe_!!6000000000199-2-tps-1671-848.png)
+
+10. 选择「添加回调」，搜索**卡片回传交互**，订阅**卡片回传交互**
+
+![reveive](https://img.alicdn.com/imgextra/i3/O1CN017s7lz724GJMzKKKnC_!!6000000007363-2-tps-1685-855.png)
+
+![click](https://img.alicdn.com/imgextra/i4/O1CN01CcGGmW1K0JCp7cQQV_!!6000000001101-2-tps-1679-847.png)
+
+![result](https://img.alicdn.com/imgextra/i3/O1CN01V9kzMj1CbqkBnSI0x_!!6000000000100-2-tps-1682-847.png)
+
+11. 在「应用发布」的「版本管理与发布」中，**创建版本**，填写基础信息，**保存**并**发布**
 
 ![create](https://img.alicdn.com/imgextra/i1/O1CN01zOqMGk1lhoREn9Lip_!!6000000004851-2-tps-4082-2126.png)
 
@@ -200,23 +212,39 @@
 
 ![save](https://img.alicdn.com/imgextra/i1/O1CN01ebVPlq1lzDUM1Mwej_!!6000000004889-2-tps-4082-2126.png)
 
-### 填写 config.json
+### 填写 agent.json
 
-在`config.json`（默认在 `~/.copaw/config.json`）中找到`channels.feishu`，只需填 **App ID** 和 **App Secret**（在开放平台「凭证与基础信息」里复制）：
+在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）中找到`channels.feishu`，只需填 **App ID** 和 **App Secret**（在开放平台「凭证与基础信息」里复制）：
 
 ```json
 "feishu": {
   "enabled": true,
   "bot_prefix": "[BOT]",
   "app_id": "cli_xxxxx",
-  "app_secret": "你的 App Secret"
+  "app_secret": "你的 App Secret",
+  "domain": "feishu"
 }
 ```
 
-其他字段（encrypt_key、verification_token、media_dir）可选，WebSocket 模式可不填，有默认值。依赖：`pip install lark-oapi`，然后 `copaw app`。如果你使用 SOCKS 代理联网，还需安装 `python-socks`（例如 `pip install python-socks`），否则可能报错：`python-socks is required to use a SOCKS proxy`。
+**飞书专属字段说明：**
 
-> 注: **App ID** 和 **App Secret** 信息也可以在Console前端填写，但需重启 CoPaw 服务，才能继续配置长链接的操作。
-> ![console](https://img.alicdn.com/imgextra/i2/O1CN01k7UVrP1E2hZBAn0oF_!!6000000000294-2-tps-4082-2126.png)
+| 字段                 | 类型   | 默认值       | 说明                                       |
+| -------------------- | ------ | ------------ | ------------------------------------------ |
+| `app_id`             | string | `""`（必填） | 飞书应用 App ID                            |
+| `app_secret`         | string | `""`（必填） | 飞书应用 App Secret                        |
+| `domain`             | string | `"feishu"`   | `"feishu"`（国内）或 `"lark"`（国际版）    |
+| `encrypt_key`        | string | `""`         | 消息加密密钥（可选，WebSocket 模式可不填） |
+| `verification_token` | string | `""`         | 验证 Token（可选，WebSocket 模式可不填）   |
+| `media_dir`          | string | `null`       | 媒体文件下载目录（留空则不保存）           |
+
+> **提示：** 其他字段（encrypt_key、verification_token、media_dir）可选，WebSocket 模式可不填，有默认值。
+
+**依赖：** `pip install lark-oapi`
+
+如果你使用 SOCKS 代理联网，还需安装 `python-socks`（例如 `pip install python-socks`），否则可能报错：`python-socks is required to use a SOCKS proxy`。
+
+> 注: **App ID** 和 **App Secret** 信息也可以在Console前端填写，但需重启 QwenPaw 服务，才能继续配置长链接的操作。
+> ![console](https://img.alicdn.com/imgextra/i3/O1CN01KCQj1b1z8utMnRr6y_!!6000000006670-2-tps-3822-2070.png)
 
 ### 机器人权限建议
 
@@ -237,7 +265,7 @@
 | 获取与上传图片或文件资源       | im:resource                    | 应用身份     | -              |
 | **以应用身份读取通讯录**       | **contact:user.base:readonly** | **应用身份** | **见下方说明** |
 
-> **获取用户昵称（推荐）**：若希望会话和日志中显示**用户昵称**（如「张三#1d1a」）而非「unknown#1d1a」，需额外开通通讯录只读权限 **以应用身份读取通讯录**（`contact:user.base:readonly`）。未开通时，飞书仅返回 open_id 等身份字段，不返回姓名，CoPAW 无法解析昵称。开通后需重新发布/更新应用版本，权限生效后即可正常显示用户名称。
+> **获取用户昵称（推荐）**：若希望会话和日志中显示**用户昵称**（如「张三#1d1a」）而非「unknown#1d1a」，需额外开通通讯录只读权限 **以应用身份读取通讯录**（`contact:user.base:readonly`）。未开通时，飞书仅返回 open_id 等身份字段，不返回姓名，QwenPaw 无法解析昵称。开通后需重新发布/更新应用版本，权限生效后即可正常显示用户名称。
 
 ### 将机器人添加到常用
 
@@ -281,7 +309,7 @@
    > cp ./bin/imsg /usr/local/bin/
    > ```
 
-3. 为了使 iMessage 中的信息能被获取，需要 **终端** （或你用来运行 CoPaw 的 app） 和 **消息** 有 **完全磁盘访问权限**（系统设置 → 隐私与安全性 → 完全磁盘访问权限）。
+3. 为了使 iMessage 中的信息能被获取，需要 **终端** （或你用来运行 QwenPaw 的 app） 和 **消息** 有 **完全磁盘访问权限**（系统设置 → 隐私与安全性 → 完全磁盘访问权限）。
 
    ![权限](https://img.alicdn.com/imgextra/i2/O1CN01gCbMWX1S2c77mcoPo_!!6000000002189-2-tps-958-440.png)
 
@@ -289,22 +317,25 @@
 
    - 进入 **控制台 → 频道**，点击 **iMessage** 卡片，将 **Enable** 开关打开，在 **DB Path**中填写上面的路径，点击 **保存**。
 
-     ![控制台](https://img.alicdn.com/imgextra/i3/O1CN01ut2ooB1mxDNNtz1Qc_!!6000000005020-2-tps-3814-1954.png)
+     ![控制台](https://img.alicdn.com/imgextra/i4/O1CN01yxsvJ51yOetCYur9f_!!6000000006569-2-tps-3822-2070.png)
 
-   - 填写 config.json（路径通常为~/.copaw/config.json）：
+   - 填写智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）：
 
      ```json
      "imessage": {
-     "enabled": true,
-     "bot_prefix": "[BOT]",
-     "db_path": "~/Library/Messages/chat.db",
-     "poll_sec": 1.0
+       "enabled": true,
+       "bot_prefix": "[BOT]",
+       "db_path": "~/Library/Messages/chat.db",
+       "poll_sec": 1.0
      }
      ```
 
-     **db_path** — iMessage 数据库路径
+**iMessage 专属字段说明：**
 
-     **poll_sec** — 轮询间隔（秒），默认 1 即可
+| 字段       | 类型   | 默认值                       | 说明                |
+| ---------- | ------ | ---------------------------- | ------------------- |
+| `db_path`  | string | `~/Library/Messages/chat.db` | iMessage 数据库路径 |
+| `poll_sec` | float  | `1.0`                        | 轮询间隔（秒）      |
 
 5. 填写完成后，使用你的手机，给当前电脑登录的 iMessage 账号（与电脑Apple ID一致）发送任意一条消息，可以看到回复。
 
@@ -352,17 +383,17 @@
 
 ### 绑定 Bot
 
-可以在console前端配置，或者修改`~/.copaw/config.json`。
+可以在console前端配置，或者修改智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）。
 
 **方法1**: 在console前端配置
 
 从“控制→频道”找到**Discord**，点击后填入刚刚获取的**Bot Token**
 
-![console](https://img.alicdn.com/imgextra/i2/O1CN01kP657n1XK5IXfPLAv_!!6000000002904-2-tps-4082-2126.png)
+![console](https://img.alicdn.com/imgextra/i1/O1CN01kRdzN61HBLu9LghUV_!!6000000000719-2-tps-3822-2070.png)
 
-**方法2**: 修改`~/.copaw/config.json`
+**方法2**: 修改 `agent.json`
 
-在 `config.json` 里找到 `channels.discord`，填入对应信息，例如：
+在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）里找到 `channels.discord`，填入对应信息：
 
 ```json
 "discord": {
@@ -374,10 +405,15 @@
 }
 ```
 
-国内网络访问 Discord API 可能需代理。如需代理：
+**Discord 专属字段说明：**
 
-- **http_proxy** — 例如 `http://127.0.0.1:7890`
-- **http_proxy_auth** — 若代理需鉴权，填 `用户名:密码`，否则留空
+| 字段              | 类型   | 默认值       | 说明                                        |
+| ----------------- | ------ | ------------ | ------------------------------------------- |
+| `bot_token`       | string | `""`（必填） | Discord Bot Token                           |
+| `http_proxy`      | string | `""`         | 代理地址（如 `http://127.0.0.1:7890`）      |
+| `http_proxy_auth` | string | `""`         | 代理认证（格式：`用户名:密码`，无需则留空） |
+
+> **提示：** 国内网络访问 Discord API 可能需代理。
 
 ---
 
@@ -407,9 +443,9 @@
 
 ![1](https://img.alicdn.com/imgextra/i4/O1CN01LGYUMe1la1hmtcuyY_!!6000000004834-2-tps-4082-2126.png)
 
-5. 在**开发管理**中获取**AppID**和**AppSecret**（即 ClientSecret），填入config，方式见下方填写config.json。在**IP白名单**中添加一个IP。
+5. 在**开发管理**中获取**AppID**和**AppSecret**（即 ClientSecret），填入 `agent.json`，方式见下方填写 agent.json。在**IP白名单**中添加一个IP。
 
-   > **提示：** 如果使用魔搭创空间部署CoPaw，QQ频道的IP白名单应填写：`47.92.200.108`
+   > **提示：** 如果使用魔搭创空间部署QwenPaw，QQ频道的IP白名单应填写：`47.92.200.108`
 
 ![1](https://img.alicdn.com/imgextra/i4/O1CN012UQWI21cnvBAUcz54_!!6000000003646-2-tps-4082-2126.png)
 
@@ -417,24 +453,104 @@
 
 ![1](https://img.alicdn.com/imgextra/i3/O1CN01r1OvPy1kcwc30w32K_!!6000000004705-2-tps-4082-2126.png)
 
-### 填写 config.json
+### 填写 agent.json
 
-在 `config.json` 里找到 `channels.qq`，把上面两个值分别填进 `app_id` 和 `client_secret`：
+在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）里找到 `channels.qq`，把上面两个值分别填进 `app_id` 和 `client_secret`：
 
 ```json
 "qq": {
   "enabled": true,
   "bot_prefix": "[BOT]",
   "app_id": "你的 AppID",
-  "client_secret": "你的 AppSecret"
+  "client_secret": "你的 AppSecret",
+  "markdown_enabled": false,
+  "max_reconnect_attempts": -1
 }
 ```
 
-注意：这里填的是 **AppID** 和 **AppSecret** 两个字段，不是拼成一条 Token。
+**QQ 专属字段说明：**
 
-或者也可以在console前端填写
+| 字段                     | 类型   | 默认值       | 说明                                      |
+| ------------------------ | ------ | ------------ | ----------------------------------------- |
+| `app_id`                 | string | `""`（必填） | QQ 机器人 App ID                          |
+| `client_secret`          | string | `""`（必填） | QQ 机器人 Client Secret（即 AppSecret）   |
+| `markdown_enabled`       | bool   | `false`      | 是否启用 Markdown 消息（需 QQ 平台授权）  |
+| `max_reconnect_attempts` | int    | `-1`         | WebSocket 最大重连次数（`-1` = 无限重连） |
 
-![1](https://img.alicdn.com/imgextra/i1/O1CN01kK9tSJ1MHpZmGR2o9_!!6000000001410-2-tps-4082-2126.png)
+> **注意：** 这里填的是 **AppID** 和 **AppSecret** 两个字段，不是拼成一条 Token。
+
+或者也可以在console前端填写：
+
+![console](https://img.alicdn.com/imgextra/i3/O1CN01FJrXGd1dNBgbrPZMf_!!6000000003723-2-tps-3822-2070.png)
+
+---
+
+## OneBot v11（NapCat / QQ 完整协议）
+
+**OneBot** 渠道通过**反向 WebSocket** 将 QwenPaw 连接到 [NapCat](https://github.com/NapNeko/NapCatQQ)、[go-cqhttp](https://github.com/Mrs4s/go-cqhttp)、[Lagrange](https://github.com/LagrangeDev/Lagrange.Core) 或其他任何兼容 [OneBot v11](https://github.com/botuniverse/onebot-11) 的实现。
+
+与内置 QQ 渠道（使用官方 QQ Bot API，功能受限）不同，OneBot v11 提供**完整 QQ 协议**支持：个人号、群聊无需 @、富媒体消息等。
+
+### 工作原理
+
+QwenPaw 启动一个 WebSocket 服务器，OneBot 实现（如 NapCat）作为客户端连接过来：
+
+```
+NapCat  ──反向 WS──▶  QwenPaw (:6199/ws)
+```
+
+### 配置 NapCat
+
+1. 通过 Docker 运行 NapCat：
+
+   ```bash
+   docker run -d \
+     --name napcat \
+     -e ACCOUNT=<你的QQ号> \
+     -p 6099:6099 \
+     mlikiowa/napcat-docker:latest
+   ```
+
+2. 打开 NapCat WebUI `http://localhost:6099`，用 QQ 扫码登录。
+
+3. 进入 **网络配置** → **新建** → **WebSocket 客户端**（反向 WS）：
+   - URL：`ws://<qwenpaw地址>:6199/ws`
+   - Access Token：与 QwenPaw 配置中的 `access_token` 保持一致（可选）
+
+### 填写 agent.json
+
+```json
+"onebot": {
+  "enabled": true,
+  "ws_host": "0.0.0.0",
+  "ws_port": 6199,
+  "access_token": "",
+  "share_session_in_group": false
+}
+```
+
+**OneBot 专属字段说明：**
+
+| 字段                     | 类型   | 默认值    | 说明                                                          |
+| ------------------------ | ------ | --------- | ------------------------------------------------------------- |
+| `ws_host`                | string | `0.0.0.0` | WebSocket 服务器监听地址                                      |
+| `ws_port`                | int    | `6199`    | WebSocket 服务器监听端口                                      |
+| `access_token`           | string | `""`      | 可选的认证 Token（需与 NapCat 配置一致）                      |
+| `share_session_in_group` | bool   | `false`   | 为 `true` 时群成员共享一个会话；为 `false` 时每个成员独立会话 |
+
+> **Docker Compose 提示：** QwenPaw 和 NapCat 一起用 Docker Compose 部署时，NapCat 的反向 WS 地址填 `ws://qwenpaw:6199/ws`（使用服务名）。
+
+**多模态支持：**
+
+| 类型 | 接收 | 发送 |
+| ---- | ---- | ---- |
+| 文本 | ✓    | ✓    |
+| 图片 | ✓    | ✓    |
+| 语音 | 🚧   | ✓    |
+| 视频 | 🚧   | ✓    |
+| 文件 | ✓    | ✓    |
+
+> **提示：** 语音和视频在渠道层已正确接收，但需要配置 QwenPaw 的转写服务（`transcription_provider_type`）才能让 LLM 理解内容。未配置时语音消息显示为占位符。
 
 ---
 
@@ -459,7 +575,9 @@
 可在工作台点击智能机器人-创建机器人，选择API模式创建-通过长链接配置
 
 ![创建机器人1](https://img.alicdn.com/imgextra/i3/O1CN01lcA2rX1fm2P19SLcB_!!6000000004048-2-tps-1440-814.png)
+
 ![新建机器人2](https://img.alicdn.com/imgextra/i1/O1CN014R3a0f1mnb3qbycMV_!!6000000004999-2-tps-1440-814.png)
+
 ![新建机器人3](https://img.alicdn.com/imgextra/i4/O1CN01kZDNVk1ugHf73ybs2_!!6000000006066-2-tps-2938-1594.png)
 
 获取`Bot ID`和`Secret`
@@ -468,30 +586,101 @@
 
 ### 绑定bot
 
-可以在Console或是`config.json`填写Bot ID和Secret绑定bot
+可以在Console或是智能体工作区的 `agent.json` 填写Bot ID和Secret绑定bot
 
 **方法一**在console填写
 
-![绑定机器人](https://img.alicdn.com/imgextra/i2/O1CN01X8NcEj1NrqL0e3AMS_!!6000000001624-2-tps-2732-1390.png)
+![console](https://img.alicdn.com/imgextra/i1/O1CN01pyx6Ma1YMCl1kMnje_!!6000000003044-2-tps-3822-2070.png)
 
-**方法二**在`config.json`填写(默认文件路径为`~/.copaw/config.json`)
-找到`wecom`，填写对应信息，例如：
+**方法二**在 `agent.json` 填写（如 `~/.qwenpaw/workspaces/default/agent.json`）
+
+找到`wecom`，填写对应信息：
 
 ```json
 "wecom": {
-      "enabled": true,
-      "dm_policy": "open",
-      "group_policy": "open",
-      "bot_id": "your bot_id",
-      "secret": "your secret",
-      "media_dir": "~/.copaw/media",
-      "max_reconnect_attempts": -1
-    }
+  "enabled": true,
+  "bot_prefix": "[BOT]",
+  "dm_policy": "open",
+  "group_policy": "open",
+  "bot_id": "your bot_id",
+  "secret": "your secret",
+  "media_dir": "~/.qwenpaw/media",
+  "max_reconnect_attempts": -1
+}
 ```
+
+**企业微信专属字段说明：**
+
+| 字段                     | 类型   | 默认值             | 说明                                      |
+| ------------------------ | ------ | ------------------ | ----------------------------------------- |
+| `bot_id`                 | string | `""`（必填）       | 企业微信机器人 Bot ID                     |
+| `secret`                 | string | `""`（必填）       | 企业微信机器人 Secret                     |
+| `media_dir`              | string | `~/.qwenpaw/media` | 媒体文件（图片、文件等）下载目录          |
+| `max_reconnect_attempts` | int    | `-1`               | WebSocket 最大重连次数（`-1` = 无限重连） |
 
 ### 在企业微信开始与机器人聊天
 
 ![开始使用](https://img.alicdn.com/imgextra/i3/O1CN01ZsmpYr1tq4ViIbO80_!!6000000005952-2-tps-1308-1130.png)
+
+---
+
+## 微信个人（iLink）
+
+微信 iLink Bot 频道允许通过**个人微信账号**运行 AI 机器人，无需企业资质，使用官方 [iLink Bot HTTP API](https://weixin.qq.com/cgi-bin/readtemplate?t=ilink/chatbot) 协议。
+
+> **注意**：微信个人 Bot（iLink 协议）目前仍处于内测阶段，需申请接入资格后方可使用。
+
+### 工作原理
+
+- **登录方式**：首次使用时扫描二维码授权，Token 自动持久化到本地文件（默认 `~/.qwenpaw/wechat_bot_token`），后续启动无需重复扫码。
+- **消息接收**：通过 HTTP 长轮询（`getupdates`）持续拉取新消息，支持文本、图片、语音（ASR 转录）和文件。
+- **消息发送**：通过 `sendmessage` 接口回复用户，当前仅支持文本（iLink API 限制）。
+
+### 扫码登录（推荐通过 Console）
+
+1. 在 QwenPaw Web Console 中进入 **设置 → 通道 → 微信个人（iLink）**。
+2. 点击 **获取登录二维码**，等待二维码显示。
+3. 用手机微信扫描二维码并确认授权。
+4. 扫码成功后，Bot Token 会自动填入表单，点击 **保存** 即可。
+
+### 在配置文件中填写
+
+也可直接在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）中配置：
+
+```json
+"wechat": {
+  "enabled": true,
+  "bot_prefix": "[BOT]",
+  "bot_token": "your_bot_token",
+  "bot_token_file": "~/.qwenpaw/wechat_bot_token",
+  "base_url": "",
+  "media_dir": "~/.qwenpaw/media",
+  "dm_policy": "open",
+  "group_policy": "open"
+}
+```
+
+**微信个人专属字段说明：**
+
+| 字段             | 类型   | 默认值                        | 说明                                                |
+| ---------------- | ------ | ----------------------------- | --------------------------------------------------- |
+| `bot_token`      | string | `""`                          | 扫码登录后获取的 Bearer Token；留空则启动时引导扫码 |
+| `bot_token_file` | string | `~/.qwenpaw/wechat_bot_token` | Token 持久化路径，下次启动自动读取                  |
+| `base_url`       | string | 官方默认地址                  | iLink API 地址，一般留空使用默认值                  |
+| `media_dir`      | string | `~/.qwenpaw/media`            | 接收到的图片、文件保存目录                          |
+
+### 环境变量方式
+
+也可通过环境变量配置：
+
+```bash
+WECHAT_CHANNEL_ENABLED=1
+WECHAT_BOT_TOKEN=your_bot_token
+WECHAT_BOT_TOKEN_FILE=~/.qwenpaw/wechat_bot_token
+WECHAT_MEDIA_DIR=~/.qwenpaw/media
+WECHAT_DM_POLICY=open
+WECHAT_GROUP_POLICY=open
+```
 
 ---
 
@@ -510,32 +699,37 @@
 
 ### 绑定 Bot
 
-可以在console前端配置，或者修改`~/.copaw/config.json`。
+可以在console前端配置，或者修改智能体的 `agent.json`。
 
 **方法1**: 在console前端配置
 
 从"控制→频道"找到**Telegram**，点击后填入刚刚获取的**Bot Token**
 
-![console](https://img.alicdn.com/imgextra/i4/O1CN01utJvvg1dmNSiFOOJi_!!6000000003778-0-tps-1920-993.jpg)
+![console](https://img.alicdn.com/imgextra/i3/O1CN01wrQfVo1QmIOUaWqoW_!!6000000002018-2-tps-3822-2070.png)
 
-**方法2**: 修改`~/.copaw/config.json`
+**方法2**: 修改 `agent.json`
 
-在 `config.json` 里找到 `channels.telegram`，填入对应信息，例如：
+在智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）里找到 `channels.telegram`，填入对应信息：
 
 ```json
 "telegram": {
-    "enabled": true,
-    "bot_prefix": "[BOT]",
-    "bot_token": "你的 Bot Token",
-    "http_proxy": "",
-    "http_proxy_auth": ""
+  "enabled": true,
+  "bot_prefix": "[BOT]",
+  "bot_token": "你的 Bot Token",
+  "http_proxy": "",
+  "http_proxy_auth": ""
 }
 ```
 
-国内网络访问 Telegram API 可能需代理。如需代理：
+**Telegram 专属字段说明：**
 
-- **http_proxy** — 例如 `http://127.0.0.1:7890`
-- **http_proxy_auth** — 若代理需鉴权，填 `用户名:密码`，否则留空
+| 字段              | 类型   | 默认值       | 说明                                        |
+| ----------------- | ------ | ------------ | ------------------------------------------- |
+| `bot_token`       | string | `""`（必填） | Telegram Bot Token                          |
+| `http_proxy`      | string | `""`         | 代理地址（如 `http://127.0.0.1:7890`）      |
+| `http_proxy_auth` | string | `""`         | 代理认证（格式：`用户名:密码`，无需则留空） |
+
+> **提示：** 国内网络访问 Telegram API 可能需代理。
 
 ### 备注
 
@@ -554,24 +748,35 @@
 
 Mattermost 频道通过 WebSocket 实时监听事件，并使用 REST API 发送回复。支持私聊和群聊场景，在群聊中基于 **Thread（盖楼）** 划分会话上下文。
 
-### 获取凭证
+### 获取凭证并配置
 
 1. 在 Mattermost 中创建 **Bot 账号** (System Console → Integrations → Bot Accounts)。
 2. 给予机器人必要的权限（如 `Post all`），并获取 **Access Token**。
-3. 在控制台或 `config.json` 中配置 **URL** 和 **Token**。
+3. 在控制台或智能体工作区的 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）中配置 **URL** 和 **Token**。
 
-### 核心配置
+**配置示例：**
 
-| 字段                              | 说明                                                      | 默认值   |
-| --------------------------------- | --------------------------------------------------------- | -------- |
-| **url**                           | Mattermost 实例的完整地址                                 | -        |
-| **bot_token**                     | 机器人的 Access Token                                     | -        |
-| **show_typing**                   | 是否开启「正在输入...」状态指示                           | `true`   |
-| **thread_follow_without_mention** | 在群聊已参与的 Thread 中，是否在后续无 @ 消息时也触发回复 | `false`  |
-| **dm_policy**                     | 私聊策略：`open` (全部允许) 或 `allowlist` (仅白名单)     | `"open"` |
-| **group_policy**                  | 群聊策略：`open` (全部允许) 或 `allowlist` (仅白名单)     | `"open"` |
-| **allow_from**                    | 允许的用户 ID 列表 (仅在策略为 `allowlist` 时生效)        | `[]`     |
-| **deny_message**                  | 被拒绝访问时的自动回复消息                                | `""`     |
+```json
+"mattermost": {
+  "enabled": true,
+  "bot_prefix": "[BOT]",
+  "url": "https://mattermost.example.com",
+  "bot_token": "your_access_token",
+  "show_typing": true,
+  "thread_follow_without_mention": false,
+  "dm_policy": "open",
+  "group_policy": "open"
+}
+```
+
+**Mattermost 专属字段说明：**
+
+| 字段                            | 类型   | 默认值       | 说明                                                      |
+| ------------------------------- | ------ | ------------ | --------------------------------------------------------- |
+| `url`                           | string | `""`（必填） | Mattermost 实例的完整地址                                 |
+| `bot_token`                     | string | `""`（必填） | 机器人的 Access Token                                     |
+| `show_typing`                   | bool   | `true`       | 是否开启「正在输入...」状态指示                           |
+| `thread_follow_without_mention` | bool   | `false`      | 在群聊已参与的 Thread 中，是否在后续无 @ 消息时也触发回复 |
 
 > **提示**：Mattermost 的 `session_id` 在私聊中固定为 `mattermost_dm:{mm_channel_id}`，在群聊中按 Thread ID 隔离回话。仅在 Session 首次触发时会自动拉取最近的历史记录作为上下文补全。
 
@@ -620,7 +825,7 @@ JSON消息格式
 
 2. 模糊匹配订阅和自动推送
 
-   模糊订阅全server/+/up主题，根据客户端的client_id自动推送到对应的主题，例如客户端向`/server/client_a/up`推送，OpenClaw处理完后，将会向`/client/client_b/down`推送消息。
+   模糊订阅全server/+/up主题，根据客户端的client_id自动推送到对应的主题，例如客户端向`/server/client_a/up`推送QwenPaw处理完后，将会向`/client/client_b/down`推送消息。
 
    | subscribe_topic | publish_topic           |
    | --------------- | ----------------------- |
@@ -637,13 +842,13 @@ JSON消息格式
    }
    ```
 
-   消息会根据redirect_client_id属性，推送至 `client/client_b/down`，从而实现跨主题推送。在物联网场景，可以做到以OpenClaw为核心，根据个人需求，多设备间自主推送消息。
+   消息会根据redirect_client_id属性，推送至 `client/client_b/down`，从而实现跨主题推送。在物联网场景，可以做到以QwenPaw为核心，根据个人需求，多设备间自主推送消息。
 
 ---
 
 ## Matrix
 
-Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 CoPaw 接入任意 Matrix 服务器，支持私聊和群聊房间中的文本消息收发。
+Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 QwenPaw 接入任意 Matrix 服务器，支持私聊和群聊房间中的文本消息收发。
 
 ### 创建机器人账号并获取 Access Token
 
@@ -677,9 +882,9 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 - **User ID** — 例如 `@mybot:matrix.org`
 - **Access Token** — 上面复制的 Token（以密码框形式显示）
 
-**方式二：** 编辑 `~/.copaw/config.json`
+**方式二：** 编辑智能体工作区的 `agent.json`
 
-在 `config.json` 中找到 `channels.matrix`：
+在 `agent.json`（如 `~/.qwenpaw/workspaces/default/agent.json`）中找到 `channels.matrix`：
 
 ```json
 "matrix": {
@@ -691,7 +896,15 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 }
 ```
 
-保存后，若 CoPaw 已在运行，频道会自动重载。
+**Matrix 专属字段说明：**
+
+| 字段           | 类型   | 默认值       | 说明                                         |
+| -------------- | ------ | ------------ | -------------------------------------------- |
+| `homeserver`   | string | `""`（必填） | Matrix 服务器地址（如 `https://matrix.org`） |
+| `user_id`      | string | `""`（必填） | 机器人 User ID（如 `@mybot:matrix.org`）     |
+| `access_token` | string | `""`（必填） | 机器人的 Access Token（以 `syt_` 开头）      |
+
+保存后，若 QwenPaw 已在运行，频道会自动重载。
 
 ### 开始聊天
 
@@ -709,19 +922,392 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 
 小艺通道通过 **A2A (Agent-to-Agent) 协议** 基于 WebSocket 连接华为小艺平台。
 
-### 获取凭证
+### 获取凭证并配置
 
 1. 在小艺开放平台创建Agent。
 2. 获取 **AK** (Access Key)、**SK** (Secret Key) 和 **Agent ID**。
+3. 在控制台或智能体工作区的 `agent.json` 中配置。
 
-### 核心配置
+**配置示例：**
 
-| 字段         | 说明           | 默认值                                           |
-| ------------ | -------------- | ------------------------------------------------ |
-| **ak**       | 访问密钥       | -                                                |
-| **sk**       | 密钥           | -                                                |
-| **agent_id** | 代理唯一标识   | -                                                |
-| **ws_url**   | WebSocket 地址 | `wss://hag.cloud.huawei.com/openclaw/v1/ws/link` |
+```json
+"xiaoyi": {
+  "enabled": true,
+  "bot_prefix": "[BOT]",
+  "ak": "your_access_key",
+  "sk": "your_secret_key",
+  "agent_id": "your_agent_id",
+  "ws_url": "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
+}
+```
+
+**小艺专属字段说明：**
+
+| 字段       | 类型   | 默认值                                           | 说明                |
+| ---------- | ------ | ------------------------------------------------ | ------------------- |
+| `ak`       | string | `""`（必填）                                     | 访问密钥 Access Key |
+| `sk`       | string | `""`（必填）                                     | 密钥 Secret Key     |
+| `agent_id` | string | `""`（必填）                                     | 代理唯一标识        |
+| `ws_url`   | string | `wss://hag.cloud.huawei.com/openclaw/v1/ws/link` | WebSocket 地址      |
+
+### 支持的文件类型
+
+**图片**：JPEG, JPG, PNG, BMP, WEBP
+
+**文件**：PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT
+
+> 注：小艺平台限制，不支持视频和音频文件。
+
+---
+
+## Voice
+
+Voice 频道通过 Twilio ConversationRelay 实现电话语音交互，支持语音转文本（STT）、文本转语音（TTS），让用户可以直接拨打电话与 QwenPaw 对话。
+
+### 前置要求
+
+1. **Twilio 账号**：从 [Twilio 官网](https://www.twilio.com/) 注册账号并获取凭证
+2. **Cloudflare Tunnel**（或其他内网穿透方案）：将本地 QwenPaw 服务暴露到公网，供 Twilio 回调使用
+
+### 创建 Twilio 账号并获取凭证
+
+1. 访问 [Twilio Console](https://console.twilio.com/)，注册账号
+2. 在 Dashboard 中获取：
+   - **Account SID**（账号标识）
+   - **Auth Token**（认证令牌）
+3. 购买电话号码：
+   - 前往 **Phone Numbers → Buy a Number**
+   - 选择支持语音通话的号码
+   - 记录 **Phone Number**（如 `+1234567890`）和 **Phone Number SID**
+
+### 配置 Cloudflare Tunnel
+
+Twilio 需要通过公网回调 QwenPaw 的 Webhook 接口，因此需要将本地服务暴露到公网。
+
+1. 安装 Cloudflare Tunnel 客户端：
+
+```bash
+# macOS
+brew install cloudflare/cloudflare/cloudflared
+
+# Linux
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+sudo chmod +x /usr/local/bin/cloudflared
+```
+
+2. 启动隧道，将本地 8088 端口暴露到公网：
+
+```bash
+cloudflared tunnel --url http://localhost:8088
+```
+
+3. 终端会输出一个公网 URL，例如：`https://abc-def-ghi.trycloudflare.com`
+
+### 配置 Voice 频道
+
+**方式一：** 在 Console 中配置
+
+前往 **控制 → 频道**，点击 **Voice**，启用后填写：
+
+- **Twilio Account SID**：从 Twilio Dashboard 获取
+- **Twilio Auth Token**：从 Twilio Dashboard 获取
+- **Phone Number**：购买的电话号码（如 `+1234567890`）
+- **Phone Number SID**：电话号码的 SID
+
+高级选项：
+
+- **TTS Provider**：文本转语音提供商（默认 `google`）
+- **TTS Voice**：语音模型（默认 `en-US-Journey-D`）
+- **STT Provider**：语音转文本提供商（默认 `deepgram`）
+- **Language**：语言代码（默认 `en-US`）
+- **Welcome Greeting**：欢迎语（用户接通电话后的第一句话）
+
+**方式二：** 手动编辑 `agent.json`
+
+```json
+{
+  "channels": {
+    "voice": {
+      "enabled": true,
+      "twilio_account_sid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "twilio_auth_token": "your_auth_token",
+      "phone_number": "+1234567890",
+      "phone_number_sid": "PNxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "tts_provider": "google",
+      "tts_voice": "en-US-Journey-D",
+      "stt_provider": "deepgram",
+      "language": "en-US",
+      "welcome_greeting": "Hi! This is QwenPaw. How can I help you?"
+    }
+  }
+}
+```
+
+### 配置 Twilio Webhook
+
+在 Twilio Console 中配置电话号码的 Webhook：
+
+1. 前往 **Phone Numbers → Manage → Active Numbers**
+2. 点击你的电话号码
+3. 在 **Voice Configuration** 部分：
+   - **A Call Comes In**：选择 **Webhook**
+   - **URL**：填入 `https://your-cloudflare-url.trycloudflare.com/api/voice/callback`
+   - **HTTP Method**：选择 **POST**
+4. 保存配置
+
+### 使用方式
+
+配置完成后，直接拨打你购买的 Twilio 电话号码，即可与 QwenPaw 进行语音对话：
+
+1. 拨打电话
+2. 听到欢迎语后开始说话
+3. QwenPaw 将语音转文本，调用 Agent 处理
+4. 将 Agent 的回复转为语音播放给用户
+
+**Voice 频道专属字段说明：**
+
+| 字段                 | 类型   | 默认值                                       | 说明                               |
+| -------------------- | ------ | -------------------------------------------- | ---------------------------------- |
+| `twilio_account_sid` | string | `""`（必填）                                 | Twilio Account SID                 |
+| `twilio_auth_token`  | string | `""`（必填）                                 | Twilio Auth Token                  |
+| `phone_number`       | string | `""`（必填）                                 | 购买的电话号码（如 `+1234567890`） |
+| `phone_number_sid`   | string | `""`（必填）                                 | 电话号码的 SID                     |
+| `tts_provider`       | string | `"google"`                                   | 文本转语音提供商                   |
+| `tts_voice`          | string | `"en-US-Journey-D"`                          | TTS 语音模型                       |
+| `stt_provider`       | string | `"deepgram"`                                 | 语音转文本提供商                   |
+| `language`           | string | `"en-US"`                                    | 语言代码                           |
+| `welcome_greeting`   | string | `"Hi! This is QwenPaw. How can I help you?"` | 欢迎语（接通电话后的第一句话）     |
+
+> **注意**：Voice 频道需要持续的网络连接和内网穿透工具运行。建议在生产环境使用稳定的内网穿透方案（如 Cloudflare Tunnel、ngrok 付费版等）。
+
+---
+
+## SIP
+
+SIP 频道让你可以通过标准 SIP 电话或软电话（如 Linphone、MicroSIP、IP 座机）与 QwenPaw 进行语音对话。完全在本地网络或私有基础设施上运行，无需云账号或公网 URL。
+
+提供两种后端模式：
+
+| 模式        | 适用场景            | 需要外部基础设施？                 |
+| ----------- | ------------------- | ---------------------------------- |
+| **Dev**     | 本地开发、PoC、调试 | 不需要 — 内置 SIP 注册服务器       |
+| **LiveKit** | 生产环境、高音质    | LiveKit Server（或 LiveKit Cloud） |
+
+### 快速体验：Dev 模式（3 分钟，零外部依赖）
+
+最快的体验方式。QwenPaw 会自动启动内置 SIP 注册服务器，无需 Asterisk、FreeSWITCH 或任何外部服务。
+
+1. 安装：
+
+```bash
+pip install "qwenpaw[sip]"
+```
+
+2. 启动 QwenPaw 并在控制台中配置：
+
+```bash
+qwenpaw init --defaults
+qwenpaw app
+```
+
+打开 **http://127.0.0.1:8088/** → **设置 → 模型**：配置模型提供商和 API Key。然后进入 **控制 → 频道 → SIP**：启用，填入 DashScope API Key，点击 **保存**。其他字段全部留空即可 — `sip_server` 留空时 QwenPaw 自动启动内置注册服务器，STT/TTS 默认使用 `aliyun`，语音模型自动选择默认音色。
+
+QwenPaw 会自动重启 SIP 频道，终端中会看到：
+
+```
+[SIP] Built-in SIP registrar started on 0.0.0.0:5060
+[SIP] Quickstart: register your softphone to <你的IP>:5060
+[SIP] Dial 'sip:agent@<你的IP>:5060' to talk with QwenPaw!
+```
+
+3. 打开 [Linphone](https://www.linphone.org/linphone)（或任意 SIP 软电话）并配置：
+
+   - 进入 **Preferences → SIP Accounts → Add**
+   - Username：任意名称（如 `caller`）
+   - SIP Domain：`127.0.0.1`（使用 IP 地址，**不要**用 `localhost`，避免 IPv6 问题）
+   - Transport：**UDP**
+   - 无需密码 — 内置注册服务器接受所有注册
+   - 拨号：`sip:agent@127.0.0.1:5060`
+
+   你会听到欢迎语，然后说话 — QwenPaw 会回复！
+
+   **也可以用 pjsua（命令行，使用系统麦克风/扬声器）**
+
+   ```bash
+   pjsua --local-port=5062 \
+     --bound-addr=127.0.0.1 \
+     --no-tcp \
+     --id='sip:caller@127.0.0.1:5062' \
+     --registrar='sip:127.0.0.1:5060' \
+     --realm='*' --username=caller --password=pass
+   ```
+
+   注册成功后按 `m` 发起呼叫，输入 `sip:agent@127.0.0.1:5060`，即可通过麦克风对话。按 `h` 挂断。
+
+> **注意**：内置注册服务器仅供快速试用。生产环境请参见下方[生产部署](#生产部署)。
+
+### 快速体验：LiveKit 模式浏览器测试（3 分钟，无需 SIP 电话）
+
+你可以直接用浏览器通过 WebRTC 测试完整的 LiveKit 音频管线，无需 SIP Trunk、Docker 或 Redis。
+
+1. 注册 [LiveKit Cloud](https://cloud.livekit.io/)（有免费额度），创建项目。在 **Settings → Project** 中获取项目 URL，在 **Settings → API keys** 中获取 API Key 和 API Secret。
+
+2. 安装、启动 QwenPaw 并在控制台中配置：
+
+```bash
+pip install "qwenpaw[sip,sip-livekit]"
+qwenpaw init --defaults
+qwenpaw app
+```
+
+打开 **http://127.0.0.1:8088/** → **设置 → 模型**：配置模型提供商和 API Key。然后进入 **控制 → 频道 → SIP**：启用，SIP 模式选 **Production (LiveKit)**，填写以下 4 个字段：
+
+- **LiveKit URL**（如 `wss://<your-project>.livekit.cloud`）
+- **LiveKit API Key**
+- **LiveKit API Secret**
+- **DashScope API Key**
+
+其他字段全部留空即可，点击 **保存**。
+
+终端中会看到：`Connected to room: sip-inbound, waiting...`
+
+3. 生成 Token 并通过 [LiveKit Meet](https://meet.livekit.io/) 加入房间：
+
+   ```bash
+   # 安装 LiveKit CLI（一次性）
+   brew install livekit-cli
+
+   # 生成 Token
+   lk token create \
+     --api-key <your-api-key> \
+     --api-secret <your-api-secret> \
+     --join --room sip-inbound \
+     --identity test-user
+   ```
+
+   - 打开 [meet.livekit.io](https://meet.livekit.io/) → 点击底部 **"Custom"**
+   - 输入你的 LiveKit Cloud URL（如 `wss://<your-project>.livekit.cloud`）
+   - 粘贴生成的 Token 并点击 **Connect**
+   - 允许麦克风权限，然后说话 — QwenPaw 会回复！
+
+> **注意**：浏览器测试与真实 SIP 电话走的是完全相同的音频管线（流式 STT、24kHz TTS、语音打断），是 LiveKit 模式的完整验证。
+
+### 生产部署
+
+生产环境下使用真实电话号码和运营商级可靠性，可选择以下方案：
+
+**Dev 模式 + 外部 SIP 服务器：**
+
+使用 Asterisk、FreeSWITCH 或任意 SIP PBX 作为注册服务器。将 `sip_server` 设为 PBX 地址，QwenPaw 注册为 SIP 分机，由 PBX 路由来电。
+
+**LiveKit 模式 + SIP Trunk：**
+
+需要 PSTN 连接（真实电话号码）时，部署 LiveKit Server + LiveKit SIP，配合 SIP Trunk 提供商（如 Twilio、Telnyx、Vonage）。参见 [LiveKit SIP 文档](https://docs.livekit.io/sip/)。
+
+| 生产方案                          | 支持 PSTN？    | 可扩展性 | 复杂度 |
+| --------------------------------- | -------------- | -------- | ------ |
+| Dev + Asterisk/FreeSWITCH         | 是（需 trunk） | 单路通话 | 低     |
+| LiveKit + Twilio/Telnyx SIP Trunk | 是             | 高       | 中     |
+| LiveKit + 自建 SIP 基础设施       | 视情况         | 高       | 高     |
+
+### Dev 模式配置
+
+Dev 模式使用 `pyVoIP` — 一个纯 Python SIP 库。
+
+**方式一：** 在控制台中配置
+
+进入 **控制 → 频道**，点击 **SIP**，选择 **Dev (pyVoIP)** 模式。`sip_server` 留空使用内置注册服务器，或填写外部 SIP 服务器地址。点击 **保存**。
+
+**方式二：** 编辑 agent 工作区 `agent.json`
+
+```json
+{
+  "channels": {
+    "sip": {
+      "enabled": true,
+      "sip_mode": "dev",
+      "sip_server": "",
+      "stt_provider": "aliyun",
+      "tts_provider": "aliyun",
+      "tts_voice": "longxiaochun",
+      "language": "zh-CN",
+      "welcome_greeting": "你好，我是QwenPaw"
+    }
+  }
+}
+```
+
+`sip_server` 留空时，QwenPaw 自动在 5060 端口启动内置 SIP 注册服务器，agent 自动注册。设置 `sip_server`（如 `"192.168.1.100:5060"`）时，QwenPaw 注册到该外部服务器。
+
+### LiveKit 模式配置
+
+生产模式将 SIP/RTP 委托给 LiveKit SIP Server，处理 NAT 穿透、抖动缓冲和编解码协商。QwenPaw 作为 AI 参与者加入 LiveKit 房间。
+
+1. 安装扩展：
+
+```bash
+pip install "qwenpaw[sip,sip-livekit]"
+```
+
+2. 在控制台或 `agent.json` 中配置 SIP 频道：
+
+```json
+{
+  "channels": {
+    "sip": {
+      "enabled": true,
+      "sip_mode": "livekit",
+      "livekit_url": "wss://<your-project>.livekit.cloud",
+      "livekit_api_key": "your-api-key",
+      "livekit_api_secret": "your-api-secret",
+      "stt_provider": "aliyun",
+      "tts_provider": "aliyun",
+      "tts_voice": "longxiaochun",
+      "language": "zh-CN",
+      "welcome_greeting": "你好，我是QwenPaw"
+    }
+  }
+}
+```
+
+> **`livekit_url`**：LiveKit Cloud 使用 `wss://<project>.livekit.cloud`，自建 LiveKit Server 使用 `ws://<host>:<port>`。
+
+3. 启动 QwenPaw。如需 SIP 电话呼入，还需部署 LiveKit 基础设施并配置 SIP Trunk 和 Dispatch Rule（参见 [LiveKit SIP 文档](https://docs.livekit.io/sip/)）。浏览器测试请参见上方[快速体验](#快速体验livekit-模式浏览器测试3-分钟无需-sip-电话)。
+
+### 使用方式
+
+配置完成后，从 SIP 电话或浏览器发起通话：
+
+1. 电话接通，听到欢迎语
+2. 开始说话 — QwenPaw 通过流式 STT 将语音转为文本
+3. Agent 处理消息并生成回复
+4. 回复通过 TTS 转为语音播放给你
+5. 自然地继续对话 — 完全支持多轮对话
+6. 支持语音打断：在 Agent 说话时直接开口即可打断
+
+### SIP 频道专属字段说明
+
+| 字段                 | 类型   | 默认值                                       | 说明                                                   |
+| -------------------- | ------ | -------------------------------------------- | ------------------------------------------------------ |
+| `sip_mode`           | string | `"dev"`                                      | 后端模式：`"dev"`（pyVoIP）或 `"livekit"`              |
+| `sip_server`         | string | `""`                                         | SIP 注册服务器地址，留空使用内置注册服务器（dev 模式） |
+| `sip_username`       | string | `""`                                         | SIP 账号用户名（内置注册服务器默认 `agent`）           |
+| `sip_password`       | string | `""`                                         | SIP 账号密码                                           |
+| `sip_host`           | string | `"0.0.0.0"`                                  | 本地绑定地址                                           |
+| `sip_port`           | int    | `5061`                                       | 本地 SIP 端口（agent 侧）                              |
+| `sip_transport`      | string | `"UDP"`                                      | SIP 传输协议：`UDP`、`TCP` 或 `TLS`                    |
+| `rtp_port_low`       | int    | `10000`                                      | RTP 端口范围起始（仅 dev 模式）                        |
+| `rtp_port_high`      | int    | `20000`                                      | RTP 端口范围结束（仅 dev 模式）                        |
+| `livekit_url`        | string | `""`                                         | LiveKit Server WebSocket URL（生产模式）               |
+| `livekit_api_key`    | string | `""`                                         | LiveKit API 密钥（生产模式）                           |
+| `livekit_api_secret` | string | `""`                                         | LiveKit API 密钥（生产模式）                           |
+| `tts_provider`       | string | `"aliyun"`                                   | TTS 提供商（目前支持 `aliyun`）                        |
+| `tts_voice`          | string | `"longxiaochun"`                             | TTS 语音模型                                           |
+| `stt_provider`       | string | `"aliyun"`                                   | STT 提供商（目前支持 `aliyun`）                        |
+| `language`           | string | `"zh-CN"`                                    | 语言代码                                               |
+| `welcome_greeting`   | string | `"Hi! This is QwenPaw. How can I help you?"` | 欢迎语（接通电话后的第一句话）                         |
+| `call_timeout`       | float  | `30.0`                                       | 呼出超时时间（秒）                                     |
 
 ---
 
@@ -729,21 +1315,40 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 
 ### 配置总览
 
-| 频道       | 配置键     | 必填/主要字段                                                                           |
-| ---------- | ---------- | --------------------------------------------------------------------------------------- |
-| 钉钉       | dingtalk   | client_id, client_secret, message_type, card_template_id, card_template_key, robot_code |
-| 飞书       | feishu     | app_id, app_secret；可选 encrypt_key, verification_token, media_dir                     |
-| iMessage   | imessage   | db_path, poll_sec（仅 macOS）                                                           |
-| Discord    | discord    | bot_token；可选 http_proxy, http_proxy_auth                                             |
-| QQ         | qq         | app_id, client_secret                                                                   |
-| Telegram   | telegram   | bot_token；可选 http_proxy, http_proxy_auth                                             |
-| Mattermost | mattermost | url, bot_token; 可选 show_typing, dm_policy, allow_from                                 |
-| Matrix     | matrix     | homeserver, user_id, access_token                                                       |
-| 小艺       | xiaoyi     | ak, sk, agent_id；可选 ws_url                                                           |
+| 频道       | 配置键     | 必填/主要字段                                                                                          |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| 钉钉       | dingtalk   | client_id, client_secret, message_type, card_template_id, card_template_key, robot_code                |
+| 飞书       | feishu     | app_id, app_secret；可选 encrypt_key, verification_token, media_dir                                    |
+| iMessage   | imessage   | db_path, poll_sec（仅 macOS）                                                                          |
+| Discord    | discord    | bot_token；可选 http_proxy, http_proxy_auth                                                            |
+| QQ         | qq         | app_id, client_secret                                                                                  |
+| Telegram   | telegram   | bot_token；可选 http_proxy, http_proxy_auth                                                            |
+| Mattermost | mattermost | url, bot_token; 可选 show_typing, dm_policy, allow_from                                                |
+| Matrix     | matrix     | homeserver, user_id, access_token                                                                      |
+| 企业微信   | wecom      | bot_id, secret；可选 media_dir                                                                         |
+| 微信个人   | wechat     | bot_token（或扫码登录）；可选 bot_token_file, base_url, media_dir                                      |
+| 小艺       | xiaoyi     | ak, sk, agent_id；可选 ws_url                                                                          |
+| Voice      | voice      | twilio_account_sid, twilio_auth_token, phone_number, phone_number_sid；可选 tts_provider, stt_provider |
 
 所有频道均支持本页顶部「通用字段」中介绍的访问控制字段（`dm_policy`、`group_policy`、`allow_from`、`deny_message`、`require_mention`）。
 
 各频道字段与完整结构见上文表格及 [配置与工作目录](./config)。
+
+### 通用字段说明
+
+所有频道都支持以下通用字段：
+
+| 字段                   | 类型     | 默认值   | 说明                                                    |
+| ---------------------- | -------- | -------- | ------------------------------------------------------- |
+| `enabled`              | bool     | `false`  | 是否启用该频道                                          |
+| `bot_prefix`           | string   | `""`     | 机器人回复前缀（如 `[BOT]`）                            |
+| `filter_tool_messages` | bool     | `false`  | 是否过滤工具调用/输出消息                               |
+| `filter_thinking`      | bool     | `false`  | 是否过滤思考/推理内容                                   |
+| `dm_policy`            | string   | `"open"` | 私聊访问策略：`"open"`（开放）/ `"allowlist"`（白名单） |
+| `group_policy`         | string   | `"open"` | 群聊访问策略：`"open"`（开放）/ `"allowlist"`（白名单） |
+| `allow_from`           | string[] | `[]`     | 白名单列表（当 policy 为 `"allowlist"` 时生效）         |
+| `deny_message`         | string   | `""`     | 拒绝访问时的提示消息                                    |
+| `require_mention`      | bool     | `false`  | 是否需要 @机器人 才响应                                 |
 
 ### 多模态消息支持
 
@@ -756,12 +1361,14 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 | 飞书       | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
 | Discord    | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
 | iMessage   | ✓        | ✗        | ✗        | ✗        | ✗        | ✓        | ✗        | ✗        | ✗        | ✗        |
-| QQ         | ✓        | 🚧       | 🚧       | 🚧       | 🚧       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
-| 企业微信   | ✓        | ✓        | 🚧       | ✓        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
+| QQ         | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
+| 企业微信   | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
+| 微信个人   | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
 | Telegram   | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
 | Mattermost | ✓        | ✓        | 🚧       | 🚧       | ✓        | ✓        | ✓        | 🚧       | 🚧       | ✓        |
 | Matrix     | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        | ✓        |
-| 小艺       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
+| 小艺       | ✓        | ✓        | ✗        | ✗        | ✓        | ✓        | 🚧       | 🚧       | 🚧       | 🚧       |
+| Voice      | ✗        | ✗        | ✗        | ✓        | ✗        | ✗        | ✗        | ✗        | ✓        | ✗        |
 
 说明：
 
@@ -771,13 +1378,15 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 - **iMessage**：基于本地 imsg + 数据库轮询，仅支持文本收发；平台/实现限制，无法支持附件（✗）。
 - **QQ**：接收侧附件解析为多模态、发送侧真实媒体均为 🚧 施工中，当前仅文本 + 链接形式。
 - **Telegram**：接收时附件会解析为文件并传入，可在telegram对话界面以对应格式打开（图片 / 语音 / 视频 / 文件）
-- **企业微信**：WebSocket 长连接接收，markdown/template_card 发送；支持接收文本、图片、语音和文件；发送媒体暂不支持（SDK 限制，仅支持通过 markdown 发送文本）。
+- **企业微信**：WebSocket 长连接接收，markdown/template_card 发送；支持接收和发送文本、图片、语音、视频和文件。
+- **微信个人（iLink）**：HTTP 长轮询接收，支持文本、图片（AES-128-ECB 解密）、语音（ASR 转录文字）、文件和视频；发送支持文本、图片、文件和视频；音频文件（如 MP3）因 iLink API 限制暂不支持。
 - **Matrix**：接收图片 / 视频 / 音频 / 文件（通过 `mxc://` 媒体 URL）；发送时将文件上传至服务器后以原生 Matrix 媒体消息（`m.image`、`m.video`、`m.audio`、`m.file`）发出。
-- **小艺**：当前仅支持文本。
+- **小艺**：支持接收文本、图片（JPEG/PNG/BMP/WEBP）和文件（PDF/DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT）；平台限制不支持视频和音频。
+- **Voice**：纯语音通话频道，接收用户语音并转为文本，Agent 回复转为语音播放；不支持其他格式。
 
 ### 通过 HTTP 修改配置
 
-服务运行时可读写频道配置，修改会写回 `config.json` 并自动生效：
+服务运行时可读写频道配置，修改会写回 `agent.json` 并自动生效：
 
 - `GET /config/channels` — 获取全部频道
 - `PUT /config/channels` — 整体覆盖
@@ -818,8 +1427,8 @@ Matrix 频道通过 [matrix-nio](https://github.com/poljar/matrix-nio) 库将 Co
 ```python
 # my_channel.py
 from agentscope_runtime.engine.schemas.agent_schemas import TextContent, ContentType
-from copaw.app.channels.base import BaseChannel
-from copaw.app.channels.schema import ChannelType
+from qwenpaw.app.channels.base import BaseChannel
+from qwenpaw.app.channels.schema import ChannelType
 
 class MyChannel(BaseChannel):
     channel: ChannelType = "my_channel"
@@ -919,10 +1528,97 @@ def build_agent_request_from_native(self, native_payload):
 
 ### 自定义渠道目录与 CLI
 
-- **目录**：工作目录下的 `custom_channels/`（默认 `~/.copaw/custom_channels/`）用于存放自定义渠道模块。Manager 启动时会扫描该目录下的 `.py` 文件与包（含 `__init__.py` 的子目录），加载其中的 `BaseChannel` 子类，并按类的 `channel` 属性注册。
-- **安装**：`copaw channels install <key>` 会在 `custom_channels/` 下生成名为 `<key>.py` 的模板文件，可直接编辑实现；也可用 `--path <本地路径>` 或 `--url <URL>` 从本地/网络复制渠道模块。`copaw channels add <key>` 等价于安装后并写入 config 默认项，且可加 `--path`/`--url`。
-- **删除**：`copaw channels remove <key>` 会从 `custom_channels/` 中删除该渠道模块（仅支持自定义渠道，内置渠道不可删）；加 `--no-keep-config`（默认）会同时从 `config.json` 的 `channels` 中移除对应 key。
-- **Config**：`ChannelConfig` 使用 `extra="allow"`，`config.json` 的 `channels` 下可写任意 key；自定义渠道的配置会保存在 extra 中。配置方式与内置一致：`copaw channels config` 交互式配置，或直接编辑 config。
+- **目录**：工作目录下的 `custom_channels/`（默认 `~/.qwenpaw/custom_channels/`）用于存放自定义渠道模块。Manager 启动时会扫描该目录下的 `.py` 文件与包（含 `__init__.py` 的子目录），加载其中的 `BaseChannel` 子类，并按类的 `channel` 属性注册。
+- **安装**：`qwenpaw channels install <key>` 会在 `custom_channels/` 下生成名为 `<key>.py` 的模板文件，可直接编辑实现；也可用 `--path <本地路径>` 或 `--url <URL>` 从本地/网络复制渠道模块。`qwenpaw channels add <key>` 等价于安装后并写入 config 默认项，且可加 `--path`/`--url`。
+- **删除**：`qwenpaw channels remove <key>` 会从 `custom_channels/` 中删除该渠道模块（仅支持自定义渠道，内置渠道不可删）；加 `--no-keep-config`（默认）会同时从 `config.json` 的 `channels` 中移除对应 key。
+- **Config**：`ChannelConfig` 使用 `extra="allow"`，`config.json` 的 `channels` 下可写任意 key；自定义渠道的配置会保存在 extra 中。配置方式与内置一致：`qwenpaw channels config` 交互式配置，或直接编辑 config。
+
+### HTTP 路由注册
+
+对于需要 Webhook 回调的渠道（如微信、Slack、LINE 等），可以通过在模块中导出 `register_app_routes` 可调用对象来注册自定义 HTTP 路由，无需修改 QwenPaw 核心源码。
+
+QwenPaw 启动时会扫描 `custom_channels/` 下的模块，发现 `register_app_routes` 后将其与 FastAPI `app` 实例一起调用，渠道即可注册所需的任何路由。
+
+**路由前缀规则**：
+
+| 路由前缀 | 行为                     |
+| -------- | ------------------------ |
+| `/api/`  | 静默注册                 |
+| 其他路径 | 启动时打印警告（不阻断） |
+
+**接口说明 — `register_app_routes(app)`**
+
+- **参数**：`app` — FastAPI 应用实例
+- **返回**：None
+- **作用域**：注册路由、中间件、或 startup/shutdown 事件
+- **错误隔离**：单个渠道注册失败不影响其他渠道
+
+**最简示例 — Echo 频道**：
+
+```
+<workspace>/
+└── custom_channels/
+    └── my_echo/
+        └── __init__.py
+```
+
+```python
+# custom_channels/my_echo/__init__.py
+from qwenpaw.app.channels.base import BaseChannel
+
+class MyEchoChannel(BaseChannel):
+    """最简单的回声频道。"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    async def _listen(self):
+        pass  # 通过 HTTP 回调接收消息
+
+    async def _send(self, target, content, **kwargs):
+        self.logger.info(f"Would send to {target}: {content}")
+
+
+def register_app_routes(app):
+    """注册该频道的 HTTP 路由。"""
+
+    @app.post("/api/my-echo/callback")
+    async def echo_callback(request):
+        """Webhook 入口。"""
+        body = await request.json()
+
+        from qwenpaw.app.channels.base import TextContent
+        channel = MyEchoChannel()
+        channel.enqueue_user_message(
+            user_id=body.get("user_id", "anonymous"),
+            session_id=body.get("session_id", "default"),
+            content=[TextContent(type="text", text=body.get("text", ""))],
+        )
+
+        return {"status": "ok"}
+```
+
+配置 `agent.json`：
+
+```json
+{
+  "channels": {
+    "my_echo": {
+      "enabled": true
+    }
+  }
+}
+```
+
+启动后测试：
+
+```bash
+curl -X POST http://localhost:8088/api/my-echo/callback \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test", "session_id": "test", "text": "Hello!"}'
+```
+
+**实际案例**：微信 ClawBot 集成（[PR #2140](https://github.com/agentscope-ai/QwenPaw/pull/2140)、[Issue #2043](https://github.com/agentscope-ai/QwenPaw/issues/2043)）通过此机制注册 `/api/wechat/callback` 路由，使用腾讯官方 SDK 处理消息投递。
 
 ---
 
@@ -932,4 +1628,4 @@ def build_agent_request_from_native(self, native_payload):
 - [快速开始](./quickstart) — 安装与首次启动
 - [心跳](./heartbeat) — 定时自检/摘要
 - [CLI](./cli) — init、app、cron、clean
-- [配置与工作目录](./config) — config.json 与工作目录
+- [配置与工作目录](./config) — 配置文件与工作目录

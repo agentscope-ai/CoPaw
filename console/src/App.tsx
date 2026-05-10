@@ -1,5 +1,10 @@
 import { createGlobalStyle } from "antd-style";
-import { ConfigProvider, bailianTheme } from "@agentscope-ai/design";
+import {
+  ConfigProvider,
+  bailianDarkTheme,
+  bailianTheme,
+} from "@agentscope-ai/design";
+import { App as AntdApp } from "antd";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,13 +15,21 @@ import ruRU from "antd/locale/ru_RU";
 import type { Locale } from "antd/es/locale";
 import { theme as antdTheme } from "antd";
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/zh-cn";
 import "dayjs/locale/ja";
 import "dayjs/locale/ru";
+dayjs.extend(relativeTime);
 import MainLayout from "./layouts/MainLayout";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
-import LoginPage from "./pages/Login";
+import { PluginProvider, usePlugins } from "./plugins/PluginContext";
+import { ApprovalProvider } from "./contexts/ApprovalContext";
+import { Suspense } from "react";
+import { lazyImportWithRetry } from "./utils/lazyWithRetry";
+
+const LoginPage = lazyImportWithRetry("./pages/Login/index");
 import { authApi } from "./api/modules/auth";
+import { languageApi } from "./api/modules/language";
 import { getApiUrl, getApiToken, clearAuthToken } from "./api/config";
 import "./styles/layout.css";
 import "./styles/form-override.css";
@@ -107,10 +120,28 @@ function AppInner() {
   const basename = getRouterBasename(window.location.pathname);
   const { i18n } = useTranslation();
   const { isDark } = useTheme();
+  const { loading: pluginsLoading } = usePlugins();
+  const selectedTheme = isDark ? bailianDarkTheme : bailianTheme;
   const lang = i18n.resolvedLanguage || i18n.language || "en";
   const [antdLocale, setAntdLocale] = useState<Locale>(
     antdLocaleMap[lang] ?? enUS,
   );
+
+  useEffect(() => {
+    if (!localStorage.getItem("language")) {
+      languageApi
+        .getLanguage()
+        .then(({ language }) => {
+          if (language && language !== i18n.language) {
+            i18n.changeLanguage(language);
+            localStorage.setItem("language", language);
+          }
+        })
+        .catch((err) =>
+          console.error("Failed to fetch language preference:", err),
+        );
+    }
+  }, []);
 
   useEffect(() => {
     const handleLanguageChanged = (lng: string) => {
@@ -128,32 +159,51 @@ function AppInner() {
     };
   }, [i18n]);
 
+  // Wait for plugins to load before rendering routes that might be patched
+  if (pluginsLoading) {
+    return null;
+  }
+
   return (
     <BrowserRouter basename={basename}>
       <GlobalStyle />
       <ConfigProvider
-        {...bailianTheme}
-        prefix="copaw"
-        prefixCls="copaw"
+        {...selectedTheme}
+        prefix="qwenpaw"
+        prefixCls="qwenpaw"
         locale={antdLocale}
         theme={{
-          ...(bailianTheme as any)?.theme,
+          ...(selectedTheme as any)?.theme,
           algorithm: isDark
             ? antdTheme.darkAlgorithm
             : antdTheme.defaultAlgorithm,
+          token: {
+            colorPrimary: "#FF7F16",
+          },
         }}
       >
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/*"
-            element={
-              <AuthGuard>
-                <MainLayout />
-              </AuthGuard>
-            }
-          />
-        </Routes>
+        <AntdApp>
+          <ApprovalProvider>
+            <Routes>
+              <Route
+                path="/login"
+                element={
+                  <Suspense fallback={null}>
+                    <LoginPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/*"
+                element={
+                  <AuthGuard>
+                    <MainLayout />
+                  </AuthGuard>
+                }
+              />
+            </Routes>
+          </ApprovalProvider>
+        </AntdApp>
       </ConfigProvider>
     </BrowserRouter>
   );
@@ -162,7 +212,9 @@ function AppInner() {
 function App() {
   return (
     <ThemeProvider>
-      <AppInner />
+      <PluginProvider>
+        <AppInner />
+      </PluginProvider>
     </ThemeProvider>
   );
 }

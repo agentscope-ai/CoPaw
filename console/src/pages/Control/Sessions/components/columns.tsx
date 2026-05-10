@@ -2,11 +2,14 @@ import { Button, Tag } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { ColumnsType } from "antd/es/table";
-import { CHANNEL_COLORS, formatTime, type Session } from "./constants";
+import { formatTime, type Session } from "./constants";
+import { CHANNEL_COLORS } from "../../../../constants/channel";
+import styles from "../index.module.less";
 
 interface ColumnHandlers {
   onEdit: (session: Session) => void;
   onDelete: (sessionId: string) => void;
+  onView: (session: Session) => void;
   t: TFunction;
 }
 
@@ -82,13 +85,21 @@ export const createColumns = (
       width: 180,
       fixed: "right",
       render: (_: unknown, record: Session) => (
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className={styles.actionColumn}>
           <Button
             type="link"
             size="small"
             onClick={() => handlers.onEdit(record)}
           >
             {t("common.edit")}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            style={{ color: "#52c41a" }}
+            onClick={() => handlers.onView(record)}
+          >
+            {t("common.view")}
           </Button>
           <Button
             type="link"
