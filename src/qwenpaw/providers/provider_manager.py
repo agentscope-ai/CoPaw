@@ -943,7 +943,7 @@ PROVIDER_VOLCENGINE_CN = OpenAIProvider(
     api_key_prefix="",
     models=VOLCENGINE_MODELS,
     freeze_url=True,
-    support_model_discovery=True,
+    support_model_discovery=False,
 )
 
 PROVIDER_VOLCENGINE_CN_CODINGPLAN = OpenAIProvider(
@@ -954,7 +954,7 @@ PROVIDER_VOLCENGINE_CN_CODINGPLAN = OpenAIProvider(
     models=VOLCENGINE_CODINGPLAN_MODELS,
     support_connection_check=False,
     freeze_url=True,
-    support_model_discovery=True,
+    support_model_discovery=False,
 )
 
 
