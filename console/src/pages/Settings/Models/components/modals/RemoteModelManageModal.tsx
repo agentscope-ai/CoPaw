@@ -208,6 +208,7 @@ interface RemoteModelManageModalProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  initialAdding?: boolean;
 }
 
 function CapabilityTags({
@@ -264,6 +265,7 @@ export function RemoteModelManageModal({
   open,
   onClose,
   onSaved,
+  initialAdding = false,
 }: RemoteModelManageModalProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -573,6 +575,12 @@ export function RemoteModelManageModal({
       setDiscoveringModels(false);
     }
   };
+
+  useEffect(() => {
+    if (open && initialAdding && !isOpenRouter) {
+      setAdding(true);
+    }
+  }, [initialAdding, isOpenRouter, open]);
 
   useEffect(() => {
     if (!adding) {

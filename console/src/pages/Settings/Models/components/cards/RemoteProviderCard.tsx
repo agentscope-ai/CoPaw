@@ -24,6 +24,8 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
   const { message } = useAppMessage();
   const [modalOpen, setModalOpen] = useState(false);
   const [modelManageOpen, setModelManageOpen] = useState(false);
+  const [modelManageStartsAdding, setModelManageStartsAdding] = useState(false);
+  const [openModelsAfterConfig, setOpenModelsAfterConfig] = useState(false);
 
   const handleDeleteProvider = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -65,6 +67,45 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
 
   const hasModels = totalCount > 0;
   const isAvailable = isConfigured && hasModels;
+  const modelActionLabel = hasModels
+    ? t("models.models")
+    : t("models.addModel");
+
+  const openModelManager = (startAdding: boolean) => {
+    setModelManageStartsAdding(startAdding);
+    setModelManageOpen(true);
+  };
+
+  const handleModelAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!isConfigured) {
+      setOpenModelsAfterConfig(true);
+      setModalOpen(true);
+      return;
+    }
+
+    openModelManager(!hasModels);
+  };
+
+  const handleProviderConfigSaved = async () => {
+    await onSaved();
+
+    if (openModelsAfterConfig) {
+      setOpenModelsAfterConfig(false);
+      openModelManager(!hasModels);
+    }
+  };
+
+  const handleProviderConfigClose = () => {
+    setOpenModelsAfterConfig(false);
+    setModalOpen(false);
+  };
+
+  const handleModelManageClose = () => {
+    setModelManageOpen(false);
+    setModelManageStartsAdding(false);
+  };
 
   const providerTag = provider.is_custom ? (
     <span className={styles.customTag}>{t("models.custom")}</span>
@@ -158,15 +199,12 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
 
       <div className={styles.cardActions}>
         <Button
-          type="default"
+          type={hasModels ? "default" : "primary"}
           size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            setModelManageOpen(true);
-          }}
+          onClick={handleModelAction}
           className={styles.actionBtn}
         >
-          {t("models.models")}
+          {modelActionLabel}
         </Button>
         <Button
           type="default"
@@ -196,14 +234,15 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
         provider={provider}
         activeModels={activeModels}
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSaved={onSaved}
+        onClose={handleProviderConfigClose}
+        onSaved={handleProviderConfigSaved}
       />
       <ModelManageModal
         provider={provider}
         open={modelManageOpen}
-        onClose={() => setModelManageOpen(false)}
+        onClose={handleModelManageClose}
         onSaved={onSaved}
+        initialAdding={modelManageStartsAdding}
       />
     </Card>
   );
