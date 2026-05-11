@@ -99,7 +99,7 @@ class MemoryDistillToolPlugin:
                             agent_config.tools.builtin_tools = []
                         agent_config.tools.builtin_tools.append(tool_cfg)
 
-                save_agent_config(agent_config)
+                save_agent_config(agent_id, agent_config)
                 logger.info(f"✓ Tools added to agent {agent_id} config")
 
             except Exception as e:

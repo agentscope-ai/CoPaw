@@ -311,7 +311,7 @@ async def distill_memory(
     )
 
 
-async def consolidate_memory(
+async def consolidate_memory(  # pylint: disable=too-many-statements
     working_dir: str = "",
     days: int = 15,
     dry_run: bool = True,
