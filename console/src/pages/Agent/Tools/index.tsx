@@ -290,7 +290,10 @@ export default function ToolsPage() {
                 )}
 
                 <div className={styles.cardFooter}>
-                  {tool.name === "execute_shell_command" && (
+                  {[
+                    "execute_shell_command",
+                    "delegate_external_agent",
+                  ].includes(tool.name) && (
                     <Button
                       className={styles.toggleButton}
                       onClick={() => toggleAsyncExecution(tool)}
