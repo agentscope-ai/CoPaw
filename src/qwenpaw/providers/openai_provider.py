@@ -20,7 +20,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DASHSCOPE_BASE_URLS = (
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+)
 CODING_DASHSCOPE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
 TOKEN_PLAN_BASE_URL = (
     "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
@@ -143,7 +147,7 @@ class OpenAIProvider(Provider):
 
         client_kwargs = {"base_url": self.base_url}
 
-        if self.base_url == DASHSCOPE_BASE_URL:
+        if self.base_url in DASHSCOPE_BASE_URLS:
             client_kwargs["default_headers"] = {
                 "x-dashscope-agentapp": json.dumps(
                     {
