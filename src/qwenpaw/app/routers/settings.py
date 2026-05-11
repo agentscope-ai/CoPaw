@@ -17,7 +17,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 _SETTINGS_FILE = WORKING_DIR / "settings.json"
 
-_VALID_LANGUAGES = {"en", "zh", "ja", "ru", "pt-BR"}
+_VALID_LANGUAGES = {"en", "zh", "ja", "ru", "pt-BR", "id"}
 
 
 def _load() -> dict:
