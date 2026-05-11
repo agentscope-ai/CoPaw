@@ -288,9 +288,23 @@ const resolveRealId = (
   sessionList: IAgentScopeRuntimeWebUISession[],
   tempSessionId: string,
 ): { list: IAgentScopeRuntimeWebUISession[]; realId: string | null } => {
-  const realSession = sessionList.find(
-    (s) => (s as ExtendedSession).sessionId === tempSessionId,
+  // 1) Exact match: a session whose id already equals the temp timestamp
+  //    (e.g. after applyChatsToSessionList merged it).
+  let realSession = sessionList.find(
+    (s) => s.id === tempSessionId,
   );
+
+  // 2) Fallback: match by sessionId, but only consider sessions that have
+  //    NOT yet been resolved (no realId) to avoid stealing another session's
+  //    backend UUID — same class of bug as #3843.
+  if (!realSession) {
+    realSession = sessionList.find(
+      (s) =>
+        (s as ExtendedSession).sessionId === tempSessionId &&
+        !(s as ExtendedSession).realId,
+    );
+  }
+
   if (!realSession) return { list: sessionList, realId: null };
 
   const realUUID = realSession.id;
