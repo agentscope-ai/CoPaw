@@ -535,10 +535,12 @@ class AgentRunner(Runner):
                             cur_id = plan.id
                             if not had_plan or cur_id != prev_id:
                                 nb._plan_just_mutated = True
+                                nb._plan_awaiting_user_confirm = True
                             nb._qp_prev_plan_id = cur_id
                         else:
                             if had_plan:
                                 nb._plan_recently_finished = True
+                            nb._plan_awaiting_user_confirm = False
                             nb._qp_prev_plan_id = None
                         nb._qp_had_plan = plan is not None
 
@@ -674,6 +676,11 @@ class AgentRunner(Runner):
                     e,
                 )
             session_state_loaded = True
+
+            if plan_notebook is not None:
+                from ...plan.hints import clear_plan_awaiting_user_confirm
+
+                clear_plan_awaiting_user_confirm(plan_notebook)
 
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved

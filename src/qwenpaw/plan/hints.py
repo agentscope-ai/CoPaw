@@ -31,6 +31,16 @@ except ImportError:
 _DESC_LIMIT = 80
 _PLAN_DESC_LIMIT = 200
 
+# While ``_plan_awaiting_user_confirm`` is set (same agent run after
+# ``create_plan`` / ``revise_current_plan``), only these tools may run.
+_PLAN_TOOLS_WHILE_AWAITING_USER_CONFIRM = frozenset(
+    {
+        "create_plan",
+        "revise_current_plan",
+        "finish_plan",
+    },
+)
+
 
 def set_plan_gate(  # pylint: disable=protected-access
     plan_notebook,
@@ -41,24 +51,51 @@ def set_plan_gate(  # pylint: disable=protected-access
         plan_notebook._plan_tool_gate = enabled
 
 
-def check_plan_tool_gate(  # pylint: disable=protected-access
+def clear_plan_awaiting_user_confirm(  # pylint: disable=protected-access
+    plan_notebook,
+) -> None:
+    """Clear the post-``create_plan`` / revise lock before a new user turn.
+
+    Each incoming user message starts a new runner invocation; the agent
+    must not keep blocking execution tools across turns after the user has
+    had a chance to respond.
+    """
+    if plan_notebook is not None:
+        plan_notebook._plan_awaiting_user_confirm = False
+
+
+def check_plan_tool_gate(
     plan_notebook,
     tool_name: str,
-):
+):  # pylint: disable=protected-access,too-many-return-statements
     """Return an error string if *tool_name* must be blocked, else ``None``.
 
     When a ``/plan`` request is pending (gate set by the runner), only
     ``create_plan`` may run.  The gate is cleared once a plan exists.
+
+    Immediately after ``create_plan`` or ``revise_current_plan`` (same run),
+    only plan-management tools may run until the next user message — see
+    ``clear_plan_awaiting_user_confirm`` in the runner.
     """
     if plan_notebook is None:
         return None
+    if getattr(plan_notebook, "_plan_awaiting_user_confirm", False):
+        if tool_name in _PLAN_TOOLS_WHILE_AWAITING_USER_CONFIRM:
+            return None
+        return (
+            f"Tool '{tool_name}' is not available right now. "
+            "A plan was just created or revised — present it to the user "
+            "and wait for their confirmation (or edit/cancel) before "
+            "calling any other tools. Only 'create_plan', "
+            "'revise_current_plan', and 'finish_plan' are allowed until "
+            "the user's next message."
+        )
     if plan_notebook.current_plan is not None:
         if getattr(plan_notebook, "_plan_tool_gate", False):
             plan_notebook._plan_tool_gate = False
         return None
-    if not getattr(plan_notebook, "_plan_tool_gate", False):
-        return None
-    if tool_name == "create_plan":
+    gate = getattr(plan_notebook, "_plan_tool_gate", False)
+    if not gate or tool_name == "create_plan":
         return None
     return (
         f"Tool '{tool_name}' is not available right now. "

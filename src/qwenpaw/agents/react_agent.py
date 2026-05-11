@@ -771,6 +771,8 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         if nb is not None and tool_name == "revise_current_plan":
             nb._plan_just_mutated = True  # pylint: disable=protected-access
+            # pylint: disable-next=protected-access
+            nb._plan_awaiting_user_confirm = True
 
         return result
 
