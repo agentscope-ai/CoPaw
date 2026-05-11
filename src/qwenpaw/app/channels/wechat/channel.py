@@ -1128,6 +1128,10 @@ class WeChatChannel(BaseChannel):
                     self._flush_merge_buffer(to_handle),
                 ),
             )
+        elif not self._merge_meta.get("wechat_context_token"):
+            # Full-merge mode: cron/proactive calls won't trigger
+            # _on_process_completed, so flush immediately.
+            await self._flush_merge_buffer(to_handle)
 
     async def _flush_merge_buffer(
         self,
@@ -1196,6 +1200,7 @@ class WeChatChannel(BaseChannel):
                     media_parts,
                     meta,
                 )
+
             return
 
         # Merging disabled: send everything immediately

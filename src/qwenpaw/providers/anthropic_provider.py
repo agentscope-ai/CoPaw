@@ -22,8 +22,15 @@ from qwenpaw.providers.provider import ModelInfo, Provider
 
 logger = logging.getLogger(__name__)
 
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DASHSCOPE_BASE_URLS = (
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+)
 CODING_DASHSCOPE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
+TOKEN_PLAN_BASE_URL = (
+    "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+)
 
 
 class AnthropicProvider(Provider):
@@ -131,7 +138,7 @@ class AnthropicProvider(Provider):
         from agentscope.model import AnthropicChatModel
 
         client_kwargs = {"base_url": self.base_url}
-        if self.base_url == DASHSCOPE_BASE_URL:
+        if self.base_url in DASHSCOPE_BASE_URLS:
             client_kwargs["default_headers"] = {
                 "x-dashscope-agentapp": json.dumps(
                     {
@@ -144,6 +151,18 @@ class AnthropicProvider(Provider):
                 ),
             }
         elif self.base_url == CODING_DASHSCOPE_BASE_URL:
+            client_kwargs["default_headers"] = {
+                "X-DashScope-Cdpl": json.dumps(
+                    {
+                        "agentType": "QwenPaw",
+                        "deployType": "UnKnown",
+                        "moduleCode": "model",
+                        "agentCode": "UnKnown",
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        elif self.base_url == TOKEN_PLAN_BASE_URL:
             client_kwargs["default_headers"] = {
                 "X-DashScope-Cdpl": json.dumps(
                     {
