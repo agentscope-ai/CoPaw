@@ -406,24 +406,11 @@ class MatrixChannel(BaseChannel):
         # When token or username/password is explicitly configured, do not
         # restore cached token, otherwise we may accidentally bypass the
         # intended auth path.
-        if has_password_creds:
-            self._load_auth_state(
-                restore_token=False,
-                restore_identity=False,
-            )
-        elif has_token_cred:
-            self._load_auth_state(
-                restore_token=False,
-                restore_identity=False,
-            )
-        elif self._cfg.user_id:
-            # User is switching/targeting a specific MXID but did not provide
-            # explicit credentials in this config: don't silently use stale
-            # cached token from another account.
-            self._load_auth_state(
-                restore_token=False,
-                restore_identity=False,
-            )
+        has_explicit_identity = has_password_creds or has_token_cred or self._cfg.user_id
+        self._load_auth_state(
+            restore_token=False,
+            restore_identity=not has_explicit_identity,
+        )
         else:
             # Do not auto-restore access_token from cache; stale tokens can
             # cause endless M_UNKNOWN_TOKEN loops when credentials are absent.
