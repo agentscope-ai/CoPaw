@@ -162,7 +162,7 @@
   }
 
   :global(.ant-collapse-header) {
-    padding: 8px 10px !important;
+    padding: 8px 10px 8px 6px !important;
     align-items: flex-start !important;
   }
 
@@ -172,7 +172,7 @@
   }
 
   :global(.ant-collapse-content-box) {
-    padding: 0 10px 10px 10px !important;
+    padding: 0 10px 10px 6px !important;
   }
 }
 
@@ -272,6 +272,7 @@
 .traceUserRow {
   display: flex;
   justify-content: flex-end;
+  padding-right: 10px;
 }
 
 .traceUserMessage {
@@ -285,6 +286,11 @@
   border: 1px solid var(--colorBorderSecondary, rgba(0, 0, 0, 0.06));
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.traceStandaloneAligned {
+  margin-left: 6px;
+  margin-right: 10px;
 }
 
 .toolDetailWrap {

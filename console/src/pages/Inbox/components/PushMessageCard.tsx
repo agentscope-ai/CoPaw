@@ -38,6 +38,12 @@ const CHANNEL_COLORS = {
   heartbeat: "#5865F2",
 };
 
+const normalizeCronTaskName = (title: string): string =>
+  title
+    .replace(/^(cron result|heartbeat result)\s*[:：]\s*/i, "")
+    .replace(/^(定时任务结果|心跳结果)\s*[:：]\s*/i, "")
+    .trim();
+
 export function PushMessageCard({
   message,
   onMarkAsRead,
@@ -49,6 +55,11 @@ export function PushMessageCard({
   const { t } = useTranslation();
   const IconComponent = CHANNEL_ICONS[message.channelType];
   const channelColor = CHANNEL_COLORS[message.channelType];
+  const sourceType = (message.metadata?.sourceType || "").toLowerCase();
+  const isCronMessage = sourceType === "cron";
+  const displayTitle = isCronMessage
+    ? t("inbox.pushCronHeader", { name: normalizeCronTaskName(message.title) })
+    : message.title;
 
   return (
     <Card
@@ -96,7 +107,7 @@ export function PushMessageCard({
         </div>
       </div>
       <div className={styles.cardBody}>
-        <h4 className={styles.messageTitle}>{message.title}</h4>
+        <h4 className={styles.messageTitle}>{displayTitle}</h4>
         <p className={styles.messageContent}>{message.content}</p>
       </div>
       <div className={styles.cardFooter}>

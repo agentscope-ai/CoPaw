@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Tabs,
   Empty,
@@ -211,13 +211,6 @@ const getTraceFoldIcon = (eventType: string) => {
   return null;
 };
 
-const formatTraceTime = (seconds: number): string => {
-  if (!Number.isFinite(seconds)) return "-";
-  return new Date(seconds * 1000).toLocaleTimeString([], {
-    hour12: false,
-  });
-};
-
 const getToolFieldText = (
   eventRecord: Record<string, unknown>,
   field: "tool_input" | "tool_output",
@@ -266,6 +259,31 @@ const formatToolBlockContent = (text: string): string => {
   }
 };
 
+const normalizeDetailTaskName = (title: string): string => {
+  if (!title) return "-";
+  return title
+    .replace(/^(cron result|heartbeat result)\s*[:：]\s*/i, "")
+    .replace(/^(定时任务结果|心跳结果)\s*[:：]\s*/i, "")
+    .trim();
+};
+
+const getDetailModalTitle = (
+  messageItem: PushMessage | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
+  if (!messageItem) return t("inbox.messageDetailTitle");
+  const sourceType = (messageItem.metadata?.sourceType || "").toLowerCase();
+  if (sourceType === "cron") {
+    return t("inbox.detailCronTitle", {
+      name: normalizeDetailTaskName(messageItem.title),
+    });
+  }
+  if (sourceType === "heartbeat") {
+    return t("inbox.detailHeartbeatTitle");
+  }
+  return messageItem.title || t("inbox.messageDetailTitle");
+};
+
 const renderMarkdownText = (text: string, className: string) => (
   <div className={className}>
     <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
@@ -292,6 +310,8 @@ export default function InboxPage() {
   >({});
   const [messagesPage, setMessagesPage] = useState(1);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const traceContainerRef = useRef<HTMLDivElement | null>(null);
+  const traceScrollTopByMessageRef = useRef<Record<string, number>>({});
   const agents = useAgentStore((state) => state.agents);
   const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
@@ -545,6 +565,28 @@ export default function InboxPage() {
   useEffect(() => {
     setExpandedTraceMap({});
   }, [traceData, detailOpen]);
+
+  useEffect(() => {
+    if (
+      !detailOpen ||
+      traceLoading ||
+      traceEvents.length <= 0 ||
+      !selectedMessage
+    ) {
+      return;
+    }
+    const messageId = selectedMessage.id;
+    const savedScrollTop = traceScrollTopByMessageRef.current[messageId];
+    const rafId = window.requestAnimationFrame(() => {
+      const container = traceContainerRef.current;
+      if (!container) return;
+      container.scrollTop =
+        typeof savedScrollTop === "number"
+          ? savedScrollTop
+          : container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [detailOpen, selectedMessage, traceEvents.length, traceLoading]);
 
   const handleViewMessage = (messageId: string) => {
     const found = pushMessages.find((item) => item.id === messageId);
@@ -806,7 +848,7 @@ export default function InboxPage() {
         onCancel={() => setDetailOpen(false)}
         footer={null}
         width={820}
-        title={selectedMessage?.title || t("inbox.messageDetailTitle")}
+        title={getDetailModalTitle(selectedMessage, t)}
       >
         {selectedMessage ? (
           <div className={styles.messageDetail}>
@@ -828,13 +870,22 @@ export default function InboxPage() {
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label={t("inbox.detailAgent")}>
-                {selectedMessage.metadata?.agentId || "-"}
+                {(() => {
+                  const agentId =
+                    selectedMessage.metadata?.agentId || DEFAULT_AGENT_ID;
+                  return (
+                    agentDisplayNameById.get(agentId) ||
+                    (agentId === DEFAULT_AGENT_ID
+                      ? t("agent.defaultDisplayName")
+                      : agentId)
+                  );
+                })()}
               </Descriptions.Item>
-              <Descriptions.Item label={t("inbox.detailSource")}>
-                {selectedMessage.metadata?.sourceType || "-"}
+              <Descriptions.Item label={t("inbox.detailReceivedAt")}>
+                {selectedMessage.createdAt.toLocaleString()}
               </Descriptions.Item>
-              <Descriptions.Item label={t("inbox.detailRunId")} span={2}>
-                {(selectedMessage.metadata?.payload?.run_id as string) || "-"}
+              <Descriptions.Item label={t("inbox.detailTaskId")}>
+                {selectedMessage.id || "-"}
               </Descriptions.Item>
             </Descriptions>
 
@@ -847,7 +898,15 @@ export default function InboxPage() {
                   <Spin size="small" />
                 </div>
               ) : traceEvents.length > 0 ? (
-                <div className={styles.traceContainer}>
+                <div
+                  ref={traceContainerRef}
+                  className={styles.traceContainer}
+                  onScroll={(event) => {
+                    if (!selectedMessage) return;
+                    traceScrollTopByMessageRef.current[selectedMessage.id] =
+                      event.currentTarget.scrollTop;
+                  }}
+                >
                   <div className={styles.traceTimeline}>
                     {traceEvents.map((item, index) => {
                       const {
@@ -875,7 +934,7 @@ export default function InboxPage() {
                           ) : kind === "push_preview" && traceText ? (
                             renderMarkdownText(
                               traceText,
-                              styles.traceAssistantMessage,
+                              `${styles.traceAssistantMessage} ${styles.traceStandaloneAligned}`,
                             )
                           ) : collapsible ? (
                             <Collapse
@@ -918,9 +977,6 @@ export default function InboxPage() {
                                         }`}
                                       >
                                         <DownOutlined />
-                                      </span>
-                                      <span className={styles.traceFoldTime}>
-                                        {formatTraceTime(item.at)}
                                       </span>
                                     </div>
                                   ),
@@ -1022,10 +1078,12 @@ export default function InboxPage() {
                           ) : traceText ? (
                             renderMarkdownText(
                               traceText,
-                              styles.traceMarkdownBlock,
+                              `${styles.traceMarkdownBlock} ${styles.traceStandaloneAligned}`,
                             )
                           ) : (
-                            <pre className={styles.traceJsonBlock}>
+                            <pre
+                              className={`${styles.traceJsonBlock} ${styles.traceStandaloneAligned}`}
+                            >
                               {JSON.stringify(eventRecord, null, 2)}
                             </pre>
                           )}
@@ -1040,17 +1098,6 @@ export default function InboxPage() {
                 </div>
               )}
             </div>
-
-            {selectedMessage.metadata?.payload ? (
-              <div className={styles.messageDetailBlock}>
-                <div className={styles.messageDetailLabel}>
-                  {t("inbox.detailPayload")}
-                </div>
-                <pre className={styles.messageDetailPayload}>
-                  {JSON.stringify(selectedMessage.metadata.payload, null, 2)}
-                </pre>
-              </div>
-            ) : null}
           </div>
         ) : null}
       </Modal>
