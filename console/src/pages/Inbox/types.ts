@@ -15,7 +15,13 @@ export interface InboxSummary {
 
 export interface PushMessage {
   id: string;
-  channelType: "wechat" | "slack" | "telegram" | "discord" | "email";
+  channelType:
+    | "wechat"
+    | "slack"
+    | "telegram"
+    | "discord"
+    | "email"
+    | "heartbeat";
   channelName: string;
   title: string;
   content: string;

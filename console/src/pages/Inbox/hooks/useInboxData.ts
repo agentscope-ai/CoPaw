@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import type { InboxEvent } from "../../../api/modules/console";
+import { useAgentStore } from "../../../stores/agentStore";
+import {
+  DEFAULT_AGENT_ID,
+  getAgentDisplayName,
+} from "../../../utils/agentDisplayName";
 import type { HarvestInstance, InboxSummary, PushMessage } from "../types";
 
 const PUSH_POLLING_INTERVAL_MS = 6000;
@@ -17,11 +23,28 @@ const mapPriority = (text: string): "low" | "normal" | "high" | "urgent" => {
 const stripExecutionTimeText = (text: string): string =>
   text.replace(/\s*duration=\d+ms\.?/gi, "").trim();
 
-const mapEventToPushMessage = (event: InboxEvent): PushMessage => ({
+const getHeartbeatSummary = (status?: string): string => {
+  const normalizedStatus = (status || "").toLowerCase();
+  if (normalizedStatus === "success") {
+    return "Heartbeat 执行成功";
+  }
+  if (normalizedStatus === "timeout") {
+    return "Heartbeat 执行超时";
+  }
+  if (normalizedStatus === "cancelled") {
+    return "Heartbeat 已取消";
+  }
+  return "Heartbeat 执行失败";
+};
+
+const mapEventToPushMessage = (
+  event: InboxEvent,
+  resolveAgentName: (agentId: string) => string,
+): PushMessage => ({
   id: event.id,
   channelType:
     event.source_type === "heartbeat"
-      ? "discord"
+      ? "heartbeat"
       : event.source_type === "cron"
       ? "wechat"
       : "email",
@@ -32,10 +55,13 @@ const mapEventToPushMessage = (event: InboxEvent): PushMessage => ({
       ? "Cron"
       : "System",
   title: event.title,
-  content: stripExecutionTimeText(event.body),
+  content:
+    event.source_type === "heartbeat"
+      ? getHeartbeatSummary(event.status)
+      : stripExecutionTimeText(event.body),
   sender: {
     userId: event.agent_id || "default",
-    username: event.agent_id || "default",
+    username: resolveAgentName(event.agent_id || DEFAULT_AGENT_ID),
   },
   createdAt: new Date((event.created_at || Date.now() / 1000) * 1000),
   read: Boolean(event.read),
@@ -62,6 +88,26 @@ const mapEventToPushMessage = (event: InboxEvent): PushMessage => ({
 });
 
 export const useInboxData = () => {
+  const { t } = useTranslation();
+  const agents = useAgentStore((state) => state.agents);
+  const agentsById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent])),
+    [agents],
+  );
+  const resolveAgentName = useCallback(
+    (agentId: string) => {
+      const normalizedId = agentId || DEFAULT_AGENT_ID;
+      const agent = agentsById.get(normalizedId);
+      if (agent) {
+        return getAgentDisplayName(agent, t);
+      }
+      if (normalizedId === DEFAULT_AGENT_ID) {
+        return t("agent.defaultDisplayName");
+      }
+      return normalizedId;
+    },
+    [agentsById, t],
+  );
   const [summary, setSummary] = useState<InboxSummary>({
     approvals: { total: 0, urgent: 0 },
     pushMessages: { total: 0, unread: 0 },
@@ -80,7 +126,9 @@ export const useInboxData = () => {
         ["cron", "heartbeat"].includes(event.source_type),
       );
       events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-      const nextItems: PushMessage[] = events.map(mapEventToPushMessage);
+      const nextItems: PushMessage[] = events.map((event) =>
+        mapEventToPushMessage(event, resolveAgentName),
+      );
       setPushMessages(nextItems);
       setSummary((prev) => ({
         ...prev,
@@ -92,7 +140,7 @@ export const useInboxData = () => {
     } catch (error) {
       console.error("Failed to fetch push inbox data", error);
     }
-  }, []);
+  }, [resolveAgentName]);
 
   useEffect(() => {
     void loadPushMessages();

@@ -26,6 +26,7 @@ const CHANNEL_ICONS = {
   telegram: Send,
   discord: MessageSquare,
   email: Mail,
+  heartbeat: MessageCircle,
 };
 
 const CHANNEL_COLORS = {
@@ -34,6 +35,7 @@ const CHANNEL_COLORS = {
   telegram: "#0088CC",
   discord: "#5865F2",
   email: "#EA4335",
+  heartbeat: "#5865F2",
 };
 
 export function PushMessageCard({

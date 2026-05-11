@@ -13,6 +13,7 @@ import {
   Descriptions,
   Tag,
   Spin,
+  Select,
 } from "antd";
 import {
   BulbOutlined,
@@ -20,7 +21,7 @@ import {
   DownOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
-import { PackageOpen, Bell, Sparkles } from "lucide-react";
+import { PackageOpen, Bell } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
@@ -31,16 +32,17 @@ import api from "../../api";
 import { commandsApi } from "../../api/modules/commands";
 import { chatApi } from "../../api/modules/chat";
 import sessionApi from "../Chat/sessionApi";
-import {
-  HarvestCard,
-  MagazineStackViewer,
-  PushMessageCard,
-} from "./components";
+import { PushMessageCard } from "./components";
 import { useInboxData } from "./hooks/useInboxData";
-import type { HarvestInstance, PushMessage } from "./types";
+import type { PushMessage } from "./types";
+import { useAgentStore } from "../../stores/agentStore";
+import {
+  DEFAULT_AGENT_ID,
+  getAgentDisplayName,
+} from "../../utils/agentDisplayName";
 import styles from "./index.module.less";
 
-type TabKey = "approvals" | "messages" | "harvests";
+type TabKey = "approvals" | "messages";
 const INBOX_TAB_STORAGE_KEY = "qwenpaw.inbox.activeTab";
 const PUSH_MESSAGES_PAGE_SIZE = 5;
 
@@ -49,11 +51,7 @@ const resolveInitialTab = (): TabKey => {
     return "messages";
   }
   const stored = window.localStorage.getItem(INBOX_TAB_STORAGE_KEY);
-  if (
-    stored === "approvals" ||
-    stored === "messages" ||
-    stored === "harvests"
-  ) {
+  if (stored === "approvals" || stored === "messages") {
     return stored;
   }
   return "messages";
@@ -278,10 +276,9 @@ export default function InboxPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabKey>(resolveInitialTab);
   const [markAllReading, setMarkAllReading] = useState(false);
-  const [magazineViewerOpen, setMagazineViewerOpen] = useState(false);
-  const [currentHarvest, setCurrentHarvest] = useState<HarvestInstance | null>(
-    null,
-  );
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<
+    string | undefined
+  >(undefined);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<PushMessage | null>(
     null,
@@ -295,17 +292,50 @@ export default function InboxPage() {
   >({});
   const [messagesPage, setMessagesPage] = useState(1);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const agents = useAgentStore((state) => state.agents);
   const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
     summary,
     pushMessages,
-    harvests,
     markMessageAsRead,
     markAllMessagesAsRead,
     deleteMessage,
     deleteMessages,
-    triggerHarvest,
   } = useInboxData();
+  const agentDisplayNameById = useMemo(
+    () =>
+      new Map(agents.map((agent) => [agent.id, getAgentDisplayName(agent, t)])),
+    [agents, t],
+  );
+  const filteredPushMessages = useMemo(() => {
+    if (!selectedAgentFilter) {
+      return pushMessages;
+    }
+    return pushMessages.filter(
+      (message) =>
+        (message.metadata?.agentId || DEFAULT_AGENT_ID) === selectedAgentFilter,
+    );
+  }, [pushMessages, selectedAgentFilter]);
+  const pushMessageAgentOptions = useMemo(() => {
+    const ids = new Set<string>(
+      filteredPushMessages.map(
+        (message) => message.metadata?.agentId || DEFAULT_AGENT_ID,
+      ),
+    );
+    pushMessages.forEach((message) => {
+      ids.add(message.metadata?.agentId || DEFAULT_AGENT_ID);
+    });
+    const options = Array.from(ids)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b))
+      .map((id) => ({
+        value: id,
+        label:
+          agentDisplayNameById.get(id) ||
+          (id === DEFAULT_AGENT_ID ? t("agent.defaultDisplayName") : id),
+      }));
+    return options;
+  }, [agentDisplayNameById, filteredPushMessages, pushMessages, t]);
   const urgentApprovalCount = useMemo(
     () =>
       pendingApprovals.filter((item) =>
@@ -315,8 +345,8 @@ export default function InboxPage() {
   );
   const pagedPushMessages = useMemo(() => {
     const start = (messagesPage - 1) * PUSH_MESSAGES_PAGE_SIZE;
-    return pushMessages.slice(start, start + PUSH_MESSAGES_PAGE_SIZE);
-  }, [pushMessages, messagesPage]);
+    return filteredPushMessages.slice(start, start + PUSH_MESSAGES_PAGE_SIZE);
+  }, [filteredPushMessages, messagesPage]);
   const currentPageMessageIds = useMemo(
     () => pagedPushMessages.map((item) => item.id),
     [pagedPushMessages],
@@ -329,7 +359,7 @@ export default function InboxPage() {
   );
   const totalMessagePages = Math.max(
     1,
-    Math.ceil(pushMessages.length / PUSH_MESSAGES_PAGE_SIZE),
+    Math.ceil(filteredPushMessages.length / PUSH_MESSAGES_PAGE_SIZE),
   );
 
   const handleApproveRequest = async (
@@ -508,6 +538,9 @@ export default function InboxPage() {
     const validIdSet = new Set(pushMessages.map((item) => item.id));
     setSelectedMessageIds((prev) => prev.filter((id) => validIdSet.has(id)));
   }, [pushMessages]);
+  useEffect(() => {
+    setMessagesPage(1);
+  }, [selectedAgentFilter]);
 
   useEffect(() => {
     setExpandedTraceMap({});
@@ -544,18 +577,6 @@ export default function InboxPage() {
         setTraceData(buildContentFallbackTrace(found));
       })
       .finally(() => setTraceLoading(false));
-  };
-
-  const handleViewHarvest = (harvestId: string) => {
-    const harvest = harvests.find((item) => item.id === harvestId);
-    if (!harvest) return;
-    setCurrentHarvest(harvest);
-    setMagazineViewerOpen(true);
-  };
-
-  const handleHarvestSettings = (harvestId: string) => {
-    console.info("Open harvest settings:", harvestId);
-    message.info(t("inbox.harvestSettingsComingSoon"));
   };
 
   const handleMarkAllRead = async () => {
@@ -717,16 +738,27 @@ export default function InboxPage() {
                 </Button>
               </Popconfirm>
             </div>
-            <Button
-              size="small"
-              onClick={() => void handleMarkAllRead()}
-              loading={markAllReading}
-              disabled={summary.pushMessages.unread <= 0}
-            >
-              {t("inbox.markAllRead")}
-            </Button>
+            <div className={styles.messagesSelectionTools}>
+              <Select
+                size="small"
+                value={selectedAgentFilter}
+                onChange={(value) => setSelectedAgentFilter(value)}
+                allowClear
+                options={pushMessageAgentOptions}
+                style={{ width: 180 }}
+                placeholder="按agent筛选"
+              />
+              <Button
+                size="small"
+                onClick={() => void handleMarkAllRead()}
+                loading={markAllReading}
+                disabled={summary.pushMessages.unread <= 0}
+              >
+                {t("inbox.markAllRead")}
+              </Button>
+            </div>
           </div>
-          {pushMessages.length > 0 ? (
+          {filteredPushMessages.length > 0 ? (
             <div className={styles.cardList}>
               {pagedPushMessages.map((item) => (
                 <PushMessageCard
@@ -742,7 +774,7 @@ export default function InboxPage() {
               <div className={styles.paginationWrap}>
                 <Pagination
                   current={messagesPage}
-                  total={pushMessages.length}
+                  total={filteredPushMessages.length}
                   pageSize={PUSH_MESSAGES_PAGE_SIZE}
                   onChange={setMessagesPage}
                   showSizeChanger={false}
@@ -751,37 +783,6 @@ export default function InboxPage() {
             </div>
           ) : (
             <Empty description={t("inbox.emptyPush")} />
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "harvests",
-      label: (
-        <span className={styles.tabLabel}>
-          <Sparkles size={16} />
-          {t("inbox.tabHarvests")}
-          {summary.harvests.active > 0 && (
-            <Badge count={summary.harvests.active} status="processing" />
-          )}
-        </span>
-      ),
-      children: (
-        <div className={styles.tabContent}>
-          {harvests.length > 0 ? (
-            <div className={styles.harvestGrid}>
-              {harvests.map((harvest) => (
-                <HarvestCard
-                  key={harvest.id}
-                  harvest={harvest}
-                  onTrigger={triggerHarvest}
-                  onViewAll={handleViewHarvest}
-                  onSettings={handleHarvestSettings}
-                />
-              ))}
-            </div>
-          ) : (
-            <Empty description={t("inbox.emptyHarvests")} />
           )}
         </div>
       ),
@@ -800,15 +801,6 @@ export default function InboxPage() {
           className={styles.inboxTabs}
         />
       </div>
-
-      {currentHarvest ? (
-        <MagazineStackViewer
-          open={magazineViewerOpen}
-          harvest={currentHarvest}
-          onClose={() => setMagazineViewerOpen(false)}
-        />
-      ) : null}
-
       <Modal
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
