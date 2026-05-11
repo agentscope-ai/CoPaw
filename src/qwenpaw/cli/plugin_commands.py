@@ -39,13 +39,14 @@ def _get_api_base() -> Optional[str]:
     return f"http://{host}:{port}/api"
 
 
-def _api_install_plugin(source: str) -> bool:
+def _api_install_plugin(source: str, force: bool = False) -> bool:
     """Send a hot-install request to the running QwenPaw API.
 
     Uses the localhost auth-bypass so no credentials are required.
 
     Args:
         source: Local directory path or HTTP(S) URL of the plugin
+        force: Unload existing plugin first if already loaded
 
     Returns:
         ``True`` on success, ``False`` otherwise
@@ -55,7 +56,7 @@ def _api_install_plugin(source: str) -> bool:
         return False
 
     url = f"{base}/plugins/install"
-    payload = json.dumps({"source": source}).encode()
+    payload = json.dumps({"source": source, "force": force}).encode()
     req = urllib.request.Request(
         url,
         data=payload,
@@ -82,11 +83,12 @@ def _api_install_plugin(source: str) -> bool:
         return False
 
 
-def _api_upload_plugin(zip_path: Path) -> bool:
+def _api_upload_plugin(zip_path: Path, force: bool = False) -> bool:
     """Send a ZIP file to the running QwenPaw API for hot-install.
 
     Args:
         zip_path: Path to the plugin .zip archive
+        force: Unload existing plugin first if already loaded
 
     Returns:
         ``True`` on success, ``False`` otherwise
@@ -110,7 +112,8 @@ def _api_upload_plugin(zip_path: Path) -> bool:
         + f"\r\n--{boundary}--\r\n".encode()
     )
 
-    url = f"{base}/plugins/upload"
+    force_param = "true" if force else "false"
+    url = f"{base}/plugins/upload?force={force_param}"
     req = urllib.request.Request(
         url,
         data=body,
@@ -401,7 +404,7 @@ def install(source: str, force: bool):
         is_url = source.startswith(("http://", "https://"))
         if is_url:
             # API accepts URLs directly
-            _api_install_plugin(source)
+            _api_install_plugin(source, force=force)
         else:
             # Check whether the local path is a directory or a zip
             source_path = Path(source).resolve()
@@ -412,9 +415,9 @@ def install(source: str, force: bool):
                 )
                 return
             if source_path.is_file() and source_path.suffix == ".zip":
-                _api_upload_plugin(source_path)
+                _api_upload_plugin(source_path, force=force)
             elif source_path.is_dir():
-                _api_install_plugin(str(source_path))
+                _api_install_plugin(str(source_path), force=force)
             else:
                 click.echo(
                     "❌ Source must be a directory or a .zip file.",
@@ -664,27 +667,71 @@ def info(plugin_id: str):
     click.echo(f"\n📍 Location: {plugin_dir}")
 
 
+def _resolve_plugin_id(plugin_id_or_path: str) -> Optional[str]:
+    """Resolve plugin ID from a plugin ID string or a local path.
+
+    If ``plugin_id_or_path`` points to an existing directory that
+    contains a ``plugin.json``, the ``id`` field of that manifest is
+    returned.  Otherwise the argument is returned as-is so that plain
+    IDs like ``gpt-image2-tool`` still work.
+
+    Args:
+        plugin_id_or_path: Plugin ID string or path to plugin directory.
+
+    Returns:
+        Resolved plugin ID, or ``None`` if the path exists but the
+        manifest could not be parsed.
+    """
+    candidate = Path(plugin_id_or_path)
+    if candidate.is_dir():
+        manifest_path = candidate / "plugin.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, encoding="utf-8") as fh:
+                    return json.load(fh).get("id")
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to read manifest at {manifest_path}: {exc}",
+                )
+                return None
+    return plugin_id_or_path
+
+
 @plugin.command()
 @click.argument("plugin_id")
 def uninstall(plugin_id: str):
     """Uninstall a plugin.
 
+    PLUGIN_ID may be either the plugin's ID (e.g. ``gpt-image2-tool``)
+    or a path to the plugin directory (e.g. ``plugins/tool/gpt-image2``).
+
     When QwenPaw is running, the plugin is unloaded immediately via
     the API (no restart required).  When QwenPaw is stopped, only the
     plugin files are removed from disk.
     """
+    # Support passing a directory path in addition to a bare plugin ID
+    resolved_id = _resolve_plugin_id(plugin_id)
+    if resolved_id is None:
+        click.echo(
+            f"❌ Could not determine plugin ID from '{plugin_id}'",
+            err=True,
+        )
+        return
+
     # If the app is running, delegate to the live API for hot-uninstall
     if _is_running():
         click.echo(
             "QwenPaw is running — using hot-uninstall via API...",
         )
         if not click.confirm(
-            f"Uninstall plugin '{plugin_id}'?",
+            f"Uninstall plugin '{resolved_id}'?",
         ):
             click.echo("Cancelled.")
             return
-        _api_uninstall_plugin(plugin_id)
+        _api_uninstall_plugin(resolved_id)
         return
+
+    plugin_id = resolved_id
 
     # ── Offline uninstall (app is not running) ────────────────────────
 

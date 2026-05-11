@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint:disable=too-many-branches
 """Plugin API routes: list plugins with UI metadata and serve plugin
 static files.  Also provides runtime install / uninstall endpoints."""
 
@@ -382,6 +383,7 @@ class InstallPluginRequest(BaseModel):
     """Request body for installing a plugin from a path or URL."""
 
     source: str
+    force: bool = False
 
 
 @router.post(
@@ -436,6 +438,28 @@ async def install_plugin(
 
         from ...config.utils import get_plugins_dir
 
+        # Force-reinstall: unload the existing plugin first so that
+        # load_plugin_from_path can proceed without a conflict.
+        if body.force:
+            manifest_path = source_path / "plugin.json"
+            if manifest_path.exists():
+                raw = json.loads(
+                    manifest_path.read_text(encoding="utf-8"),
+                )
+                existing_id = raw.get("id")
+                if (
+                    existing_id
+                    and loader.get_loaded_plugin(existing_id) is not None
+                ):
+                    logger.info(
+                        f"Force-reinstall: unloading '{existing_id}'"
+                        " before re-installing",
+                    )
+                    await loader.unload_plugin(
+                        existing_id,
+                        delete_files=False,
+                    )
+
         record = await loader.load_plugin_from_path(
             source_path=source_path,
             install_dir=get_plugins_dir(),
@@ -476,12 +500,15 @@ async def install_plugin(
     summary="Install plugin from ZIP upload",
     description=(
         "Upload a plugin ZIP file and install it at runtime.  The "
-        "plugin is loaded immediately — no restart required."
+        "plugin is loaded immediately — no restart required.  Pass "
+        "``force=true`` as a query parameter to reinstall an already-"
+        "loaded plugin."
     ),
 )
 async def upload_plugin(
     request: Request,
     file: UploadFile = File(..., description="Plugin ZIP archive"),
+    force: bool = False,
 ):
     """Install and hot-load a plugin from an uploaded ZIP file."""
     loader = getattr(request.app.state, "plugin_loader", None)
@@ -510,6 +537,27 @@ async def upload_plugin(
         source_path = _find_plugin_dir(temp_dir)
 
         from ...config.utils import get_plugins_dir
+
+        # Force-reinstall: unload existing plugin before re-installing
+        if force:
+            manifest_path = source_path / "plugin.json"
+            if manifest_path.exists():
+                raw = json.loads(
+                    manifest_path.read_text(encoding="utf-8"),
+                )
+                existing_id = raw.get("id")
+                if (
+                    existing_id
+                    and loader.get_loaded_plugin(existing_id) is not None
+                ):
+                    logger.info(
+                        f"Force-reinstall: unloading '{existing_id}'"
+                        " before re-installing",
+                    )
+                    await loader.unload_plugin(
+                        existing_id,
+                        delete_files=False,
+                    )
 
         record = await loader.load_plugin_from_path(
             source_path=source_path,
