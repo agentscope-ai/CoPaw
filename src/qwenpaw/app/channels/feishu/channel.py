@@ -1379,8 +1379,11 @@ class FeishuChannel(BaseChannel):
             logger.exception("feishu _upload_image failed")
             return None
 
-    async def _upload_file(self, path_or_url: str) -> Optional[str]:
-        """Upload file to Feishu using SDK; return file_key."""
+    async def _upload_file(
+        self,
+        path_or_url: str,
+    ) -> Optional[Tuple[str, str]]:
+        """Upload file to Feishu using SDK; return (file_key, file_type)."""
         path = Path(path_or_url)
         if not path.exists():
             if path_or_url.startswith(("http://", "https://")):
@@ -1436,10 +1439,11 @@ class FeishuChannel(BaseChannel):
                 return None
             fk = getattr(resp.data, "file_key", None) if resp.data else None
             logger.info(
-                "feishu _upload_file ok: file_key=%s",
+                "feishu _upload_file ok: file_key=%s file_type=%s",
                 fk[:24] if fk else "None",
+                file_type,
             )
-            return fk
+            return (fk, file_type) if fk else None
         except Exception:
             logger.exception("feishu _upload_file failed")
             return None
@@ -1722,19 +1726,21 @@ class FeishuChannel(BaseChannel):
                 "feishu _send_file: no path/url/base64, skip",
             )
             return None
-        file_key = await self._upload_file(path_or_url)
-        if not file_key:
+        upload_result = await self._upload_file(path_or_url)
+        if not upload_result:
             logger.info(
                 "feishu _send_file: upload failed, no file_key",
             )
             return None
+        file_key, file_type = upload_result
         logger.info(
-            "feishu _send_file: upload ok file_key=%s",
+            "feishu _send_file: upload ok file_key=%s file_type=%s",
             file_key[:24] if file_key else "",
+            file_type,
         )
         content = json.dumps({"file_key": file_key}, ensure_ascii=False)
         part_type = getattr(part, "type", None)
-        if part_type == ContentType.AUDIO:
+        if part_type == ContentType.AUDIO and file_type == "opus":
             msg_type = "audio"
         else:
             msg_type = "file"
