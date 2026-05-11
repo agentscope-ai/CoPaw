@@ -539,12 +539,16 @@
     "target": "回复目标",
     "targetMain": "静默运行（默认，不发送到频道）",
     "targetLast": "发到上次对话频道",
+    "targetInbox": "发送到收件箱",
     "activeHours": "活跃时段（可选）",
     "activeStart": "开始时间",
     "activeEnd": "结束时间",
     "loadFailed": "加载心跳配置失败",
     "saveSuccess": "保存成功，心跳已热重载",
-    "saveFailed": "保存心跳配置失败"
+    "saveFailed": "保存心跳配置失败",
+    "runNow": "立即执行一次",
+    "runNowSuccess": "已触发心跳执行，请稍后查看收件箱或目标渠道",
+    "runNowFailed": "触发心跳执行失败"
   },
   "cronJobs": {
     "title": "定时任务",

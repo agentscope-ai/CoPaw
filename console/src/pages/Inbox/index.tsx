@@ -65,13 +65,29 @@ const buildContentFallbackTrace = (messageItem: PushMessage) => ({
         {
           at: messageItem.createdAt.getTime() / 1000,
           event: {
-            kind: "push_preview",
-            text: messageItem.content,
+            role: "assistant",
+            name: "assistant",
+            content: [
+              {
+                type: "text",
+                text: messageItem.content,
+              },
+            ],
           },
         },
       ]
     : [],
 });
+
+const getPrimaryTraceBlock = (
+  event: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  const content = event.content;
+  if (!Array.isArray(content) || !content.length) return null;
+  const first = content[0];
+  if (!first || typeof first !== "object") return null;
+  return first as Record<string, unknown>;
+};
 
 const isCollapsibleTraceEvent = (
   kind: string,
@@ -81,11 +97,12 @@ const isCollapsibleTraceEvent = (
   if (lowerKind.includes("thinking") || lowerKind.includes("tool")) {
     return true;
   }
-  // Keep tool-like payloads folded by default even when kind is generic.
+  const block = getPrimaryTraceBlock(event);
+  const blockType = String(block?.type || "").toLowerCase();
   if (
-    typeof event.tool === "string" ||
-    typeof event.tool_name === "string" ||
-    typeof event.function_name === "string"
+    blockType === "thinking" ||
+    blockType === "tool_use" ||
+    blockType === "tool_result"
   ) {
     return true;
   }
@@ -93,20 +110,53 @@ const isCollapsibleTraceEvent = (
 };
 
 const extractTraceText = (event: Record<string, unknown>): string => {
-  if (typeof event.text === "string" && event.text.trim()) {
-    return event.text.trim();
+  const block = getPrimaryTraceBlock(event);
+  if (!block) return "";
+  const blockType = String(block.type || "").toLowerCase();
+  if (blockType === "thinking") {
+    const thinking = block.thinking;
+    if (typeof thinking === "string" && thinking.trim()) {
+      return thinking.trim();
+    }
   }
-  if (typeof event.message === "string" && event.message.trim()) {
-    return event.message.trim();
+  if (blockType === "text") {
+    const text = block.text;
+    if (typeof text === "string" && text.trim()) {
+      return text.trim();
+    }
   }
-  if (typeof event.content === "string" && event.content.trim()) {
-    return event.content.trim();
+  if (blockType === "tool_result") {
+    const output = block.output;
+    if (Array.isArray(output)) {
+      const textChunks = output
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const text = (item as Record<string, unknown>).text;
+          return typeof text === "string" ? text : "";
+        })
+        .filter(Boolean);
+      if (textChunks.length) return textChunks.join("\n");
+    }
+  }
+  if (blockType === "tool_use") {
+    const rawInput = block.raw_input;
+    if (typeof rawInput === "string" && rawInput.trim()) {
+      return rawInput.trim();
+    }
   }
   return "";
 };
 
-const normalizeTraceKind = (event: Record<string, unknown>): string =>
-  typeof event.kind === "string" ? (event.kind as string) : "event";
+const normalizeTraceKind = (event: Record<string, unknown>): string => {
+  if (event.type === "response_completed") return "response_completed";
+  const block = getPrimaryTraceBlock(event);
+  const blockType = String(block?.type || "").toLowerCase();
+  if (blockType === "thinking") return "thinking";
+  if (blockType === "tool_use") return "tool_call";
+  if (blockType === "tool_result") return "tool_output";
+  if (blockType === "text") return "push_preview";
+  return "event";
+};
 
 type TraceDisplayItem = {
   at: number;
@@ -142,14 +192,10 @@ const getTraceFoldTitle = (
   const lowerType = eventType.toLowerCase();
   if (lowerType.includes("thinking")) return "Thinking";
   if (lowerType.includes("tool")) {
-    if (
-      typeof eventRecord.tool_name === "string" &&
-      eventRecord.tool_name.trim()
-    ) {
-      return eventRecord.tool_name;
-    }
-    if (typeof eventRecord.tool === "string" && eventRecord.tool.trim()) {
-      return eventRecord.tool;
+    const block = getPrimaryTraceBlock(eventRecord);
+    const toolName = block?.name;
+    if (typeof toolName === "string" && toolName.trim()) {
+      return toolName;
     }
     return "Tool";
   }
@@ -178,8 +224,31 @@ const getToolFieldText = (
   eventRecord: Record<string, unknown>,
   field: "tool_input" | "tool_output",
 ): string => {
-  const val = eventRecord[field];
-  if (typeof val === "string" && val.trim()) return val;
+  const block = getPrimaryTraceBlock(eventRecord);
+  if (!block) return "";
+  const blockType = String(block.type || "").toLowerCase();
+  if (field === "tool_input" && blockType === "tool_use") {
+    const rawInput = block.raw_input;
+    if (typeof rawInput === "string" && rawInput.trim()) return rawInput;
+    const input = block.input;
+    if (input !== undefined) {
+      try {
+        return JSON.stringify(input, null, 2);
+      } catch {
+        return String(input);
+      }
+    }
+  }
+  if (field === "tool_output" && blockType === "tool_result") {
+    const output = block.output;
+    if (output !== undefined) {
+      try {
+        return JSON.stringify(output, null, 2);
+      } catch {
+        return String(output);
+      }
+    }
+  }
   return "";
 };
 
@@ -296,10 +365,33 @@ export default function InboxPage() {
   const traceEvents = useMemo<TraceDisplayItem[]>(() => {
     if (!traceData) return [];
     const normalized = traceData.events
-      .map((item) => {
-        const eventRecord = item.event || {};
-        const eventType = normalizeTraceKind(eventRecord);
-        return { ...item, eventRecord, eventType };
+      .flatMap((item) => {
+        const eventRecord = (item.event || {}) as Record<string, unknown>;
+        const content = eventRecord.content;
+        if (Array.isArray(content) && content.length > 1) {
+          return content.map((block) => {
+            const blockRecord = {
+              ...eventRecord,
+              content: [block],
+            } as Record<string, unknown>;
+            return {
+              ...item,
+              eventRecord: blockRecord,
+              eventType: normalizeTraceKind(blockRecord),
+            };
+          });
+        }
+        const normalizedRecord =
+          Array.isArray(content) && content.length === 1
+            ? eventRecord
+            : ({ ...eventRecord } as Record<string, unknown>);
+        return [
+          {
+            ...item,
+            eventRecord: normalizedRecord,
+            eventType: normalizeTraceKind(normalizedRecord),
+          },
+        ];
       })
       .filter(
         (item) => !shouldHideTraceEvent(item.eventType, item.eventRecord),
@@ -756,15 +848,6 @@ export default function InboxPage() {
 
             <div className={styles.messageDetailBlock}>
               <div className={styles.messageDetailLabel}>
-                {t("inbox.detailContent")}
-              </div>
-              <pre className={styles.messageDetailContent}>
-                {selectedMessage.content || "-"}
-              </pre>
-            </div>
-
-            <div className={styles.messageDetailBlock}>
-              <div className={styles.messageDetailLabel}>
                 {t("inbox.detailExecutionTrace")}
               </div>
               {traceLoading ? (
@@ -791,7 +874,13 @@ export default function InboxPage() {
                           key={`${item.at}-${index}`}
                           className={styles.traceEntry}
                         >
-                          {kind === "push_preview" && traceText ? (
+                          {eventRecord.role === "user" && traceText ? (
+                            <div className={styles.traceUserRow}>
+                              <div className={styles.traceUserMessage}>
+                                {traceText}
+                              </div>
+                            </div>
+                          ) : kind === "push_preview" && traceText ? (
                             renderMarkdownText(
                               traceText,
                               styles.traceAssistantMessage,

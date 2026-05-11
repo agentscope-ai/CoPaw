@@ -685,12 +685,16 @@
     "target": "Reply target",
     "targetMain": "Silent mode (default, no channel output)",
     "targetLast": "Send to last chat channel",
+    "targetInbox": "Send to inbox",
     "activeHours": "Active hours (optional)",
     "activeStart": "Start time",
     "activeEnd": "End time",
     "loadFailed": "Failed to load heartbeat config",
     "saveSuccess": "Saved successfully; heartbeat hot-reloaded",
-    "saveFailed": "Failed to save heartbeat config"
+    "saveFailed": "Failed to save heartbeat config",
+    "runNow": "Run Now",
+    "runNowSuccess": "Heartbeat triggered. Check Inbox or target channel shortly.",
+    "runNowFailed": "Failed to trigger heartbeat run"
   },
   "cronJobs": {
     "title": "Cron Jobs",

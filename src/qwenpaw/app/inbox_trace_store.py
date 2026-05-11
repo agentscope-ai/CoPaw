@@ -77,13 +77,18 @@ async def create_trace(
         _write_trace(run_id, payload)
 
 
-async def append_trace_event(run_id: str, event: Any) -> None:
+async def append_trace_event(
+    run_id: str,
+    event: Any,
+    *,
+    at: float | None = None,
+) -> None:
     async with _LOCK:
         payload = _read_trace(run_id)
         events = payload.get("events", [])
         events.append(
             {
-                "at": time.time(),
+                "at": at if at is not None else time.time(),
                 "event": _to_jsonable(event),
             },
         )

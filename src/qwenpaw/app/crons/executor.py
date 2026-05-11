@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from datetime import datetime
 import logging
 import uuid
 from typing import Any, Dict
 
-from agentscope_runtime.engine.schemas.agent_schemas import RunStatus
-
-from ..channels.renderer import MessageRenderer
 from ..inbox_trace_store import (
     append_trace_event,
     create_trace,
@@ -24,133 +21,76 @@ class CronExecutor:
     def __init__(self, *, runner: Any, channel_manager: Any):
         self._runner = runner
         self._channel_manager = channel_manager
-        self._renderer = MessageRenderer()
 
-    def _extract_push_preview(self, event: Any) -> str | None:
-        if (
-            getattr(event, "object", None) != "message"
-            or getattr(event, "status", None) != RunStatus.Completed
-        ):
-            return None
-        msg_type = str(getattr(event, "type", "") or "").lower()
-        # Keep tool/thinking events as structured trace entries instead of
-        # flattening them into assistant preview text.
-        if (
-            "reasoning" in msg_type
-            or "thinking" in msg_type
-            or "function_call" in msg_type
-            or "plugin_call" in msg_type
-            or "mcp_tool_call" in msg_type
-        ):
-            return None
-        parts = self._renderer.message_to_parts(event)
-        body = self._renderer.parts_to_text(parts).strip()
-        return body or None
-
-    def _extract_structured_trace_event(
-        self,
-        event: Any,
-    ) -> dict[str, Any] | None:
-        obj = getattr(event, "object", None)
-        status = getattr(event, "status", None)
-        if status != RunStatus.Completed:
-            return None
-
-        if obj == "message":
-            msg_type = str(getattr(event, "type", "") or "").lower()
-            parts = self._renderer.message_to_parts(event)
-            text_preview = self._renderer.parts_to_text(parts).strip()
-            tool_name = self._extract_tool_name(event)
-            if "reasoning" in msg_type or "thinking" in msg_type:
-                return {
-                    "kind": "thinking",
-                    "message_type": msg_type or "reasoning",
-                    "text": text_preview,
-                }
-            if (
-                "function_call" in msg_type
-                or "plugin_call" in msg_type
-                or "mcp_tool_call" in msg_type
-            ):
-                kind = "tool_output" if "output" in msg_type else "tool_call"
-                tool_payload_fields = self._extract_tool_payload_fields(event)
-                trace_event = {
-                    "kind": kind,
-                    "message_type": msg_type,
-                    "text": text_preview,
-                }
-                if tool_name:
-                    trace_event["tool_name"] = tool_name
-                trace_event.update(tool_payload_fields)
-                return trace_event
-            return None
-
-        if obj == "response":
-            return {
-                "kind": "response_completed",
-                "status": str(status),
-            }
-        return None
-
-    def _extract_tool_name(self, event: Any) -> str | None:
-        content = getattr(event, "content", None) or []
+    @staticmethod
+    def _flatten_session_messages(content: Any) -> list[dict[str, Any]]:
+        if not isinstance(content, list):
+            return []
+        messages: list[dict[str, Any]] = []
         for item in content:
-            data = getattr(item, "data", None)
-            if isinstance(data, dict):
-                name = data.get("name")
-                if isinstance(name, str) and name.strip():
-                    return name.strip()
-        return None
-
-    def _extract_tool_payload_fields(self, event: Any) -> dict[str, str]:
-        content = getattr(event, "content", None) or []
-        for item in content:
-            data = getattr(item, "data", None)
-            if not isinstance(data, dict):
+            if isinstance(item, dict):
+                messages.append(item)
                 continue
-            payload: dict[str, str] = {}
-            arguments = data.get("arguments")
-            output = data.get("output")
-            if isinstance(arguments, str) and arguments.strip():
-                payload["tool_input"] = arguments
-            elif arguments is not None:
-                try:
-                    payload["tool_input"] = json.dumps(
-                        arguments,
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                except Exception:  # pylint: disable=broad-except
-                    payload["tool_input"] = str(arguments)
-            if isinstance(output, str) and output.strip():
-                payload["tool_output"] = output
-            elif output is not None:
-                try:
-                    payload["tool_output"] = json.dumps(
-                        output,
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                except Exception:  # pylint: disable=broad-except
-                    payload["tool_output"] = str(output)
-            if payload:
-                return payload
-        return {}
+            if isinstance(item, list) and item and isinstance(item[0], dict):
+                messages.append(item[0])
+        return messages
 
-    async def _append_trace_events(self, run_id: str, event: Any) -> None:
-        structured_trace_event = self._extract_structured_trace_event(event)
-        if structured_trace_event is not None:
-            await append_trace_event(run_id, structured_trace_event)
-        preview = self._extract_push_preview(event)
-        if preview:
-            await append_trace_event(
-                run_id,
-                {
-                    "kind": "push_preview",
-                    "text": preview,
-                },
+    @staticmethod
+    def _parse_session_timestamp(value: Any) -> float | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        raw = value.strip()
+        formats = ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S")
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(raw, fmt)
+                return dt.timestamp()
+            except ValueError:
+                continue
+        return None
+
+    async def _read_session_messages(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        channel: str,
+    ) -> list[dict[str, Any]]:
+        session = getattr(self._runner, "session", None)
+        if session is None:
+            return []
+        try:
+            state = await session.get_session_state_dict(
+                session_id,
+                user_id,
+                channel,
+                allow_not_exist=True,
             )
+        except Exception:  # pylint: disable=broad-except
+            return []
+        memory = state.get("agent", {}).get("memory", {})
+        return self._flatten_session_messages(memory.get("content"))
 
+    async def _append_trace_from_session_delta(
+        self,
+        *,
+        run_id: str,
+        session_id: str,
+        user_id: str,
+        channel: str,
+        baseline_count: int,
+    ) -> None:
+        messages = await self._read_session_messages(
+            session_id=session_id,
+            user_id=user_id,
+            channel=channel,
+        )
+        baseline_count = max(baseline_count, 0)
+        for msg in messages[baseline_count:]:
+            at = self._parse_session_timestamp(msg.get("timestamp"))
+            await append_trace_event(run_id, msg, at=at)
+
+    # pylint: disable=too-many-statements
     async def execute(self, job: CronJobSpec) -> dict[str, Any]:
         """Execute one job once.
 
@@ -205,7 +145,6 @@ class CronExecutor:
                 ),
                 "delivery_error": text_delivery_error,
             }
-            # TODO: text type需要这么多额外的meta信息吗？
         # agent: run request as the dispatch target user so context matches
         logger.info(
             "cron agent: job_id=%s channel=%s stream_query then send_event",
@@ -230,6 +169,12 @@ class CronExecutor:
             )
         run_id = str(uuid.uuid4())
         delivery_error: str | None = None
+        baseline_messages = await self._read_session_messages(
+            session_id=req["session_id"],
+            user_id=req["user_id"],
+            channel=target_channel,
+        )
+        baseline_count = len(baseline_messages)
         await create_trace(
             run_id,
             meta={
@@ -245,7 +190,6 @@ class CronExecutor:
         async def _run() -> None:
             nonlocal delivery_error
             async for event in self._runner.stream_query(req):
-                await self._append_trace_events(run_id, event)
                 try:
                     await self._channel_manager.send_event(
                         channel=target_channel,
@@ -270,6 +214,13 @@ class CronExecutor:
                 _run(),
                 timeout=job.runtime.timeout_seconds,
             )
+            await self._append_trace_from_session_delta(
+                run_id=run_id,
+                session_id=req["session_id"],
+                user_id=req["user_id"],
+                channel=target_channel,
+                baseline_count=baseline_count,
+            )
             await finalize_trace(run_id, status="success")
             return {
                 "task_type": "agent",
@@ -283,6 +234,13 @@ class CronExecutor:
                 job.id,
                 job.runtime.timeout_seconds,
             )
+            await self._append_trace_from_session_delta(
+                run_id=run_id,
+                session_id=req["session_id"],
+                user_id=req["user_id"],
+                channel=target_channel,
+                baseline_count=baseline_count,
+            )
             await finalize_trace(
                 run_id,
                 status="timeout",
@@ -291,6 +249,13 @@ class CronExecutor:
             raise
         except asyncio.CancelledError:
             logger.info("cron execute: job_id=%s cancelled", job.id)
+            await self._append_trace_from_session_delta(
+                run_id=run_id,
+                session_id=req["session_id"],
+                user_id=req["user_id"],
+                channel=target_channel,
+                baseline_count=baseline_count,
+            )
             await finalize_trace(
                 run_id,
                 status="cancelled",
@@ -298,6 +263,13 @@ class CronExecutor:
             )
             raise
         except Exception as e:  # pylint: disable=broad-except
+            await self._append_trace_from_session_delta(
+                run_id=run_id,
+                session_id=req["session_id"],
+                user_id=req["user_id"],
+                channel=target_channel,
+                baseline_count=baseline_count,
+            )
             await finalize_trace(
                 run_id,
                 status="error",

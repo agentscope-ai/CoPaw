@@ -75,8 +75,10 @@ export const useInboxData = () => {
 
   const loadPushMessages = useCallback(async () => {
     try {
-      const res = await api.getInboxEvents({ limit: 200, source_type: "cron" });
-      const events = [...(res?.events || [])];
+      const res = await api.getInboxEvents({ limit: 200 });
+      const events = [...(res?.events || [])].filter((event) =>
+        ["cron", "heartbeat"].includes(event.source_type),
+      );
       events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
       const nextItems: PushMessage[] = events.map(mapEventToPushMessage);
       setPushMessages(nextItems);
