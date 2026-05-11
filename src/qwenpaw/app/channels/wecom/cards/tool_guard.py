@@ -72,7 +72,8 @@ def _build_button_key(
     session_ctx: Dict[str, Any],
 ) -> str:
     """Encode action + ctx into a button ``key`` (≤1024 bytes per WeCom);
-    raises :class:`ValueError` when the payload would overflow."""
+    raises :class:`ValueError` when the payload would overflow.
+    """
     payload = json.dumps(
         {
             "a": action,
