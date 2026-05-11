@@ -1,4 +1,4 @@
-import { Card, Button, Tag, Avatar, Popconfirm } from "antd";
+import { Card, Button, Tag, Avatar, Popconfirm, Checkbox } from "antd";
 import {
   MessageCircle,
   Hash,
@@ -16,6 +16,8 @@ interface PushMessageCardProps {
   onMarkAsRead: (id: string) => void;
   onView: (id: string) => void;
   onDelete: (id: string) => void;
+  selected?: boolean;
+  onSelectChange?: (id: string, checked: boolean) => void;
 }
 
 const CHANNEL_ICONS = {
@@ -39,6 +41,8 @@ export function PushMessageCard({
   onMarkAsRead,
   onView,
   onDelete,
+  selected = false,
+  onSelectChange,
 }: PushMessageCardProps) {
   const { t } = useTranslation();
   const IconComponent = CHANNEL_ICONS[message.channelType];
@@ -53,6 +57,16 @@ export function PushMessageCard({
     >
       <div className={styles.cardHeader}>
         <div className={styles.channelInfo}>
+          {onSelectChange ? (
+            <Checkbox
+              checked={selected}
+              onChange={(event) => {
+                event.stopPropagation();
+                onSelectChange(message.id, event.target.checked);
+              }}
+              onClick={(event) => event.stopPropagation()}
+            />
+          ) : null}
           <Avatar
             size={36}
             style={{ backgroundColor: channelColor }}

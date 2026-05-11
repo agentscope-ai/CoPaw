@@ -48,14 +48,33 @@
 
 .messagesToolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
+}
+
+.messagesSelectionTools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selectedCountText {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
 }
 
 .cardList {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.paginationWrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .harvestGrid {

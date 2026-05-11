@@ -5,6 +5,9 @@ import {
   Button,
   Badge,
   Collapse,
+  Pagination,
+  Checkbox,
+  Popconfirm,
   message,
   Modal,
   Descriptions,
@@ -39,6 +42,7 @@ import styles from "./index.module.less";
 
 type TabKey = "approvals" | "messages" | "harvests";
 const INBOX_TAB_STORAGE_KEY = "qwenpaw.inbox.activeTab";
+const PUSH_MESSAGES_PAGE_SIZE = 5;
 
 const resolveInitialTab = (): TabKey => {
   if (typeof window === "undefined") {
@@ -220,6 +224,8 @@ export default function InboxPage() {
   const [expandedTraceMap, setExpandedTraceMap] = useState<
     Record<string, boolean>
   >({});
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
     summary,
@@ -228,6 +234,7 @@ export default function InboxPage() {
     markMessageAsRead,
     markAllMessagesAsRead,
     deleteMessage,
+    deleteMessages,
     triggerHarvest,
   } = useInboxData();
   const urgentApprovalCount = useMemo(
@@ -236,6 +243,24 @@ export default function InboxPage() {
         ["high", "critical"].includes(item.severity?.toLowerCase?.() || ""),
       ).length,
     [pendingApprovals],
+  );
+  const pagedPushMessages = useMemo(() => {
+    const start = (messagesPage - 1) * PUSH_MESSAGES_PAGE_SIZE;
+    return pushMessages.slice(start, start + PUSH_MESSAGES_PAGE_SIZE);
+  }, [pushMessages, messagesPage]);
+  const currentPageMessageIds = useMemo(
+    () => pagedPushMessages.map((item) => item.id),
+    [pagedPushMessages],
+  );
+  const allCurrentPageSelected = useMemo(
+    () =>
+      currentPageMessageIds.length > 0 &&
+      currentPageMessageIds.every((id) => selectedMessageIds.includes(id)),
+    [currentPageMessageIds, selectedMessageIds],
+  );
+  const totalMessagePages = Math.max(
+    1,
+    Math.ceil(pushMessages.length / PUSH_MESSAGES_PAGE_SIZE),
   );
 
   const handleApproveRequest = async (
@@ -382,6 +407,17 @@ export default function InboxPage() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (messagesPage > totalMessagePages) {
+      setMessagesPage(totalMessagePages);
+    }
+  }, [messagesPage, totalMessagePages]);
+
+  useEffect(() => {
+    const validIdSet = new Set(pushMessages.map((item) => item.id));
+    setSelectedMessageIds((prev) => prev.filter((id) => validIdSet.has(id)));
+  }, [pushMessages]);
+
+  useEffect(() => {
     setExpandedTraceMap({});
   }, [traceData, detailOpen]);
 
@@ -443,6 +479,40 @@ export default function InboxPage() {
       message.error(t("common.operationFailed"));
     } finally {
       setMarkAllReading(false);
+    }
+  };
+
+  const handleToggleMessageSelection = (
+    messageId: string,
+    checked: boolean,
+  ) => {
+    setSelectedMessageIds((prev) => {
+      if (checked) {
+        if (prev.includes(messageId)) return prev;
+        return [...prev, messageId];
+      }
+      return prev.filter((id) => id !== messageId);
+    });
+  };
+
+  const handleToggleSelectCurrentPage = (checked: boolean) => {
+    setSelectedMessageIds((prev) => {
+      const pageSet = new Set(currentPageMessageIds);
+      if (checked) {
+        const merged = new Set(prev);
+        currentPageMessageIds.forEach((id) => merged.add(id));
+        return Array.from(merged);
+      }
+      return prev.filter((id) => !pageSet.has(id));
+    });
+  };
+
+  const handleBatchDeleteMessages = async () => {
+    if (!selectedMessageIds.length) return;
+    const deletedCount = await deleteMessages(selectedMessageIds);
+    setSelectedMessageIds([]);
+    if (deletedCount > 0) {
+      message.success(t("inbox.batchDeleteSuccess", { count: deletedCount }));
     }
   };
 
@@ -528,6 +598,33 @@ export default function InboxPage() {
       children: (
         <div className={styles.tabContent}>
           <div className={styles.messagesToolbar}>
+            <div className={styles.messagesSelectionTools}>
+              <Checkbox
+                checked={allCurrentPageSelected}
+                onChange={(event) =>
+                  handleToggleSelectCurrentPage(event.target.checked)
+                }
+                disabled={currentPageMessageIds.length <= 0}
+              >
+                {t("inbox.selectAllCurrentPage")}
+              </Checkbox>
+              <span className={styles.selectedCountText}>
+                {t("inbox.selectedItems", { count: selectedMessageIds.length })}
+              </span>
+              <Popconfirm
+                title={t("inbox.batchDeleteConfirm", {
+                  count: selectedMessageIds.length,
+                })}
+                onConfirm={() => void handleBatchDeleteMessages()}
+                okText={t("common.confirm")}
+                cancelText={t("common.cancel")}
+                disabled={selectedMessageIds.length <= 0}
+              >
+                <Button danger disabled={selectedMessageIds.length <= 0}>
+                  {t("inbox.batchDeleteButton")}
+                </Button>
+              </Popconfirm>
+            </div>
             <Button
               size="small"
               onClick={() => void handleMarkAllRead()}
@@ -539,15 +636,26 @@ export default function InboxPage() {
           </div>
           {pushMessages.length > 0 ? (
             <div className={styles.cardList}>
-              {pushMessages.map((item) => (
+              {pagedPushMessages.map((item) => (
                 <PushMessageCard
                   key={item.id}
                   message={item}
                   onMarkAsRead={markMessageAsRead}
                   onDelete={deleteMessage}
                   onView={handleViewMessage}
+                  selected={selectedMessageIds.includes(item.id)}
+                  onSelectChange={handleToggleMessageSelection}
                 />
               ))}
+              <div className={styles.paginationWrap}>
+                <Pagination
+                  current={messagesPage}
+                  total={pushMessages.length}
+                  pageSize={PUSH_MESSAGES_PAGE_SIZE}
+                  onChange={setMessagesPage}
+                  showSizeChanger={false}
+                />
+              </div>
             </div>
           ) : (
             <Empty description={t("inbox.emptyPush")} />

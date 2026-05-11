@@ -139,22 +139,43 @@ export const useInboxData = () => {
     return unreadIds.length;
   }, [pushMessages]);
 
-  const deleteMessage = useCallback((messageId: string) => {
-    void api.deleteInboxEvent(messageId);
-    let unreadDelta = 0;
+  const deleteMessages = useCallback(async (messageIds: string[]) => {
+    const ids = Array.from(
+      new Set(messageIds.map((id) => id.trim()).filter(Boolean)),
+    );
+    if (!ids.length) return 0;
+    const idSet = new Set(ids);
+    await Promise.allSettled(ids.map((id) => api.deleteInboxEvent(id)));
+    let deleted = 0;
+    let unreadDeleted = 0;
     setPushMessages((prev) => {
-      const removed = prev.find((message) => message.id === messageId);
-      unreadDelta = removed && !removed.read ? 1 : 0;
-      return prev.filter((message) => message.id !== messageId);
+      const remaining: PushMessage[] = [];
+      for (const message of prev) {
+        if (idSet.has(message.id)) {
+          deleted += 1;
+          if (!message.read) unreadDeleted += 1;
+          continue;
+        }
+        remaining.push(message);
+      }
+      return remaining;
     });
     setSummary((prev) => ({
       ...prev,
       pushMessages: {
-        total: Math.max(prev.pushMessages.total - 1, 0),
-        unread: Math.max(prev.pushMessages.unread - unreadDelta, 0),
+        total: Math.max(prev.pushMessages.total - deleted, 0),
+        unread: Math.max(prev.pushMessages.unread - unreadDeleted, 0),
       },
     }));
+    return deleted;
   }, []);
+
+  const deleteMessage = useCallback(
+    (messageId: string) => {
+      void deleteMessages([messageId]);
+    },
+    [deleteMessages],
+  );
 
   const triggerHarvest = useCallback((harvestId: string) => {
     console.info("triggerHarvest", harvestId);
@@ -167,6 +188,7 @@ export const useInboxData = () => {
     markMessageAsRead,
     markAllMessagesAsRead,
     deleteMessage,
+    deleteMessages,
     triggerHarvest,
     refreshPushMessages: loadPushMessages,
   };
