@@ -3262,7 +3262,7 @@ async def _action_batch(  # pylint: disable=too-many-nested-blocks
             if resp is not None and resp.content:
                 try:
                     # ToolResponse content is a list of TextBlocks; extract text from the first one
-                    raw_text = resp.content[0].text
+                    raw_text = resp.content[0]["text"]
                     resp_data = json.loads(raw_text)
                     if isinstance(resp_data, dict):
                         step_result.update(resp_data)
