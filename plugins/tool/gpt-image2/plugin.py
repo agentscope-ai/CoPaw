@@ -35,9 +35,10 @@ class GPTImage2ToolPlugin:
         logger.info("✓ GPT Image 2 tool plugin registered")
 
     def _register_tool(self):
-        """Register the generate_image_gpt tool to Agent toolkit.
+        """Register GPT Image 2 tools to Agent toolkit.
 
         This is called during application startup.
+        Registers both generate_image_gpt and edit_image_gpt tools.
         """
         try:
             # Load tool module
@@ -52,18 +53,25 @@ class GPTImage2ToolPlugin:
             spec.loader.exec_module(tool_module)
 
             generate_image_gpt = tool_module.generate_image_gpt
+            edit_image_gpt = tool_module.edit_image_gpt
 
-            # Register tool function globally
+            # Register tool functions globally
             import qwenpaw.agents.tools as tools_module
 
             setattr(tools_module, "generate_image_gpt", generate_image_gpt)
             if "generate_image_gpt" not in tools_module.__all__:
                 tools_module.__all__.append("generate_image_gpt")
 
-            logger.info("✓ Registered tool function: generate_image_gpt")
+            setattr(tools_module, "edit_image_gpt", edit_image_gpt)
+            if "edit_image_gpt" not in tools_module.__all__:
+                tools_module.__all__.append("edit_image_gpt")
 
-            # Add tool to current agent's config
-            # Note: This will be executed when the agent starts up
+            logger.info(
+                "✓ Registered tool functions: "
+                "generate_image_gpt, edit_image_gpt",
+            )
+
+            # Add tools to current agent's config
             from qwenpaw.config.config import (
                 BuiltinToolConfig,
                 load_agent_config,
@@ -71,7 +79,23 @@ class GPTImage2ToolPlugin:
             )
             from qwenpaw.app.agent_context import get_current_agent_id
 
-            tool_name = "generate_image_gpt"
+            tools_to_register = [
+                {
+                    "name": "generate_image_gpt",
+                    "description": (
+                        "Generate images using OpenAI GPT Image 2"
+                    ),
+                    "icon": "🎨",
+                },
+                {
+                    "name": "edit_image_gpt",
+                    "description": (
+                        "Edit or generate images using reference images "
+                        "with OpenAI GPT Image 2"
+                    ),
+                    "icon": "🖼️",
+                },
+            ]
 
             try:
                 # Get current agent ID
@@ -79,7 +103,7 @@ class GPTImage2ToolPlugin:
                 if not agent_id:
                     logger.warning(
                         "No current agent ID found, "
-                        "tool will be registered later",
+                        "tools will be registered later",
                     )
                     return
 
@@ -92,39 +116,41 @@ class GPTImage2ToolPlugin:
 
                     agent_config.tools = ToolsConfig()
 
-                # Add tool if not exists
-                if tool_name not in agent_config.tools.builtin_tools:
-                    agent_config.tools.builtin_tools[
-                        tool_name
-                    ] = BuiltinToolConfig(
-                        name=tool_name,
-                        enabled=False,  # Default disabled
-                        description=(
-                            "Generate images using OpenAI GPT Image 2"
-                        ),
-                        display_to_user=True,
-                        async_execution=False,
-                        icon="🎨",
-                    )
-                    save_agent_config(agent_id, agent_config)
-                    logger.info(
-                        f"✓ Added {tool_name} to agent {agent_id} "
-                        f"(disabled)",
-                    )
-                else:
-                    logger.info(
-                        f"Tool {tool_name} already exists in agent "
-                        f"{agent_id}",
-                    )
+                # Add each tool if not exists
+                for tool_info in tools_to_register:
+                    tool_name = tool_info["name"]
+                    if tool_name not in agent_config.tools.builtin_tools:
+                        agent_config.tools.builtin_tools[
+                            tool_name
+                        ] = BuiltinToolConfig(
+                            name=tool_name,
+                            enabled=False,  # Default disabled
+                            description=tool_info["description"],
+                            display_to_user=True,
+                            async_execution=False,
+                            icon=tool_info["icon"],
+                        )
+                        logger.info(
+                            f"✓ Added {tool_name} to agent {agent_id} "
+                            f"(disabled)",
+                        )
+                    else:
+                        logger.info(
+                            f"Tool {tool_name} already exists in agent "
+                            f"{agent_id}",
+                        )
+
+                save_agent_config(agent_id, agent_config)
+
             except Exception as ex:
                 logger.warning(
-                    f"Failed to add tool to current agent: {ex}. "
-                    f"Tool will be available after restart.",
+                    f"Failed to add tools to current agent: {ex}. "
+                    f"Tools will be available after restart.",
                 )
 
         except Exception as e:
             logger.error(
-                f"Failed to register GPT Image 2 tool: {e}",
+                f"Failed to register GPT Image 2 tools: {e}",
                 exc_info=True,
             )
 

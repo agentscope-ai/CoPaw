@@ -301,8 +301,18 @@ class PluginRegistry:
         """
         for plugin_id, manifest in self._plugin_manifests.items():
             meta = manifest.get("meta", {})
+            # Check old format: meta.tool_name
             if meta.get("tool_name") == tool_name:
                 return plugin_id
+            # Check new format: meta.tools array
+            tools = meta.get("tools", [])
+            if isinstance(tools, list):
+                for tool in tools:
+                    if (
+                        isinstance(tool, dict)
+                        and tool.get("name") == tool_name
+                    ):
+                        return plugin_id
         return None
 
     def get_tool_config(

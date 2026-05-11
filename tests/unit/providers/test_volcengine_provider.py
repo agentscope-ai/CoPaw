@@ -10,6 +10,7 @@ from qwenpaw.providers.openai_provider import OpenAIProvider
 from qwenpaw.providers.provider_manager import (
     PROVIDER_VOLCENGINE_CN,
     PROVIDER_VOLCENGINE_CN_CODINGPLAN,
+    VOLCENGINE_CODINGPLAN_MODELS,
     VOLCENGINE_MODELS,
     ProviderManager,
 )
@@ -49,8 +50,9 @@ def test_volcengine_provider_configs() -> None:
 def test_volcengine_models_list() -> None:
     """Verify Volcano Engine model definitions."""
     model_ids = [m.id for m in VOLCENGINE_MODELS]
-    assert "Doubao-Seed-2.0-Code" in model_ids
-    assert len(VOLCENGINE_MODELS) == 10
+    assert "doubao-seed-2-0-code-preview-260215" in model_ids
+    assert len(VOLCENGINE_MODELS) == 9
+    assert len(VOLCENGINE_CODINGPLAN_MODELS) == 10
 
 
 @pytest.fixture
@@ -93,5 +95,5 @@ def test_volcengine_has_expected_models(isolated_secret_dir) -> None:
     assert provider_cn is not None
     assert provider_codingplan is not None
 
-    assert provider_cn.has_model("Doubao-Seed-2.0-Code")
-    assert provider_codingplan.has_model("Doubao-Seed-2.0-Code")
+    assert provider_cn.has_model("doubao-seed-2-0-code-preview-260215")
+    assert provider_codingplan.has_model("doubao-seed-2-0-code-preview-260215")
