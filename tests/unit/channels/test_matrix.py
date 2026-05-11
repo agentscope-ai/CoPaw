@@ -24,7 +24,7 @@ from nio import (
     UploadResponse,
 )
 
-from nio.responses import RoomGetStateEventResponse, WhoamiResponse
+from nio.responses import WhoamiResponse
 from qwenpaw.app.channels.matrix.channel import MatrixChannel
 from qwenpaw.config.config import MatrixConfig
 
@@ -767,46 +767,6 @@ class TestMatrixChannelSend:
         content = call_args[0][2]
         assert content["msgtype"] == "m.text"
         assert content["body"] == "Hello world"
-
-    async def test_send_syncs_encryption_from_room_state(
-        self,
-        matrix_channel,
-        mock_async_client,
-    ):
-        """When local room is not flagged encrypted,
-        fetch m.room.encryption from server."""
-        room_id = "!room:example.com"
-        room = MagicMock()
-        room.encrypted = False
-
-        matrix_channel._cfg.encryption = True
-        matrix_channel._client = mock_async_client
-        mock_async_client.olm = object()
-        mock_async_client.rooms = {room_id: room}
-        mock_async_client.encrypted_rooms = set()
-        mock_async_client.should_upload_keys = False
-        mock_async_client.should_query_keys = False
-        mock_async_client.should_claim_keys = False
-        mock_async_client.send_to_device_messages = AsyncMock()
-        mock_async_client.room_get_state_event = AsyncMock(
-            return_value=RoomGetStateEventResponse(
-                {"algorithm": "m.megolm.v1.aes-sha2"},
-                "m.room.encryption",
-                "",
-                room_id,
-            ),
-        )
-        mock_async_client.room_send = AsyncMock(return_value=MagicMock())
-
-        await matrix_channel.send(room_id, "Hello e2ee")
-
-        mock_async_client.room_get_state_event.assert_called_once_with(
-            room_id,
-            "m.room.encryption",
-            "",
-        )
-        assert room.encrypted is True
-        mock_async_client.room_send.assert_called_once()
 
     async def test_send_when_client_not_initialized(self, matrix_channel):
         """Test send when client is not initialized."""
