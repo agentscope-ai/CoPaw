@@ -1398,7 +1398,9 @@ class FeishuChannel(BaseChannel):
             return None
         ext = path.suffix.lower().lstrip(".")
         file_type = "stream"
-        if ext in (
+        if ext in ("ogg", "opus"):
+            file_type = "opus"
+        elif ext in (
             "pdf",
             "doc",
             "docx",
@@ -1731,10 +1733,15 @@ class FeishuChannel(BaseChannel):
             file_key[:24] if file_key else "",
         )
         content = json.dumps({"file_key": file_key}, ensure_ascii=False)
+        part_type = getattr(part, "type", None)
+        if part_type == ContentType.AUDIO:
+            msg_type = "audio"
+        else:
+            msg_type = "file"
         return await self._send_message(
             receive_id_type,
             receive_id,
-            "file",
+            msg_type,
             content,
         )
 
