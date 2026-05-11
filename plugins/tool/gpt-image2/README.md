@@ -87,7 +87,8 @@ Edit or generate image using reference images with OpenAI GPT Image 2 model.
   - Note: Local files are automatically converted to base64
 - `size` (str, optional): Image size, one of "1024x1024", "1024x1536", "1536x1024", "auto" (default: "1024x1024")
 - `quality` (str, optional): Quality level, one of "low", "medium", "high", "auto" (default: "auto")
-- `input_fidelity` (str, optional): Fidelity to original images, one of "high", "low" (default: "high")
+
+**Note:** GPT Image 2 always processes images at high fidelity and does not support the `input_fidelity` parameter.
 
 **Returns:**
 

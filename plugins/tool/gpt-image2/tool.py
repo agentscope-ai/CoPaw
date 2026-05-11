@@ -247,12 +247,14 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
     reference_images: List[str],
     size: str = "1024x1024",
     quality: str = "auto",
-    input_fidelity: str = "high",
 ) -> ToolResponse:
     """Edit or generate image using reference images with GPT Image 2.
 
     This tool uses OpenAI's GPT Image 2 model to generate or edit images
     based on one or more reference images and a text prompt.
+
+    Note: gpt-image-2 always processes images at high fidelity and does
+    not support the input_fidelity parameter.
 
     Args:
         prompt (str):
@@ -268,9 +270,6 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
         quality (str, optional):
             Image quality level. Options: "low", "medium", "high", "auto".
             Defaults to "auto".
-        input_fidelity (str, optional):
-            Controls fidelity to original input images. Options: "high",
-            "low". Defaults to "high".
 
     Returns:
         ToolResponse:
@@ -382,22 +381,6 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
                 ],
             )
 
-        valid_fidelity = {"high", "low"}
-        if input_fidelity not in valid_fidelity:
-            return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=(
-                            f"Error: Invalid input_fidelity "
-                            f"'{input_fidelity}'. "
-                            f"Must be one of: "
-                            f"{', '.join(sorted(valid_fidelity))}"
-                        ),
-                    ),
-                ],
-            )
-
         # Process reference images
         try:
             images_payload = []
@@ -429,10 +412,11 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
         # Call OpenAI API
         logger.info(
             f"Editing image with GPT Image 2: {len(reference_images)} "
-            f"reference images, size={size}, quality={quality}, "
-            f"input_fidelity={input_fidelity}",
+            f"reference images, size={size}, quality={quality}",
         )
 
+        # Note: gpt-image-2 does not support input_fidelity parameter
+        # It always processes images at high fidelity
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 endpoint,
@@ -446,7 +430,6 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
                     "prompt": prompt,
                     "size": size,
                     "quality": quality,
-                    "input_fidelity": input_fidelity,
                     "n": 1,
                 },
             )
@@ -512,8 +495,7 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
                         f"Edited image using GPT Image 2\n"
                         f"Prompt: {prompt}\n"
                         f"Reference images: {len(reference_images)}\n"
-                        f"Size: {size}, Quality: {quality}, "
-                        f"Input Fidelity: {input_fidelity}\n"
+                        f"Size: {size}, Quality: {quality}\n"
                         f"Saved to: {image_path}"
                     ),
                 ),
