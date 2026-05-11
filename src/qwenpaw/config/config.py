@@ -1285,9 +1285,8 @@ class BuiltinToolConfig(BaseModel):
     )
 
 
-def _default_builtin_tools() -> (
-    Dict[str, BuiltinToolConfig]
-):  # pylint: disable=too-many-nested-blocks
+# pylint: disable=too-many-nested-blocks
+def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
     """Return a fresh copy of the canonical built-in tool definitions.
 
     This includes both hardcoded tools and dynamically registered tools

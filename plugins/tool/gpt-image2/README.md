@@ -8,7 +8,7 @@ A QwenPaw tool plugin that enables image generation and editing using OpenAI's G
 - **Edit/generate images** using reference images (1-16 images)
 - Support for multiple image sizes (1024x1024, 1024x1536, 1536x1024, auto)
 - Quality options: low, medium, high, auto
-- Input fidelity control for image editing (high, low)
+- High fidelity image processing (automatic for gpt-image-2)
 - Pure backend implementation - no frontend code required
 
 ## Installation
