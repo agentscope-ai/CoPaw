@@ -74,7 +74,6 @@ function HeartbeatPage() {
   const { selectedAgent } = useAgentStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [runningNow, setRunningNow] = useState(false);
   const [form] = Form.useForm<HeartbeatFormValues>();
   const { message } = useAppMessage();
 
@@ -136,19 +135,6 @@ function HeartbeatPage() {
       message.error(t("heartbeat.saveFailed"));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRunNow = async () => {
-    setRunningNow(true);
-    try {
-      await api.runHeartbeatNow();
-      message.success(t("heartbeat.runNowSuccess"));
-    } catch (e) {
-      console.error("Failed to run heartbeat now:", e);
-      message.error(t("heartbeat.runNowFailed"));
-    } finally {
-      setRunningNow(false);
     }
   };
 
@@ -272,9 +258,6 @@ function HeartbeatPage() {
             </Form.Item>
 
             <Form.Item className={styles.formActions}>
-              <Button onClick={() => void handleRunNow()} loading={runningNow}>
-                {t("heartbeat.runNow")}
-              </Button>
               <Button type="primary" htmlType="submit" loading={saving}>
                 {t("common.save")}
               </Button>

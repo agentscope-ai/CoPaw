@@ -620,35 +620,35 @@
         "description": "毎月15日夜に駆虫・ワクチン確認を通知します。",
         "frequency": "毎月15日 20:00 (0 20 15 * *)"
       },
-      "oneTimeReminder": {
-        "title": "1回限りのリマインダー",
-        "description": "指定した日時に 1 回だけ実行します。",
-        "frequency": "選択した時刻に 1 回実行"
+      "onceTextBirthdayReminder": {
+        "title": "誕生日リマインダー",
+        "description": "xx が 1月1日に誕生日であることを通知します。",
+        "frequency": "実行時刻：2026-01-01 09:00"
       },
-      "nDayCheckin": {
-        "title": "N日間チェックイン",
-        "description": "一定回数まで毎日リマインドします。",
-        "frequency": "1日ごと、回数指定"
+      "onceAgentBusinessTripPrep": {
+        "title": "出張前の準備",
+        "description": "目的地の天気を確認し、出張準備の提案を行います。",
+        "frequency": "実行時刻：2026-01-01 20:00"
       },
-      "dailyUntilDeadline": {
-        "title": "期限まで毎日通知",
-        "description": "期限日まで毎日リマインドします。",
-        "frequency": "1日ごと、日時で終了"
+      "repeatCountTextMedicineReminder": {
+        "title": "服薬リマインダー（14回）",
+        "description": "14回の療程で、時間どおりの服薬を通知します。",
+        "frequency": "初回：2026-01-01 09:00｜1日ごと｜14回"
       },
-      "releaseCountdown": {
-        "title": "リリースカウントダウン",
-        "description": "リリース日までのカウントダウン通知です。",
-        "frequency": "1日ごと、日時で終了"
+      "repeatCountAgentDietPlan": {
+        "title": "14日間の食事プラン",
+        "description": "14日間、毎日の食事提案を生成して送信します。",
+        "frequency": "初回：2026-01-01 08:00｜1日ごと｜14回"
       },
-      "trainingCycle": {
-        "title": "トレーニング周期通知",
-        "description": "一定回数の周期的なトレーニング通知です。",
-        "frequency": "7日ごと、回数指定"
+      "repeatUntilTextWeeklyMeeting": {
+        "title": "2か月間の週次会議リマインダー",
+        "description": "設定した締切まで毎週、会議参加を通知します。",
+        "frequency": "初回：2026-01-02 08:45｜7日ごと｜2026-03-01まで"
       },
-      "sprintCadence": {
-        "title": "スプリント進行通知",
-        "description": "固定回数のスプリントリズム通知です。",
-        "frequency": "2日ごと、回数指定"
+      "repeatUntilAgentWeeklySummary": {
+        "title": "会議前の週次サマリー",
+        "description": "毎週会議前に、直近1週間の memory をもとに業務サマリーを生成します。",
+        "frequency": "初回：2026-01-02 08:30｜7日ごと｜2026-03-01まで"
       }
     }
   },

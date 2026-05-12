@@ -808,35 +808,35 @@
         "description": "No dia 15 de cada mês à noite, lembre sobre vermifugação ou retorno de vacina do pet.",
         "frequency": "Mensalmente no dia 15 às 20:00 (0 20 15 * *)"
       },
-      "oneTimeReminder": {
-        "title": "Lembrete único",
-        "description": "Um único lembrete em data e horário específicos.",
-        "frequency": "Executar uma vez no horário selecionado"
+      "onceTextBirthdayReminder": {
+        "title": "Lembrete de aniversário",
+        "description": "Lembrar que xx faz aniversário em 1º de janeiro.",
+        "frequency": "Execução: 2026-01-01 09:00"
       },
-      "nDayCheckin": {
-        "title": "Check-in de N dias",
-        "description": "Lembrete diário de check-in por um número fixo de execuções.",
-        "frequency": "A cada 1 dia, contagem limitada"
+      "onceAgentBusinessTripPrep": {
+        "title": "Preparação para viagem de trabalho",
+        "description": "Consultar o clima do destino e sugerir preparativos para a viagem.",
+        "frequency": "Execução: 2026-01-01 20:00"
       },
-      "dailyUntilDeadline": {
-        "title": "Diário até o prazo",
-        "description": "Lembrete diário que para em uma data limite.",
-        "frequency": "A cada 1 dia, encerra em data"
+      "repeatCountTextMedicineReminder": {
+        "title": "Lembrete de medicação (14 vezes)",
+        "description": "Lembrar de tomar o remédio no horário por um ciclo de 14 execuções.",
+        "frequency": "Primeira execução: 2026-01-01 09:00 | A cada 1 dia | 14 execuções"
       },
-      "releaseCountdown": {
-        "title": "Contagem regressiva até o lançamento",
-        "description": "Lembrete de contagem regressiva antes da data de lançamento.",
-        "frequency": "A cada 1 dia, encerra em data"
+      "repeatCountAgentDietPlan": {
+        "title": "Plano alimentar de 14 dias",
+        "description": "Gerar e enviar sugestões diárias de alimentação por 14 dias.",
+        "frequency": "Primeira execução: 2026-01-01 08:00 | A cada 1 dia | 14 execuções"
       },
-      "trainingCycle": {
-        "title": "Ciclo de treinamento",
-        "description": "Lembrete periódico de treinamento com número limitado de execuções.",
-        "frequency": "A cada 7 dias, contagem limitada"
+      "repeatUntilTextWeeklyMeeting": {
+        "title": "Lembrete de reunião semanal (2 meses)",
+        "description": "Enviar lembrete semanal da reunião até a data limite configurada.",
+        "frequency": "Primeira execução: 2026-01-02 08:45 | A cada 7 dias | Até 2026-03-01"
       },
-      "sprintCadence": {
-        "title": "Cadência de sprint",
-        "description": "Lembrete do ritmo de sprint para iterações fixas.",
-        "frequency": "A cada 2 dias, contagem limitada"
+      "repeatUntilAgentWeeklySummary": {
+        "title": "Resumo semanal antes da reunião",
+        "description": "Antes de cada reunião semanal, gerar um resumo de trabalho com base na memory da última semana.",
+        "frequency": "Primeira execução: 2026-01-02 08:30 | A cada 7 dias | Até 2026-03-01"
       }
     }
   },

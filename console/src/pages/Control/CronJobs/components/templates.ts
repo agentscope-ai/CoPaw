@@ -29,6 +29,7 @@ const buildDispatch = () => ({
 });
 
 const buildRuntime = () => ({
+  share_session: true,
   max_concurrency: 1,
   timeout_seconds: 120,
   misfire_grace_seconds: 60,
@@ -105,10 +106,14 @@ const createScheduledTemplate = (
   descriptionKey: string,
   frequencyKey: string,
   options: {
+    taskType?: "text" | "agent";
+    textContent?: string;
+    agentPrompt?: string;
+    runAt?: dayjs.Dayjs;
     repeatEnabled: boolean;
     repeatEveryDays?: number;
     repeatEndType?: "never" | "until" | "count";
-    repeatUntilDaysFromNow?: number;
+    repeatUntil?: dayjs.Dayjs;
     repeatCount?: number;
   },
   tags: CronTemplateTag[],
@@ -122,27 +127,46 @@ const createScheduledTemplate = (
   tags,
   showInCalendarRecommended: true,
   toFormValues: (timezone) => {
-    const onceRunAt = dayjs().add(1, "hour");
-    const onceRepeatUntil =
-      options.repeatUntilDaysFromNow !== undefined
-        ? onceRunAt.add(options.repeatUntilDaysFromNow, "day")
-        : null;
+    const onceRunAt = options.runAt ?? dayjs("2026-01-01T09:00:00");
     return {
       name: "",
       enabled: true,
+      save_result_to_inbox: true,
       scheduleType: "once",
       onceRunAt,
       onceRepeatEnabled: options.repeatEnabled,
       onceRepeatEveryDays: options.repeatEveryDays ?? 1,
       onceRepeatEndType: options.repeatEndType ?? "never",
-      onceRepeatUntil,
+      onceRepeatUntil: options.repeatUntil ?? null,
       onceRepeatCount: options.repeatCount ?? 2,
       schedule: {
         type: "once",
         timezone,
       },
-      task_type: "text",
-      text: "",
+      task_type: options.taskType || "text",
+      text: options.taskType === "agent" ? "" : options.textContent || "",
+      request:
+        options.taskType === "agent"
+          ? {
+              input: JSON.stringify(
+                [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "text",
+                        text: options.agentPrompt || "",
+                      },
+                    ],
+                  },
+                ],
+                null,
+                2,
+              ),
+              session_id: "",
+              user_id: "",
+            }
+          : undefined,
       dispatch: buildDispatch(),
       runtime: buildRuntime(),
       meta: {
@@ -205,77 +229,94 @@ export const CRON_TEMPLATES: CronTemplateDefinition[] = [
     ["personal", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "one_time_reminder",
-    "cronJobs.templates.oneTimeReminder.title",
-    "cronJobs.templates.oneTimeReminder.description",
-    "cronJobs.templates.oneTimeReminder.frequency",
+    "once_text_birthday_reminder",
+    "cronJobs.templates.onceTextBirthdayReminder.title",
+    "cronJobs.templates.onceTextBirthdayReminder.description",
+    "cronJobs.templates.onceTextBirthdayReminder.frequency",
     {
+      taskType: "text",
+      textContent: "xx在1月1日过生日，别忘了送上祝福～",
+      runAt: dayjs("2026-01-01T09:00:00"),
       repeatEnabled: false,
     },
     ["personal", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "n_day_checkin",
-    "cronJobs.templates.nDayCheckin.title",
-    "cronJobs.templates.nDayCheckin.description",
-    "cronJobs.templates.nDayCheckin.frequency",
+    "once_agent_business_trip_prep",
+    "cronJobs.templates.onceAgentBusinessTripPrep.title",
+    "cronJobs.templates.onceAgentBusinessTripPrep.description",
+    "cronJobs.templates.onceAgentBusinessTripPrep.frequency",
     {
-      repeatEnabled: true,
-      repeatEveryDays: 1,
-      repeatEndType: "count",
-      repeatCount: 7,
+      taskType: "agent",
+      agentPrompt:
+        "我明天要出差，请查询目的地天气，并给出穿衣、携带物品和行程准备建议。",
+      runAt: dayjs("2026-01-01T20:00:00"),
+      repeatEnabled: false,
     },
     ["personal", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "daily_until_deadline",
-    "cronJobs.templates.dailyUntilDeadline.title",
-    "cronJobs.templates.dailyUntilDeadline.description",
-    "cronJobs.templates.dailyUntilDeadline.frequency",
+    "repeat_count_text_medicine_reminder",
+    "cronJobs.templates.repeatCountTextMedicineReminder.title",
+    "cronJobs.templates.repeatCountTextMedicineReminder.description",
+    "cronJobs.templates.repeatCountTextMedicineReminder.frequency",
     {
+      taskType: "text",
+      textContent: "注意身体，别忘记吃药哦。",
+      runAt: dayjs("2026-01-01T09:00:00"),
       repeatEnabled: true,
       repeatEveryDays: 1,
-      repeatEndType: "until",
-      repeatUntilDaysFromNow: 14,
+      repeatEndType: "count",
+      repeatCount: 14,
     },
-    ["team", "reminder", "calendar"],
+    ["personal", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "release_countdown",
-    "cronJobs.templates.releaseCountdown.title",
-    "cronJobs.templates.releaseCountdown.description",
-    "cronJobs.templates.releaseCountdown.frequency",
+    "repeat_count_agent_diet_plan",
+    "cronJobs.templates.repeatCountAgentDietPlan.title",
+    "cronJobs.templates.repeatCountAgentDietPlan.description",
+    "cronJobs.templates.repeatCountAgentDietPlan.frequency",
     {
+      taskType: "agent",
+      agentPrompt: "我最近在增肌，请为我生成今天的饮食建议。",
+      runAt: dayjs("2026-01-01T08:00:00"),
       repeatEnabled: true,
       repeatEveryDays: 1,
-      repeatEndType: "until",
-      repeatUntilDaysFromNow: 10,
+      repeatEndType: "count",
+      repeatCount: 14,
     },
-    ["team", "reminder", "calendar"],
+    ["personal", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "training_cycle",
-    "cronJobs.templates.trainingCycle.title",
-    "cronJobs.templates.trainingCycle.description",
-    "cronJobs.templates.trainingCycle.frequency",
+    "repeat_until_text_weekly_meeting",
+    "cronJobs.templates.repeatUntilTextWeeklyMeeting.title",
+    "cronJobs.templates.repeatUntilTextWeeklyMeeting.description",
+    "cronJobs.templates.repeatUntilTextWeeklyMeeting.frequency",
     {
+      taskType: "text",
+      textContent: "15分钟后周会开始。",
+      runAt: dayjs("2026-01-02T08:45:00"),
       repeatEnabled: true,
       repeatEveryDays: 7,
-      repeatEndType: "count",
-      repeatCount: 6,
+      repeatEndType: "until",
+      repeatUntil: dayjs("2026-03-01T23:59:00"),
     },
-    ["team", "calendar"],
+    ["team", "reminder", "calendar"],
   ),
   createScheduledTemplate(
-    "sprint_cadence",
-    "cronJobs.templates.sprintCadence.title",
-    "cronJobs.templates.sprintCadence.description",
-    "cronJobs.templates.sprintCadence.frequency",
+    "repeat_until_agent_weekly_summary",
+    "cronJobs.templates.repeatUntilAgentWeeklySummary.title",
+    "cronJobs.templates.repeatUntilAgentWeeklySummary.description",
+    "cronJobs.templates.repeatUntilAgentWeeklySummary.frequency",
     {
+      taskType: "agent",
+      agentPrompt:
+        "请基于最近一周的 memory，生成本周工作总结，供周会前快速回顾。",
+      runAt: dayjs("2026-01-02T08:30:00"),
       repeatEnabled: true,
-      repeatEveryDays: 2,
-      repeatEndType: "count",
-      repeatCount: 10,
+      repeatEveryDays: 7,
+      repeatEndType: "until",
+      repeatUntil: dayjs("2026-03-01T23:59:00"),
     },
     ["team", "calendar"],
   ),

@@ -420,3 +420,90 @@
     min-height: 280px;
   }
 }
+
+/* ─── Dark mode ─────────────────────────────────────────────────────────────── */
+:global(.dark-mode) {
+  .inboxPage {
+    background: #141414;
+  }
+
+  .inboxTabs {
+    background: #1f1f1f;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .selectedCountText,
+  .messageDetailLabel,
+  .traceLoading,
+  .traceEmpty {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .traceLoading,
+  .traceEmpty {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .traceCollapse:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .traceCollapseActive {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .traceFoldIcon {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .traceFoldTitle,
+  .traceAssistantMessage {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .traceInlineChevron,
+  .traceFoldTime {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .toolSection,
+  .traceJsonBlock,
+  .traceMarkdownBlock :global(pre) {
+    border-color: #3a3a3a;
+    background: #1a1a1a;
+  }
+
+  .traceCodeHeader {
+    background: #242424;
+    border-bottom-color: #3a3a3a;
+  }
+
+  .traceCodeTitle {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .traceCodeCopyBtn {
+    color: rgba(255, 255, 255, 0.55);
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.85);
+    }
+  }
+
+  .traceJsonBlock,
+  .toolCodeBlock,
+  .traceMarkdownBlock {
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .toolCodeBlock {
+    background: #1a1a1a;
+  }
+
+  .traceUserMessage {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}

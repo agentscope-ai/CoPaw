@@ -726,35 +726,35 @@
         "description": "每月 15 日晚提醒给宠物做体外驱虫。",
         "frequency": "每月 15 日 20:00（0 20 15 * *）"
       },
-      "oneTimeReminder": {
-        "title": "一次性提醒",
-        "description": "在指定日期时间执行一次提醒。",
-        "frequency": "在所选时间执行 1 次"
+      "onceTextBirthdayReminder": {
+        "title": "生日提醒",
+        "description": "提醒xx于1月1日过生日。",
+        "frequency": "执行时间：2026年1月1日 09:00"
       },
-      "nDayCheckin": {
-        "title": "连续 N 天打卡",
-        "description": "按天重复，并在指定次数后结束。",
-        "frequency": "每 1 天，限定次数"
+      "onceAgentBusinessTripPrep": {
+        "title": "出差前天气与行程准备",
+        "description": "查询目的地天气并给出行程准备建议。",
+        "frequency": "执行时间：2026年1月1日 20:00"
       },
-      "dailyUntilDeadline": {
-        "title": "截止日前每日提醒",
-        "description": "按天重复，并在截止时间自动结束。",
-        "frequency": "每 1 天，终止于某天"
+      "repeatCountTextMedicineReminder": {
+        "title": "吃药提醒（14次）",
+        "description": "提醒按时吃药，本疗程共14次。",
+        "frequency": "首次执行：2026年1月1日 09:00｜每1天一次｜限定14次"
       },
-      "releaseCountdown": {
-        "title": "发布倒计时提醒",
-        "description": "发布前按天提醒，直到截止时间。",
-        "frequency": "每 1 天，终止于某天"
+      "repeatCountAgentDietPlan": {
+        "title": "14天饮食计划",
+        "description": "连续14天生成并发送当日饮食建议。",
+        "frequency": "首次执行：2026年1月1日 08:00｜每1天一次｜限定14次"
       },
-      "trainingCycle": {
-        "title": "培训周期提醒",
-        "description": "按周期提醒，并在指定次数后结束。",
-        "frequency": "每 7 天，限定次数"
+      "repeatUntilTextWeeklyMeeting": {
+        "title": "两个月周会提醒",
+        "description": "每周提醒参加周会，持续到设定截止时间。",
+        "frequency": "首次执行：2026年1月2日 08:45｜每7天一次｜截止到2026年3月1日"
       },
-      "sprintCadence": {
-        "title": "冲刺节奏提醒",
-        "description": "按冲刺节奏提醒，固定次数后结束。",
-        "frequency": "每 2 天，限定次数"
+      "repeatUntilAgentWeeklySummary": {
+        "title": "周会前工作总结",
+        "description": "每次周会前基于最近一周 memory 生成工作总结。",
+        "frequency": "首次执行：2026年1月2日 08:30｜每7天一次｜截止到2026年3月1日"
       }
     }
   },
