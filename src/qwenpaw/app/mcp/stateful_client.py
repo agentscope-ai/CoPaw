@@ -20,7 +20,7 @@ import asyncio
 import logging
 from contextlib import AsyncExitStack
 from datetime import timedelta
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
 import httpx
 from mcp import ClientSession
@@ -29,6 +29,50 @@ from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
 
 from agentscope.mcp import StatefulClientBase
+
+# ---------------------------------------------------------------------------
+# Monkey-patch: replace agentscope's _extract_json_schema_from_mcp_tool with
+# a version that forwards the full inputSchema (including "$defs", "anyOf",
+# nested objects, etc.) instead of only copying "properties" and "required".
+# The patch must target the importing module (_mcp_function) rather than the
+# defining module (_utils._common) because Python's `from … import` creates
+# a local binding in the importer's namespace.
+# ---------------------------------------------------------------------------
+import agentscope.mcp._mcp_function as _mcp_fn_mod
+
+if TYPE_CHECKING:
+    from mcp.types import Tool as _Tool
+
+
+# TODO: delete this once after a new version of agentscope is released
+def _extract_json_schema_from_mcp_tool(tool: _Tool) -> dict[str, Any]:
+    """Extract JSON schema from MCP tool.
+
+    Preserves the full inputSchema structure (including ``$defs``, ``anyOf``,
+    nested objects, etc.) rather than flattening it to only ``properties`` and
+    ``required``.  Falls back to an empty-object schema when inputSchema is
+    absent.
+    """
+    parameters = dict(tool.inputSchema) if tool.inputSchema else {}
+    parameters.setdefault("type", "object")
+    parameters.setdefault("properties", {})
+    parameters.setdefault("required", [])
+
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description or "",
+            "parameters": parameters,
+        },
+    }
+
+
+# pylint: disable=protected-access
+_mcp_fn_mod._extract_json_schema_from_mcp_tool = (
+    _extract_json_schema_from_mcp_tool
+)
+# ---------------------------------------------------------------------------
 
 logger = logging.getLogger(__name__)
 
