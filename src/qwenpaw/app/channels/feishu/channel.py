@@ -2058,11 +2058,10 @@ class FeishuChannel(BaseChannel):
 
                 # Patch SDK to track last-received timestamp for
                 # silent connection loss detection.
-                channel_self = self
                 original_handle = self._ws_client._handle_message
 
                 async def _patched_handle_message(msg: bytes) -> None:
-                    channel_self._last_ws_recv_time = time.time()
+                    self._last_ws_recv_time = time.time()
                     return await original_handle(msg)
 
                 self._ws_client._handle_message = _patched_handle_message
@@ -2089,7 +2088,7 @@ class FeishuChannel(BaseChannel):
                                 self._ws_loop.stop()
                             break
                         # No pong/data for too long → connection dead.
-                        last_recv = channel_self._last_ws_recv_time
+                        last_recv = self._last_ws_recv_time
                         if last_recv > 0:
                             silent_seconds = time.time() - last_recv
                             if silent_seconds > FEISHU_WS_RECV_TIMEOUT:
