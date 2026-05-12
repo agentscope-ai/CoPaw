@@ -6,12 +6,13 @@ import base64
 import logging
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import httpx
 from agentscope.message import ImageBlock, TextBlock
 from agentscope.tool import ToolResponse
 from qwenpaw.constant import DEFAULT_MEDIA_DIR
+from qwenpaw.plugins import get_tool_config
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +49,11 @@ async def generate_image_gpt(
         >>> result = await generate_image_gpt(
         ...     prompt="A serene mountain landscape at sunset",
         ...     size="1792x1024",
-        ...     quality="hd"
         ... )
     """
     try:
         # Get tool config (API key and endpoint)
-        tool_config = _get_tool_config()
+        tool_config = get_tool_config("generate_image_gpt")
         if not tool_config:
             return ToolResponse(
                 content=[
@@ -311,7 +311,7 @@ async def edit_image_gpt(  # pylint: disable=too-many-statements
             )
 
         # Get tool config
-        tool_config = _get_tool_config("edit_image_gpt")
+        tool_config = get_tool_config("edit_image_gpt")
         if not tool_config:
             return ToolResponse(
                 content=[
@@ -572,40 +572,3 @@ def _process_image_url(image_path: str) -> dict:
         image_data = base64.b64encode(f.read()).decode("utf-8")
 
     return {"image_url": f"data:{mime_type};base64,{image_data}"}
-
-
-def _get_tool_config(tool_name: str = "generate_image_gpt") -> Optional[dict]:
-    """Get tool configuration including API key and endpoint.
-
-    Args:
-        tool_name: Name of the tool to get config for
-
-    Returns:
-        dict or None: Tool config if configured, None otherwise
-    """
-    try:
-        from qwenpaw.plugins.registry import PluginRegistry
-        from qwenpaw.app.agent_context import get_current_agent_id
-
-        registry = PluginRegistry()
-        if not registry:
-            return None
-
-        # Get current agent ID
-        agent_id = get_current_agent_id()
-        if not agent_id:
-            logger.warning("No current agent ID found")
-            return None
-
-        # Get tool config for current agent
-        tool_config = registry.get_tool_config(
-            tool_name,
-            agent_id,
-        )
-        if not tool_config:
-            return None
-
-        return tool_config
-    except Exception as e:
-        logger.error(f"Failed to get tool config: {e}")
-        return None

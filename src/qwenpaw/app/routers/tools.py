@@ -85,6 +85,70 @@ class ToolConfigUpdate(BaseModel):
     )
 
 
+def _build_tool_info(tool_config: Any, tool_name: str) -> ToolInfo:
+    """Build a complete ToolInfo from a tool config, including plugin metadata.
+
+    Reads requires_config, config_fields and config_values from the plugin
+    manifest so that every endpoint returns a consistent, complete response.
+
+    Args:
+        tool_config: BuiltinToolConfig instance
+        tool_name: Tool function name
+
+    Returns:
+        Fully populated ToolInfo
+    """
+    from ...plugins.registry import PluginRegistry
+
+    tool_info = ToolInfo(
+        name=tool_config.name,
+        enabled=tool_config.enabled,
+        description=tool_config.description,
+        async_execution=tool_config.async_execution,
+        icon=tool_config.icon or "",
+    )
+
+    registry = PluginRegistry()
+    plugin_id = registry.get_plugin_id_for_tool(tool_name)
+    manifest = registry.get_plugin_manifest(plugin_id) if plugin_id else None
+
+    if manifest and "meta" in manifest:
+        meta = manifest["meta"]
+
+        config_fields_data = None
+        requires_config = False
+
+        for t in meta.get("tools", []):
+            if isinstance(t, dict) and t.get("name") == tool_name:
+                requires_config = t.get("requires_config", False)
+                config_fields_data = t.get("config_fields", [])
+                break
+
+        if config_fields_data is None:
+            requires_config = meta.get("requires_config", False)
+            config_fields_data = meta.get("config_fields", [])
+
+        tool_info.requires_config = requires_config
+
+        if config_fields_data:
+            tool_info.config_fields = [
+                ToolConfigField(**field) for field in config_fields_data
+            ]
+
+        if tool_config.config:
+            masked_config = dict(tool_config.config)
+            for field in config_fields_data:
+                if (
+                    field.get("type") == "password"
+                    and field["name"] in masked_config
+                ):
+                    if masked_config[field["name"]]:
+                        masked_config[field["name"]] = "***"
+            tool_info.config_values = masked_config
+
+    return tool_info
+
+
 @router.get("", response_model=List[ToolInfo])
 async def list_tools(
     request: Request,
@@ -242,14 +306,7 @@ async def toggle_tool(
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, workspace.agent_id)
 
-    # Return immediately (optimistic update)
-    return ToolInfo(
-        name=tool_config.name,
-        enabled=tool_config.enabled,
-        description=tool_config.description,
-        async_execution=tool_config.async_execution,
-        icon=tool_config.icon,
-    )
+    return _build_tool_info(tool_config, tool_name)
 
 
 @router.patch("/{tool_name}/async-execution", response_model=ToolInfo)
@@ -296,14 +353,7 @@ async def update_tool_async_execution(
     # Hot reload config (async, non-blocking)
     schedule_agent_reload(request, workspace.agent_id)
 
-    # Return immediately (optimistic update)
-    return ToolInfo(
-        name=tool_config.name,
-        enabled=tool_config.enabled,
-        description=tool_config.description,
-        async_execution=tool_config.async_execution,
-        icon=tool_config.icon,
-    )
+    return _build_tool_info(tool_config, tool_name)
 
 
 @router.get("/{tool_name}/config")
