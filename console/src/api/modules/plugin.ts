@@ -1,6 +1,15 @@
 import { getApiUrl } from "../config";
 import { buildAuthHeaders } from "../authHeaders";
 
+/** Matches the backend ``PluginType`` enum values. */
+export type PluginType =
+  | "tool"
+  | "provider"
+  | "hook"
+  | "command"
+  | "frontend"
+  | "general";
+
 /**
  * A single plugin record returned by `GET /api/plugins`.
  */
@@ -13,6 +22,8 @@ export interface PluginInfo {
   enabled: boolean;
   /** Whether the plugin is currently loaded in memory. */
   loaded: boolean;
+  /** Primary capability type declared in plugin.json. */
+  plugin_type: PluginType;
   /** Frontend JS entry-point path (if any). */
   frontend_entry?: string;
 }

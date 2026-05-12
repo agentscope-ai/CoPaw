@@ -1916,6 +1916,7 @@
     "uninstallFailed": "Plugin uninstallation failed",
     "statusLoaded": "Running",
     "statusUnloaded": "Not loaded",
+    "type": "Type",
     "version": "Version",
     "author": "Author",
     "unknown": "Unknown",

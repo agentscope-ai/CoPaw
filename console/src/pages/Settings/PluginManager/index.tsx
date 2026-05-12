@@ -24,7 +24,13 @@ import {
   FolderOpen,
   FileArchive,
   X,
+  Wrench,
+  BrainCircuit,
+  Zap,
+  Terminal,
+  LayoutDashboard,
 } from "lucide-react";
+import type { PluginType } from "@/api/modules/plugin";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMessage } from "@/hooks/useAppMessage";
 import {
@@ -38,6 +44,57 @@ import { useRequest } from "ahooks";
 import styles from "./index.module.less";
 
 const { Text } = Typography;
+
+// ── Plugin type display config ───────────────────────────────────────────────
+
+const PLUGIN_TYPE_CONFIG: Record<
+  PluginType,
+  { label: string; color: string; icon: React.ReactNode }
+> = {
+  tool: {
+    label: "Tool",
+    color: "blue",
+    icon: <Wrench size={11} />,
+  },
+  provider: {
+    label: "Provider",
+    color: "purple",
+    icon: <BrainCircuit size={11} />,
+  },
+  hook: {
+    label: "Hook",
+    color: "orange",
+    icon: <Zap size={11} />,
+  },
+  command: {
+    label: "Command",
+    color: "cyan",
+    icon: <Terminal size={11} />,
+  },
+  frontend: {
+    label: "Frontend",
+    color: "green",
+    icon: <LayoutDashboard size={11} />,
+  },
+  general: {
+    label: "General",
+    color: "default",
+    icon: <Package size={11} />,
+  },
+};
+
+function PluginTypeTag({ type }: { type: PluginType }) {
+  const cfg = PLUGIN_TYPE_CONFIG[type] ?? PLUGIN_TYPE_CONFIG.general;
+  return (
+    <Tag
+      color={cfg.color}
+      icon={cfg.icon}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+    >
+      {cfg.label}
+    </Tag>
+  );
+}
 
 // ── Drag-and-drop folder reading ────────────────────────────────────────────
 
@@ -291,6 +348,15 @@ export default function PluginManagerPage() {
             </Text>
           )}
         </Space>
+      ),
+    },
+    {
+      title: t("pluginManager.type"),
+      dataIndex: "plugin_type",
+      key: "plugin_type",
+      width: 110,
+      render: (type: PluginType) => (
+        <PluginTypeTag type={type ?? "general"} />
       ),
     },
     {

@@ -1924,6 +1924,7 @@
     "uninstallFailed": "插件卸载失败",
     "statusLoaded": "运行中",
     "statusUnloaded": "未加载",
+    "type": "类型",
     "version": "版本",
     "author": "作者",
     "unknown": "未知",

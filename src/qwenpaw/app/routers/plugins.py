@@ -58,6 +58,10 @@ def _list_plugins_from_disk() -> list[dict]:
         plugin_id = manifest.get("id", item.name)
         frontend_entry = manifest.get("entry", {}).get("frontend")
 
+        from ...plugins.architecture import PluginManifest
+
+        disk_manifest = PluginManifest.from_dict(manifest)
+
         result.append(
             {
                 "id": plugin_id,
@@ -67,6 +71,7 @@ def _list_plugins_from_disk() -> list[dict]:
                 "author": manifest.get("author", ""),
                 "enabled": True,
                 "loaded": False,
+                "plugin_type": disk_manifest.plugin_type,
                 "frontend_entry": frontend_entry,
             },
         )
@@ -465,6 +470,7 @@ async def list_plugins(request: Request):
                 "author": manifest.author,
                 "enabled": record.enabled,
                 "loaded": True,
+                "plugin_type": manifest.plugin_type,
                 "frontend_entry": manifest.entry.frontend,
             },
         )
