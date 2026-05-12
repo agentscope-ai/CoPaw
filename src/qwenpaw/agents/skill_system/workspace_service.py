@@ -68,7 +68,7 @@ class SkillService:
         skills: list[SkillInfo] = []
         for skill_name, entry in sorted(manifest.get("skills", {}).items()):
             skill_dir = skill_root / skill_name
-            source = entry.get("source", "workspace")
+            source = entry.get("source", "customized")
             skill = _read_skill_from_dir(skill_dir, source)
             if skill is not None:
                 skills.append(skill)
