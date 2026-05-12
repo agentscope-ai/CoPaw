@@ -23,14 +23,12 @@ import frontmatter
 import yaml
 
 from agentscope_runtime.engine.schemas.exception import ConfigurationException
-from ..exceptions import SkillsError
-from .skills_manager import (
-    SkillConflictError,
-    SkillPoolService,
-    SkillService,
-    suggest_conflict_name,
-)
-from ..constant import EnvVarLoader
+from ...exceptions import SkillsError
+from ...constant import EnvVarLoader
+from .models import SkillConflictError
+from .pool_service import SkillPoolService
+from .store import suggest_conflict_name
+from .workspace_service import SkillService
 
 logger = logging.getLogger(__name__)
 

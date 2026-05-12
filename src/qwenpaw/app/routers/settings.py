@@ -10,7 +10,9 @@ import json
 
 from fastapi import APIRouter, Body, HTTPException
 
-from ...agents.skills_manager import set_builtin_skill_language_preference
+from ...agents.skill_system.registry import (
+    set_builtin_skill_language_preference,
+)
 from ...constant import WORKING_DIR
 
 router = APIRouter(prefix="/settings", tags=["settings"])

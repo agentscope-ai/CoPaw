@@ -30,7 +30,7 @@ from .prompt import (
     build_system_prompt_from_working_dir,
     get_active_model_supports_multimodal,
 )
-from .skills_manager import (
+from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
     get_workspace_skills_dir,
