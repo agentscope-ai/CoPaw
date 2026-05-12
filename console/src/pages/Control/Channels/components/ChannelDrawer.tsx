@@ -121,6 +121,22 @@ export function ChannelDrawer({
   const matrixUserId = Form.useWatch("user_id", form);
   const isMatrixPasswordAuth = matrixAuthMethod === "password";
 
+  const matrixE2eeTokenWarning =
+    "End-to-end encryption only works with Password authentication. Switch to Password or disable E2EE.";
+
+  const validateMatrixE2eeAuthCompat = async () => {
+    if (
+      form.getFieldValue("encryption") &&
+      form.getFieldValue("auth_method") === "token"
+    ) {
+      throw new Error(matrixE2eeTokenWarning);
+    }
+  };
+
+  const revalidateMatrixE2eeAuth = () => {
+    void form.validateFields(["auth_method", "encryption"]);
+  };
+
   // ── Access control fields (shared across multiple channels) ──────────────
 
   const renderAccessControlFields = () => (
@@ -205,12 +221,15 @@ export function ChannelDrawer({
               name="auth_method"
               label="Auth Method"
               initialValue="token"
+              dependencies={["encryption"]}
+              rules={[{ validator: validateMatrixE2eeAuthCompat }]}
             >
               <Select
                 options={[
                   { value: "token", label: "Token" },
                   { value: "password", label: "Password" },
                 ]}
+                onChange={revalidateMatrixE2eeAuth}
               />
             </Form.Item>
             <Form.Item
@@ -237,11 +256,16 @@ export function ChannelDrawer({
             <Form.Item
               name="encryption"
               label="Enable End-to-End Encryption (You need verify the device after enable E2EE, Only Password Auth supported)"
-              rules={[{ required: true }]}
+              dependencies={["auth_method"]}
+              rules={[
+                { required: true },
+                { validator: validateMatrixE2eeAuthCompat },
+              ]}
             >
               <Switch
                 onChange={(checked: boolean) => {
                   if (checked) form.setFieldValue("access_token", "");
+                  revalidateMatrixE2eeAuth();
                 }}
               />
             </Form.Item>
