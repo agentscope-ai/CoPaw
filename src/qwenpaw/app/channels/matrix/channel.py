@@ -25,6 +25,7 @@ import httpx
 from nio import (
     AsyncClient,
     AsyncClientConfig,
+    KeysUploadResponse,
     LoginResponse,
     KeyVerificationCancel,
     KeyVerificationEvent,
@@ -154,6 +155,37 @@ def _md_to_html(text: str) -> str:
 HISTORY_CONTEXT_MARKER = "[Chat messages since your last reply - for context]"
 CURRENT_MESSAGE_MARKER = "[Current message - respond to this]"
 DEFAULT_HISTORY_LIMIT = 50
+
+
+class QwenPawMatrixClient(AsyncClient):
+    """Keep query-token auth for homeservers/proxies that drop auth headers."""
+
+    async def send(
+        self,
+        method: str,
+        path: str,
+        data: Any = None,
+        headers: Optional[Dict[str, str]] = None,
+        trace_context: Optional[Any] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        if self.access_token and "access_token=" not in path:
+            url = urllib.parse.urlparse(path)
+            query = urllib.parse.parse_qs(url.query)
+            query["access_token"] = [self.access_token]
+            path = urllib.parse.urlunparse(
+                url._replace(
+                    query=urllib.parse.urlencode(query, doseq=True),
+                ),
+            )
+        return await super().send(
+            method,
+            path,
+            data,
+            headers,
+            trace_context,
+            timeout,
+        )
 
 
 @dataclass
@@ -426,7 +458,7 @@ class MatrixChannel(BaseChannel):
         client_config = self._build_client_config(
             encryption=self._cfg.encryption,
         )
-        self._client = AsyncClient(
+        self._client = QwenPawMatrixClient(
             self._cfg.homeserver,
             # Keep user neutral before auth; token/whoami or login response
             # will set the canonical MXID.
@@ -608,6 +640,7 @@ class MatrixChannel(BaseChannel):
                         "(token may lack device scope)",
                     )
                     self._cfg.encryption = False
+            return True
         logger.error("MatrixChannel: token login failed: %s", whoami)
         return False
 
@@ -626,11 +659,17 @@ class MatrixChannel(BaseChannel):
             ),
         )
 
-    async def _setup_e2ee_after_login(self) -> None:
+    async def _setup_e2ee_after_login(self) -> bool:
         if not self._cfg.encryption:
-            return
+            return True
         if self._client.should_upload_keys:
-            await self._client.keys_upload()
+            resp = await self._client.keys_upload()
+            if not isinstance(resp, KeysUploadResponse):
+                logger.error(
+                    "MatrixChannel: E2E keys upload failed after login: %s",
+                    resp,
+                )
+                return False
             logger.info("MatrixChannel: E2E keys uploaded")
         # Encrypted media events (decrypted by nio, delivered as
         # RoomEncrypted* types)
@@ -670,6 +709,7 @@ class MatrixChannel(BaseChannel):
             "MatrixChannel: E2EE enabled, "
             "encrypted event handlers registered",
         )
+        return True
 
     async def start(self) -> None:
         if not self._cfg.homeserver:
@@ -709,7 +749,8 @@ class MatrixChannel(BaseChannel):
             return
 
         self._register_plain_room_callbacks()
-        await self._setup_e2ee_after_login()
+        if not await self._setup_e2ee_after_login():
+            return
 
         self._http_client = httpx.AsyncClient(
             follow_redirects=True,
@@ -1473,14 +1514,14 @@ class MatrixChannel(BaseChannel):
                     # to-device)
                     await self._e2ee_maintenance()
                 else:
-                    if (
-                        isinstance(resp, SyncError)
-                        and getattr(resp, "status_code", None)
-                        == "M_UNKNOWN_TOKEN"
-                    ):
+                    if isinstance(resp, SyncError) and getattr(
+                        resp,
+                        "status_code",
+                        None,
+                    ) in {"M_UNKNOWN_TOKEN", "M_MISSING_TOKEN"}:
                         logger.error(
                             "MatrixChannel: sync stopped due to "
-                            "unknown access token; please re-login "
+                            "invalid/missing access token; please re-login "
                             "(password or fresh token)",
                         )
                         if self._client:

@@ -117,7 +117,9 @@ export function ChannelDrawer({
   const currentLang = i18n.language?.startsWith("zh") ? "zh" : "en";
   const label = activeKey ? getChannelLabel(activeKey, t) : activeLabel;
   const { message } = useAppMessage();
-  const matrixE2eeEnabled = Form.useWatch("encryption", form) === true;
+  const matrixAuthMethod = Form.useWatch("auth_method", form);
+  const matrixUserId = Form.useWatch("user_id", form);
+  const isMatrixPasswordAuth = matrixAuthMethod === "password";
 
   // ── Access control fields (shared across multiple channels) ──────────────
 
@@ -189,21 +191,39 @@ export function ChannelDrawer({
             <Form.Item
               name="user_id"
               label="User ID"
-              rules={[{ required: true }]}
+              dependencies={["auth_method", "username"]}
+              rules={[
+                {
+                  required: isMatrixPasswordAuth && !form.getFieldValue("username"),
+                  message: "Please enter User ID (or provide Username)",
+                },
+              ]}
             >
               <Input placeholder="@bot:matrix.org" />
             </Form.Item>
             <Form.Item
+              name="auth_method"
+              label="Auth Method"
+              initialValue="token"
+            >
+              <Select
+                options={[
+                  { value: "token", label: "Token" },
+                  { value: "password", label: "Password" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
               name="access_token"
               label="Access Token"
-              dependencies={["encryption"]}
+              dependencies={["auth_method"]}
               rules={[
                 {
-                  required: !matrixE2eeEnabled,
+                  required: !isMatrixPasswordAuth,
                   message: "Please enter access token",
                 },
               ]}
-              hidden={matrixE2eeEnabled}
+              hidden={isMatrixPasswordAuth}
             >
               <Input.Password placeholder="syt_..." />
             </Form.Item>
@@ -216,36 +236,40 @@ export function ChannelDrawer({
             </Form.Item>
             <Form.Item
               name="encryption"
-              label="Enable End-to-End Encryption (You need verify the device after enable E2EE)"
+              label="Enable End-to-End Encryption (You need verify the device after enable E2EE, Only Password Auth supported)"
               rules={[{ required: true }]}
             >
-              <Switch />
+              <Switch
+                onChange={(checked: boolean) => {
+                  if (checked) form.setFieldValue("access_token", "");
+                }}
+              />
             </Form.Item>
             <Form.Item
               name="username"
               label="Username"
-              dependencies={["encryption"]}
+              dependencies={["auth_method", "user_id"]}
               rules={[
                 {
-                  required: matrixE2eeEnabled,
-                  message: "Please enter username",
+                  required: isMatrixPasswordAuth && !matrixUserId,
+                  message: "Please enter username (or provide User ID)",
                 },
               ]}
-              hidden={!matrixE2eeEnabled}
+              hidden={!isMatrixPasswordAuth}
             >
               <Input placeholder="Matrix localpart or full MXID" />
             </Form.Item>
             <Form.Item
               name="password"
               label="Password"
-              dependencies={["encryption"]}
+              dependencies={["auth_method"]}
               rules={[
                 {
-                  required: matrixE2eeEnabled,
+                  required: isMatrixPasswordAuth,
                   message: "Please enter password",
                 },
               ]}
-              hidden={!matrixE2eeEnabled}
+              hidden={!isMatrixPasswordAuth}
             >
               <Input.Password placeholder="Account password for login" />
             </Form.Item>
@@ -1258,7 +1282,18 @@ export function ChannelDrawer({
           form={form}
           layout="vertical"
           initialValues={initialValues}
-          onFinish={onSubmit}
+          onFinish={(values: Record<string, unknown>) => {
+            if (activeKey !== "matrix") {
+              onSubmit(values);
+              return;
+            }
+            const authMethod = values.auth_method;
+            if (authMethod === "password") {
+              onSubmit({ ...values, access_token: "" });
+              return;
+            }
+            onSubmit({ ...values, username: "", password: "" });
+          }}
         >
           <Form.Item
             name="enabled"
