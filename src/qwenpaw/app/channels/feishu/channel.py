@@ -1379,11 +1379,8 @@ class FeishuChannel(BaseChannel):
             logger.exception("feishu _upload_image failed")
             return None
 
-    async def _upload_file(
-        self,
-        path_or_url: str,
-    ) -> Optional[Tuple[str, str]]:
-        """Upload file to Feishu using SDK; return (file_key, file_type)."""
+    async def _upload_file(self, path_or_url: str) -> Optional[str]:
+        """Upload file to Feishu using SDK; return file_key."""
         path = Path(path_or_url)
         if not path.exists():
             if path_or_url.startswith(("http://", "https://")):
@@ -1401,9 +1398,7 @@ class FeishuChannel(BaseChannel):
             return None
         ext = path.suffix.lower().lstrip(".")
         file_type = "stream"
-        if ext in ("ogg", "opus"):
-            file_type = "opus"
-        elif ext in (
+        if ext in (
             "pdf",
             "doc",
             "docx",
@@ -1415,6 +1410,8 @@ class FeishuChannel(BaseChannel):
             file_type = "doc" if ext == "docx" else ext
             file_type = "xls" if ext == "xlsx" else file_type
             file_type = "ppt" if ext == "pptx" else file_type
+        elif ext in ("ogg", "opus"):
+            file_type = "opus"
         file_obj = None
         try:
             file_obj = await asyncio.to_thread(path.open, "rb")
@@ -1439,11 +1436,10 @@ class FeishuChannel(BaseChannel):
                 return None
             fk = getattr(resp.data, "file_key", None) if resp.data else None
             logger.info(
-                "feishu _upload_file ok: file_key=%s file_type=%s",
+                "feishu _upload_file ok: file_key=%s",
                 fk[:24] if fk else "None",
-                file_type,
             )
-            return (fk, file_type) if fk else None
+            return fk
         except Exception:
             logger.exception("feishu _upload_file failed")
             return None
@@ -1726,24 +1722,19 @@ class FeishuChannel(BaseChannel):
                 "feishu _send_file: no path/url/base64, skip",
             )
             return None
-        upload_result = await self._upload_file(path_or_url)
-        if not upload_result:
+        file_key = await self._upload_file(path_or_url)
+        if not file_key:
             logger.info(
                 "feishu _send_file: upload failed, no file_key",
             )
             return None
-        file_key, file_type = upload_result
         logger.info(
-            "feishu _send_file: upload ok file_key=%s file_type=%s",
+            "feishu _send_file: upload ok file_key=%s",
             file_key[:24] if file_key else "",
-            file_type,
         )
         content = json.dumps({"file_key": file_key}, ensure_ascii=False)
-        part_type = getattr(part, "type", None)
-        if part_type == ContentType.AUDIO and file_type == "opus":
-            msg_type = "audio"
-        else:
-            msg_type = "file"
+        ext = Path(path_or_url).suffix.lower().lstrip(".")
+        msg_type = "audio" if ext in ("ogg", "opus") else "file"
         return await self._send_message(
             receive_id_type,
             receive_id,
