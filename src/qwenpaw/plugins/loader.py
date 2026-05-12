@@ -265,17 +265,30 @@ class PluginLoader:
     def _find_uv() -> Optional[str]:
         """Return the path to the ``uv`` binary, or ``None`` if not found.
 
-        Checks PATH first, then the common install locations used by the
-        QwenPaw script-installer (``~/.local/bin/uv``,
-        ``~/.cargo/bin/uv``).
+        Checks PATH first, then well-known install locations for both
+        Unix (``~/.local/bin/uv``, ``~/.cargo/bin/uv``) and
+        Windows (``%LOCALAPPDATA%\\Programs\\uv\\uv.exe``,
+        ``%USERPROFILE%\\.cargo\\bin\\uv.exe``).
         """
+        # shutil.which honours PATHEXT on Windows and handles .exe
         if found := shutil.which("uv"):
             return found
-        for candidate in (
-            Path.home() / ".local" / "bin" / "uv",
-            Path.home() / ".cargo" / "bin" / "uv",
-        ):
-            if candidate.is_file() and os.access(candidate, os.X_OK):
+
+        home = Path.home()
+        candidates = [
+            home / ".local" / "bin" / "uv",  # Linux/macOS script install
+            home / ".cargo" / "bin" / "uv",  # Linux/macOS cargo install
+        ]
+        # Windows-specific locations
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidates.append(
+                Path(local_app_data) / "Programs" / "uv" / "uv.exe",
+            )
+        candidates.append(home / ".cargo" / "bin" / "uv.exe")
+
+        for candidate in candidates:
+            if candidate.is_file():
                 return str(candidate)
         return None
 

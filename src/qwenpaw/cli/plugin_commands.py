@@ -5,6 +5,7 @@
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -183,21 +184,32 @@ def _api_uninstall_plugin(plugin_id: str) -> bool:
 def _find_uv() -> Optional[str]:
     """Return the path to the ``uv`` binary, or ``None`` if not found.
 
-    Checks PATH first, then the common install locations used by the
-    QwenPaw script-installer (``~/.local/bin/uv``,
-    ``~/.cargo/bin/uv``).
+    Checks PATH first (``shutil.which`` handles PATHEXT on Windows),
+    then well-known install locations for Unix and Windows.
 
     Returns:
         Absolute path string to ``uv``, or ``None``.
     """
+    # shutil.which honours PATHEXT on Windows (finds uv.exe automatically)
     found = shutil.which("uv")
     if found:
         return found
-    for candidate in (
-        Path.home() / ".local" / "bin" / "uv",
-        Path.home() / ".cargo" / "bin" / "uv",
-    ):
-        if candidate.is_file() and candidate.stat().st_mode & 0o111:
+
+    home = Path.home()
+    candidates = [
+        home / ".local" / "bin" / "uv",  # Linux/macOS script install
+        home / ".cargo" / "bin" / "uv",  # Linux/macOS cargo install
+    ]
+    # Windows-specific locations
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(
+            Path(local_app_data) / "Programs" / "uv" / "uv.exe",
+        )
+    candidates.append(home / ".cargo" / "bin" / "uv.exe")
+
+    for candidate in candidates:
+        if candidate.is_file():
             return str(candidate)
     return None
 
