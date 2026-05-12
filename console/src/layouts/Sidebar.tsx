@@ -277,11 +277,6 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
 
   const agentMenuItems: MenuProps["items"] = [
     {
-      key: "chat",
-      label: collapsed ? null : t("nav.chat"),
-      icon: <SparkChatTabFill size={16} />,
-    },
-    {
       key: "control-group",
       label: collapsed ? null : t("nav.control"),
       children: [
@@ -460,6 +455,18 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
           <div className={styles.agentScopedSection}>
             <div className={styles.agentSelectorContainer}>
               <AgentSelector collapsed={collapsed} />
+              {/* Chat entry — sticky together with agent selector */}
+              <button
+                className={`${styles.stickyChatButton}${
+                  selectedKey === "chat"
+                    ? ` ${styles.stickyChatButtonActive}`
+                    : ""
+                }`}
+                onClick={() => navigate("/chat")}
+              >
+                <SparkChatTabFill size={16} />
+                <span>{t("nav.chat")}</span>
+              </button>
             </div>
             <Menu
               mode="inline"
