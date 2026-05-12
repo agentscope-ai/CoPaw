@@ -6,6 +6,7 @@
 import asyncio
 import locale
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -181,6 +182,34 @@ def _is_cmd(executable: str) -> bool:
     return _shell_basename(executable) in ("cmd", "cmd.exe")
 
 
+_PS_CMD_RE = re.compile(
+    r"^(powershell(?:\.exe)?|pwsh(?:\.exe)?)"
+    r"((?:\s+-(?:NoProfile|NonInteractive|NoLogo))*)"
+    r"(?:\s+-ExecutionPolicy\s+\S+)?"
+    r"\s+-Command\s+",
+    re.IGNORECASE,
+)
+
+
+def _extract_powershell_command(cmd: str) -> tuple[str | None, str]:
+    """Detect ``powershell -Command <body>`` and return (exe, inner_body).
+
+    When *cmd* starts with a PowerShell invocation followed by ``-Command``,
+    extract the executable name and the inner command body (with a single
+    layer of surrounding double-quotes removed if present).
+
+    Returns ``(None, cmd)`` unchanged when no PowerShell prefix is found.
+    """
+    m = _PS_CMD_RE.match(cmd)
+    if not m:
+        return None, cmd
+    ps_exe = m.group(1)
+    inner = cmd[m.end() :]
+    if len(inner) >= 2 and inner[0] == '"' and inner[-1] == '"':
+        inner = inner[1:-1]
+    return ps_exe, inner
+
+
 # pylint: disable=too-many-branches, too-many-statements
 def _execute_subprocess_sync(
     cmd: str,
@@ -235,6 +264,9 @@ def _execute_subprocess_sync(
 
     try:
         if shell_executable and _is_powershell(shell_executable):
+            # Strip redundant powershell/pwsh -Command wrapper that the
+            # LLM may emit even though the shell is already PowerShell.
+            _, cmd = _extract_powershell_command(cmd)
             wrapped = [
                 shell_executable,
                 "-NoProfile",
