@@ -5,7 +5,7 @@
   "description": "Generate videos using Alibaba Wan 2.7 models (text-to-video, image-to-video, reference-to-video)",
   "author": "QwenPaw Team",
   "entry": {
-    "backend": "plugin.py"
+    "backend": "wan27.py"
   },
   "dependencies": ["dashscope>=1.25.16", "httpx>=0.24.0"],
   "min_version": "1.1.6",
