@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Plugin API for plugin developers."""
 
-from typing import Any, Callable, Dict, Type
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Type
 import logging
 
 logger = logging.getLogger(__name__)
@@ -148,6 +150,37 @@ class PluginApi:
             logger.info(
                 f"Plugin '{self.plugin_id}' registered shutdown hook "
                 f"'{hook_name}' (priority={priority})",
+            )
+
+    def register_http_router(
+        self,
+        router: Any,
+        *,
+        prefix: str,
+        tags: Optional[List[str]] = None,
+    ) -> None:
+        """Expose REST endpoints under ``/api`` + *prefix*.
+
+        Use a FastAPI ``APIRouter`` with route decorators such as
+        ``@router.get("/")`` so that with ``prefix="/pets"`` the handler
+        is served at ``GET /api/pets/`` (trailing slash follows FastAPI
+        defaults for the mounted path).
+
+        Args:
+            router: ``fastapi.APIRouter`` instance
+            prefix: Path under ``/api``, e.g. ``"/pets"``
+            tags: Optional OpenAPI tags for these routes
+
+        Raises:
+            RuntimeError: If the registry has no HTTP parent router.
+            ValueError: If *prefix* is invalid or already taken.
+        """
+        if self._registry:
+            self._registry.register_http_router(
+                self.plugin_id,
+                router,
+                prefix=prefix,
+                tags=tags,
             )
 
     def register_control_command(
