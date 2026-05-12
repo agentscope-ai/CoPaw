@@ -1,0 +1,87 @@
+{
+  "id": "qwen-image-tool",
+  "name": "Qwen-Image Tool",
+  "version": "1.0.0",
+  "description": "Generate and edit images using Alibaba Qwen-Image models",
+  "author": "QwenPaw Team",
+  "entry": {
+    "backend": "plugin.py"
+  },
+  "dependencies": ["dashscope>=1.25.16", "httpx>=0.24.0"],
+  "min_version": "1.1.6",
+  "meta": {
+    "tools": [
+      {
+        "name": "generate_image_qwen",
+        "description": "Generate high-quality images from text prompts using Qwen-Image models",
+        "icon": "🖼️",
+        "requires_config": true,
+        "config_fields": [
+          {
+            "name": "api_key",
+            "label": "DashScope API Key",
+            "type": "password",
+            "required": true,
+            "placeholder": "sk-...",
+            "help": "Get your API key from https://bailian.console.aliyun.com/"
+          },
+          {
+            "name": "endpoint",
+            "label": "API Endpoint",
+            "type": "text",
+            "required": false,
+            "placeholder": "https://dashscope.aliyuncs.com/api/v1",
+            "help": "Beijing: https://dashscope.aliyuncs.com/api/v1  Singapore: https://dashscope-intl.aliyuncs.com/api/v1"
+          },
+          {
+            "name": "timeout",
+            "label": "Request Timeout (seconds)",
+            "type": "number",
+            "required": false,
+            "placeholder": "120",
+            "min": 30,
+            "max": 600,
+            "help": "HTTP request timeout in seconds (default: 120)"
+          }
+        ]
+      },
+      {
+        "name": "edit_image_qwen",
+        "description": "Edit images or fuse multiple images using Qwen-Image models",
+        "icon": "✏️",
+        "requires_config": true,
+        "config_fields": [
+          {
+            "name": "api_key",
+            "label": "DashScope API Key",
+            "type": "password",
+            "required": true,
+            "placeholder": "sk-...",
+            "help": "Get your API key from https://bailian.console.aliyun.com/"
+          },
+          {
+            "name": "endpoint",
+            "label": "API Endpoint",
+            "type": "text",
+            "required": false,
+            "placeholder": "https://dashscope.aliyuncs.com/api/v1",
+            "help": "Beijing: https://dashscope.aliyuncs.com/api/v1  Singapore: https://dashscope-intl.aliyuncs.com/api/v1"
+          },
+          {
+            "name": "timeout",
+            "label": "Request Timeout (seconds)",
+            "type": "number",
+            "required": false,
+            "placeholder": "120",
+            "min": 30,
+            "max": 600,
+            "help": "HTTP request timeout in seconds (default: 120)"
+          }
+        ]
+      }
+    ],
+    "api_key_url": "https://bailian.console.aliyun.com/",
+    "api_key_hint": "Get your DashScope API key from Alibaba Cloud Bailian console",
+    "model_url": "https://help.aliyun.com/zh/model-studio/qwen-image-api"
+  }
+}
