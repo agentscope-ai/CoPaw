@@ -150,7 +150,8 @@
     "detailContent": "Output",
     "detailPayload": "Payload",
     "detailExecutionTrace": "Execution Trace",
-    "detailTraceEmpty": "No execution trace available"
+    "detailTraceEmpty": "No execution trace available",
+    "filterByAgent": "Filter by agent"
   },
   "acp": {
     "title": "ACP",

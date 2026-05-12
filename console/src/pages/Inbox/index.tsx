@@ -788,7 +788,7 @@ export default function InboxPage() {
                 allowClear
                 options={pushMessageAgentOptions}
                 style={{ width: 180 }}
-                placeholder="按agent筛选"
+                placeholder={t("inbox.filterByAgent")}
               />
               <Button
                 size="small"

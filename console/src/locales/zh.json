@@ -150,7 +150,8 @@
     "detailContent": "执行输出",
     "detailPayload": "附加信息",
     "detailExecutionTrace": "执行轨迹",
-    "detailTraceEmpty": "暂无执行轨迹"
+    "detailTraceEmpty": "暂无执行轨迹",
+    "filterByAgent": "按 Agent 筛选"
   },
   "workspace": {
     "title": "文件",

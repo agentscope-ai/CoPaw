@@ -447,7 +447,11 @@
     "activeEnd": "終了時刻",
     "loadFailed": "ハートビート設定の読み込みに失敗しました",
     "saveSuccess": "保存しました。ハートビートをホットリロードしました",
-    "saveFailed": "ハートビート設定の保存に失敗しました"
+    "saveFailed": "ハートビート設定の保存に失敗しました",
+    "targetInbox": "受信トレイに送信",
+    "runNow": "今すぐ実行",
+    "runNowSuccess": "ハートビートを実行しました。受信トレイまたは送信先チャンネルを確認してください。",
+    "runNowFailed": "ハートビートの実行に失敗しました"
   },
   "cronJobs": {
     "title": "定期実行",
@@ -540,7 +544,113 @@
     "misfireGraceSecondsTooltip": "実行漏れの許容時間。スケジュール時刻をこの時間以上過ぎた場合は実行されません。",
     "executeNowTitle": "タスクを今すぐ実行",
     "executeNowContent": "\"{{name}}\" を今すぐ実行してもよろしいですか？",
-    "executeNowConfirm": "今すぐ実行"
+    "executeNowConfirm": "今すぐ実行",
+    "createFromTemplate": "テンプレートから作成",
+    "templateModalTitle": "タスクテンプレートを選択",
+    "templateModalDescription": "内蔵テンプレートを選び、保存前に主要パラメータを調整します。",
+    "useTemplate": "このテンプレートを使用",
+    "templateTagPersonal": "個人",
+    "templateTagTeam": "チーム",
+    "templateTagReminder": "リマインダー",
+    "templateTagCalendar": "カレンダー",
+    "templateTagCalendarRecommended": "カレンダー推奨",
+    "saveResultToInbox": "実行結果を受信トレイに保存",
+    "saveResultToInboxTooltip": "有効時、実行と配信が成功した結果を受信トレイに保存します。配信失敗時はフォールバックとして必ず受信トレイに記録されます。",
+    "scheduleFilterAll": "すべてのスケジュール種別",
+    "scheduleTypeRecurring": "繰り返し",
+    "scheduleTypeOnce": "日程",
+    "onceRunAt": "実行日時",
+    "repeatEnabled": "繰り返し実行",
+    "repeatEnabledTooltip": "この開始時刻から定期実行を有効化します",
+    "repeatFrequency": "繰り返し頻度",
+    "repeatEveryDays": "繰り返し間隔（日）",
+    "repeatEveryPrefix": "毎",
+    "repeatEverySuffix": "日",
+    "repeatEndType": "終了条件",
+    "repeatEndNever": "終了しない",
+    "repeatEndUntil": "日時で終了",
+    "repeatEndCount": "回数で終了",
+    "repeatUntil": "終了日時",
+    "repeatCount": "実行回数",
+    "pleaseSelectScheduleType": "スケジュール種別を選択してください",
+    "pleaseInputRunAt": "実行日時を選択してください",
+    "pleaseInputRepeatEveryDays": "繰り返し間隔（日）を入力してください",
+    "pleaseSelectRepeatEndType": "終了条件を選択してください",
+    "pleaseInputRepeatUntil": "終了日時を選択してください",
+    "pleaseInputRepeatCount": "実行回数を入力してください",
+    "listView": "リスト表示",
+    "calendarView": "カレンダー表示",
+    "calendarEmptyHint": "Scheduled タスクはまだありません。作成するとカレンダーに表示されます。",
+    "calendarMoreItems": "他 {{count}} 件",
+    "calendarDayListTitle": "{{date}} の Scheduled タスク",
+    "executionHistory": "実行履歴",
+    "historyTitle": "実行履歴 - {{name}}",
+    "historyEmpty": "実行履歴はまだありません。",
+    "historyStatusSuccess": "成功",
+    "historyStatusFailed": "失敗",
+    "historyStatusRunning": "実行中",
+    "historyStatusCancelled": "キャンセル",
+    "historyTriggerScheduled": "スケジュール実行",
+    "historyTriggerManual": "手動実行",
+    "historyExpand": "展開",
+    "historyCollapse": "折りたたむ",
+    "templates": {
+      "dailyTechNewsBrief": {
+        "title": "平日テックニュース要約",
+        "description": "平日 09:30 に注目の技術ニュースを短く要約して配信します。",
+        "frequency": "平日 09:30 (30 9 * * 1-5)"
+      },
+      "dailyEveningReflection": {
+        "title": "毎日夜の振り返り",
+        "description": "平日 20:00 に当日の振り返りを促します。",
+        "frequency": "平日 20:00 (0 20 * * 1-5)"
+      },
+      "weekendRelaxationReminder": {
+        "title": "週末リラックス通知",
+        "description": "週末朝におすすめ映画を配信します。",
+        "frequency": "週末 10:00 (0 10 * * 6,0)"
+      },
+      "pomodoroBreakReminder": {
+        "title": "ポモドーロ休憩リマインダー",
+        "description": "業務時間中に 25 分ごとに休憩と水分補給を促します。",
+        "frequency": "平日 09:00-17:59、25 分ごと (*/25 9-17 * * 1-5)"
+      },
+      "petCareReminder": {
+        "title": "ペットケアリマインダー",
+        "description": "毎月15日夜に駆虫・ワクチン確認を通知します。",
+        "frequency": "毎月15日 20:00 (0 20 15 * *)"
+      },
+      "oneTimeReminder": {
+        "title": "1回限りのリマインダー",
+        "description": "指定した日時に 1 回だけ実行します。",
+        "frequency": "選択した時刻に 1 回実行"
+      },
+      "nDayCheckin": {
+        "title": "N日間チェックイン",
+        "description": "一定回数まで毎日リマインドします。",
+        "frequency": "1日ごと、回数指定"
+      },
+      "dailyUntilDeadline": {
+        "title": "期限まで毎日通知",
+        "description": "期限日まで毎日リマインドします。",
+        "frequency": "1日ごと、日時で終了"
+      },
+      "releaseCountdown": {
+        "title": "リリースカウントダウン",
+        "description": "リリース日までのカウントダウン通知です。",
+        "frequency": "1日ごと、日時で終了"
+      },
+      "trainingCycle": {
+        "title": "トレーニング周期通知",
+        "description": "一定回数の周期的なトレーニング通知です。",
+        "frequency": "7日ごと、回数指定"
+      },
+      "sprintCadence": {
+        "title": "スプリント進行通知",
+        "description": "固定回数のスプリントリズム通知です。",
+        "frequency": "2日ごと、回数指定"
+      }
+    }
   },
   "channels": {
     "title": "チャンネル",
@@ -1883,5 +1993,67 @@
       "done": "完了",
       "abandoned": "中止"
     }
+  },
+  "inbox": {
+    "title": "受信トレイ",
+    "tabApprovals": "承認",
+    "tabPushMessages": "プッシュ通知",
+    "tabHarvests": "AI Harvest",
+    "summaryApprovals": "承認件数",
+    "summaryPushUnread": "未読通知",
+    "summaryHarvests": "Harvest",
+    "from": "送信元：",
+    "requestedBy": "リクエスト元",
+    "markRead": "既読にする",
+    "markAllRead": "すべて既読",
+    "markAllReadNoUnread": "未読メッセージはありません",
+    "markAllReadSuccess": "{{count}} 件を既読にしました",
+    "selectAllCurrentPage": "このページを全選択",
+    "selectedItems": "{{count}} 件選択中",
+    "batchDeleteButton": "一括削除",
+    "batchDeleteConfirm": "選択した {{count}} 件の通知を削除しますか？",
+    "batchDeleteSuccess": "{{count}} 件の通知を削除しました",
+    "pushCronHeader": "定期実行：{{name}}",
+    "viewDetails": "詳細を見る",
+    "deleteMessageConfirm": "この通知を削除しますか？",
+    "viewAll": "すべて表示",
+    "read": "既読",
+    "approve": "承認",
+    "reject": "拒否",
+    "ready": "準備完了",
+    "harvestNow": "今すぐ実行",
+    "createHarvest": "Harvest を作成",
+    "createFirstHarvest": "最初の Harvest を作成",
+    "createSuccess": "Harvest を作成しました",
+    "emptyApprovals": "保留中の承認はありません",
+    "emptyPush": "通知はありません",
+    "emptyHarvests": "Harvest はまだありません",
+    "statusReadyToHarvest": "実行可能",
+    "statusGrowing": "実行中",
+    "harvestedTimes": "{{count}} 回実行済み",
+    "harvestSuccessRate": "成功率 {{rate}}%",
+    "messageDetailComingSoon": "詳細表示は準備中です",
+    "harvestSettingsComingSoon": "Harvest 設定は準備中です",
+    "messageDetailTitle": "実行詳細",
+    "detailCronTitle": "定期実行：{{name}}",
+    "detailHeartbeatTitle": "ハートビート",
+    "messageNotFound": "メッセージが見つかりません",
+    "detailTaskName": "タスク名",
+    "detailTaskId": "タスクID",
+    "detailStatus": "実行ステータス",
+    "detailSeverity": "重要度",
+    "detailAgent": "所属Agent",
+    "detailSource": "ソース",
+    "detailSourceCronJob": "定期実行",
+    "detailSourceHeartbeat": "ハートビート",
+    "detailTrigger": "トリガー",
+    "detailDuration": "所要時間",
+    "detailExecutedAt": "実行時刻",
+    "detailReceivedAt": "受信時刻",
+    "detailRunId": "実行ID",
+    "detailContent": "出力",
+    "detailPayload": "追加情報",
+    "detailExecutionTrace": "実行トレース",
+    "detailTraceEmpty": "実行トレースはありません"
   }
 }
