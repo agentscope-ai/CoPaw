@@ -109,21 +109,8 @@ def _build_tool_info(tool_config: Any, tool_name: str) -> ToolInfo:
     )
 
     registry = PluginRegistry()
-    all_manifests = registry.get_all_plugin_manifests()
-
-    # Locate the manifest that owns this tool
-    manifest = None
-    for m in all_manifests.values():
-        meta = m.get("meta", {})
-        if meta.get("tool_name") == tool_name:
-            manifest = m
-            break
-        for t in meta.get("tools", []):
-            if isinstance(t, dict) and t.get("name") == tool_name:
-                manifest = m
-                break
-        if manifest:
-            break
+    plugin_id = registry.get_plugin_id_for_tool(tool_name)
+    manifest = registry.get_plugin_manifest(plugin_id) if plugin_id else None
 
     if manifest and "meta" in manifest:
         meta = manifest["meta"]

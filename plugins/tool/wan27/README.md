@@ -87,4 +87,4 @@ Get your API key at: https://bailian.console.aliyun.com/
 
 ## Output
 
-Generated videos are saved to `{DEFAULT_MEDIA_DIR}/wanxiang27/` as MP4 files. Video URLs from the API are valid for 24 hours.
+Generated videos are saved to `{DEFAULT_MEDIA_DIR}/wan27/` as MP4 files. Video URLs from the API are valid for 24 hours.

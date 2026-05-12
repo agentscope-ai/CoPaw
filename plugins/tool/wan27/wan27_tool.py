@@ -3,13 +3,14 @@
 # pylint: disable=too-many-statements,too-many-locals
 """Wan 2.7 video generation tools."""
 
+import asyncio
 import base64
 import logging
 import threading
 import time
 from http import HTTPStatus
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import httpx
 from agentscope.message import TextBlock, VideoBlock
@@ -129,9 +130,12 @@ async def _download_video(
     video_path = save_dir / filename
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(video_url)
-        response.raise_for_status()
-        video_path.write_bytes(response.content)
+        async with client.stream("GET", video_url) as response:
+            response.raise_for_status()
+            chunks = []
+            async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                chunks.append(chunk)
+    await asyncio.to_thread(video_path.write_bytes, b"".join(chunks))
 
     logger.info(f"Video saved to {video_path}")
     return video_path
@@ -297,7 +301,8 @@ async def text_to_video_wan(
         if audio_url:
             kwargs["audio_url"] = audio_url
 
-        rsp = _call_video_synthesis(
+        rsp = await asyncio.to_thread(
+            _call_video_synthesis,
             api_key=api_key,
             endpoint=endpoint,
             model="wan2.7-t2v-2026-04-25",
@@ -580,7 +585,8 @@ async def image_to_video_wan(
             f"resolution={resolution}, duration={duration}s",
         )
 
-        rsp = _call_video_synthesis(
+        rsp = await asyncio.to_thread(
+            _call_video_synthesis,
             api_key=api_key,
             endpoint=endpoint,
             model="wan2.7-i2v-2026-04-25",
@@ -660,7 +666,7 @@ async def image_to_video_wan(
 async def reference_to_video_wan(
     prompt: str,
     reference_images: List[str],
-    reference_videos: List[str] = None,
+    reference_videos: Optional[List[str]] = None,
     first_frame_url: str = "",
     resolution: str = "720P",
     ratio: str = "16:9",
@@ -856,7 +862,8 @@ async def reference_to_video_wan(
             f"duration={duration}s",
         )
 
-        rsp = _call_video_synthesis(
+        rsp = await asyncio.to_thread(
+            _call_video_synthesis,
             api_key=api_key,
             endpoint=endpoint,
             model="wan2.7-r2v",

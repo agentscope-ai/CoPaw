@@ -10,7 +10,6 @@ Generate high-quality images from text prompts. Supports complex text rendering,
 
 **Parameters:**
 - `prompt` (required): Image description (Chinese/English)
-- `model`: Model name (default: `"qwen-image-2.0-pro"`)
 - `size`: Image size in "width*height" format (default: `"2048*2048"`)
 - `n`: Number of images to generate, 1–6 (default: 1)
 - `negative_prompt`: What to exclude from the image
@@ -40,7 +39,6 @@ Edit images or fuse multiple images using text instructions.
 **Parameters:**
 - `prompt` (required): Edit instruction. Use "图一"/"图二" (or "image 1"/"image 2") to refer to reference images
 - `reference_images` (required): List of image URLs or local file paths (at least 1)
-- `model`: Model name (default: `"qwen-image-2.0-pro"`)
 - `size`: Output image size (leave empty to auto-detect from input)
 - `n`: Number of output images (default: 1)
 - `negative_prompt`: What to exclude
@@ -76,6 +74,7 @@ Each tool has independent configuration fields:
 | `api_key` | DashScope API key (required) | — |
 | `endpoint` | Regional API endpoint | `https://dashscope.aliyuncs.com/api/v1` |
 | `timeout` | Request timeout in seconds | 120 |
+| `model` | Model name for image generation/editing | `qwen-image-2.0-pro` |
 
 **Endpoints:**
 - Beijing: `https://dashscope.aliyuncs.com/api/v1`

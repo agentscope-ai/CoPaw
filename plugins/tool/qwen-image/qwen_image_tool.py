@@ -3,6 +3,7 @@
 # pylint: disable=too-many-statements,too-many-locals
 """Qwen-Image image generation and editing tools."""
 
+import asyncio
 import base64
 import logging
 import threading
@@ -156,9 +157,12 @@ async def _download_image(
     image_path = save_dir / filename
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(image_url)
-        response.raise_for_status()
-        image_path.write_bytes(response.content)
+        async with client.stream("GET", image_url) as response:
+            response.raise_for_status()
+            chunks = []
+            async for chunk in response.aiter_bytes(chunk_size=512 * 1024):
+                chunks.append(chunk)
+    await asyncio.to_thread(image_path.write_bytes, b"".join(chunks))
 
     logger.info(f"Image saved to {image_path}")
     return image_path
@@ -357,7 +361,8 @@ async def generate_image_qwen(
             f"model={model}, size={size}, n={n}",
         )
 
-        rsp = _call_multimodal_conversation(
+        rsp = await asyncio.to_thread(
+            _call_multimodal_conversation,
             api_key=api_key,
             endpoint=endpoint,
             model=model,
@@ -621,7 +626,8 @@ async def edit_image_qwen(
             f"reference_images={len(reference_images)}, n={n}",
         )
 
-        rsp = _call_multimodal_conversation(
+        rsp = await asyncio.to_thread(
+            _call_multimodal_conversation,
             api_key=api_key,
             endpoint=endpoint,
             model=model,

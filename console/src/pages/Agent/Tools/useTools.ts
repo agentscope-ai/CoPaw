@@ -44,8 +44,8 @@ export function useTools() {
         message.success(
           tool.enabled ? t("tools.disableSuccess") : t("tools.enableSuccess"),
         );
-        // Merge server response to preserve static metadata (requires_config,
-        // config_fields, config_values) that toggle endpoint doesn't return.
+        // Merge rather than replace to preserve any local state not returned
+        // by the server (e.g. UI-only fields added in future expansions).
         setTools((prev) =>
           prev.map((t) => (t.name === result.name ? { ...t, ...result } : t)),
         );
