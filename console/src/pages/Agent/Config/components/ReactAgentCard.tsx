@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Form,
+  Input,
   InputNumber,
   Select,
   Card,
@@ -156,6 +157,19 @@ export function ReactAgentCard({
             placeholder={t("agentConfig.shellCommandTimeoutPlaceholder")}
           />
         </Form.Item>
+
+        <Form.Item
+          label={t("agentConfig.shellCommandExecutable")}
+          name="shell_command_executable"
+          tooltip={t("agentConfig.shellCommandExecutableTooltip")}
+          className={styles.reactAgentField}
+        >
+          <Input
+            style={{ width: "100%" }}
+            placeholder={t("agentConfig.shellCommandExecutablePlaceholder")}
+            allowClear
+          />
+        </Form.Item>
       </div>
 
       <Form.Item
@@ -163,6 +177,15 @@ export function ReactAgentCard({
         name="auto_continue_on_text_only"
         valuePropName="checked"
         tooltip={t("agentConfig.autoContinueOnTextOnlyTooltip")}
+      >
+        <Switch />
+      </Form.Item>
+
+      <Form.Item
+        label={t("agentConfig.autoGenerateSessionTitle")}
+        name={["auto_title_config", "enabled"]}
+        valuePropName="checked"
+        tooltip={t("agentConfig.autoGenerateSessionTitleTooltip")}
       >
         <Switch />
       </Form.Item>

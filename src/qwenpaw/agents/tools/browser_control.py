@@ -3043,6 +3043,263 @@ async def _action_clear_browser_cache(state: dict) -> ToolResponse:
     )
 
 
+async def _action_batch(  # pylint: disable=too-many-nested-blocks
+    state: dict,
+    page_id: str,
+    actions_json: str,
+) -> ToolResponse:
+    """Execute multiple browser actions sequentially.
+
+    Each action in the JSON array is a dict with at least an "action" key.
+    Optional keys: "page_id" (override default), "wait" (seconds to wait
+    after the action), "stop_on_error" (bool, default True).
+
+    Reuses existing _action_* helper functions to avoid duplicating logic
+    and ensure consistent behavior with single-action calls.
+    """
+    actions = _parse_json_param(actions_json, [])
+    if not isinstance(actions, list) or not actions:
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "actions_json must be a non-empty JSON array",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
+    results: list[dict[str, Any]] = []
+    total = len(actions)
+
+    for idx, act in enumerate(actions):
+        if not isinstance(act, dict):
+            return _tool_response(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": f"Action at index {idx} is not a dict",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+
+        sub_action = (act.get("action") or "").strip().lower()
+        if not sub_action:
+            return _tool_response(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": f"Action at index {idx} missing 'action' key",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+
+        sub_page_id = act.get("page_id") or page_id
+        sub_wait: float = act.get("wait", 0)  # seconds
+        stop_on_error = act.get("stop_on_error", True)
+
+        step_result: dict[str, Any] = {
+            "step": idx,
+            "action": sub_action,
+            "ok": False,
+        }
+
+        try:
+            resp: ToolResponse | None = None
+
+            # --- navigate ---
+            if sub_action == "navigate":
+                resp = await _action_navigate(
+                    state,
+                    url=(act.get("url") or "").strip(),
+                    page_id=sub_page_id,
+                )
+
+            # --- click ---
+            elif sub_action == "click":
+                resp = await _action_click(
+                    state,
+                    page_id=sub_page_id,
+                    selector=(act.get("selector") or "").strip(),
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    wait=act.get("wait", 0),
+                    double_click=act.get("double_click", False),
+                    button=act.get("button", "left"),
+                    modifiers_json=act.get("modifiers_json", ""),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- type ---
+            elif sub_action == "type":
+                resp = await _action_type(
+                    state,
+                    page_id=sub_page_id,
+                    selector=(act.get("selector") or "").strip(),
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    text=act.get("text", ""),
+                    submit=act.get("submit", False),
+                    slowly=act.get("slowly", False),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- press_key ---
+            elif sub_action == "press_key":
+                resp = await _action_press_key(
+                    state,
+                    page_id=sub_page_id,
+                    key=(act.get("key") or "").strip(),
+                )
+
+            # --- evaluate ---
+            elif sub_action == "evaluate":
+                resp = await _action_evaluate(
+                    state,
+                    page_id=sub_page_id,
+                    code=(act.get("code") or "").strip(),
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- eval ---
+            elif sub_action == "eval":
+                resp = await _action_eval(
+                    state,
+                    page_id=sub_page_id,
+                    code=(act.get("code") or "").strip(),
+                )
+
+            # --- snapshot ---
+            elif sub_action == "snapshot":
+                resp = await _action_snapshot(
+                    state,
+                    page_id=sub_page_id,
+                    filename=act.get("filename", ""),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- screenshot ---
+            elif sub_action == "screenshot":
+                resp = await _action_screenshot(
+                    state,
+                    page_id=sub_page_id,
+                    path=(act.get("path") or "").strip(),
+                    full_page=act.get("full_page", False),
+                    screenshot_type=act.get("screenshot_type", "png"),
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- wait_for ---
+            elif sub_action == "wait_for":
+                resp = await _action_wait_for(
+                    state,
+                    page_id=sub_page_id,
+                    wait_time=act.get("wait_time", 0),
+                    text=(act.get("text") or "").strip(),
+                    text_gone=(act.get("text_gone") or "").strip(),
+                )
+
+            # --- hover ---
+            elif sub_action == "hover":
+                resp = await _action_hover(
+                    state,
+                    page_id=sub_page_id,
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    selector=(act.get("selector") or "").strip(),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- select_option ---
+            elif sub_action == "select_option":
+                resp = await _action_select_option(
+                    state,
+                    page_id=sub_page_id,
+                    ref=(act.get("ref") or "").strip(),
+                    element=act.get("element", ""),
+                    values_json=act.get("values_json", "[]"),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- drag ---
+            elif sub_action == "drag":
+                resp = await _action_drag(
+                    state,
+                    page_id=sub_page_id,
+                    start_ref=(act.get("start_ref") or "").strip(),
+                    end_ref=(act.get("end_ref") or "").strip(),
+                    start_selector=(act.get("start_selector") or "").strip(),
+                    end_selector=(act.get("end_selector") or "").strip(),
+                    start_element=act.get("start_element", ""),
+                    end_element=act.get("end_element", ""),
+                    frame_selector=act.get("frame_selector", ""),
+                )
+
+            # --- resize ---
+            elif sub_action == "resize":
+                resp = await _action_resize(
+                    state,
+                    page_id=sub_page_id,
+                    width=act.get("width", 0),
+                    height=act.get("height", 0),
+                )
+
+            else:
+                step_result[
+                    "error"
+                ] = f"Unknown batch sub-action: {sub_action}"
+
+            # Parse helper response into step_result
+            if resp is not None and resp.content:
+                try:
+                    # ToolResponse content is a list of TextBlocks; extract text from the first one
+                    raw_text = resp.content[0]["text"]
+                    resp_data = json.loads(raw_text)
+                    if isinstance(resp_data, dict):
+                        step_result.update(resp_data)
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    step_result[
+                        "error"
+                    ] = "Failed to parse sub-action response"
+
+        except Exception as e:
+            step_result["error"] = str(e)
+
+        results.append(step_result)
+
+        if not step_result.get("ok") and stop_on_error:
+            break
+
+        # Post-action wait
+        if sub_wait > 0:
+            await asyncio.sleep(sub_wait)
+
+    completed = sum(1 for r in results if r.get("ok"))
+    all_ok = completed == len(results)
+
+    return _tool_response(
+        json.dumps(
+            {
+                "ok": all_ok,
+                "total": total,
+                "completed": completed,
+                "results": results,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+
+
 _CDP_SCAN_PORT_MIN = 9000
 _CDP_SCAN_PORT_MAX = 10000
 
@@ -3252,6 +3509,7 @@ async def browser_use(  # pylint: disable=R0911,R0912
     private_mode: bool = False,
     browser_args: str = "",
     executable_path: str = "",
+    actions_json: str = "",
     cdp_url: str = "",
     port: int = 0,
     port_min: int = 0,
@@ -3272,7 +3530,11 @@ async def browser_use(  # pylint: disable=R0911,R0912
             resize, console_messages, network_requests, handle_dialog,
             file_upload, fill_form, install, press_key, run_code, drag, hover,
             select_option, tabs, wait_for, pdf, close, cookies_get, cookies_set,
-            cookies_clear, connect_cdp, list_cdp_targets, clear_browser_cache.
+            cookies_clear, connect_cdp, list_cdp_targets, clear_browser_cache,
+            batch. batch executes multiple sub-actions sequentially from
+            actions_json; supported sub-actions: navigate, click, type,
+            press_key, evaluate, eval, snapshot, screenshot, wait_for, hover,
+            select_option, drag, resize.
             Commonly confused actions:
             - start: start browser only; does not open a target URL by itself.
             - open: create/open a page and go to URL; auto-starts browser if needed.
@@ -3402,6 +3664,17 @@ async def browser_use(  # pylint: disable=R0911,R0912
             "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".
             When set, overrides the system default browser detection.
             Default empty string (use system default).
+        actions_json (str):
+            JSON array string of sub-action dicts for action=batch. Required
+            when action=batch. Each sub-action dict has at least an "action"
+            key specifying the sub-action type. Supported sub-actions:
+            navigate, click, type, press_key, evaluate, eval, snapshot,
+            screenshot, wait_for, hover, select_option, drag, resize.
+            Optional keys per sub-action: "page_id" (override default),
+            "wait" (seconds to wait after the action), "stop_on_error"
+            (bool, default True). Example:
+            [{"action": "navigate", "url": "https://example.com"},
+             {"action": "click", "ref": "e1"}, {"action": "type", "ref": "e2", "text": "hello"}].
         cdp_url (str):
             CDP base URL, e.g. "http://localhost:9222". Required for
             action=connect_cdp.
@@ -3722,6 +3995,8 @@ async def browser_use(  # pylint: disable=R0911,R0912
                         indent=2,
                     ),
                 )
+        if action == "batch":
+            return await _action_batch(state, page_id, actions_json)
         if action == "clear_browser_cache":
             return await _action_clear_browser_cache(state)
         return _tool_response(
