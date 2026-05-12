@@ -5,12 +5,13 @@ import asyncio
 import importlib.util
 import inspect
 import json
+import logging
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-import logging
 
 from .architecture import PluginManifest, PluginRecord
 from .api import PluginApi
@@ -260,6 +261,24 @@ class PluginLoader:
 
         return self._loaded_plugins
 
+    @staticmethod
+    def _find_uv() -> Optional[str]:
+        """Return the path to the ``uv`` binary, or ``None`` if not found.
+
+        Checks PATH first, then the common install locations used by the
+        QwenPaw script-installer (``~/.local/bin/uv``,
+        ``~/.cargo/bin/uv``).
+        """
+        if found := shutil.which("uv"):
+            return found
+        for candidate in (
+            Path.home() / ".local" / "bin" / "uv",
+            Path.home() / ".cargo" / "bin" / "uv",
+        ):
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        return None
+
     def _install_requirements(
         self,
         requirements_file: Path,
@@ -267,19 +286,28 @@ class PluginLoader:
     ) -> None:
         """Install Python dependencies for a plugin (blocking).
 
-        Intended to be called via ``asyncio.to_thread`` so that pip
-        does not block the event loop.
+        Tries ``python -m pip`` first (conda / pip-installed envs).
+        If pip is not available in the current interpreter — which is
+        the case for uv-managed venvs created by the QwenPaw script
+        installer — falls back to ``uv pip install``.
+
+        Intended to be called via ``asyncio.to_thread`` so that the
+        package-manager call does not block the event loop.
 
         Args:
             requirements_file: Path to requirements.txt
             plugin_id: Plugin identifier (for log messages)
 
         Raises:
-            RuntimeError: If pip exits with a non-zero return code
+            RuntimeError: If all install attempts fail or time out
         """
         logger.info(
             f"Installing dependencies for plugin '{plugin_id}'...",
         )
+        req = str(requirements_file)
+        timeout = 300
+
+        # ── Attempt 1: python -m pip ──────────────────────────────────
         try:
             result = subprocess.run(  # pylint: disable=subprocess-run-check
                 [
@@ -290,24 +318,76 @@ class PluginLoader:
                     "--disable-pip-version-check",
                     "--no-input",
                     "-r",
-                    str(requirements_file),
+                    req,
                 ],
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
                 f"Dependency installation timed out for '{plugin_id}' "
                 f"(300 s limit exceeded)",
             ) from exc
-        if result.returncode != 0:
+
+        if result.returncode == 0:
+            logger.info(
+                f"Dependencies installed for plugin '{plugin_id}'"
+                " (via pip)",
+            )
+            return
+
+        # If pip itself is missing, try uv as a fallback.
+        pip_missing = (
+            "No module named pip" in result.stderr
+            or "No module named pip" in result.stdout
+        )
+        if not pip_missing:
             raise RuntimeError(
                 f"Dependency installation failed for '{plugin_id}': "
                 f"{result.stderr}",
             )
+
+        # ── Attempt 2: uv pip install ─────────────────────────────────
+        uv = self._find_uv()
+        if uv is None:
+            raise RuntimeError(
+                f"pip is not available in the current Python environment "
+                f"and 'uv' was not found on PATH.  Install dependencies "
+                f"manually: pip install -r {req}",
+            )
+
         logger.info(
-            f"Dependencies installed for plugin '{plugin_id}'",
+            f"pip not available; retrying with uv for plugin '{plugin_id}'",
+        )
+        try:
+            uv_result = subprocess.run(  # pylint: disable=subprocess-run-check
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    "--python",
+                    sys.executable,
+                    "-r",
+                    req,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Dependency installation timed out for '{plugin_id}' "
+                f"(300 s limit exceeded, via uv)",
+            ) from exc
+
+        if uv_result.returncode != 0:
+            raise RuntimeError(
+                f"Dependency installation failed for '{plugin_id}' "
+                f"(via uv): {uv_result.stderr}",
+            )
+        logger.info(
+            f"Dependencies installed for plugin '{plugin_id}' (via uv)",
         )
 
     async def load_plugin_from_path(

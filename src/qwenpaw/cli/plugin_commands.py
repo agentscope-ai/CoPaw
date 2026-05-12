@@ -180,6 +180,116 @@ def _api_uninstall_plugin(plugin_id: str) -> bool:
         return False
 
 
+def _find_uv() -> Optional[str]:
+    """Return the path to the ``uv`` binary, or ``None`` if not found.
+
+    Checks PATH first, then the common install locations used by the
+    QwenPaw script-installer (``~/.local/bin/uv``,
+    ``~/.cargo/bin/uv``).
+
+    Returns:
+        Absolute path string to ``uv``, or ``None``.
+    """
+    found = shutil.which("uv")
+    if found:
+        return found
+    for candidate in (
+        Path.home() / ".local" / "bin" / "uv",
+        Path.home() / ".cargo" / "bin" / "uv",
+    ):
+        if candidate.is_file() and candidate.stat().st_mode & 0o111:
+            return str(candidate)
+    return None
+
+
+def _install_requirements_cli(
+    requirements_file: Path,
+    target_dir: Path,
+) -> bool:
+    """Install requirements.txt using pip or uv (fallback).
+
+    Tries ``python -m pip`` first.  When pip is absent (uv-managed
+    venv), falls back to ``uv pip install``.  On any failure the
+    ``target_dir`` is removed and an error is printed.
+
+    Args:
+        requirements_file: Path to requirements.txt
+        target_dir: Plugin directory to clean up on failure.
+
+    Returns:
+        ``True`` on success, ``False`` on failure (error already
+        printed).
+    """
+    req = str(requirements_file)
+    timeout = 300
+
+    # ── Attempt 1: python -m pip ──────────────────────────────────────
+    try:
+        result = subprocess.run(  # pylint: disable=subprocess-run-check
+            [sys.executable, "-m", "pip", "install", "-r", req],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        click.echo("❌ Dependency installation timed out.", err=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return False
+
+    if result.returncode == 0:
+        click.echo("Dependencies installed")
+        return True
+
+    pip_missing = (
+        "No module named pip" in result.stderr
+        or "No module named pip" in result.stdout
+    )
+    if not pip_missing:
+        click.echo("❌ Failed to install dependencies:", err=True)
+        click.echo(f"  {result.stderr}", err=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return False
+
+    # ── Attempt 2: uv pip install ─────────────────────────────────────
+    uv = _find_uv()
+    if uv is None:
+        click.echo(
+            "❌ pip is not available and uv was not found on PATH.\n"
+            f"   Install manually: pip install -r {req}",
+            err=True,
+        )
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return False
+
+    click.echo("pip not found, retrying with uv...")
+    try:
+        uv_result = subprocess.run(  # pylint: disable=subprocess-run-check
+            [uv, "pip", "install", "--python", sys.executable, "-r", req],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        click.echo(
+            "❌ Dependency installation timed out (via uv).",
+            err=True,
+        )
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return False
+
+    if uv_result.returncode != 0:
+        click.echo(
+            "❌ Failed to install dependencies (via uv):",
+            err=True,
+        )
+        click.echo(f"  {uv_result.stderr}", err=True)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return False
+
+    click.echo("Dependencies installed (via uv)")
+    return True
+
+
 def _is_running() -> bool:
     """Return whether QwenPaw is currently running.
 
@@ -528,35 +638,7 @@ def install(source: str, force: bool):
     requirements_file = target_dir / "requirements.txt"
     if requirements_file.exists():
         click.echo("Installing dependencies...")
-        try:
-            _ = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "-r",
-                    str(requirements_file),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            click.echo("Dependencies installed")
-        except subprocess.CalledProcessError as e:
-            click.echo("❌ Failed to install dependencies:", err=True)
-            click.echo(f"  {e.stderr}", err=True)
-            if target_dir.exists():
-                shutil.rmtree(target_dir)
-            return
-        except FileNotFoundError:
-            click.echo(
-                "pip not found. Please install dependencies manually:",
-                err=True,
-            )
-            click.echo(f"   pip install -r {requirements_file}")
-            if target_dir.exists():
-                shutil.rmtree(target_dir)
+        if not _install_requirements_cli(requirements_file, target_dir):
             return
 
     click.echo(f"\n✅ Plugin '{plugin_name}' installed successfully!")
