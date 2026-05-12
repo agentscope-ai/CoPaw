@@ -568,6 +568,13 @@ export default function PluginManagerPage() {
                 : t("pluginManager.installFromUrl")}
             </Button>
           </Form>
+
+          <Text
+            type="secondary"
+            style={{ fontSize: 11, display: "block", marginTop: 14 }}
+          >
+            {t("pluginManager.restartHint")}
+          </Text>
         </div>
       </Modal>
     </div>
