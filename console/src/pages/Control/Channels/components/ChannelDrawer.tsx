@@ -210,7 +210,8 @@ export function ChannelDrawer({
               dependencies={["auth_method", "username"]}
               rules={[
                 {
-                  required: isMatrixPasswordAuth && !form.getFieldValue("username"),
+                  required:
+                    isMatrixPasswordAuth && !form.getFieldValue("username"),
                   message: "Please enter User ID (or provide Username)",
                 },
               ]}
