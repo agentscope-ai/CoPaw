@@ -11,6 +11,7 @@ import { useAppMessage } from "../../../../hooks/useAppMessage";
 import { Alert, ConfigProvider } from "antd";
 import { LinkOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 import type { FormInstance } from "antd";
 import { getChannelLabel, type ChannelKey } from "./constants";
 import { QrcodeAuthBlock } from "./QrcodeAuthBlock";
@@ -136,6 +137,16 @@ export function ChannelDrawer({
   const revalidateMatrixE2eeAuth = () => {
     void form.validateFields(["auth_method", "encryption"]);
   };
+
+  // Parent calls form.setFieldsValue() before the Form mounts, which wins over
+  // initialValues. Re-apply auth_method after open so the dropdown is correct.
+  useEffect(() => {
+    if (!open || activeKey !== "matrix") return;
+    const pw = initialValues?.password;
+    if (typeof pw === "string" && pw.trim().length > 0) {
+      form.setFieldsValue({ auth_method: "password" });
+    }
+  }, [open, activeKey, initialValues, form]);
 
   // ── Access control fields (shared across multiple channels) ──────────────
 

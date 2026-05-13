@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import importlib
 import inspect
 import io
 import logging
@@ -211,8 +212,7 @@ class MatrixChannelConfig:
         self.user_id: str = raw.get("user_id", "")
         self.access_token: str = raw.get("access_token", "")
         # username/password fallback (rarely used in hiclaw)
-        self.username: str = raw.get("username") or self.user_id or ""
-        self.password: str = raw.get("password") or ""
+        self.password: str = raw.get("password", "")
         self.device_name: str = raw.get("device_name", "qwenpaw-worker")
         self.device_id: str = raw.get("device_id", "")
         # E2EE: when True, enable end-to-end encryption via matrix-nio + libolm
@@ -369,7 +369,7 @@ class MatrixChannel(BaseChannel):
 
     # ------------------------------------------------------------------
     # Lifecycle — client, login, event callbacks, _sync_loop
-    # token + username/password login (§2); optional
+    # token + user_id/password login (§2); optional
     # E2EE client config + store; cleartext + encrypted event callbacks;
     # starts _sync_loop (§3).
     # ------------------------------------------------------------------
@@ -431,11 +431,11 @@ class MatrixChannel(BaseChannel):
         has_token_cred: bool,
     ) -> None:
         # Auth source priority:
-        # 1) Explicit username/password from config/UI
+        # 1) Explicit user_id/password from config/UI
         # 2) Explicit access_token from config/UI
         # 3) Cached auth_state fallback
         #
-        # When token or username/password is explicitly configured, do not
+        # When token or user_id/password is explicitly configured, do not
         # restore cached token, otherwise we may accidentally bypass the
         # intended auth path.
         has_explicit_identity = (
@@ -445,6 +445,22 @@ class MatrixChannel(BaseChannel):
             restore_token=False,
             restore_identity=not has_explicit_identity,
         )
+
+    def _preflight_e2ee_dependencies(self) -> None:
+        """Probe olm before creating AsyncClientConfig;
+        disable E2EE if absent."""
+        if not self._cfg.encryption:
+            return
+        try:
+            importlib.import_module("olm")
+        except ImportError:
+            logger.error(
+                "MatrixChannel: olm not installed — falling back to "
+                "non-encrypted mode. "
+                "To enable E2EE: pip install matrix-nio[e2e] && "
+                "apt/dnf install libolm-dev",
+            )
+            self._cfg.encryption = False
 
     def _init_async_client(self, resolved_device_id: str) -> None:
         # E2EE: when encryption is enabled, provide store_path so matrix-nio
@@ -706,8 +722,7 @@ class MatrixChannel(BaseChannel):
             "MatrixChannel: key verification to-device callback registered",
         )
         logger.info(
-            "MatrixChannel: E2EE enabled, "
-            "encrypted event handlers registered",
+            "MatrixChannel: E2EE enabled, encrypted event handlers registered",
         )
         return True
 
@@ -717,12 +732,8 @@ class MatrixChannel(BaseChannel):
                 "MatrixChannel: homeserver not configured, skipping",
             )
             return
-        if self._cfg.encryption:
-            logger.info(
-                "MatrixChannel: E2EE enabled,"
-                "ensuring libolm and python bindings are installed",
-            )
-        login_user = (self._cfg.username or self._cfg.user_id or "").strip()
+        self._preflight_e2ee_dependencies()
+        login_user = (self._cfg.user_id or "").strip()
         has_password_creds = bool(login_user and self._cfg.password)
         has_token_cred = bool(self._cfg.access_token)
         self._restore_auth_state_before_start(

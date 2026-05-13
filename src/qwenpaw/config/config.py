@@ -335,7 +335,6 @@ class MatrixConfig(BaseChannelConfig):
     # When False, images are surfaced as text placeholders (no vision URL).
     vision_enabled: bool = True
     history_limit: int = 50
-    username: str = ""
     password: str = ""
     device_name: str = "qwenpaw-worker"
     # matrix-nio sync long-poll timeout (ms); typical 30s
