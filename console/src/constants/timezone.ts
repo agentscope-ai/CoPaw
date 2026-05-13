@@ -12,6 +12,7 @@ const TIMEZONE_ID_SET = new Set([
   "Europe/Berlin",
   "Europe/Moscow",
   "Asia/Dubai",
+  "Asia/Jakarta",
   "Asia/Shanghai",
   "Asia/Hong_Kong",
   "Asia/Singapore",
