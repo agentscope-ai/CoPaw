@@ -1,3 +1,13 @@
+const OPEN_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "file:"]);
+
+export function isOpenableExternalLink(url: string): boolean {
+  try {
+    return OPEN_EXTERNAL_PROTOCOLS.has(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Open an external URL, using the pywebview bridge in desktop app or
  * window.open in browser.
@@ -11,7 +21,7 @@ export function openExternalLink(
   target: string = "_blank",
   features: string = "noopener,noreferrer",
 ): void {
-  if (!url) return;
+  if (!isOpenableExternalLink(url)) return;
 
   const pywebview = (window as any).pywebview;
   if (pywebview?.api?.open_external_link) {

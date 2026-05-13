@@ -33,6 +33,10 @@ const LoginPage = lazyImportWithRetry("./pages/Login/index");
 import { authApi } from "./api/modules/auth";
 import { languageApi } from "./api/modules/language";
 import { getApiUrl, getApiToken, clearAuthToken } from "./api/config";
+import {
+  isOpenableExternalLink,
+  openExternalLink,
+} from "./utils/openExternalLink";
 import "./styles/layout.css";
 import "./styles/form-override.css";
 
@@ -162,6 +166,34 @@ function AppInner() {
       i18n.off("languageChanged", handleLanguageChanged);
     };
   }, [i18n]);
+
+  useEffect(() => {
+    const handleExternalLinkClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target as Element | null;
+      const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
+      const rawHref = anchor?.getAttribute("href") ?? "";
+      if (!anchor || !isOpenableExternalLink(rawHref)) return;
+
+      event.preventDefault();
+      openExternalLink(anchor.href, anchor.target || "_blank");
+    };
+
+    document.addEventListener("click", handleExternalLinkClick, true);
+    return () => {
+      document.removeEventListener("click", handleExternalLinkClick, true);
+    };
+  }, []);
 
   // Wait for plugins to load before rendering routes that might be patched
   if (pluginsLoading) {

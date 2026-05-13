@@ -31,7 +31,7 @@ class WebViewAPI:
 
     def open_external_link(self, url: str) -> None:
         """Open URL in system's default browser."""
-        if not url.startswith(("http://", "https://")):
+        if not url.startswith(("http://", "https://", "file://")):
             return
         webbrowser.open(url)
 
