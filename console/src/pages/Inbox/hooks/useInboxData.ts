@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import type { InboxEvent } from "../../../api/modules/console";
@@ -108,6 +108,8 @@ export const useInboxData = () => {
     },
     [agentsById, t],
   );
+  const resolveAgentNameRef = useRef(resolveAgentName);
+  resolveAgentNameRef.current = resolveAgentName;
   const [summary, setSummary] = useState<InboxSummary>({
     approvals: { total: 0, urgent: 0 },
     pushMessages: { total: 0, unread: 0 },
@@ -117,6 +119,8 @@ export const useInboxData = () => {
     },
   });
   const [pushMessages, setPushMessages] = useState<PushMessage[]>([]);
+  const pushMessagesRef = useRef(pushMessages);
+  pushMessagesRef.current = pushMessages;
   const [harvests] = useState<HarvestInstance[]>(MOCK_HARVESTS);
 
   const loadPushMessages = useCallback(async () => {
@@ -127,7 +131,7 @@ export const useInboxData = () => {
       );
       events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
       const nextItems: PushMessage[] = events.map((event) =>
-        mapEventToPushMessage(event, resolveAgentName),
+        mapEventToPushMessage(event, resolveAgentNameRef.current),
       );
       setPushMessages(nextItems);
       setSummary((prev) => ({
@@ -140,7 +144,7 @@ export const useInboxData = () => {
     } catch (error) {
       console.error("Failed to fetch push inbox data", error);
     }
-  }, [resolveAgentName]);
+  }, []);
 
   useEffect(() => {
     void loadPushMessages();
@@ -167,7 +171,7 @@ export const useInboxData = () => {
   }, []);
 
   const markAllMessagesAsRead = useCallback(async (): Promise<number> => {
-    const unreadIds = pushMessages
+    const unreadIds = pushMessagesRef.current
       .filter((message) => !message.read)
       .map((m) => m.id);
     if (!unreadIds.length) {
@@ -187,7 +191,7 @@ export const useInboxData = () => {
       },
     }));
     return unreadIds.length;
-  }, [pushMessages]);
+  }, []);
 
   const deleteMessages = useCallback(async (messageIds: string[]) => {
     const ids = Array.from(

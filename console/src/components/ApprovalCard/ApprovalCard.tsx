@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button, Card, Tag, Typography, Space } from "antd";
 import { Shield, Check, X, Clock, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -48,7 +48,11 @@ export function ApprovalCard({
   onAcknowledge,
 }: ApprovalCardProps) {
   const { t } = useTranslation();
-  const { agents } = useAgentStore();
+  const agents = useAgentStore((state) => state.agents);
+  const agentsById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent])),
+    [agents],
+  );
   const [loading, setLoading] = useState<
     "approve" | "deny" | "acknowledge" | null
   >(null);
@@ -69,17 +73,17 @@ export function ApprovalCard({
   const isCrossSession =
     sessionId && rootSessionId && sessionId !== rootSessionId;
   const isTimedOut = showInboxAgentContext && remaining <= 0;
-  const executionAgentDisplayName = (() => {
-    const matched = agents.find((agent) => agent.id === agentId);
+  const executionAgentDisplayName = useMemo(() => {
+    const matched = agentsById.get(agentId);
     if (matched) return getAgentDisplayName(matched, t);
     return agentId || t("common.unknown", "Unknown");
-  })();
-  const ownerAgentDisplayName = (() => {
+  }, [agentsById, agentId, t]);
+  const ownerAgentDisplayName = useMemo(() => {
     const ownerId = ownerAgentId || agentId;
-    const matched = agents.find((agent) => agent.id === ownerId);
+    const matched = agentsById.get(ownerId);
     if (matched) return getAgentDisplayName(matched, t);
     return ownerId || t("common.unknown", "Unknown");
-  })();
+  }, [agentsById, ownerAgentId, agentId, t]);
   const shouldShowExecutionAgent =
     showInboxAgentContext && Boolean(isCrossSession);
 
