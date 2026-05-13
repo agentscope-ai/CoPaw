@@ -1815,7 +1815,7 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
 
         registry = ExpectedCapabilityRegistry()
         for provider in self.builtin_providers.values():
-            for model in provider.models:
+            for model in provider.models + provider.extra_models:
                 # Already fully annotated (e.g. by a prior probe) → skip
                 if model.supports_multimodal is not None:
                     continue

@@ -129,6 +129,25 @@ def test_builtin_zhipu_providers_registered(isolated_secret_dir) -> None:
         ]
 
 
+def test_default_annotations_apply_to_extra_models(
+    isolated_secret_dir,
+) -> None:
+    manager = ProviderManager()
+    provider = manager.get_provider("aliyun-codingplan")
+    assert provider is not None
+    provider.extra_models = [
+        ModelInfo(id="qwen3.6-plus", name="Qwen3.6 Plus"),
+    ]
+
+    manager._apply_default_annotations()
+
+    model = provider.extra_models[0]
+    assert model.supports_multimodal is True
+    assert model.supports_image is True
+    assert model.supports_video is True
+    assert model.probe_source == "documentation"
+
+
 async def test_add_custom_provider_and_reload_from_storage(
     isolated_secret_dir,
 ) -> None:
