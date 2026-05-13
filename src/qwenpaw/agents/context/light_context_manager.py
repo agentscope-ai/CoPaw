@@ -26,6 +26,7 @@ from .compactor_prompts import (
     UPDATE_USER_MESSAGE_EN,
     UPDATE_USER_MESSAGE_ZH,
 )
+from .usage_store import set_context_usage
 from ..model_factory import create_model_and_formatter
 from ..tools.utils import truncate_text_output, DEFAULT_MAX_BYTES
 from ..utils import get_token_counter
@@ -773,6 +774,15 @@ class LightContextManager(BaseContextManager):
                 as_token_counter=token_counter,
             )
 
+            from ...app.agent_context import get_current_session_id
+
+            set_context_usage(
+                agent_id=self.agent_id,
+                session_id=get_current_session_id() or "",
+                total_tokens=str_token_count + ctx_total_tokens,
+                max_input_length=running_config.max_input_length,
+            )
+
             if not messages_to_compact:
                 return None
 
@@ -979,6 +989,26 @@ class LightContextManager(BaseContextManager):
         When ``auto_memory_interval`` is set (e.g., 2), this hook counts user
         messages in the memory and triggers auto memory every N queries.
         """
+        try:
+            from ...app.agent_context import get_current_session_id
+
+            agent_config = load_agent_config(self.agent_id)
+            max_input_length = agent_config.running.max_input_length
+            stats = await agent.memory.estimate_tokens(max_input_length)
+            token_counter = get_token_counter(agent_config)
+            sys_token_count = await token_counter.count(
+                messages=[],
+                text=(agent.sys_prompt or ""),
+            )
+            set_context_usage(
+                agent_id=self.agent_id,
+                session_id=get_current_session_id() or "",
+                total_tokens=stats["estimated_tokens"] + sys_token_count,
+                max_input_length=max_input_length,
+            )
+        except Exception as e:
+            logger.debug("Failed to update context usage snapshot: %s", e)
+
         try:
             memory_manager = agent.memory_manager
             if memory_manager is None:

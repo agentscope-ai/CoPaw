@@ -86,6 +86,62 @@ interface CommandSuggestion {
   description: string;
 }
 
+interface ContextUsage {
+  total_tokens: number;
+  max_input_length: number;
+  pct: number;
+}
+
+function isContextUsage(value: unknown): value is ContextUsage {
+  if (!value || typeof value !== "object") return false;
+  const usage = value as Record<string, unknown>;
+  return (
+    typeof usage.total_tokens === "number" &&
+    typeof usage.max_input_length === "number" &&
+    typeof usage.pct === "number"
+  );
+}
+
+function formatTokenCount(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}m`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
+function getUsageTone(pct: number): "ok" | "warn" | "danger" {
+  if (pct >= 70) return "danger";
+  if (pct >= 50) return "warn";
+  return "ok";
+}
+
+function ContextUsageIndicator({
+  usage,
+  label,
+}: {
+  usage: ContextUsage | null;
+  label: string;
+}) {
+  if (!usage) return null;
+
+  const pct = Math.max(0, Math.min(100, usage.pct));
+  const tone = getUsageTone(pct);
+
+  return (
+    <div className={styles.contextUsageIndicator} title={`${pct.toFixed(1)}%`}>
+      <span className={styles.contextUsageText}>
+        {label}: {formatTokenCount(usage.total_tokens)} /{" "}
+        {formatTokenCount(usage.max_input_length)}
+      </span>
+      <span className={styles.contextUsageTrack}>
+        <span
+          className={`${styles.contextUsageFill} ${styles[tone]}`}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+    </div>
+  );
+}
+
 function messageRequestsHistoryClear(message: unknown): boolean {
   if (!message || typeof message !== "object") return false;
   const metadata = (message as Record<string, unknown>).metadata;
@@ -517,6 +573,11 @@ export default function ChatPage() {
     Map<string, ApprovalMessageData>
   >(new Map());
   const [planEnabled, setPlanEnabled] = useState(false);
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
+
+  useEffect(() => {
+    setContextUsage(null);
+  }, [chatId, selectedAgent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1042,6 +1103,10 @@ export default function ChatPage() {
             <RuntimeLoadingBridge bridgeRef={runtimeLoadingBridgeRef} />
             <ChatHeaderTitle />
             <span style={{ flex: 1 }} />
+            <ContextUsageIndicator
+              usage={contextUsage}
+              label={t("chat.contextUsage.label", "Context")}
+            />
             <ModelSelector />
             <ChatActionGroup planEnabled={planEnabled} />
           </>
@@ -1098,6 +1163,9 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          if (isContextUsage(payload.context_usage)) {
+            setContextUsage(payload.context_usage);
+          }
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;
@@ -1166,6 +1234,7 @@ export default function ChatPage() {
     toolRenderConfig,
     scheduleHistoryClear,
     planEnabled,
+    contextUsage,
   ]);
 
   return (
