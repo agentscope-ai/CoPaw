@@ -190,7 +190,8 @@ def copy_template_md_files(
     """Copy template-specific markdown files into an agent workspace.
 
     Files are read from ``md_files/<template_id>/<language>/`` with fallback
-    order ``language`` then the built-in fallback languages on a per-file basis.
+    order ``language`` then the built-in fallback languages on a
+    per-file basis.
 
     Args:
         template_id: Template directory name under ``agents/md_files``.
