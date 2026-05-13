@@ -1030,7 +1030,6 @@ plugin = PetApiPlugin()
 
 ```bash
 qwenpaw plugin install pet-api-plugin
-qwenpaw app
 ```
 
 Once QwenPaw is running:

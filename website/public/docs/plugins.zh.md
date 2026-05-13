@@ -1011,7 +1011,6 @@ plugin = PetApiPlugin()
 
 ```bash
 qwenpaw plugin install pet-api-plugin
-qwenpaw app
 ```
 
 启动 QwenPaw 后，可在终端用 `curl` 测试（端口请按你本地实际为准，例如 `8088`）：
