@@ -1,5 +1,12 @@
 import { useState, useCallback } from "react";
-import { Button, Empty, Modal, Input, Select } from "@agentscope-ai/design";
+import {
+  Button,
+  Checkbox,
+  Empty,
+  Modal,
+  Input,
+  Select,
+} from "@agentscope-ai/design";
 import { Tabs } from "antd";
 import { Plus } from "lucide-react";
 import type { MCPClientInfo } from "../../../api/types";
@@ -40,6 +47,12 @@ function normalizeClientData(key: string, rawData: Record<string, unknown>) {
 
   const command =
     transport === "stdio" ? ((rawData.command ?? "") as string) : "";
+  const tlsVerify =
+    typeof rawData.tls_verify === "boolean"
+      ? rawData.tls_verify
+      : typeof rawData.tlsVerify === "boolean"
+      ? rawData.tlsVerify
+      : true;
 
   return {
     name: (rawData.name as string) || key,
@@ -49,6 +62,8 @@ function normalizeClientData(key: string, rawData: Record<string, unknown>) {
     transport,
     url: (rawData.url || rawData.baseUrl || "") as string,
     headers: (rawData.headers as Record<string, string>) || {},
+    tls_verify: tlsVerify,
+    ca_file: (rawData.ca_file || rawData.caFile || "") as string,
     command,
     args: Array.isArray(rawData.args) ? (rawData.args as string[]) : [],
     env: (rawData.env as Record<string, string>) || {},
@@ -70,6 +85,8 @@ const defaultForm = {
   args: "",
   env: "",
   cwd: "",
+  tlsVerify: true,
+  caFile: "",
 };
 
 function MCPPage() {
@@ -246,6 +263,8 @@ function MCPPage() {
       description: form.description,
       transport: form.transport,
       url: isHttp ? form.url.trim() : "",
+      tls_verify: isHttp ? form.tlsVerify : true,
+      ca_file: isHttp ? form.caFile.trim() : "",
       command: form.transport === "stdio" ? form.command.trim() : "",
       args,
       env,
@@ -422,17 +441,45 @@ function MCPPage() {
 
                   {/* URL (HTTP/SSE) or Command (stdio) */}
                   {isHttpTransport ? (
-                    <div>
-                      <label style={labelStyle}>
-                        {t("mcp.form.url")}
-                        <span style={{ color: "#c0392b" }}> *</span>
-                      </label>
-                      <Input
-                        placeholder="https://mcp.example.com/mcp"
-                        value={form.url}
-                        onChange={(e) => setField("url", e.target.value)}
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <label style={labelStyle}>
+                          {t("mcp.form.url")}
+                          <span style={{ color: "#c0392b" }}> *</span>
+                        </label>
+                        <Input
+                          placeholder="https://mcp.example.com/mcp"
+                          value={form.url}
+                          onChange={(e) => setField("url", e.target.value)}
+                        />
+                      </div>
+                      <div style={rowStyle}>
+                        <div style={fieldStyle}>
+                          <label style={labelStyle}>
+                            {t("mcp.form.caFile")}
+                          </label>
+                          <Input
+                            placeholder="/path/to/ca.pem"
+                            value={form.caFile}
+                            onChange={(e) => setField("caFile", e.target.value)}
+                            disabled={!form.tlsVerify}
+                          />
+                        </div>
+                        <div style={checkboxFieldStyle}>
+                          <Checkbox
+                            checked={form.tlsVerify}
+                            onChange={(event) =>
+                              setField(
+                                "tlsVerify",
+                                Boolean(event?.target?.checked),
+                              )
+                            }
+                          >
+                            {t("mcp.form.tlsVerify")}
+                          </Checkbox>
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div>
@@ -501,6 +548,12 @@ const fieldStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4,
+};
+
+const checkboxFieldStyle: React.CSSProperties = {
+  ...fieldStyle,
+  justifyContent: "flex-end",
+  paddingBottom: 4,
 };
 
 const labelStyle: React.CSSProperties = {

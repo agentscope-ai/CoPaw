@@ -701,7 +701,9 @@
       "description": "Description",
       "descriptionPlaceholder": "Optional description",
       "env": "Environment Variables",
-      "envPlaceholder": "KEY=VALUE (one per line)"
+      "envPlaceholder": "KEY=VALUE (one per line)",
+      "tlsVerify": "Verify TLS certificates",
+      "caFile": "Custom CA file"
     },
     "oauth": {
       "enableOAuth": "Use OAuth Authorization",

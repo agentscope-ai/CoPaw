@@ -697,13 +697,36 @@ class HttpStatefulClient(_MCPClientMixin, StatefulClientBase):
                 streamable_http_client(url=self.url, http_client=http_client),
             )
         else:
+            httpx_client_factory = None
+            if self.client_kwargs:
+                httpx_client_factory = self._build_httpx_client_factory()
+
+            kwargs: dict[str, Any] = {}
+            if httpx_client_factory is not None:
+                kwargs["httpx_client_factory"] = httpx_client_factory
+
             context = await stack.enter_async_context(
                 sse_client(
                     url=self.url,
                     headers=self.headers,
                     timeout=self.timeout,
                     sse_read_timeout=self.sse_read_timeout,
-                    **self.client_kwargs,
+                    **kwargs,
                 ),
             )
         return context[0], context[1]
+
+    def _build_httpx_client_factory(self):
+        def _factory(
+            headers: dict[str, str] | None = None,
+            timeout: httpx.Timeout | None = None,
+            auth: httpx.Auth | None = None,
+        ) -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                headers=headers,
+                timeout=timeout,
+                auth=auth,
+                **self.client_kwargs,
+            )
+
+        return _factory

@@ -250,6 +250,8 @@ class MCPClientManager:
             "transport": client_config.transport,
             "url": client_config.url,
             "headers": client_config.headers or None,
+            "tls_verify": client_config.tls_verify,
+            "ca_file": client_config.ca_file,
             "command": client_config.command,
             "args": list(client_config.args),
             "env": dict(client_config.env),
@@ -275,12 +277,32 @@ class MCPClientManager:
             headers,
             client_config,
         )
+        client_kwargs = MCPClientManager._build_http_client_kwargs(
+            client_config,
+        )
 
         client = HttpStatefulClient(
             name=client_config.name,
             transport=client_config.transport,
             url=client_config.url,
             headers=headers or None,
+            **client_kwargs,
         )
         setattr(client, "_qwenpaw_rebuild_info", rebuild_info)
         return client
+
+    @staticmethod
+    def _build_http_client_kwargs(
+        client_config: "MCPClientConfig",
+    ) -> Dict[str, Any]:
+        """Build httpx kwargs for remote MCP transports."""
+        if not client_config.tls_verify:
+            return {"verify": False}
+
+        ca_file = os.path.expanduser(
+            os.path.expandvars(client_config.ca_file.strip()),
+        )
+        if ca_file:
+            return {"verify": ca_file}
+
+        return {}

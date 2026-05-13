@@ -40,6 +40,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        tls_verify?: boolean;
+        ca_file?: string;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
@@ -73,6 +75,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        tls_verify?: boolean;
+        ca_file?: string;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
