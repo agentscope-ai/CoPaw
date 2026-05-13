@@ -45,6 +45,14 @@ class MCPClientInfo(BaseModel):
         default_factory=dict,
         description="HTTP headers for remote transport",
     )
+    timeout: float = Field(
+        default=30.0,
+        description="HTTP connect/write/pool timeout in seconds",
+    )
+    sse_read_timeout: float = Field(
+        default=300.0,
+        description="SSE/read timeout in seconds",
+    )
     command: str = Field(
         default="",
         description="Command to launch the MCP server",
@@ -88,6 +96,14 @@ class MCPClientCreateRequest(BaseModel):
         default_factory=dict,
         description="HTTP headers for remote transport",
     )
+    timeout: float = Field(
+        default=30.0,
+        description="HTTP connect/write/pool timeout in seconds",
+    )
+    sse_read_timeout: float = Field(
+        default=300.0,
+        description="SSE/read timeout in seconds",
+    )
     command: str = Field(
         default="",
         description="Command to launch the MCP server",
@@ -126,6 +142,14 @@ class MCPClientUpdateRequest(BaseModel):
     headers: Optional[Dict[str, str]] = Field(
         None,
         description="HTTP headers for remote transport",
+    )
+    timeout: Optional[float] = Field(
+        None,
+        description="HTTP connect/write/pool timeout in seconds",
+    )
+    sse_read_timeout: Optional[float] = Field(
+        None,
+        description="SSE/read timeout in seconds",
     )
     command: Optional[str] = Field(
         None,
@@ -233,6 +257,8 @@ def _build_client_info(key: str, client: MCPClientConfig) -> MCPClientInfo:
         transport=client.transport,
         url=client.url,
         headers=masked_headers,
+        timeout=client.timeout,
+        sse_read_timeout=client.sse_read_timeout,
         command=client.command,
         args=client.args,
         env=masked_env,
@@ -393,6 +419,8 @@ async def create_mcp_client(
         transport=client.transport,
         url=client.url,
         headers=client.headers,
+        timeout=client.timeout,
+        sse_read_timeout=client.sse_read_timeout,
         command=client.command,
         args=client.args,
         env=client.env,

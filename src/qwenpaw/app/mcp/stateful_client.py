@@ -623,7 +623,7 @@ class HttpStatefulClient(_MCPClientMixin, StatefulClientBase):
             url: The URL to the MCP server
             headers: Additional headers to include in the HTTP request
             timeout: The timeout for the HTTP request in seconds
-            sse_read_timeout: The timeout for reading SSE in seconds
+            sse_read_timeout: The timeout for reading SSE events in seconds
             **client_kwargs: Additional keyword arguments for the client
 
         Raises:

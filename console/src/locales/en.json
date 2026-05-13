@@ -701,7 +701,11 @@
       "description": "Description",
       "descriptionPlaceholder": "Optional description",
       "env": "Environment Variables",
-      "envPlaceholder": "KEY=VALUE (one per line)"
+      "envPlaceholder": "KEY=VALUE (one per line)",
+      "timeout": "HTTP timeout (seconds)",
+      "timeoutRequired": "HTTP timeout must be greater than 0",
+      "sseReadTimeout": "SSE read timeout (seconds)",
+      "sseReadTimeoutRequired": "SSE read timeout must be greater than 0"
     },
     "oauth": {
       "enableOAuth": "Use OAuth Authorization",

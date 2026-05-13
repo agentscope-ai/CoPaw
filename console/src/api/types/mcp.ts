@@ -28,6 +28,10 @@ export interface MCPClientInfo {
   url: string;
   /** HTTP headers for remote transport */
   headers: Record<string, string>;
+  /** HTTP connect/write/pool timeout in seconds */
+  timeout: number;
+  /** SSE/read timeout in seconds */
+  sse_read_timeout: number;
   /** Command to launch the MCP server */
   command: string;
   /** Command-line arguments */
@@ -83,6 +87,10 @@ export interface MCPClientCreateRequest {
     url?: string;
     /** HTTP headers for remote transport */
     headers?: Record<string, string>;
+    /** HTTP connect/write/pool timeout in seconds */
+    timeout?: number;
+    /** SSE/read timeout in seconds */
+    sse_read_timeout?: number;
     /** Command to launch the MCP server */
     command?: string;
     /** Command-line arguments */
@@ -116,6 +124,10 @@ export interface MCPClientUpdateRequest {
   url?: string;
   /** HTTP headers for remote transport */
   headers?: Record<string, string>;
+  /** HTTP connect/write/pool timeout in seconds */
+  timeout?: number;
+  /** SSE/read timeout in seconds */
+  sse_read_timeout?: number;
   /** Command to launch the MCP server */
   command?: string;
   /** Command-line arguments */

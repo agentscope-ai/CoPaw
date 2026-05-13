@@ -1251,6 +1251,8 @@ class MCPClientConfig(BaseModel):
     transport: Literal["stdio", "streamable_http", "sse"] = "stdio"
     url: str = ""
     headers: Dict[str, str] = Field(default_factory=dict)
+    timeout: float = 30.0
+    sse_read_timeout: float = 300.0
     command: str = ""
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
@@ -1301,6 +1303,17 @@ class MCPClientConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_transport_config(self):
         """Validate required fields for each MCP transport type."""
+        if self.timeout <= 0:
+            raise ConfigurationException(
+                config_key="mcp.timeout",
+                message="MCP client timeout must be greater than 0",
+            )
+        if self.sse_read_timeout <= 0:
+            raise ConfigurationException(
+                config_key="mcp.sse_read_timeout",
+                message="MCP client SSE read timeout must be greater than 0",
+            )
+
         if self.transport == "stdio":
             if not self.command.strip():
                 raise ConfigurationException(
