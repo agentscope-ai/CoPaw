@@ -1,4393 +1,557 @@
 # -*- coding: utf-8 -*-
-# flake8: noqa: E501
-"""Browser automation tool using Playwright.
+"""Retry wrapper for ChatModelBase instances.
 
-Single tool with action-based API matching browser MCP: start, stop, open,
-navigate, navigate_back, screenshot, snapshot, click, type, eval, evaluate,
-resize, console_messages, handle_dialog, file_upload, file_download, fill_form, install,
-press_key, network_requests, run_code, drag, hover, select_option, tabs,
-wait_for, pdf, close. Uses refs from snapshot for ref-based actions.
+Transparently retries LLM API calls on exceptions with configurable
+exponential back-off.
+
+Concurrency and rate-limit control (LLMRateLimiter):
+- A global semaphore caps the number of concurrent in-flight LLM calls,
+  preventing a burst of requests from hammering the upstream API.
+- When a 429 is received every concurrent caller is paused for the same
+  duration (plus per-caller jitter) before re-trying, eliminating the
+  thundering-herd problem where multiple callers retry at the same instant.
+
+Semaphore ownership rules:
+- Non-streaming: __call__'s finally block always releases the slot
+  (owns_semaphore stays True throughout).
+- Streaming: ownership transfers to _consume_stream_with_slot the moment
+  __call__ returns the generator.  owns_semaphore is set to False before
+  the return so __call__'s finally skips the release.
+  _consume_stream_with_slot releases after the first chunk arrives.
+- Cancellation safety: the boolean flag `acquired` tracks whether the
+  semaphore slot has actually been taken; the final block only releases
+  when acquired is True, preventing a spurious release on CancelledError.
 """
 
+from __future__ import annotations
+
 import asyncio
-import atexit
-from concurrent import futures
-import json
 import logging
-import re
-import shlex
-from pathlib import Path
-import signal
-import socket
-import subprocess
-import sys
-import time
-from typing import Any, Optional
-from urllib.parse import urljoin
-from urllib import request as urllib_request
+from dataclasses import dataclass
+from typing import Any, AsyncGenerator
 
-from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
-
-from ...config import (
-    get_playwright_chromium_executable_path,
-    get_system_default_browser,
-    is_running_in_container,
+from agentscope.model import ChatModelBase
+from agentscope.model._model_response import ChatResponse
+from agentscope_runtime.engine.schemas.exception import (
+    RateLimitExceededException,
 )
-from ...config.context import get_current_workspace_dir
-from ...constant import WORKING_DIR, EnvVarLoader
 
-from .browser_snapshot import build_role_snapshot_from_aria
+from ..constant import (
+    LLM_ACQUIRE_TIMEOUT,
+    LLM_BACKOFF_BASE,
+    LLM_BACKOFF_CAP,
+    LLM_MAX_CONCURRENT,
+    LLM_MAX_RETRIES,
+    LLM_MAX_QPM,
+    LLM_RATE_LIMIT_JITTER,
+    LLM_RATE_LIMIT_PAUSE,
+)
+from .model_capability_cache import get_capability_cache
+from .rate_limiter import LLMRateLimiter, get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504, 529}
 
-# Keywords used to validate executable_path — the binary filename must
-# contain at least one of these (case-insensitive) to be accepted.
-_TRUSTED_BROWSER_KEYWORDS = frozenset(
-    {
-        "chrome",  # Google Chrome
-        "chromium",  # Chromium (open-source)
-        "edge",  # Microsoft Edge
-        "firefox",  # Mozilla Firefox
-        "brave",  # Brave Browser
-        "vivaldi",  # Vivaldi Browser
-        "opera",  # Opera
-        "360se",  # 360 Secure Browser
-        "yandex",  # Yandex Browser
-        "tor",  # Tor Browser
-    },
-)
+_openai_retryable: tuple[type[Exception], ...] | None = None
+_anthropic_retryable: tuple[type[Exception], ...] | None = None
+_httpx_retryable: tuple[type[Exception], ...] | None = None
 
 
-def _validate_executable_path(executable_path: str) -> None:
-    """Raise ValueError if *executable_path* is not a trusted browser binary."""
-    if not executable_path:
-        return
-    name = Path(executable_path).name.lower()
-    if not any(kw in name for kw in _TRUSTED_BROWSER_KEYWORDS):
-        raise ValueError(
-            f"executable_path rejected: '{Path(executable_path).name}' "
-            f"does not match any trusted browser name "
-            f"(keywords: {', '.join(sorted(_TRUSTED_BROWSER_KEYWORDS))})",
-        )
-    if not Path(executable_path).is_file():
-        raise ValueError(
-            f"executable_path rejected: '{executable_path}' does not exist",
-        )
+@dataclass(frozen=True, slots=True)
+class RetryConfig:
+    """Retry policy for transient LLM API failures."""
+
+    enabled: bool = LLM_MAX_RETRIES > 0
+    max_retries: int = max(LLM_MAX_RETRIES, 1)
+    backoff_base: float = LLM_BACKOFF_BASE
+    backoff_cap: float = LLM_BACKOFF_CAP
 
 
-def _resolve_output_path(path: str) -> str:
-    """Resolve relative output paths under workspace_dir/browser/."""
-    if Path(path).is_absolute():
-        return path
-    base_dir = (get_current_workspace_dir() or WORKING_DIR) / "browser"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return str(base_dir / path)
+@dataclass(frozen=True, slots=True)
+class RateLimitConfig:
+    """Rate-limiting policy for LLM calls.
 
+    Controls the global LLMRateLimiter singleton that caps concurrency and
+    coordinates pauses when a 429 is received.  The singleton is initialised
+    on the *first* call; subsequent callers share the same instance.
 
-def _safe_download_filename(filename: Any, default: str = "download") -> str:
-    """Return a filesystem-safe filename for browser downloads."""
-    name = Path(str(filename or "")).name.strip()
-    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name)
-    name = name.strip(" .")
-    return name or default
-
-
-def _browser_output_dir(state: dict, name: str) -> Path:
-    """Return workspace browser output directory and create it if needed."""
-    workspace_dir = state.get("workspace_dir")
-    base_dir = Path(workspace_dir) if workspace_dir else WORKING_DIR
-    output_dir = base_dir / "browser" / name
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
-
-
-async def _configure_download_behavior(state: dict) -> None:
-    """Configure Chromium CDP download path when available."""
-    context = _get_context(state)
-    page = next(iter(state["pages"].values()), None)
-    if context is None or page is None or _USE_SYNC_PLAYWRIGHT:
-        return
-    try:
-        cdp = await context.new_cdp_session(page)
-        await cdp.send(
-            "Browser.setDownloadBehavior",
-            {
-                "behavior": "allow",
-                "downloadPath": str(_browser_output_dir(state, "downloads")),
-                "eventsEnabled": True,
-            },
-        )
-    except Exception:
-        logger.debug(
-            "Failed to configure browser download behavior",
-            exc_info=True,
-        )
-
-
-# Hybrid mode detection: Windows + Uvicorn reload mode requires sync Playwright
-# to avoid NotImplementedError with asyncio.create_subprocess_exec.
-# On other platforms or without reload, use async Playwright for better performance.
-_USE_SYNC_PLAYWRIGHT = sys.platform == "win32" and EnvVarLoader.get_bool(
-    "QWENPAW_RELOAD_MODE",
-)
-
-if _USE_SYNC_PLAYWRIGHT:
-    _executor: Optional[futures.ThreadPoolExecutor] = None
-
-    def _get_executor() -> futures.ThreadPoolExecutor:
-        global _executor
-        if _executor is None:
-            _executor = futures.ThreadPoolExecutor(
-                max_workers=1,
-                thread_name_prefix="playwright",
-            )
-        return _executor
-
-    async def _run_sync(func, *args, **kwargs):
-        """Run a sync function in the thread pool and await the result."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            _get_executor(),
-            lambda: func(*args, **kwargs),
-        )
-
-else:
-
-    async def _run_sync(func, *args, **kwargs):
-        """Fallback: directly call async function (should not be used in async mode)."""
-        return await func(*args, **kwargs)
-
-
-# Per-workspace browser states: workspace_id -> state dict
-_workspace_states: dict[str, dict[str, Any]] = {}
-
-
-def _make_fresh_state(workspace_id: str, workspace_dir: str) -> dict[str, Any]:
-    """Create a fresh browser state dict for a workspace."""
-    user_data_dir = (
-        str(Path(workspace_dir) / "browser" / "user_data")
-        if workspace_dir
-        else ""
-    )
-    return {
-        "playwright": None,
-        "browser": None,
-        "context": None,
-        "_sync_playwright": None,
-        "_sync_browser": None,
-        "_sync_context": None,
-        "pages": {},
-        "refs": {},  # page_id -> ref -> {role, name?, nth?}
-        "refs_frame": {},  # page_id -> frame for last snapshot
-        "console_logs": {},  # page_id -> list of {level, text}
-        "network_requests": {},  # page_id -> list of request dicts
-        "pending_dialogs": {},  # page_id -> dialog handlers
-        "pending_file_choosers": {},  # page_id -> FileChooser list
-        "headless": True,
-        "current_page_id": None,
-        "page_counter": 0,  # monotonic counter for page_N ids, avoids reuse after close
-        "last_activity_time": 0.0,  # monotonic timestamp of last browser activity
-        "_idle_task": None,  # background asyncio.Task for idle watchdog
-        "_last_browser_error": None,  # message when launch failed (for user-facing error)
-        "workspace_id": workspace_id,
-        "workspace_dir": workspace_dir,
-        "user_data_dir": user_data_dir,
-        "connected_via_cdp": False,
-        "cdp_url": None,
-        "launch_mode": None,
-        "owned_browser_process": False,
-        "browser_pid": None,
-        "browser_process": None,
-    }
-
-
-def _get_workspace_state(
-    workspace_id: str,
-    workspace_dir: str = "",
-) -> dict[str, Any]:
-    """Get or create the browser state for a workspace."""
-    if workspace_id not in _workspace_states:
-        _workspace_states[workspace_id] = _make_fresh_state(
-            workspace_id,
-            workspace_dir,
-        )
-    return _workspace_states[workspace_id]
-
-
-# Stop the browser after this many seconds of inactivity (default 10 minutes).
-_BROWSER_IDLE_TIMEOUT = 600.0
-
-
-def _touch_activity(state: dict) -> None:
-    """Record the current time as the last browser activity timestamp."""
-    state["last_activity_time"] = time.monotonic()
-
-
-def _is_browser_running(state: dict) -> bool:
-    """Check if browser is currently running (sync or async mode)."""
-    if _USE_SYNC_PLAYWRIGHT:
-        return (
-            state.get("_sync_context") is not None
-            or state.get("_sync_browser") is not None
-        )
-    return state.get("browser") is not None or state.get("context") is not None
-
-
-def _reset_browser_state(state: dict) -> None:
-    """Reset all browser-related state variables."""
-    # Clear sync/async specific state
-    state["playwright"] = None
-    state["browser"] = None
-    state["context"] = None
-    state["_sync_playwright"] = None
-    state["_sync_browser"] = None
-    state["_sync_context"] = None
-    # Clear shared state
-    state["pages"].clear()
-    state["refs"].clear()
-    state["refs_frame"].clear()
-    state["console_logs"].clear()
-    state["network_requests"].clear()
-    state["pending_dialogs"].clear()
-    state["pending_file_choosers"].clear()
-    state["current_page_id"] = None
-    state["page_counter"] = 0
-    state["last_activity_time"] = 0.0
-    state["headless"] = True
-    state["connected_via_cdp"] = False
-    state["cdp_url"] = None
-    state["launch_mode"] = None
-    state["owned_browser_process"] = False
-    state["browser_pid"] = None
-    state["browser_process"] = None
-
-
-async def _idle_watchdog(
-    state: dict,
-    idle_seconds: float = _BROWSER_IDLE_TIMEOUT,
-) -> None:
-    """Background task: stop the browser after it has been idle for *idle_seconds*.
-
-    This reclaims Chrome renderer processes that accumulate when pages are
-    opened during agent tasks but never explicitly closed.
+    Attributes:
+        max_concurrent: Maximum concurrent in-flight LLM calls.
+        max_qpm: Maximum queries per minute (sliding window). 0 = disabled.
+        pause_seconds: Global pause duration (s) on a 429 response.
+        jitter_range: Random jitter (s) added on top of the pause.
+        acquire_timeout: Max seconds to wait for a slot before raising.
     """
-    try:
-        check_interval = max(1.0, min(60.0, idle_seconds / 2))
-        while True:
-            await asyncio.sleep(check_interval)
-            if not _is_browser_running(state):
-                return
-            idle = time.monotonic() - state.get("last_activity_time", 0.0)
-            if idle >= idle_seconds:
-                logger.info(
-                    "Browser idle for %.0fs (limit %.0fs), stopping to release resources",
-                    idle,
-                    idle_seconds,
-                )
-                await _action_stop(state)
-                return
-    except asyncio.CancelledError:
-        pass
+
+    max_concurrent: int = LLM_MAX_CONCURRENT
+    max_qpm: int = LLM_MAX_QPM
+    pause_seconds: float = LLM_RATE_LIMIT_PAUSE
+    jitter_range: float = LLM_RATE_LIMIT_JITTER
+    acquire_timeout: float = LLM_ACQUIRE_TIMEOUT
 
 
-def _atexit_cleanup() -> None:
-    """Best-effort browser cleanup registered with :func:`atexit`.
+def _get_openai_retryable() -> tuple[type[Exception], ...]:
+    global _openai_retryable
+    if _openai_retryable is None:
+        try:
+            import openai
 
-    Playwright child processes are cleaned up by the OS when the parent
-    exits, but this gives Playwright a chance to flush any pending I/O and
-    close Chrome gracefully before the process disappears.
+            _openai_retryable = (
+                openai.RateLimitError,
+                openai.APITimeoutError,
+                openai.APIConnectionError,
+            )
+        except ImportError:
+            _openai_retryable = ()
+    return _openai_retryable
+
+
+def _get_anthropic_retryable() -> tuple[type[Exception], ...]:
+    global _anthropic_retryable
+    if _anthropic_retryable is None:
+        try:
+            import anthropic
+
+            _anthropic_retryable = (
+                anthropic.RateLimitError,
+                anthropic.APITimeoutError,
+                anthropic.APIConnectionError,
+            )
+        except ImportError:
+            _anthropic_retryable = ()
+    return _anthropic_retryable
+
+
+def _get_httpx_retryable() -> tuple[type[Exception], ...]:
+    global _httpx_retryable
+    if _httpx_retryable is None:
+        try:
+            import httpx
+
+            _httpx_retryable = (
+                httpx.RemoteProtocolError,
+                httpx.TimeoutException,
+            )
+        except ImportError:
+            _httpx_retryable = ()
+    return _httpx_retryable
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return *True* if *exc* should trigger a retry."""
+    return True
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    """Return *True* if *exc* is specifically a 429 rate-limit error."""
+    return getattr(exc, "status_code", None) == 429
+
+
+def _is_missing_reasoning_content_error(exc: Exception) -> bool:
+    """Return *True* if *exc* is a 400 about missing ``reasoning_content``.
+
+    DeepSeek (and compatible providers) require every assistant message to
+    carry ``reasoning_content`` when thinking mode is active.  When the
+    conversation history was produced by a non-reasoning model, these
+    fields are absent and the API rejects the request with a 400.
     """
-    if not _workspace_states:
-        return
-
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running() or loop.is_closed():
-            return
-        for ws_state in list(_workspace_states.values()):
-            if _is_browser_running(ws_state):
-                try:
-                    loop.run_until_complete(_action_stop(ws_state))
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
-
-atexit.register(_atexit_cleanup)
-
-
-def _tool_response(text: str) -> ToolResponse:
-    """Wrap text for agentscope Toolkit (return ToolResponse)."""
-    return ToolResponse(
-        content=[TextBlock(type="text", text=text)],
-    )
-
-
-def _chromium_launch_args() -> list[str]:
-    """Extra args for Chromium when running in container or Windows."""
-    args = []
-    if is_running_in_container() or sys.platform == "win32":
-        args.extend(["--no-sandbox"])
-
-    if is_running_in_container():
-        args.extend(["--disable-dev-shm-usage"])
-    # Windows always needs --disable-gpu to run properly
-    if sys.platform == "win32":
-        args.extend(["--disable-gpu"])
-    return args
-
-
-def _chromium_executable_path() -> str | None:
-    """Chromium executable path when set (e.g. container); else None."""
-    return get_playwright_chromium_executable_path()
-
-
-def _use_webkit_fallback() -> bool:
-    """True only on macOS when no system Chrome/Edge/Chromium found.
-    Use WebKit (Safari) to avoid downloading Chromium. Windows has no system
-    WebKit, so we never use webkit there.
-    """
-    return sys.platform == "darwin" and _chromium_executable_path() is None
-
-
-def _ensure_playwright_async():
-    """Import async_playwright; raise ImportError with hint if missing."""
-    try:
-        from playwright.async_api import async_playwright
-
-        return async_playwright
-    except ImportError as exc:
-        raise ImportError(
-            "Playwright not installed. Use the same Python that runs QwenPaw (e.g. "
-            "activate your venv or use 'uv run'): "
-            f"'{sys.executable}' -m pip install playwright && "
-            f"'{sys.executable}' -m playwright install",
-        ) from exc
-
-
-def _ensure_playwright_sync():
-    """Import sync_playwright; raise ImportError with hint if missing."""
-    try:
-        from playwright.sync_api import sync_playwright
-
-        return sync_playwright
-    except ImportError as exc:
-        raise ImportError(
-            "Playwright not installed. Use the same Python that runs QwenPaw (e.g. "
-            "activate your venv or use 'uv run'): "
-            f"'{sys.executable}' -m pip install playwright && "
-            f"'{sys.executable}' -m playwright install",
-        ) from exc
-
-
-def _sync_browser_launch(
-    state: dict,
-    cdp_port: int = 0,
-    browser_args: str = "",
-    executable_path: str = "",
-):
-    """Launch browser using sync Playwright (for hybrid mode)."""
-    sync_playwright = _ensure_playwright_sync()
-    pw = sync_playwright().start()  # Start without context manager
-    use_default = not is_running_in_container() and EnvVarLoader.get_bool(
-        "QWENPAW_BROWSER_USE_DEFAULT",
-        True,
-    )
-    default_kind, default_path = (
-        get_system_default_browser() if use_default else (None, None)
-    )
-    exe: Optional[str] = None
-    if default_kind == "chromium" and default_path:
-        exe = default_path
-    elif default_kind != "webkit":
-        exe = _chromium_executable_path()
-    if executable_path:
-        exe = executable_path
-
-    extra_args = list(_chromium_launch_args())
-    if browser_args:
-        extra_args.extend(
-            shlex.split(browser_args, posix=sys.platform != "win32"),
-        )
-    if cdp_port:
-        extra_args.append(f"--remote-debugging-port={cdp_port}")
-
-    if exe:
-        user_data_dir = state["user_data_dir"]
-        if user_data_dir:
-            Path(user_data_dir).mkdir(parents=True, exist_ok=True)
-            context = pw.chromium.launch_persistent_context(
-                user_data_dir=user_data_dir,
-                headless=state["headless"],
-                executable_path=exe,
-                args=extra_args if extra_args else [],
-                accept_downloads=True,
-            )
-            _attach_context_listeners(state, context)
-            return pw, None, context
-        launch_kwargs = {"headless": state["headless"]}
-        if extra_args:
-            launch_kwargs["args"] = extra_args
-        launch_kwargs["executable_path"] = exe
-        browser = pw.chromium.launch(**launch_kwargs)
-    elif default_kind == "webkit" or sys.platform == "darwin":
-        browser = pw.webkit.launch(headless=state["headless"])
-    else:
-        launch_kwargs = {"headless": state["headless"]}
-        if extra_args:
-            launch_kwargs["args"] = extra_args
-        browser = pw.chromium.launch(**launch_kwargs)
-
-    context = browser.new_context(accept_downloads=True)
-    _attach_context_listeners(state, context)
-    return pw, browser, context
-
-
-def _sync_browser_close(state: dict):
-    """Close browser using sync Playwright (for hybrid mode)."""
-    if state["_sync_browser"] is not None:
-        try:
-            state["_sync_browser"].close()
-        except Exception:
-            pass
-    elif state["_sync_context"] is not None:
-        # persistent context mode: no separate browser object, close context directly
-        try:
-            state["_sync_context"].close()
-        except Exception:
-            pass
-    if state["_sync_playwright"] is not None:
-        try:
-            state["_sync_playwright"].stop()
-        except Exception:
-            pass
-
-
-def _resolve_chromium_launch_target() -> tuple[Optional[str], Optional[str]]:
-    """Return (browser_kind, executable_path) for Chromium-family launches."""
-    use_default = not is_running_in_container() and EnvVarLoader.get_bool(
-        "QWENPAW_BROWSER_USE_DEFAULT",
-        True,
-    )
-    default_kind, default_path = (
-        get_system_default_browser() if use_default else (None, None)
-    )
-    if default_kind == "chromium" and default_path:
-        return default_kind, default_path
-    if default_kind == "webkit":
-        return default_kind, None
-    return default_kind, _chromium_executable_path()
-
-
-def _find_free_local_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        sock.listen(1)
-        return int(sock.getsockname()[1])
-
-
-async def _wait_for_cdp_ready(
-    port: int,
-    timeout: float = 15.0,
-) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout
-    last_error: Optional[Exception] = None
-    url = f"http://127.0.0.1:{port}/json/version"
-    while time.monotonic() < deadline:
-        try:
-            with urllib_request.urlopen(url, timeout=1.0) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:
-            last_error = exc
-            await asyncio.sleep(0.2)
-    raise RuntimeError(
-        f"Timed out waiting for Chrome CDP endpoint on port {port}: {last_error}",
-    )
-
-
-async def _start_managed_cdp_browser(
-    state: dict,
-    cdp_port: int = 0,
-    ensure_pages: bool = False,
-    browser_args: str = "",
-    executable_path: str = "",
-) -> None:
-    default_kind, exe = _resolve_chromium_launch_target()
-    if executable_path:
-        exe = executable_path
-    if not exe:
-        if default_kind == "webkit" or sys.platform == "darwin":
-            raise RuntimeError(
-                "Managed CDP mode requires "
-                "Chrome/Chromium/Edge. Safari/WebKit "
-                "is not supported.",
-            )
-        raise RuntimeError(
-            "Managed CDP mode requires a Chrome/Chromium executable, "
-            "but none was found.",
-        )
-
-    chosen_cdp_port = cdp_port or _find_free_local_port()
-    proc = _start_managed_chromium_process(
-        executable_path=exe,
-        user_data_dir=state["user_data_dir"],
-        headless=state["headless"],
-        cdp_port=chosen_cdp_port,
-        browser_args=browser_args,
-    )
-    try:
-        await _wait_for_cdp_ready(chosen_cdp_port)
-        async_playwright = _ensure_playwright_async()
-        pw = await async_playwright().start()
-        browser = await pw.chromium.connect_over_cdp(
-            f"http://127.0.0.1:{chosen_cdp_port}",
-        )
-        contexts = browser.contexts
-        context = (
-            contexts[0]
-            if contexts
-            else await browser.new_context(
-                accept_downloads=True,
-            )
-        )
-        _attach_context_listeners(state, context)
-        state["playwright"] = pw
-        state["browser"] = browser
-        state["context"] = context
-        state["connected_via_cdp"] = True
-        state["cdp_url"] = f"http://127.0.0.1:{chosen_cdp_port}"
-        state["launch_mode"] = "managed_cdp"
-        state["owned_browser_process"] = True
-        state["browser_pid"] = proc.pid
-        state["browser_process"] = proc
-        if ensure_pages:
-            for page in context.pages:
-                page_id = _next_page_id(state)
-                _register_page(state, page, page_id)
-                if state["current_page_id"] is None:
-                    state["current_page_id"] = page_id
-            if not state["pages"]:
-                page = await context.new_page()
-                page_id = _next_page_id(state)
-                _register_page(state, page, page_id)
-                state["current_page_id"] = page_id
-    except Exception:
-        try:
-            if proc.poll() is None:
-                proc.kill()
-                await asyncio.to_thread(proc.wait, 5)
-        except Exception:
-            pass
-        raise
-
-
-def _start_managed_chromium_process(
-    executable_path: str,
-    user_data_dir: str,
-    headless: bool,
-    cdp_port: int,
-    browser_args: str = "",
-) -> subprocess.Popen:
-    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
-    args = [
-        executable_path,
-        f"--remote-debugging-port={cdp_port}",
-        f"--user-data-dir={user_data_dir}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-sync",
-        "--disable-background-networking",
-        "--disable-component-update",
-        "--disable-features=Translate,MediaRouter,AutomationControlled",
-        "--disable-session-crashed-bubble",
-        "--hide-crash-restore-bubble",
-        "--password-store=basic",
-    ]
-    args.extend(_chromium_launch_args())
-    if browser_args:
-        args.extend(shlex.split(browser_args, posix=sys.platform != "win32"))
-    if headless:
-        args.extend(["--headless=new", "--disable-gpu"])
-
-    popen_kwargs: dict[str, Any] = {
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-        "stdin": subprocess.DEVNULL,
-        "cwd": str(Path(user_data_dir).parent),
-    }
-    if sys.platform == "win32":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        popen_kwargs["start_new_session"] = True
-
-    return subprocess.Popen(args, **popen_kwargs)
-
-
-async def _stop_owned_browser_process(state: dict) -> bool:
-    proc = state.get("browser_process")
-    if proc is None:
+    if getattr(exc, "status_code", None) != 400:
         return False
-
-    if proc.poll() is not None:
-        return True
-
-    try:
-        if sys.platform == "win32":
-            proc.terminate()
-        else:
-            proc.send_signal(signal.SIGTERM)
-        await asyncio.to_thread(proc.wait, 5)
-        return True
-    except subprocess.TimeoutExpired:
-        try:
-            proc.kill()
-            await asyncio.to_thread(proc.wait, 5)
-            return True
-        except Exception:
-            return False
-    except Exception:
-        return False
+    return "reasoning_content" in str(exc)
 
 
-def _parse_json_param(value: str, default: Any = None):
-    """Parse optional JSON string param (e.g. fields, paths, values)."""
-    if not value or not isinstance(value, str):
-        return default
-    value = value.strip()
-    if not value:
-        return default
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        if "," in value:
-            return [x.strip() for x in value.split(",")]
-        return default
-
-
-def _get_page(state: dict, page_id: str):
-    """Return page for page_id or None if not found."""
-    return state["pages"].get(page_id)
-
-
-def _get_context(state: dict):
-    """Return the active browser context regardless of sync/async mode."""
-    return state["context"] or state.get("_sync_context")
-
-
-def _get_refs(state: dict, page_id: str) -> dict[str, dict]:
-    """Return refs map for page_id (ref -> {role, name?, nth?})."""
-    return state["refs"].setdefault(page_id, {})
-
-
-def _get_root(page, frame_selector: str = ""):
-    """Return page or frame for frame_selector (ref/selector)."""
-    if not (frame_selector and frame_selector.strip()):
-        return page
-    return page.frame_locator(frame_selector.strip())
-
-
-def _get_locator_by_ref(
-    state: dict,
-    page,
-    page_id: str,
-    ref: str,
-    frame_selector: str = "",
-):
-    """Resolve snapshot ref to locator; frame_selector for iframe."""
-    refs = _get_refs(state, page_id)
-    info = refs.get(ref)
-    if not info:
-        return None
-    role = info.get("role", "generic")
-    name = info.get("name")
-    nth = info.get("nth")
-    root = _get_root(page, frame_selector)
-    locator = root.get_by_role(role, name=name or None)
-    if nth is not None:
-        locator = locator.nth(nth)
-    return locator
-
-
-def _attach_page_listeners(state: dict, page, page_id: str) -> None:
-    """Attach console and request listeners for a page."""
-    logs = state["console_logs"].setdefault(page_id, [])
-
-    def on_console(msg):
-        logs.append({"level": msg.type, "text": msg.text})
-
-    page.on("console", on_console)
-    requests_list = state["network_requests"].setdefault(page_id, [])
-
-    def on_request(req):
-        requests_list.append(
-            {
-                "url": req.url,
-                "method": req.method,
-                "resourceType": getattr(req, "resource_type", None),
-            },
-        )
-
-    def on_response(res):
-        for r in requests_list:
-            if r.get("url") == res.url and "status" not in r:
-                r["status"] = res.status
-                break
-
-    page.on("request", on_request)
-    page.on("response", on_response)
-    dialogs = state["pending_dialogs"].setdefault(page_id, [])
-
-    def on_dialog(dialog):
-        dialogs.append(dialog)
-
-    page.on("dialog", on_dialog)
-    choosers = state["pending_file_choosers"].setdefault(page_id, [])
-
-    def on_filechooser(chooser):
-        choosers.append(chooser)
-
-    page.on("filechooser", on_filechooser)
-
-
-def _next_page_id(state: dict) -> str:
-    """Return a unique page_id (page_N).
-    Uses monotonic counter so IDs are not reused after close."""
-    state["page_counter"] = state.get("page_counter", 0) + 1
-    return f"page_{state['page_counter']}"
-
-
-def _register_page(state: dict, page, page_id: str) -> None:
-    """Initialize state and listeners for a page."""
-    state["refs"][page_id] = {}
-    state["console_logs"][page_id] = []
-    state["network_requests"][page_id] = []
-    state["pending_dialogs"][page_id] = []
-    state["pending_file_choosers"][page_id] = []
-    _attach_page_listeners(state, page, page_id)
-    state["pages"][page_id] = page
-
-
-def _attach_context_listeners(state: dict, context) -> None:
-    """When the page opens a new tab (e.g. target=_blank, window.open),
-    register it and set as current."""
-
-    def on_page(page):
-        new_id = _next_page_id(state)
-        _register_page(state, page, new_id)
-        state["current_page_id"] = new_id
-        logger.debug(
-            "New tab opened by page, registered as page_id=%s",
-            new_id,
-        )
-
-    context.on("page", on_page)
-
-
-# pylint: disable=too-many-branches,too-many-statements
-async def _ensure_browser(
-    state: dict,
+def _inject_reasoning_content(
+    args: tuple,
+    kwargs: dict[str, Any],
 ) -> bool:
-    """Start browser if not running. Return True if ready, False on failure."""
-    # CDP-connected mode: verify the connection is still alive; never auto-restart.
-    if state.get("connected_via_cdp"):
-        browser = state.get("browser")
-        if browser is not None and browser.is_connected():
-            _touch_activity(state)
-            return True
-        cdp_url = state.get("cdp_url") or "unknown"
-        state["_last_browser_error"] = (
-            f"CDP connection lost (was: {cdp_url}). "
-            "Reconnect with action='connect_cdp'."
-        )
-        return False
+    """Add ``reasoning_content = " "`` to assistant messages that lack it.
 
-    # Check browser state based on mode
-    if _USE_SYNC_PLAYWRIGHT:
-        if state["_sync_context"] is not None and (
-            state["_sync_browser"] is not None or state["user_data_dir"]
-        ):
-            _touch_activity(state)
-            return True
-    else:
-        # Accept both regular context (browser+context) and persistent context
-        # (context only, no separate browser object)
-        if state["context"] is not None:
-            _touch_activity(state)
-            return True
-
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            # Hybrid mode: use sync Playwright in thread pool
-            loop = asyncio.get_event_loop()
-            pw, browser, context = await loop.run_in_executor(
-                _get_executor(),
-                lambda: _sync_browser_launch(
-                    state,
-                    browser_args=state.get("_browser_args", ""),
-                    executable_path=state.get("_executable_path", ""),
-                ),
-            )
-            state["_sync_playwright"] = pw
-            state["_sync_browser"] = browser
-            state["_sync_context"] = context
-            state["connected_via_cdp"] = False
-            state["cdp_url"] = None
-            state["owned_browser_process"] = False
-            state["browser_pid"] = None
-            state["browser_process"] = None
-            state["launch_mode"] = "playwright"
-        else:
-            try:
-                await _start_managed_cdp_browser(
-                    state,
-                    ensure_pages=True,
-                    browser_args=state.get("_browser_args", ""),
-                    executable_path=state.get("_executable_path", ""),
-                )
-            except Exception:
-                await _action_start(
-                    state,
-                    headed=not state["headless"],
-                    private_mode=True,
-                    browser_args=state.get("_browser_args", ""),
-                    executable_path=state.get("_executable_path", ""),
-                )
-        state["_last_browser_error"] = None
-        _touch_activity(state)
-        _start_idle_watchdog(state)
-        await _configure_download_behavior(state)
-        return True
-    except Exception as e:
-        state["_last_browser_error"] = str(e)
-        return False
-
-
-def _start_idle_watchdog(state: dict) -> None:
-    """Cancel any existing idle watchdog and start a fresh one."""
-    old_task = state.get("_idle_task")
-    if old_task and not old_task.done():
-        old_task.cancel()
-    state["_idle_task"] = asyncio.ensure_future(_idle_watchdog(state))
-
-
-def _cancel_idle_watchdog(state: dict) -> None:
-    """Cancel the idle watchdog, if running.
-
-    Note: If called from within the watchdog task itself (e.g., during _action_stop
-    triggered by idle timeout), we don't cancel the current task - just clear the
-    reference and let the watchdog exit naturally after _action_stop returns.
+    Modifies the formatted message dicts **in-place** so the subsequent
+    retry sees the updated values.  Returns *True* when at least one
+    message was patched.
     """
-    task = state.get("_idle_task")
-    current = asyncio.current_task()
-    if task and not task.done() and task is not current:
-        task.cancel()
-    state["_idle_task"] = None
+    messages: list[dict] | None = kwargs.get("messages")
+    if messages is None and args:
+        candidate = args[0]
+        if isinstance(candidate, list):
+            messages = candidate
+
+    if not messages:
+        return False
+
+    modified = False
+    for msg in messages:
+        if (
+            isinstance(msg, dict)
+            and msg.get("role") == "assistant"
+            and "reasoning_content" not in msg
+        ):
+            msg["reasoning_content"] = " "
+            modified = True
+
+    return modified
 
 
-# pylint: disable=R0912,R0915
-async def _action_start(
-    state: dict,
-    headed: bool = False,
-    cdp_port: int = 0,
-    private_mode: bool = False,
-    browser_args: str = "",
-    executable_path: str = "",
-) -> ToolResponse:
-    _validate_executable_path(executable_path)
-    # Check browser state based on mode
-    if _USE_SYNC_PLAYWRIGHT:
-        browser_exists = (
-            state["_sync_browser"] is not None
-            or state["_sync_context"] is not None
-        )
-        current_headless = bool(state.get("_sync_headless", True))
-    else:
-        browser_exists = (
-            state["browser"] is not None or state["context"] is not None
-        )
-        current_headless = bool(state["headless"])
+def _extract_retry_after(exc: Exception) -> float | None:
+    """Parse the Retry-After header value (in seconds) from an exception.
 
-    # If user asks for visible window (headed=True)
-    # but browser is already running headless, restart with headed
-    if browser_exists:
-        if state.get("connected_via_cdp"):
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": (
-                            f"Already connected to an external browser via CDP "
-                            f"({state.get('cdp_url') or 'unknown'}). "
-                            "Disconnect first with action='stop'."
-                        ),
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        if headed and current_headless:
-            _cancel_idle_watchdog(state)
+    Handles both OpenAI and Anthropic SDK exception shapes, which expose
+    headers either directly on the exception or on an attached response object.
+    """
+    headers = getattr(exc, "headers", None) or getattr(
+        getattr(exc, "response", None),
+        "headers",
+        None,
+    )
+    if headers:
+        raw = headers.get("Retry-After") or headers.get("retry-after")
+        if raw:
             try:
-                await _action_stop(state)
-            except Exception:
+                return float(raw)
+            except (TypeError, ValueError):
                 pass
-        else:
-            return _tool_response(
-                json.dumps(
-                    {"ok": True, "message": "Browser already running"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-    # Default: headless (background). Only headed=True (e.g. browser_visible skill) shows window.
-    state["headless"] = not headed
+    return None
 
-    if cdp_port:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
-            if _s.connect_ex(("127.0.0.1", cdp_port)) == 0:
-                return _tool_response(
-                    json.dumps(
-                        {
-                            "ok": False,
-                            "error": (
-                                f"Port {cdp_port} is already in use. "
-                                "Another browser may be running on this port. "
-                                "Choose a different cdp_port or stop the existing process first."
-                            ),
+
+def _normalize_retry_config(retry_config: RetryConfig | None) -> RetryConfig:
+    """Normalize externally supplied retry config into safe bounds."""
+    if retry_config is None:
+        return RetryConfig()
+    normalized_backoff_base = max(0.1, retry_config.backoff_base)
+    normalized_backoff_cap = max(
+        0.5,
+        retry_config.backoff_cap,
+        normalized_backoff_base,
+    )
+    return RetryConfig(
+        enabled=retry_config.enabled,
+        max_retries=max(1, retry_config.max_retries),
+        backoff_base=normalized_backoff_base,
+        backoff_cap=normalized_backoff_cap,
+    )
+
+
+def _normalize_rate_limit_config(
+    cfg: RateLimitConfig | None,
+) -> RateLimitConfig:
+    """Normalize externally supplied rate-limit config into safe bounds."""
+    if cfg is None:
+        return RateLimitConfig()
+    return RateLimitConfig(
+        max_concurrent=max(1, cfg.max_concurrent),
+        max_qpm=max(0, cfg.max_qpm),
+        pause_seconds=max(1.0, cfg.pause_seconds),
+        jitter_range=max(0.0, cfg.jitter_range),
+        acquire_timeout=max(10.0, cfg.acquire_timeout),
+    )
+
+
+def _compute_backoff(attempt: int, retry_config: RetryConfig) -> float:
+    """Exponential back-off: base * 2^(attempt-1), capped."""
+    return min(
+        retry_config.backoff_cap,
+        retry_config.backoff_base * (2 ** max(0, attempt - 1)),
+    )
+
+
+class RetryChatModel(ChatModelBase):
+    """Transparent retry wrapper around any :class:`ChatModelBase`.
+
+    The wrapper delegates every call to the underlying *inner* model and
+    retries on exceptions with exponential back-off.  Streaming responses are
+    also covered: if the stream fails mid-consumption the entire request is
+    retried from scratch.
+
+    A global LLMRateLimiter is consulted on every call to cap concurrency and
+    to coordinate a shared pause across all callers when a 429 is received.
+    """
+
+    def __init__(
+        self,
+        inner: ChatModelBase,
+        retry_config: RetryConfig | None = None,
+        rate_limit_config: RateLimitConfig | None = None,
+    ) -> None:
+        super().__init__(model_name=inner.model_name, stream=inner.stream)
+        self._inner = inner
+        self._retry_config = _normalize_retry_config(retry_config)
+        self._rate_limit_config = _normalize_rate_limit_config(
+            rate_limit_config,
+        )
+
+    # Expose the real model's class so that formatter mapping keeps working
+    # when code inspects ``model.__class__`` after wrapping.
+    @property
+    def inner_class(self) -> type:
+        return self._inner.__class__
+
+    @property
+    def model_key(self) -> str:
+        """Stable key for the underlying model: ``provider_id:model_name``."""
+        provider_id = getattr(self._inner, "_provider_id", None)
+        name = self._inner.model_name
+        return f"{provider_id}:{name}" if provider_id else name
+
+    async def _consume_stream_with_slot(
+        self,
+        stream: AsyncGenerator[ChatResponse, None],
+        limiter: LLMRateLimiter,
+    ) -> AsyncGenerator[ChatResponse, None]:
+        """Yield all chunks from *stream*, managing the semaphore slot
+        lifecycle.
+
+        Releases the semaphore slot after the first chunk arrives — once the
+        API starts streaming the request has been accepted and will not be
+        rate-limited mid-flight, so holding the slot for the full streaming
+        duration would unnecessarily starve other callers.
+
+        Always closes *stream* on completion or error.  Any exception raised
+        during iteration propagates to the caller's ``async for`` loop
+        (i.e. _wrap_stream), which handles retry decisions.  The exception
+        does not propagate to the final consumer unless all retries are
+        exhausted.
+        """
+        first_chunk = True
+        try:
+            async for chunk in stream:
+                if first_chunk:
+                    first_chunk = False
+                    # return the slot once the API starts delivering
+                    limiter.release()
+                yield chunk
+        finally:
+            await stream.aclose()
+            if first_chunk:
+                # Stream failed before producing any chunk;
+                # slot not yet released.
+                limiter.release()
+
+    async def __call__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
+        cache = get_capability_cache()
+        key = self.model_key
+
+        if cache.get(key, "needs_reasoning_content", False):
+            _inject_reasoning_content(args, kwargs)
+
+        limiter = await get_rate_limiter(
+            max_concurrent=self._rate_limit_config.max_concurrent,
+            max_qpm=self._rate_limit_config.max_qpm,
+            default_pause_seconds=self._rate_limit_config.pause_seconds,
+            jitter_range=self._rate_limit_config.jitter_range,
+        )
+
+        retries = (
+            self._retry_config.max_retries if self._retry_config.enabled else 0
+        )
+        attempts = retries + 1
+        last_exc: Exception | None = None
+
+        for attempt in range(1, attempts + 1):
+            # Acquire a semaphore slot, with a timeout to prevent
+            # indefinite blocking. `acquired` tracks whether the slot was
+            # taken so the final block can skip the release on
+            # CancelledError (slot was never acquired).
+            acquired = False
+            owns_semaphore = True
+            try:
+                try:
+                    await asyncio.wait_for(
+                        limiter.acquire(),
+                        timeout=self._rate_limit_config.acquire_timeout,
+                    )
+                    acquired = True
+                except asyncio.TimeoutError as exc:
+                    raise RateLimitExceededException(
+                        operation="LLM execution",
+                        retry_after=int(
+                            self._rate_limit_config.acquire_timeout,
+                        ),
+                        details={
+                            "reason": "Timed out waiting for execution slot",
                         },
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
+                    ) from exc
 
-    try:
-        if not _USE_SYNC_PLAYWRIGHT and not bool(private_mode):
-            await _start_managed_cdp_browser(
-                state,
-                cdp_port=cdp_port,
-                ensure_pages=True,
-                browser_args=browser_args,
-                executable_path=executable_path,
-            )
-        elif _USE_SYNC_PLAYWRIGHT:
-            loop = asyncio.get_event_loop()
-            pw, browser, context = await loop.run_in_executor(
-                _get_executor(),
-                lambda: _sync_browser_launch(
-                    state,
-                    cdp_port,
-                    browser_args,
-                    executable_path,
-                ),
-            )
-            state["_sync_playwright"] = pw
-            state["_sync_browser"] = browser
-            state["_sync_context"] = context
-            state["_sync_headless"] = not headed
-            state["connected_via_cdp"] = False
-            state["cdp_url"] = None
-            state["owned_browser_process"] = False
-            state["browser_pid"] = None
-            state["browser_process"] = None
-            state["launch_mode"] = "playwright"
-        else:
-            async_playwright = _ensure_playwright_async()
-            pw = await async_playwright().start()
-            default_kind, exe = _resolve_chromium_launch_target()
-            if executable_path:
-                exe = executable_path
-            extra_args = list(_chromium_launch_args())
-            if browser_args:
-                extra_args.extend(
-                    shlex.split(browser_args, posix=sys.platform != "win32"),
-                )
-            if cdp_port:
-                extra_args.append(f"--remote-debugging-port={cdp_port}")
-
-            if exe:
-                # Use persistent context so cookies/storage survive browser restarts
-                user_data_dir = state["user_data_dir"]
-                if user_data_dir:
-                    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
-                    context = await pw.chromium.launch_persistent_context(
-                        user_data_dir=user_data_dir,
-                        headless=state["headless"],
-                        executable_path=exe if exe else None,
-                        args=extra_args if extra_args else [],
-                        accept_downloads=True,
+                try:
+                    result = await self._inner(*args, **kwargs)
+                except Exception as inner_exc:
+                    if not (
+                        _is_missing_reasoning_content_error(inner_exc)
+                        and _inject_reasoning_content(args, kwargs)
+                    ):
+                        raise
+                    cache.learn(key, "needs_reasoning_content", True)
+                    logger.warning(
+                        "Thinking-mode model requires reasoning_content "
+                        "on every assistant message. Injecting empty "
+                        "values and retrying (learned for future calls).",
                     )
-                    # launch_persistent_context returns context directly; no separate browser object
-                    _attach_context_listeners(state, context)
-                    state["playwright"] = pw
-                    state[
-                        "browser"
-                    ] = None  # not needed for persistent context
-                    state["context"] = context
-                else:
-                    launch_kwargs = {"headless": state["headless"]}
-                    if extra_args:
-                        launch_kwargs["args"] = extra_args
-                    launch_kwargs["executable_path"] = exe
-                    pw_browser = await pw.chromium.launch(**launch_kwargs)
-                    context = await pw_browser.new_context(
-                        accept_downloads=True,
+                    result = await self._inner(*args, **kwargs)
+
+                if isinstance(result, AsyncGenerator):
+                    # Transfer semaphore ownership to _wrap_stream, which uses
+                    # _consume_stream_with_slot internally and handles
+                    # retries on stream failure.
+                    owns_semaphore = False
+                    return self._wrap_stream(
+                        result,
+                        args,
+                        kwargs,
+                        attempt,
+                        attempts,
+                        limiter,
                     )
-                    _attach_context_listeners(state, context)
-                    state["playwright"] = pw
-                    state["browser"] = pw_browser
-                    state["context"] = context
-            elif default_kind == "webkit" or sys.platform == "darwin":
-                pw_browser = await pw.webkit.launch(
-                    headless=state["headless"],
+
+                return result
+
+            except Exception as exc:
+                last_exc = exc
+                if _is_retryable(exc) and _is_rate_limit(exc):
+                    await limiter.report_rate_limit(_extract_retry_after(exc))
+
+                if not _is_retryable(exc) or attempt >= attempts:
+                    raise
+
+                delay = _compute_backoff(attempt, self._retry_config)
+                logger.warning(
+                    "LLM call failed (attempt %d/%d): %s. "
+                    "Retrying in %.1fs ...",
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
                 )
-                context = await pw_browser.new_context(accept_downloads=True)
-                _attach_context_listeners(state, context)
-                state["playwright"] = pw
-                state["browser"] = pw_browser
-                state["context"] = context
-            else:
-                launch_kwargs = {"headless": state["headless"]}
-                if extra_args:
-                    launch_kwargs["args"] = extra_args
-                pw_browser = await pw.chromium.launch(**launch_kwargs)
-                context = await pw_browser.new_context(accept_downloads=True)
-                _attach_context_listeners(state, context)
-                state["playwright"] = pw
-                state["browser"] = pw_browser
-                state["context"] = context
-            state["connected_via_cdp"] = False
-            state["cdp_url"] = None
-            state["owned_browser_process"] = False
-            state["browser_pid"] = None
-            state["browser_process"] = None
-            state["launch_mode"] = "playwright"
-        _touch_activity(state)
-        _start_idle_watchdog(state)
-        await _configure_download_behavior(state)
-        # Store launch config for _ensure_browser fallback restarts
-        state["_browser_args"] = browser_args
-        state["_executable_path"] = executable_path
-        msg = (
-            "Browser started (visible window)"
-            if not state["headless"]
-            else "Browser started"
-        )
-        result: dict[str, Any] = {
-            "ok": True,
-            "message": msg,
-            "tip": "Enable browser-related skills in the agent config for a better experience.",
-            "launch_mode": state.get("launch_mode"),
-            "owned_browser_process": state.get("owned_browser_process", False),
-            "private_mode": bool(private_mode),
-        }
-        if state.get("browser_pid"):
-            result["browser_pid"] = state["browser_pid"]
-        cdp_url = state.get("cdp_url") or (
-            f"http://localhost:{cdp_port}" if cdp_port else None
-        )
-        if cdp_url:
-            result["cdp_url"] = cdp_url
-            result["message"] = (
-                msg + f" with CDP port {cdp_url.rsplit(':', 1)[-1]}"
-            )
-        return _tool_response(
-            json.dumps(result, ensure_ascii=False, indent=2),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Browser start failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
+                await asyncio.sleep(delay)
 
+            finally:
+                if owns_semaphore and acquired:
+                    limiter.release()
 
-async def _action_stop(state: dict) -> ToolResponse:
-    _cancel_idle_watchdog(state)
+        # Should be unreachable, but satisfies the type-checker.
+        raise last_exc  # type: ignore[misc]
 
-    # Check browser state based on mode
-    if not _is_browser_running(state):
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Browser not running"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    # CDP-connected mode: just disconnect Playwright; optionally stop owned Chrome process.
-    if state.get("connected_via_cdp"):
-        cdp_url = state.get("cdp_url") or ""
-        owned = bool(state.get("owned_browser_process"))
-        pid = state.get("browser_pid")
+    # pylint: disable=too-many-branches
+    async def _wrap_stream(
+        self,
+        stream: AsyncGenerator[ChatResponse, None],
+        call_args: tuple,
+        call_kwargs: dict,
+        current_attempt: int,
+        max_attempts: int,
+        limiter: LLMRateLimiter,
+    ) -> AsyncGenerator[ChatResponse, None]:
+        """Yield chunks from *stream*; on transient failure, retry the full
+        request and yield from the new stream instead."""
         try:
-            if state["context"] is not None:
-                try:
-                    await state["context"].close()
-                except Exception:
-                    pass
-            if state["browser"] is not None:
-                try:
-                    await state["browser"].close()
-                except Exception:
-                    pass
-            if state["playwright"] is not None:
-                try:
-                    await state["playwright"].stop()
-                except Exception:
-                    pass
-            stopped = False
-            if owned:
-                stopped = await _stop_owned_browser_process(state)
-        finally:
-            _reset_browser_state(state)
-        message = (
-            f"Disconnected from Chrome and stopped owned browser process (pid={pid})"
-            if owned
-            else f"Disconnected from Chrome (process still running: {cdp_url})"
-        )
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": message,
-                    "owned_browser_process": owned,
-                    "browser_stopped": stopped if owned else False,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    # Playwright-launched browser: terminate Chrome process.
-    # Warn that other agents sharing this browser will lose their connection.
-    warning = (
-        "Chrome process will be terminated. "
-        "Any other agents connected to this browser via CDP will be disconnected."
-    )
-    if _USE_SYNC_PLAYWRIGHT:
-        loop = asyncio.get_event_loop()
-        try:
-            await loop.run_in_executor(
-                _get_executor(),
-                lambda: _sync_browser_close(state),
-            )
-        except Exception as e:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"Browser stop failed: {e!s}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        finally:
-            _reset_browser_state(state)
-    else:
-        try:
-            # For persistent_context, close the context directly (no separate browser)
-            if state["context"] is not None:
-                try:
-                    await state["context"].close()
-                except Exception:
-                    pass
-            if state["browser"] is not None:
-                try:
-                    await state["browser"].close()
-                except Exception:
-                    pass
-            if state["playwright"] is not None:
-                try:
-                    await state["playwright"].stop()
-                except Exception:
-                    pass
-        except Exception as e:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"Browser stop failed: {e!s}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        finally:
-            _reset_browser_state(state)
-
-    return _tool_response(
-        json.dumps(
-            {"ok": True, "message": "Browser stopped", "warning": warning},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_open(state: dict, url: str, page_id: str) -> ToolResponse:
-    url = (url or "").strip()
-    if not url:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "url required for open"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if not await _ensure_browser(state):
-        err = state.get("_last_browser_error") or "Browser not started"
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": err},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            # Hybrid mode: create page in thread pool
-            loop = asyncio.get_event_loop()
-            # pylint: disable=unnecessary-lambda
-            page = await loop.run_in_executor(
-                _get_executor(),
-                lambda: state["_sync_context"].new_page(),
-            )
-        else:
-            # Standard async mode
-            page = await state["context"].new_page()
-
-        _register_page(state, page, page_id)
-        await _configure_download_behavior(state)
-
-        if _USE_SYNC_PLAYWRIGHT:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                _get_executor(),
-                lambda: page.goto(url),
-            )
-        else:
-            await page.goto(url)
-
-        state["pages"][page_id] = page
-        state["current_page_id"] = page_id
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Opened {url}",
-                    "page_id": page_id,
-                    "url": url,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Open failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_navigate(
-    state: dict,
-    url: str,
-    page_id: str,
-) -> ToolResponse:
-    url = (url or "").strip()
-    if not url:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "url required for navigate"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                _get_executor(),
-                lambda: page.goto(url),
-            )
-        else:
-            await page.goto(url)
-        state["current_page_id"] = page_id
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Navigated to {url}",
-                    "url": page.url,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Navigate failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_screenshot(
-    state: dict,
-    page_id: str,
-    path: str,
-    full_page: bool,
-    screenshot_type: str = "png",
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    frame_selector: str = "",
-) -> ToolResponse:
-    path = (path or "").strip()
-    if not path:
-        ext = "jpeg" if screenshot_type == "jpeg" else "png"
-        path = f"page-{int(time.time())}.{ext}"
-    path = _resolve_output_path(path)
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if ref and ref.strip():
-            locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                ref.strip(),
-                frame_selector,
-            )
-            if locator is None:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": f"Unknown ref: {ref}"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
+            async for chunk in self._consume_stream_with_slot(stream, limiter):
+                yield chunk
+            return  # stream completed without error
+        except Exception as failed_exc:
+            if _is_retryable(failed_exc) and _is_rate_limit(failed_exc):
+                await limiter.report_rate_limit(
+                    _extract_retry_after(failed_exc),
                 )
-            if _USE_SYNC_PLAYWRIGHT:
-                await _run_sync(
-                    locator.screenshot,
-                    path=path,
-                    type=(
-                        screenshot_type if screenshot_type == "jpeg" else "png"
-                    ),
-                )
-            else:
-                await locator.screenshot(
-                    path=path,
-                    type=(
-                        screenshot_type if screenshot_type == "jpeg" else "png"
-                    ),
-                )
-        else:
-            if frame_selector and frame_selector.strip():
-                root = _get_root(page, frame_selector)
-                locator = root.locator("body").first
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(
-                        locator.screenshot,
-                        path=path,
-                        type=(
-                            screenshot_type
-                            if screenshot_type == "jpeg"
-                            else "png"
-                        ),
-                    )
-                else:
-                    await locator.screenshot(
-                        path=path,
-                        type=(
-                            screenshot_type
-                            if screenshot_type == "jpeg"
-                            else "png"
-                        ),
-                    )
-            else:
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(
-                        page.screenshot,
-                        path=path,
-                        full_page=full_page,
-                        type=(
-                            screenshot_type
-                            if screenshot_type == "jpeg"
-                            else "png"
-                        ),
-                    )
-                else:
-                    await page.screenshot(
-                        path=path,
-                        full_page=full_page,
-                        type=(
-                            screenshot_type
-                            if screenshot_type == "jpeg"
-                            else "png"
-                        ),
-                    )
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Screenshot saved to {path}",
-                    "path": path,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Screenshot failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
 
-
-async def _action_click(  # pylint: disable=too-many-branches
-    state: dict,
-    page_id: str,
-    selector: str,
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    wait: int = 0,
-    double_click: bool = False,
-    button: str = "left",
-    modifiers_json: str = "",
-    frame_selector: str = "",
-) -> ToolResponse:
-    ref = (ref or "").strip()
-    selector = (selector or "").strip()
-    if not ref and not selector:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "selector or ref required for click"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if wait > 0:
-            await asyncio.sleep(wait / 1000.0)
-        mods = _parse_json_param(modifiers_json, [])
-        if not isinstance(mods, list):
-            mods = []
-        kwargs = {
-            "button": (
-                button if button in ("left", "right", "middle") else "left"
-            ),
-        }
-        if mods:
-            kwargs["modifiers"] = [
-                m
-                for m in mods
-                if m in ("Alt", "Control", "ControlOrMeta", "Meta", "Shift")
-            ]
-
-        if _USE_SYNC_PLAYWRIGHT:
-            loop = asyncio.get_event_loop()
-            if ref:
-                locator = _get_locator_by_ref(
-                    state,
-                    page,
-                    page_id,
-                    ref,
-                    frame_selector,
-                )
-                if locator is None:
-                    return _tool_response(
-                        json.dumps(
-                            {"ok": False, "error": f"Unknown ref: {ref}"},
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    )
-                if double_click:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.dblclick(**kwargs),
-                    )
-                else:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.click(**kwargs),
-                    )
-            else:
-                root = _get_root(page, frame_selector)
-                locator = root.locator(selector).first
-                if double_click:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.dblclick(**kwargs),
-                    )
-                else:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.click(**kwargs),
-                    )
-        else:
-            # Standard async mode
-            if ref:
-                locator = _get_locator_by_ref(
-                    state,
-                    page,
-                    page_id,
-                    ref,
-                    frame_selector,
-                )
-                if locator is None:
-                    return _tool_response(
-                        json.dumps(
-                            {"ok": False, "error": f"Unknown ref: {ref}"},
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    )
-                if double_click:
-                    await locator.dblclick(**kwargs)
-                else:
-                    await locator.click(**kwargs)
-            else:
-                root = _get_root(page, frame_selector)
-                locator = root.locator(selector).first
-                if double_click:
-                    await locator.dblclick(**kwargs)
-                else:
-                    await locator.click(**kwargs)
-
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Clicked {ref or selector}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Click failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_type(
-    state: dict,
-    page_id: str,
-    selector: str,
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    text: str = "",
-    submit: bool = False,
-    slowly: bool = False,
-    frame_selector: str = "",
-) -> ToolResponse:
-    ref = (ref or "").strip()
-    selector = (selector or "").strip()
-    if not ref and not selector:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "selector or ref required for type"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if ref:
-            locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                ref,
-                frame_selector,
-            )
-            if locator is None:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": f"Unknown ref: {ref}"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            if _USE_SYNC_PLAYWRIGHT:
-                loop = asyncio.get_event_loop()
-                if slowly:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.press_sequentially(text or ""),
-                    )
-                else:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.fill(text or ""),
-                    )
-                if submit:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: locator.press("Enter"),
-                    )
-            else:
-                if slowly:
-                    await locator.press_sequentially(text or "")
-                else:
-                    await locator.fill(text or "")
-                if submit:
-                    await locator.press("Enter")
-        else:
-            root = _get_root(page, frame_selector)
-            loc = root.locator(selector).first
-            if _USE_SYNC_PLAYWRIGHT:
-                loop = asyncio.get_event_loop()
-                if slowly:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: loc.press_sequentially(text or ""),
-                    )
-                else:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: loc.fill(text or ""),
-                    )
-                if submit:
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: loc.press("Enter"),
-                    )
-            else:
-                if slowly:
-                    await loc.press_sequentially(text or "")
-                else:
-                    await loc.fill(text or "")
-                if submit:
-                    await loc.press("Enter")
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Typed into {ref or selector}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Type failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_eval(state: dict, page_id: str, code: str) -> ToolResponse:
-    code = (code or "").strip()
-    if not code:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "code required for eval"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if code.strip().startswith("(") or code.strip().startswith("function"):
-            if _USE_SYNC_PLAYWRIGHT:
-                result = await _run_sync(page.evaluate, code)
-            else:
-                result = await page.evaluate(code)
-        else:
-            if _USE_SYNC_PLAYWRIGHT:
-                result = await _run_sync(
-                    page.evaluate,
-                    f"() => {{ return ({code}); }}",
-                )
-            else:
-                result = await page.evaluate(f"() => {{ return ({code}); }}")
-        try:
-            out = json.dumps(
-                {"ok": True, "result": result},
-                ensure_ascii=False,
-                indent=2,
-            )
-        except TypeError:
-            out = json.dumps(
-                {"ok": True, "result": str(result)},
-                ensure_ascii=False,
-                indent=2,
-            )
-        return _tool_response(out)
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Eval failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_pdf(state: dict, page_id: str, path: str) -> ToolResponse:
-    path = (path or "page.pdf").strip() or "page.pdf"
-    path = _resolve_output_path(path)
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(page.pdf, path=path)
-        else:
-            await page.pdf(path=path)
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"PDF saved to {path}", "path": path},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"PDF failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_close(state: dict, page_id: str) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(page.close)
-        else:
-            await page.close()
-        del state["pages"][page_id]
-        for key in (
-            "refs",
-            "refs_frame",
-            "console_logs",
-            "network_requests",
-            "pending_dialogs",
-            "pending_file_choosers",
-        ):
-            state[key].pop(page_id, None)
-        if state.get("current_page_id") == page_id:
-            remaining = list(state["pages"].keys())
-            state["current_page_id"] = remaining[0] if remaining else None
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Closed page '{page_id}'"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Close failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_snapshot(
-    state: dict,
-    page_id: str,
-    filename: str,
-    frame_selector: str = "",
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            # Hybrid mode: execute in thread pool
-            loop = asyncio.get_event_loop()
-            root = _get_root(page, frame_selector)
-            locator = root.locator(":root")
-            raw = await loop.run_in_executor(
-                _get_executor(),
-                lambda: locator.aria_snapshot(),  # pylint: disable=unnecessary-lambda
-            )
-        else:
-            root = _get_root(page, frame_selector)
-            locator = root.locator(":root")
-            raw = await locator.aria_snapshot()
-
-        raw_str = str(raw) if raw is not None else ""
-        snapshot, refs = build_role_snapshot_from_aria(
-            raw_str,
-            interactive=False,
-            compact=False,
-        )
-        state["refs"][page_id] = refs
-        state["refs_frame"][page_id] = (
-            frame_selector.strip() if frame_selector else ""
-        )
-        out = {
-            "ok": True,
-            "snapshot": snapshot,
-            "refs": list(refs.keys()),
-            "url": page.url,
-        }
-        if frame_selector and frame_selector.strip():
-            out["frame_selector"] = frame_selector.strip()
-        if filename and filename.strip():
-            resolved = _resolve_output_path(filename.strip())
-            with open(resolved, "w", encoding="utf-8") as f:
-                f.write(snapshot)
-            out["filename"] = resolved
-        return _tool_response(json.dumps(out, ensure_ascii=False, indent=2))
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Snapshot failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_navigate_back(state: dict, page_id: str) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(page.go_back)
-        else:
-            await page.go_back()
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Navigated back", "url": page.url},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Navigate back failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_evaluate(
-    state: dict,
-    page_id: str,
-    code: str,
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    frame_selector: str = "",
-) -> ToolResponse:
-    code = (code or "").strip()
-    if not code:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "code required for evaluate"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if ref and ref.strip():
-            locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                ref.strip(),
-                frame_selector,
-            )
-            if locator is None:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": f"Unknown ref: {ref}"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            if _USE_SYNC_PLAYWRIGHT:
-                result = await _run_sync(locator.evaluate, code)
-            else:
-                result = await locator.evaluate(code)
-        else:
-            if code.strip().startswith("(") or code.strip().startswith(
-                "function",
+            if (
+                not _is_retryable(failed_exc)
+                or current_attempt >= max_attempts
             ):
-                if _USE_SYNC_PLAYWRIGHT:
-                    result = await _run_sync(page.evaluate, code)
-                else:
-                    result = await page.evaluate(code)
-            else:
-                if _USE_SYNC_PLAYWRIGHT:
-                    result = await _run_sync(
-                        page.evaluate,
-                        f"() => {{ return ({code}); }}",
-                    )
-                else:
-                    result = await page.evaluate(
-                        f"() => {{ return ({code}); }}",
-                    )
-        try:
-            out = json.dumps(
-                {"ok": True, "result": result},
-                ensure_ascii=False,
-                indent=2,
+                raise failed_exc
+
+            delay = _compute_backoff(current_attempt, self._retry_config)
+            logger.warning(
+                "LLM stream failed (attempt %d/%d): %s. Retrying in %.1fs ...",
+                current_attempt,
+                max_attempts,
+                failed_exc,
+                delay,
             )
-        except TypeError:
-            out = json.dumps(
-                {"ok": True, "result": str(result)},
-                ensure_ascii=False,
-                indent=2,
-            )
-        return _tool_response(out)
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Evaluate failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
+            await asyncio.sleep(delay)
 
-
-async def _action_resize(
-    state: dict,
-    page_id: str,
-    width: int,
-    height: int,
-) -> ToolResponse:
-    if width <= 0 or height <= 0:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "width and height must be positive"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(
-                page.set_viewport_size,
-                {"width": width, "height": height},
-            )
-        else:
-            await page.set_viewport_size({"width": width, "height": height})
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Resized to {width}x{height}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Resize failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_console_messages(
-    state: dict,
-    page_id: str,
-    level: str,
-    filename: str,
-) -> ToolResponse:
-    level = (level or "info").strip().lower()
-    order = ("error", "warning", "info", "debug")
-    idx = order.index(level) if level in order else 2
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    logs = state["console_logs"].get(page_id, [])
-    filtered = (
-        [m for m in logs if order.index(m["level"]) <= idx]
-        if level in order
-        else logs
-    )
-    lines = [f"[{m['level']}] {m['text']}" for m in filtered]
-    text = "\n".join(lines)
-    if filename and filename.strip():
-        resolved = _resolve_output_path(filename.strip())
-        with open(resolved, "w", encoding="utf-8") as f:
-            f.write(text)
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Console messages saved to {resolved}",
-                    "filename": resolved,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    return _tool_response(
-        json.dumps(
-            {"ok": True, "messages": filtered, "text": text},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_handle_dialog(
-    state: dict,
-    page_id: str,
-    accept: bool,
-    prompt_text: str,
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    dialogs = state["pending_dialogs"].get(page_id, [])
-    if not dialogs:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "No pending dialog"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        dialog = dialogs.pop(0)
-        if accept:
-            if prompt_text and hasattr(dialog, "accept"):
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(dialog.accept, prompt_text)
-                else:
-                    await dialog.accept(prompt_text)
-            else:
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(dialog.accept)
-                else:
-                    await dialog.accept()
-        else:
-            if _USE_SYNC_PLAYWRIGHT:
-                await _run_sync(dialog.dismiss)
-            else:
-                await dialog.dismiss()
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Dialog handled"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Handle dialog failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_file_upload(
-    state: dict,
-    page_id: str,
-    paths_json: str,
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    paths = _parse_json_param(paths_json, [])
-    if not isinstance(paths, list):
-        paths = []
-    try:
-        choosers = state["pending_file_choosers"].get(page_id, [])
-        if not choosers:
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": "No chooser. Click upload then file_upload.",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        chooser = choosers.pop(0)
-        if paths:
-            if _USE_SYNC_PLAYWRIGHT:
-                await _run_sync(chooser.set_files, paths)
-            else:
-                await chooser.set_files(paths)
-            return _tool_response(
-                json.dumps(
-                    {"ok": True, "message": f"Uploaded {len(paths)} file(s)"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(chooser.set_files, [])
-        else:
-            await chooser.set_files([])
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "File chooser cancelled"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"File upload failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _download_context_url(
-    page,
-    source_url: str,
-    destination: str,
-) -> tuple[int, str]:
-    if _USE_SYNC_PLAYWRIGHT:
-        response = await _run_sync(page.context.request.get, source_url)
-    else:
-        response = await page.context.request.get(source_url)
-    status = response.status
-    if not response.ok:
-        return status, ""
-    headers = response.headers
-    content_type = (
-        headers.get("content-type") or headers.get("Content-Type") or ""
-    )
-    if _USE_SYNC_PLAYWRIGHT:
-        body = await _run_sync(response.body)
-    else:
-        body = await response.body()
-    Path(destination).write_bytes(body)
-    return status, content_type
-
-
-async def _action_file_download(  # pylint: disable=too-many-branches,too-many-return-statements,too-many-statements
-    state: dict,
-    page_id: str,
-    file_path: str,
-    ref: str = "",
-    url: str = "",
-    wait_time: float = 0.0,
-) -> ToolResponse:
-    """Save a browser download event or a page resource to a local file."""
-    file_path = (file_path or "").strip()
-    if not file_path:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "path or filename required for file_download",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    resolved = _resolve_output_path(file_path)
-    Path(resolved).parent.mkdir(parents=True, exist_ok=True)
-
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    ref = (ref or "").strip()
-    url = (url or "").strip()
-    timeout_ms = max(float(wait_time or 30.0), 0.1) * 1000
-
-    try:
-        # file_download with url saves the target resource directly through
-        # the browser context, so cookies/session state are preserved.
-        if url:
-            source_url = urljoin(getattr(page, "url", ""), url)
-            status, content_type = await _download_context_url(
-                page,
-                source_url,
-                resolved,
-            )
-            if not content_type:
-                return _tool_response(
-                    json.dumps(
-                        {
-                            "ok": False,
-                            "error": (
-                                "File download failed: browser-context request "
-                                f"returned HTTP {status}"
-                            ),
-                            "page_id": page_id,
-                            "url": source_url,
-                            "status": status,
-                            "file_path": resolved,
-                        },
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            _touch_activity(state)
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "message": "Download saved",
-                        "page_id": page_id,
-                        "file_path": resolved,
-                        "url": source_url,
-                        "status": status,
-                        "content_type": content_type,
-                        "download_method": "browser_context_request",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-        before_url = getattr(page, "url", "")
-
-        if not ref:
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": "ref or url required for file_download",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-        # file_download with ref clicks a snapshot element and waits for the
-        # browser download event from that click.
-        locator = _get_locator_by_ref(
-            state,
-            page,
-            page_id,
-            ref,
-        )
-        if locator is None:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"Unknown ref: {ref}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-        before_page_ids = set(state["pages"].keys())
-        if _USE_SYNC_PLAYWRIGHT:
+        # Retry loop for stream failures
+        for attempt in range(current_attempt + 1, max_attempts + 1):
+            acquired = False
+            owns_semaphore = True
             try:
-                download = await _run_sync(
-                    lambda: _sync_click_and_expect_download(
-                        page,
-                        locator,
-                        timeout_ms,
-                    ),
-                )
-            except Exception as exc:
-                return await _file_download_click_fallback(
-                    state,
-                    page,
-                    page_id,
-                    ref,
-                    resolved,
-                    before_url,
-                    before_page_ids,
-                    exc,
-                )
-        else:
-            try:
-                async with page.expect_download(
-                    timeout=timeout_ms,
-                ) as download_info:
-                    await locator.click()
-                    download = await download_info.value
-            except Exception as exc:
-                return await _file_download_click_fallback(
-                    state,
-                    page,
-                    page_id,
-                    ref,
-                    resolved,
-                    before_url,
-                    before_page_ids,
-                    exc,
-                )
-        suggested_filename = _safe_download_filename(
-            getattr(download, "suggested_filename", ""),
-        )
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(download.save_as, resolved)
-        else:
-            await download.save_as(resolved)
-        try:
-            source_url = download.url
-        except Exception:
-            source_url = ""
-        _touch_activity(state)
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": "Download saved",
-                    "page_id": page_id,
-                    "file_path": resolved,
-                    "suggested_filename": suggested_filename,
-                    "url": source_url,
-                    "download_method": "click_ref_download_event",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": f"File download failed: {e!s}",
-                    "hint": (
-                        "Pass ref to click a download control, or pass an "
-                        "explicit url to save a resource directly."
-                    ),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-def _sync_click_and_expect_download(page, locator, timeout_ms: float):
-    with page.expect_download(timeout=timeout_ms) as download_info:
-        locator.click()
-    return download_info.value
-
-
-async def _file_download_click_fallback(
-    state: dict,
-    page,
-    page_id: str,
-    ref: str,
-    resolved: str,
-    before_url: str,
-    before_page_ids: set[str],
-    original_error: Exception,
-) -> ToolResponse:
-    new_page_id = None
-    current_page = page
-    current_page_id = page_id
-    for candidate_id, candidate in state["pages"].items():
-        if candidate_id not in before_page_ids:
-            new_page_id = candidate_id
-            current_page = candidate
-            current_page_id = candidate_id
-            break
-    current_url = getattr(current_page, "url", "")
-    if current_url and (current_url != before_url or new_page_id is not None):
-        status, content_type = await _download_context_url(
-            current_page,
-            current_url,
-            resolved,
-        )
-        if content_type:
-            _touch_activity(state)
-            payload = {
-                "ok": True,
-                "message": "Download saved from current page URL after click",
-                "page_id": page_id,
-                "current_page_id": current_page_id,
-                "file_path": resolved,
-                "url": current_url,
-                "status": status,
-                "content_type": content_type,
-                "download_method": (
-                    "browser_context_request_after_inline_navigation"
-                ),
-                "note": (
-                    "The click navigated to an inline resource instead of "
-                    "firing a browser download event."
-                ),
-            }
-            if new_page_id is not None:
-                payload["tabs"] = list(state["pages"].keys())
-            return _tool_response(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-            )
-    return _tool_response(
-        json.dumps(
-            {
-                "ok": False,
-                "error": (
-                    "File download failed after click: no browser download "
-                    "event occurred."
-                ),
-                "page_id": page_id,
-                "ref": ref,
-                "current_page_id": current_page_id,
-                "current_url": current_url,
-                "original_error": str(original_error),
-                "hint": (
-                    "If the browser opened an inline PDF/file page, retry "
-                    "with the explicit file URL."
-                ),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_fill_form(
-    state: dict,
-    page_id: str,
-    fields_json: str,
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    fields = _parse_json_param(fields_json, [])
-    if not isinstance(fields, list) or not fields:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "fields required (JSON array)"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    refs = _get_refs(state, page_id)
-    # Use last snapshot's frame so fill_form works after iframe snapshot
-    frame = state["refs_frame"].get(page_id, "")
-    try:
-        for f in fields:
-            ref = (f.get("ref") or "").strip()
-            if not ref or ref not in refs:
-                continue
-            locator = _get_locator_by_ref(state, page, page_id, ref, frame)
-            if locator is None:
-                continue
-            field_type = (f.get("type") or "textbox").lower()
-            value = f.get("value")
-            if field_type == "checkbox":
-                if isinstance(value, str):
-                    value = value.strip().lower() in ("true", "1", "yes")
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(locator.set_checked, bool(value))
-                else:
-                    await locator.set_checked(bool(value))
-            elif field_type == "radio":
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(locator.set_checked, True)
-                else:
-                    await locator.set_checked(True)
-            elif field_type == "combobox":
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(
-                        locator.select_option,
-                        label=value if isinstance(value, str) else None,
-                        value=value,
-                    )
-                else:
-                    await locator.select_option(
-                        label=value if isinstance(value, str) else None,
-                        value=value,
-                    )
-            elif field_type == "slider":
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(locator.fill, str(value))
-                else:
-                    await locator.fill(str(value))
-            else:
-                if _USE_SYNC_PLAYWRIGHT:
-                    await _run_sync(
-                        locator.fill,
-                        str(value) if value is not None else "",
-                    )
-                else:
-                    await locator.fill(str(value) if value is not None else "")
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Filled {len(fields)} field(s)"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Fill form failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-def _run_playwright_install() -> None:
-    """Run playwright install in a blocking way (for use in thread)."""
-    subprocess.run(
-        [sys.executable, "-m", "playwright", "install"],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=600,  # 10 minutes max
-    )
-
-
-async def _action_install() -> ToolResponse:
-    """Install Playwright browsers. If a system Chrome/Chromium/Edge is found,
-    use it and skip download. On macOS with no Chromium, use Safari (WebKit)
-    so no download is needed. Only run playwright install when necessary.
-    """
-    exe = _chromium_executable_path()
-    if exe:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Using system browser (no download): {exe}",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if _use_webkit_fallback():
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": "On macOS using Safari (WebKit); no browser download needed.",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        await asyncio.to_thread(_run_playwright_install)
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Browser installed"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except subprocess.TimeoutExpired:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "Browser install timed out (10 min). Run manually in terminal: "
-                    f"{sys.executable!s} -m playwright install",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": f"Install failed: {e!s}. Install manually: "
-                    f"{sys.executable!s} -m pip install playwright && "
-                    f"{sys.executable!s} -m playwright install",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_press_key(
-    state: dict,
-    page_id: str,
-    key: str,
-) -> ToolResponse:
-    key = (key or "").strip()
-    if not key:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "key required for press_key"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(page.keyboard.press, key)
-        else:
-            await page.keyboard.press(key)
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Pressed key {key}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Press key failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_network_requests(
-    state: dict,
-    page_id: str,
-    include_static: bool,
-    filename: str,
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    requests = state["network_requests"].get(page_id, [])
-    if not include_static:
-        static = ("image", "stylesheet", "font", "media")
-        requests = [r for r in requests if r.get("resourceType") not in static]
-    lines = [
-        f"{r.get('method', '')} {r.get('url', '')} {r.get('status', '')}"
-        for r in requests
-    ]
-    text = "\n".join(lines)
-    if filename and filename.strip():
-        resolved = _resolve_output_path(filename.strip())
-        with open(resolved, "w", encoding="utf-8") as f:
-            f.write(text)
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Network requests saved to {resolved}",
-                    "filename": resolved,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    return _tool_response(
-        json.dumps(
-            {"ok": True, "requests": requests, "text": text},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_run_code(
-    state: dict,
-    page_id: str,
-    code: str,
-) -> ToolResponse:
-    """Run JS in page (like eval). Use evaluate for element (ref)."""
-    code = (code or "").strip()
-    if not code:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "code required for run_code"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if code.strip().startswith("(") or code.strip().startswith("function"):
-            if _USE_SYNC_PLAYWRIGHT:
-                result = await _run_sync(page.evaluate, code)
-            else:
-                result = await page.evaluate(code)
-        else:
-            if _USE_SYNC_PLAYWRIGHT:
-                result = await _run_sync(
-                    page.evaluate,
-                    f"() => {{ return ({code}); }}",
-                )
-            else:
-                result = await page.evaluate(f"() => {{ return ({code}); }}")
-        try:
-            out = json.dumps(
-                {"ok": True, "result": result},
-                ensure_ascii=False,
-                indent=2,
-            )
-        except TypeError:
-            out = json.dumps(
-                {"ok": True, "result": str(result)},
-                ensure_ascii=False,
-                indent=2,
-            )
-        return _tool_response(out)
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Run code failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_drag(
-    state: dict,
-    page_id: str,
-    start_ref: str,
-    end_ref: str,
-    start_selector: str = "",
-    end_selector: str = "",
-    start_element: str = "",  # pylint: disable=unused-argument
-    end_element: str = "",  # pylint: disable=unused-argument
-    frame_selector: str = "",
-) -> ToolResponse:
-    start_ref = (start_ref or "").strip()
-    end_ref = (end_ref or "").strip()
-    start_selector = (start_selector or "").strip()
-    end_selector = (end_selector or "").strip()
-    use_refs = bool(start_ref and end_ref)
-    use_selectors = bool(start_selector and end_selector)
-    if not use_refs and not use_selectors:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": (
-                        "drag needs (start_ref,end_ref) or (start_sel,end_sel)"
-                    ),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        root = _get_root(page, frame_selector)
-        if use_refs:
-            start_locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                start_ref,
-                frame_selector,
-            )
-            end_locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                end_ref,
-                frame_selector,
-            )
-            if start_locator is None or end_locator is None:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": "Unknown ref for drag"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-        else:
-            start_locator = root.locator(start_selector).first
-            end_locator = root.locator(end_selector).first
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(start_locator.drag_to, end_locator)
-        else:
-            await start_locator.drag_to(end_locator)
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Drag completed"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Drag failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_hover(
-    state: dict,
-    page_id: str,
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    selector: str = "",
-    frame_selector: str = "",
-) -> ToolResponse:
-    ref = (ref or "").strip()
-    selector = (selector or "").strip()
-    if not ref and not selector:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "hover requires ref or selector"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if ref:
-            locator = _get_locator_by_ref(
-                state,
-                page,
-                page_id,
-                ref,
-                frame_selector,
-            )
-            if locator is None:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": f"Unknown ref: {ref}"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-        else:
-            root = _get_root(page, frame_selector)
-            locator = root.locator(selector).first
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(locator.hover)
-        else:
-            await locator.hover()
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Hovered {ref or selector}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Hover failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_select_option(
-    state: dict,
-    page_id: str,
-    ref: str = "",
-    element: str = "",  # pylint: disable=unused-argument
-    values_json: str = "",
-    frame_selector: str = "",
-) -> ToolResponse:
-    ref = (ref or "").strip()
-    values = _parse_json_param(values_json, [])
-    if not isinstance(values, list):
-        values = [values] if values is not None else []
-    if not ref:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "ref required for select_option"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if not values:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "values required (JSON array or comma-separated)",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        locator = _get_locator_by_ref(
-            state,
-            page,
-            page_id,
-            ref,
-            frame_selector,
-        )
-        if locator is None:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"Unknown ref: {ref}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        if _USE_SYNC_PLAYWRIGHT:
-            await _run_sync(locator.select_option, value=values)
-        else:
-            await locator.select_option(value=values)
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": f"Selected {values}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Select option failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def _action_tabs(  # pylint: disable=too-many-return-statements
-    state: dict,
-    page_id: str,
-    tab_action: str,
-    index: int,
-) -> ToolResponse:
-    tab_action = (tab_action or "").strip().lower()
-    if not tab_action:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "tab_action required (list, new, close, select)",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    pages = state["pages"]
-    page_ids = list(pages.keys())
-    if tab_action == "list":
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "tabs": page_ids, "count": len(page_ids)},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if tab_action == "new":
-        if _USE_SYNC_PLAYWRIGHT:
-            if not state["_sync_context"]:
-                ok = await _ensure_browser(state)
-                if not ok:
-                    err = (
-                        state.get("_last_browser_error")
-                        or "Browser not started"
-                    )
-                    return _tool_response(
-                        json.dumps(
-                            {"ok": False, "error": err},
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    )
-        else:
-            if not state["context"]:
-                ok = await _ensure_browser(state)
-                if not ok:
-                    err = (
-                        state.get("_last_browser_error")
-                        or "Browser not started"
-                    )
-                    return _tool_response(
-                        json.dumps(
-                            {"ok": False, "error": err},
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    )
-        try:
-            if _USE_SYNC_PLAYWRIGHT:
-                page = await _run_sync(state["_sync_context"].new_page)
-            else:
-                page = await state["context"].new_page()
-            new_id = _next_page_id(state)
-            _register_page(state, page, new_id)
-            state["current_page_id"] = new_id
-            await _configure_download_behavior(state)
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "page_id": new_id,
-                        "tabs": list(state["pages"].keys()),
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        except Exception as e:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"New tab failed: {e!s}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-    if tab_action == "close":
-        target_id = page_ids[index] if 0 <= index < len(page_ids) else page_id
-        return await _action_close(state, target_id)
-    if tab_action == "select":
-        target_id = page_ids[index] if 0 <= index < len(page_ids) else page_id
-        state["current_page_id"] = target_id
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Use page_id={target_id} for later actions",
-                    "page_id": target_id,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    return _tool_response(
-        json.dumps(
-            {"ok": False, "error": f"Unknown tab_action: {tab_action}"},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_wait_for(
-    state: dict,
-    page_id: str,
-    wait_time: float,
-    text: str,
-    text_gone: str,
-) -> ToolResponse:
-    page = _get_page(state, page_id)
-    if not page:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Page '{page_id}' not found"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    try:
-        if wait_time and wait_time > 0:
-            await asyncio.sleep(wait_time)
-        text = (text or "").strip()
-        text_gone = (text_gone or "").strip()
-        if text:
-            locator = page.get_by_text(text)
-            if _USE_SYNC_PLAYWRIGHT:
-                await _run_sync(
-                    locator.wait_for,
-                    state="visible",
-                    timeout=30000,
-                )
-            else:
-                await locator.wait_for(
-                    state="visible",
-                    timeout=30000,
-                )
-        if text_gone:
-            locator = page.get_by_text(text_gone)
-            if _USE_SYNC_PLAYWRIGHT:
-                await _run_sync(
-                    locator.wait_for,
-                    state="hidden",
-                    timeout=30000,
-                )
-            else:
-                await locator.wait_for(
-                    state="hidden",
-                    timeout=30000,
-                )
-        return _tool_response(
-            json.dumps(
-                {"ok": True, "message": "Wait completed"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Wait failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-_BROWSER_DISK_CACHE_DIRS = [
-    Path("Default") / "Cache",
-    Path("Default") / "Code Cache",
-    Path("Default") / "GPUCache",
-    Path("Default") / "DawnWebGPUCache",
-    Path("Default") / "DawnGraphiteCache",
-    Path("GrShaderCache"),
-    Path("ShaderCache"),
-    Path("GraphiteDawnCache"),
-]
-
-
-async def _action_clear_browser_cache(state: dict) -> ToolResponse:
-    """Clear browser cache.
-
-    - Browser running: uses CDP Network.clearBrowserCache (no restart needed).
-      Cookies and Local Storage are untouched.
-    - Browser stopped: removes cache directories from user_data_dir on disk.
-    """
-    if _is_browser_running(state):
-        context = _get_context(state)
-        pages = list(state.get("pages", {}).values())
-        if not context or not pages:
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": "No open page to attach CDP session.",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        try:
-            page = pages[0]
-            if _USE_SYNC_PLAYWRIGHT:
-                loop = asyncio.get_event_loop()
-                cdp = await loop.run_in_executor(
-                    _get_executor(),
-                    lambda: context.new_cdp_session(page),
-                )
-                await loop.run_in_executor(
-                    _get_executor(),
-                    lambda: cdp.send("Network.clearBrowserCache"),
-                )
-            else:
-                cdp = await context.new_cdp_session(page)
-                await cdp.send("Network.clearBrowserCache")
-            return _tool_response(
-                json.dumps(
-                    {"ok": True, "message": "HTTP cache cleared."},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        except Exception as exc:
-            return _tool_response(
-                json.dumps(
-                    {"ok": False, "error": f"CDP cache clear failed: {exc}"},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-    # Browser stopped: remove cache dirs from disk
-    import shutil
-
-    user_data_dir = state.get("user_data_dir") or ""
-    if not user_data_dir:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "No user_data_dir configured for this workspace.",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    base = Path(user_data_dir)
-    removed: list[str] = []
-    errors: list[str] = []
-    for rel in _BROWSER_DISK_CACHE_DIRS:
-        p = base / rel
-        if p.exists():
-            try:
-                shutil.rmtree(p)
-                removed.append(str(rel))
-            except Exception as exc:
-                errors.append(f"{rel}: {exc}")
-    if errors:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "removed": removed, "errors": errors},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    msg = (
-        f"Cleared {len(removed)} cache director{'y' if len(removed) == 1 else 'ies'}."
-        if removed
-        else "No cache directories found."
-    )
-    return _tool_response(
-        json.dumps(
-            {"ok": True, "message": msg, "removed": removed},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_batch(  # pylint: disable=too-many-nested-blocks
-    state: dict,
-    page_id: str,
-    actions_json: str,
-) -> ToolResponse:
-    """Execute multiple browser actions sequentially.
-
-    Each action in the JSON array is a dict with at least an "action" key.
-    Optional keys: "page_id" (override default), "wait" (seconds to wait
-    after the action), "stop_on_error" (bool, default True).
-
-    Reuses existing _action_* helper functions to avoid duplicating logic
-    and ensure consistent behavior with single-action calls.
-    """
-    actions = _parse_json_param(actions_json, [])
-    if not isinstance(actions, list) or not actions:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": "actions_json must be a non-empty JSON array",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    results: list[dict[str, Any]] = []
-    total = len(actions)
-
-    for idx, act in enumerate(actions):
-        if not isinstance(act, dict):
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": f"Action at index {idx} is not a dict",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-        sub_action = (act.get("action") or "").strip().lower()
-        if not sub_action:
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": f"Action at index {idx} missing 'action' key",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-
-        sub_page_id = act.get("page_id") or page_id
-        sub_wait: float = act.get("wait", 0)  # seconds
-        stop_on_error = act.get("stop_on_error", True)
-
-        step_result: dict[str, Any] = {
-            "step": idx,
-            "action": sub_action,
-            "ok": False,
-        }
-
-        try:
-            resp: ToolResponse | None = None
-
-            # --- navigate ---
-            if sub_action == "navigate":
-                resp = await _action_navigate(
-                    state,
-                    url=(act.get("url") or "").strip(),
-                    page_id=sub_page_id,
-                )
-
-            # --- click ---
-            elif sub_action == "click":
-                resp = await _action_click(
-                    state,
-                    page_id=sub_page_id,
-                    selector=(act.get("selector") or "").strip(),
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    wait=act.get("wait", 0),
-                    double_click=act.get("double_click", False),
-                    button=act.get("button", "left"),
-                    modifiers_json=act.get("modifiers_json", ""),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- type ---
-            elif sub_action == "type":
-                resp = await _action_type(
-                    state,
-                    page_id=sub_page_id,
-                    selector=(act.get("selector") or "").strip(),
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    text=act.get("text", ""),
-                    submit=act.get("submit", False),
-                    slowly=act.get("slowly", False),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- press_key ---
-            elif sub_action == "press_key":
-                resp = await _action_press_key(
-                    state,
-                    page_id=sub_page_id,
-                    key=(act.get("key") or "").strip(),
-                )
-
-            # --- evaluate ---
-            elif sub_action == "evaluate":
-                resp = await _action_evaluate(
-                    state,
-                    page_id=sub_page_id,
-                    code=(act.get("code") or "").strip(),
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- eval ---
-            elif sub_action == "eval":
-                resp = await _action_eval(
-                    state,
-                    page_id=sub_page_id,
-                    code=(act.get("code") or "").strip(),
-                )
-
-            # --- snapshot ---
-            elif sub_action == "snapshot":
-                resp = await _action_snapshot(
-                    state,
-                    page_id=sub_page_id,
-                    filename=act.get("filename", ""),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- screenshot ---
-            elif sub_action == "screenshot":
-                resp = await _action_screenshot(
-                    state,
-                    page_id=sub_page_id,
-                    path=(act.get("path") or "").strip(),
-                    full_page=act.get("full_page", False),
-                    screenshot_type=act.get("screenshot_type", "png"),
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- wait_for ---
-            elif sub_action == "wait_for":
-                resp = await _action_wait_for(
-                    state,
-                    page_id=sub_page_id,
-                    wait_time=act.get("wait_time", 0),
-                    text=(act.get("text") or "").strip(),
-                    text_gone=(act.get("text_gone") or "").strip(),
-                )
-
-            # --- hover ---
-            elif sub_action == "hover":
-                resp = await _action_hover(
-                    state,
-                    page_id=sub_page_id,
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    selector=(act.get("selector") or "").strip(),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- select_option ---
-            elif sub_action == "select_option":
-                resp = await _action_select_option(
-                    state,
-                    page_id=sub_page_id,
-                    ref=(act.get("ref") or "").strip(),
-                    element=act.get("element", ""),
-                    values_json=act.get("values_json", "[]"),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- drag ---
-            elif sub_action == "drag":
-                resp = await _action_drag(
-                    state,
-                    page_id=sub_page_id,
-                    start_ref=(act.get("start_ref") or "").strip(),
-                    end_ref=(act.get("end_ref") or "").strip(),
-                    start_selector=(act.get("start_selector") or "").strip(),
-                    end_selector=(act.get("end_selector") or "").strip(),
-                    start_element=act.get("start_element", ""),
-                    end_element=act.get("end_element", ""),
-                    frame_selector=act.get("frame_selector", ""),
-                )
-
-            # --- resize ---
-            elif sub_action == "resize":
-                resp = await _action_resize(
-                    state,
-                    page_id=sub_page_id,
-                    width=act.get("width", 0),
-                    height=act.get("height", 0),
-                )
-
-            else:
-                step_result[
-                    "error"
-                ] = f"Unknown batch sub-action: {sub_action}"
-
-            # Parse helper response into step_result
-            if resp is not None and resp.content:
                 try:
-                    # ToolResponse content is a list of TextBlocks; extract text from the first one
-                    raw_text = resp.content[0]["text"]
-                    resp_data = json.loads(raw_text)
-                    if isinstance(resp_data, dict):
-                        step_result.update(resp_data)
-                except (json.JSONDecodeError, AttributeError, IndexError):
-                    step_result[
-                        "error"
-                    ] = "Failed to parse sub-action response"
-
-        except Exception as e:
-            step_result["error"] = str(e)
-
-        results.append(step_result)
-
-        if not step_result.get("ok") and stop_on_error:
-            break
-
-        # Post-action wait
-        if sub_wait > 0:
-            await asyncio.sleep(sub_wait)
-
-    completed = sum(1 for r in results if r.get("ok"))
-    all_ok = completed == len(results)
-
-    return _tool_response(
-        json.dumps(
-            {
-                "ok": all_ok,
-                "total": total,
-                "completed": completed,
-                "results": results,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-_CDP_SCAN_PORT_MIN = 9000
-_CDP_SCAN_PORT_MAX = 10000
-
-
-def _fetch_cdp_json(port: int) -> list:
-    """Fetch CDP /json endpoint synchronously. Raises on failure."""
-    url = f"http://localhost:{port}/json"
-    with urllib_request.urlopen(url, timeout=1) as resp:  # noqa: S310
-        return json.loads(resp.read())
-
-
-async def _action_list_cdp_targets(
-    port: int = 0,
-    port_min: int = 0,
-    port_max: int = 0,
-) -> ToolResponse:
-    """List CDP targets on local ports.
-
-    Priority: port (single) > port_min/port_max (range) > default range.
-    """
-    if port:
-        ports_to_scan: Any = [port]
-    elif port_min or port_max:
-        lo = port_min or _CDP_SCAN_PORT_MIN
-        hi = port_max or _CDP_SCAN_PORT_MAX
-        ports_to_scan = range(lo, hi + 1)
-    else:
-        ports_to_scan = range(_CDP_SCAN_PORT_MIN, _CDP_SCAN_PORT_MAX + 1)
-    loop = asyncio.get_event_loop()
-
-    async def probe(p: int):
-        try:
-            targets = await loop.run_in_executor(None, _fetch_cdp_json, p)
-            return p, targets
-        except Exception:
-            return p, None
-
-    results = await asyncio.gather(*[probe(p) for p in ports_to_scan])
-    found = {str(p): t for p, t in results if t is not None}
-    if found:
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "found": found,
-                    "message": f"Found CDP endpoints on port(s): {', '.join(found.keys())}",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if port:
-        scan_desc = f"port {port}"
-    else:
-        # ports_to_scan is a range when port is not set
-        scan_desc = f"range {ports_to_scan.start}-{ports_to_scan.stop - 1}"
-    msg = (
-        f"No CDP endpoints found in {scan_desc}. "
-        "Try expanding the range with port_min/port_max, "
-        "or make sure Chrome is started with --remote-debugging-port=N."
-    )
-    return _tool_response(
-        json.dumps(
-            {"ok": False, "found": {}, "message": msg},
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-
-
-async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
-    """Connect Playwright to a running Chrome via CDP."""
-    if not cdp_url:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "cdp_url is required"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    if _is_browser_running(state):
-        if state.get("connected_via_cdp"):
-            return _tool_response(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "error": (
-                            f"Already connected to an external browser via CDP "
-                            f"({state.get('cdp_url') or 'unknown'}). "
-                            "Disconnect first with action='stop'."
+                    await asyncio.wait_for(
+                        limiter.acquire(),
+                        timeout=self._rate_limit_config.acquire_timeout,
+                    )
+                    acquired = True
+                except asyncio.TimeoutError as exc:
+                    raise RateLimitExceededException(
+                        operation="LLM execution (stream retry)",
+                        retry_after=int(
+                            self._rate_limit_config.acquire_timeout,
                         ),
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-            )
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": False,
-                    "error": (
-                        "A Playwright-managed browser is currently running. "
-                        "Stop it first with action='stop' before connecting via CDP."
-                    ),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    try:
-        async_playwright = _ensure_playwright_async()
-        pw = await async_playwright().start()
-        browser = await pw.chromium.connect_over_cdp(cdp_url)
-        contexts = browser.contexts
-        if contexts:
-            context = contexts[0]
-        else:
-            context = await browser.new_context(accept_downloads=True)
-        _attach_context_listeners(state, context)
-        state["playwright"] = pw
-        state["browser"] = browser
-        state["context"] = context
-        state["connected_via_cdp"] = True
-        state["cdp_url"] = cdp_url
-        state["launch_mode"] = "external_cdp"
-        state["owned_browser_process"] = False
-        state["browser_pid"] = None
-        state["browser_process"] = None
-        # Register existing pages
-        for page in context.pages:
-            page_id = _next_page_id(state)
-            _register_page(state, page, page_id)
-            if state["current_page_id"] is None:
-                state["current_page_id"] = page_id
-        if not state["pages"]:
-            page = await context.new_page()
-            page_id = _next_page_id(state)
-            _register_page(state, page, page_id)
-            state["current_page_id"] = page_id
-        _touch_activity(state)
-        _start_idle_watchdog(state)
-        await _configure_download_behavior(state)
-        return _tool_response(
-            json.dumps(
-                {
-                    "ok": True,
-                    "message": f"Connected to Chrome via CDP at {cdp_url}",
-                    "pages": list(state["pages"].keys()),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"CDP connect failed: {e!s}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-async def browser_use(  # pylint: disable=R0911,R0912
-    action: str,
-    url: str = "",
-    page_id: str = "default",
-    selector: str = "",
-    text: str = "",
-    code: str = "",
-    path: str = "",
-    wait: int = 0,
-    full_page: bool = False,
-    width: int = 0,
-    height: int = 0,
-    level: str = "info",
-    filename: str = "",
-    accept: bool = True,
-    prompt_text: str = "",
-    ref: str = "",
-    element: str = "",
-    paths_json: str = "",
-    fields_json: str = "",
-    key: str = "",
-    submit: bool = False,
-    slowly: bool = False,
-    include_static: bool = False,
-    screenshot_type: str = "png",
-    snapshot_filename: str = "",
-    double_click: bool = False,
-    button: str = "left",
-    modifiers_json: str = "",
-    start_ref: str = "",
-    end_ref: str = "",
-    start_selector: str = "",
-    end_selector: str = "",
-    start_element: str = "",
-    end_element: str = "",
-    values_json: str = "",
-    tab_action: str = "",
-    index: int = -1,
-    wait_time: float = 0,
-    text_gone: str = "",
-    frame_selector: str = "",
-    headed: bool = False,
-    cdp_port: int = 0,
-    private_mode: bool = False,
-    browser_args: str = "",
-    executable_path: str = "",
-    actions_json: str = "",
-    cdp_url: str = "",
-    port: int = 0,
-    port_min: int = 0,
-    port_max: int = 0,
-) -> ToolResponse:
-    """Control browser (Playwright). Default is headless. Use headed=True with
-    action=start to open a visible browser window. Flow: start, open(url),
-    snapshot to get refs, then click/type etc. with ref or selector. Use
-    page_id for multiple tabs. Note: To enhance the experience, consider
-    reminding the user to enable browser-related skills in the agent config.
-    Once enabled, you will be able to proactively determine when to invoke the
-    browser tool and pass the appropriate arguments.
-
-    Args:
-        action (str):
-            Required. Action type. Values: start, stop, open, navigate,
-            navigate_back, snapshot, screenshot, click, type, eval, evaluate,
-            resize, console_messages, network_requests, handle_dialog,
-            file_upload, file_download, fill_form, install, press_key,
-            run_code, drag, hover, select_option, tabs, wait_for, pdf, close,
-            cookies_get, cookies_set, cookies_clear, connect_cdp,
-            list_cdp_targets, clear_browser_cache,
-            batch. batch executes multiple sub-actions sequentially from
-            actions_json; supported sub-actions: navigate, click, type,
-            press_key, evaluate, eval, snapshot, screenshot, wait_for, hover,
-            select_option, drag, resize.
-            Commonly confused actions:
-            - start: start browser only; does not open a target URL by itself.
-            - open: create/open a page and go to URL; auto-starts browser if needed.
-            - navigate: navigate an existing page_id to URL; page must already exist.
-            - close: close one page/tab only; browser stays running if other tabs remain.
-            - stop: stop/disconnect the whole browser session and clear browser state.
-            - tabs with tab_action=close: close a tab by index; similar to close but
-              selected by tab list position instead of page_id.
-        url (str):
-            URL to open. Required for action=open or navigate. For
-            cookies_get, optional URL or JSON array of URLs to filter
-            cookies by domain. For action=file_download, save this URL
-            directly through the browser context.
-        page_id (str):
-            Page/tab identifier, default "default". Use different page_id for
-            multiple tabs.
-        selector (str):
-            CSS selector to locate element for click/type/hover etc. Prefer
-            ref when available.
-        text (str):
-            Text to type. Required for action=type.
-        code (str):
-            JavaScript code. Required for action=eval, evaluate, or run_code.
-        path (str):
-            File path for screenshot save, PDF export, or file_download output.
-        wait (int):
-            Milliseconds to wait after click. Used with action=click.
-        full_page (bool):
-            Whether to capture full page. Used with action=screenshot.
-        width (int):
-            Viewport width in pixels. Used with action=resize.
-        height (int):
-            Viewport height in pixels. Used with action=resize.
-        level (str):
-            Console log level filter, e.g. "info" or "error". Used with
-            action=console_messages.
-        filename (str):
-            Filename for saving logs or screenshot. Used with
-            console_messages, network_requests, screenshot, file_download.
-        accept (bool):
-            Whether to accept dialog (true) or dismiss (false). Used with
-            action=handle_dialog.
-        prompt_text (str):
-            Input for prompt dialog. Used with action=handle_dialog when
-            dialog is prompt.
-        ref (str):
-            Element ref from snapshot output; use for stable targeting. Prefer
-            ref for click/type/hover/screenshot/evaluate/select_option. For
-            action=file_download, click this ref and save the browser download
-            produced by that click.
-        element (str):
-            Element description for evaluate etc. Prefer ref when available.
-        paths_json (str):
-            JSON array string of file paths. Used with action=file_upload.
-        fields_json (str):
-            JSON object string of form field name to value. Used with
-            action=fill_form. For cookies_set, JSON array of cookie objects
-            with keys: name, value, url (or domain+path), expires, httpOnly,
-            secure, sameSite.
-        key (str):
-            Key name, e.g. "Enter", "Control+a". Required for
-            action=press_key.
-        submit (bool):
-            Whether to submit (press Enter) after typing. Used with
-            action=type.
-        slowly (bool):
-            Whether to type character by character. Used with action=type.
-        include_static (bool):
-            Whether to include static resource requests. Used with
-            action=network_requests.
-        screenshot_type (str):
-            Screenshot format, "png" or "jpeg". Used with action=screenshot.
-        snapshot_filename (str):
-            File path to save snapshot output. Used with action=snapshot.
-        double_click (bool):
-            Whether to double-click. Used with action=click.
-        button (str):
-            Mouse button: "left", "right", or "middle". Used with
-            action=click.
-        modifiers_json (str):
-            JSON array of modifier keys, e.g. ["Shift","Control"]. Used with
-            action=click.
-        start_ref (str):
-            Drag start element ref. Used with action=drag.
-        end_ref (str):
-            Drag end element ref. Used with action=drag.
-        start_selector (str):
-            Drag start CSS selector. Used with action=drag.
-        end_selector (str):
-            Drag end CSS selector. Used with action=drag.
-        start_element (str):
-            Drag start element description. Used with action=drag.
-        end_element (str):
-            Drag end element description. Used with action=drag.
-        values_json (str):
-            JSON of option value(s) for select. Used with
-            action=select_option.
-        tab_action (str):
-            Tab action: list, new, close, or select. Required for
-            action=tabs.
-        index (int):
-            Tab index for tabs select, zero-based. Used with action=tabs.
-        wait_time (float):
-            Seconds to wait. Used with action=wait_for and as the download
-            event timeout for action=file_download. Defaults to 30 seconds for
-            file_download when omitted.
-        text_gone (str):
-            Wait until this text disappears from page. Used with
-            action=wait_for.
-        frame_selector (str):
-            iframe selector, e.g. "iframe#main". Set when operating inside
-            that iframe in snapshot/click/type etc.
-        headed (bool):
-            When True with action=start, launch a visible browser window
-            (non-headless). User can see the real browser. Default False.
-        cdp_port (int):
-            When > 0 with action=start, use the specified CDP port. When 0,
-            QwenPaw chooses a free local port automatically for managed CDP.
-        private_mode (bool):
-            When True with action=start, force direct Playwright management
-            instead of managed CDP. Use this when the user explicitly does not
-            want the browser to be connectable by other local tools/workspaces
-            via CDP. Default False. By default, QwenPaw prefers managed CDP for
-            both headless and headed starts.
-        browser_args (str):
-            Extra Chromium launch arguments, e.g. "--incognito" or
-            "--proxy-server=http://127.0.0.1:7890". Multiple args separated by
-            space. Applied to all launch paths (headless, headed, managed CDP).
-            Default empty string (no extra args).
-        executable_path (str):
-            Custom browser executable path, e.g.
-            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".
-            When set, overrides the system default browser detection.
-            Default empty string (use system default).
-        actions_json (str):
-            JSON array string of sub-action dicts for action=batch. Required
-            when action=batch. Each sub-action dict has at least an "action"
-            key specifying the sub-action type. Supported sub-actions:
-            navigate, click, type, press_key, evaluate, eval, snapshot,
-            screenshot, wait_for, hover, select_option, drag, resize.
-            Optional keys per sub-action: "page_id" (override default),
-            "wait" (seconds to wait after the action), "stop_on_error"
-            (bool, default True). Example:
-            [{"action": "navigate", "url": "https://example.com"},
-             {"action": "click", "ref": "e1"}, {"action": "type", "ref": "e2", "text": "hello"}].
-        cdp_url (str):
-            CDP base URL, e.g. "http://localhost:9222". Required for
-            action=connect_cdp.
-        port (int):
-            Scan a single specific port for action=list_cdp_targets.
-        port_min (int):
-            Lower bound of port range for action=list_cdp_targets.
-            Defaults to 9000 when not specified.
-        port_max (int):
-            Upper bound of port range for action=list_cdp_targets.
-            Defaults to 10000 when not specified.
-    """
-    # Resolve per-workspace state using context var set by react_agent.py
-    from ...config.context import get_current_workspace_dir as _get_cwd
-
-    _cwd = _get_cwd()
-    _ws_id = _cwd.name if _cwd else "default"
-    _ws_dir = str(_cwd) if _cwd else ""
-    state = _get_workspace_state(_ws_id, _ws_dir)
-
-    action = (action or "").strip().lower()
-    if not action:
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": "action required"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-    page_id = (page_id or "default").strip() or "default"
-    current = state.get("current_page_id")
-    pages = state.get("pages") or {}
-    if page_id == "default" and current and current in pages:
-        page_id = current
-
-    try:
-        if action == "start":
-            return await _action_start(
-                state,
-                headed=headed,
-                cdp_port=cdp_port,
-                private_mode=private_mode,
-                browser_args=browser_args,
-                executable_path=executable_path,
-            )
-        if action == "stop":
-            return await _action_stop(state)
-        if action == "connect_cdp":
-            return await _action_connect_cdp(state, cdp_url)
-        if action == "list_cdp_targets":
-            return await _action_list_cdp_targets(port, port_min, port_max)
-        if action == "open":
-            return await _action_open(state, url, page_id)
-        if action == "navigate":
-            return await _action_navigate(state, url, page_id)
-        if action == "navigate_back":
-            return await _action_navigate_back(state, page_id)
-        if action in ("screenshot", "take_screenshot"):
-            return await _action_screenshot(
-                state,
-                page_id,
-                path or filename,
-                full_page,
-                screenshot_type,
-                ref,
-                element,
-                frame_selector,
-            )
-        if action == "snapshot":
-            return await _action_snapshot(
-                state,
-                page_id,
-                snapshot_filename or filename,
-                frame_selector,
-            )
-        if action == "click":
-            return await _action_click(
-                state,
-                page_id,
-                selector,
-                ref,
-                element,
-                wait,
-                double_click,
-                button,
-                modifiers_json,
-                frame_selector,
-            )
-        if action == "type":
-            return await _action_type(
-                state,
-                page_id,
-                selector,
-                ref,
-                element,
-                text,
-                submit,
-                slowly,
-                frame_selector,
-            )
-        if action == "eval":
-            return await _action_eval(state, page_id, code)
-        if action == "evaluate":
-            return await _action_evaluate(
-                state,
-                page_id,
-                code,
-                ref,
-                element,
-                frame_selector,
-            )
-        if action == "resize":
-            return await _action_resize(state, page_id, width, height)
-        if action == "console_messages":
-            return await _action_console_messages(
-                state,
-                page_id,
-                level,
-                filename or path,
-            )
-        if action == "handle_dialog":
-            return await _action_handle_dialog(
-                state,
-                page_id,
-                accept,
-                prompt_text,
-            )
-        if action == "file_upload":
-            return await _action_file_upload(state, page_id, paths_json)
-        if action == "file_download":
-            return await _action_file_download(
-                state,
-                page_id,
-                path or filename,
-                ref=ref,
-                url=url,
-                wait_time=wait_time,
-            )
-        if action == "fill_form":
-            return await _action_fill_form(state, page_id, fields_json)
-        if action == "install":
-            return await _action_install()
-        if action == "press_key":
-            return await _action_press_key(state, page_id, key)
-        if action == "network_requests":
-            return await _action_network_requests(
-                state,
-                page_id,
-                include_static,
-                filename or path,
-            )
-        if action == "run_code":
-            return await _action_run_code(state, page_id, code)
-        if action == "drag":
-            return await _action_drag(
-                state,
-                page_id,
-                start_ref,
-                end_ref,
-                start_selector,
-                end_selector,
-                start_element,
-                end_element,
-                frame_selector,
-            )
-        if action == "hover":
-            return await _action_hover(
-                state,
-                page_id,
-                ref,
-                element,
-                selector,
-                frame_selector,
-            )
-        if action == "select_option":
-            return await _action_select_option(
-                state,
-                page_id,
-                ref,
-                element,
-                values_json,
-                frame_selector,
-            )
-        if action == "tabs":
-            return await _action_tabs(state, page_id, tab_action, index)
-        if action == "wait_for":
-            return await _action_wait_for(
-                state,
-                page_id,
-                wait_time,
-                text,
-                text_gone,
-            )
-        if action == "pdf":
-            return await _action_pdf(state, page_id, path)
-        if action == "close":
-            return await _action_close(state, page_id)
-        if action == "cookies_get":
-            ctx = _get_context(state)
-            if not ctx:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": "Browser not started"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            urls_list = _parse_json_param(url, None) if url else None
-            if urls_list is None and url:
-                urls_list = [url]
-            urls_list = urls_list or []
-            try:
-                if _USE_SYNC_PLAYWRIGHT:
-                    loop = asyncio.get_event_loop()
-                    cookies = await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: ctx.cookies(
-                            urls=urls_list if urls_list else [],
-                        ),
-                    )
-                else:
-                    cookies = await ctx.cookies(
-                        urls=urls_list if urls_list else [],
-                    )
-                return _tool_response(
-                    json.dumps(
-                        {"ok": True, "cookies": cookies},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            except Exception as e:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": str(e)},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-        if action == "cookies_set":
-            ctx = _get_context(state)
-            if not ctx:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": "Browser not started"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            try:
-                cookies = json.loads(fields_json) if fields_json else []
-                if not isinstance(cookies, list) or not all(
-                    isinstance(c, dict) and "name" in c and "value" in c
-                    for c in cookies
-                ):
-                    return _tool_response(
-                        json.dumps(
-                            {
-                                "ok": False,
-                                "error": (
-                                    "fields_json must be a JSON array of"
-                                    " cookie objects with 'name' and 'value'"
-                                ),
-                            },
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    )
-                if _USE_SYNC_PLAYWRIGHT:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        lambda: ctx.add_cookies(cookies),
-                    )
-                else:
-                    await ctx.add_cookies(cookies)
-                return _tool_response(
-                    json.dumps(
-                        {
-                            "ok": True,
-                            "message": f"Injected {len(cookies)} cookie(s)",
+                        details={
+                            "reason": "Timed out waiting for execution slot",
                         },
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            except Exception as e:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": str(e)},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-        if action == "cookies_clear":
-            ctx = _get_context(state)
-            if not ctx:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": "Browser not started"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-            try:
-                if _USE_SYNC_PLAYWRIGHT:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        _get_executor(),
-                        ctx.clear_cookies,
-                    )
+                    ) from exc
+
+                result = await self._inner(*call_args, **call_kwargs)
+
+                if isinstance(result, AsyncGenerator):
+                    owns_semaphore = False
+                    try:
+                        async for chunk in self._consume_stream_with_slot(
+                            result,
+                            limiter,
+                        ):
+                            yield chunk
+                        return  # stream completed without error
+                    except Exception as retry_failed:
+                        if _is_retryable(retry_failed) and _is_rate_limit(
+                            retry_failed,
+                        ):
+                            await limiter.report_rate_limit(
+                                _extract_retry_after(retry_failed),
+                            )
+                        if (
+                            not _is_retryable(retry_failed)
+                            or attempt >= max_attempts
+                        ):
+                            raise retry_failed
+                        retry_delay = _compute_backoff(
+                            attempt,
+                            self._retry_config,
+                        )
+                        logger.warning(
+                            "LLM stream retry failed (attempt %d/%d): %s. "
+                            "Retrying in %.1fs ...",
+                            attempt,
+                            max_attempts,
+                            retry_failed,
+                            retry_delay,
+                        )
+                        await asyncio.sleep(retry_delay)
                 else:
-                    await ctx.clear_cookies()
-                return _tool_response(
-                    json.dumps(
-                        {"ok": True, "message": "All cookies cleared"},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
+                    yield result
+                    return
+
+            except Exception as retry_exc:
+                if _is_retryable(retry_exc) and _is_rate_limit(retry_exc):
+                    await limiter.report_rate_limit(
+                        _extract_retry_after(retry_exc),
+                    )
+                if not _is_retryable(retry_exc) or attempt >= max_attempts:
+                    raise
+                retry_delay = _compute_backoff(attempt, self._retry_config)
+                logger.warning(
+                    "LLM stream retry failed (attempt %d/%d): %s. "
+                    "Retrying in %.1fs ...",
+                    attempt,
+                    max_attempts,
+                    retry_exc,
+                    retry_delay,
                 )
-            except Exception as e:
-                return _tool_response(
-                    json.dumps(
-                        {"ok": False, "error": str(e)},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                )
-        if action == "batch":
-            return await _action_batch(state, page_id, actions_json)
-        if action == "clear_browser_cache":
-            return await _action_clear_browser_cache(state)
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": f"Unknown action: {action}"},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    except Exception as e:
-        logger.error("Browser tool error: %s", e, exc_info=True)
-        return _tool_response(
-            json.dumps(
-                {"ok": False, "error": str(e)},
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
+                await asyncio.sleep(retry_delay)
+
+            finally:
+                if owns_semaphore and acquired:
+                    limiter.release()
