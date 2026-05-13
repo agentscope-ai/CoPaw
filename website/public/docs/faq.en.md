@@ -53,7 +53,6 @@ docker run -p 127.0.0.1:8088:8088 \
 > 1. **If using CMD (.bat): Script executes successfully but fails to write to `Path`**
 >
 >    The script completes file installation. Due to **Constrained Language Mode**, it cannot automatically update environment variables. Manually configure as follows:
->
 >    - **Locate the installation directory**:
 >      - Check if `uv` is available: Enter `uv --version` in CMD. If a version number appears, **only configure the QwenPaw path**. If you receive the prompt `'uv' is not recognized as an internal or external command, operable program or batch file,` configure both paths.
 >      - uv path (choose one based on installation location; use if step 1 fails): Typically `%USERPROFILE%\.local\bin`, `%USERPROFILE%\AppData\Local\uv`, or the `Scripts` folder within your Python installation directory
@@ -278,6 +277,23 @@ agent.
 You can also use `qwenpaw models` for setup, downloads, and switching. See
 [CLI → Models and environment variables → qwenpaw models](https://qwenpaw.agentscope.io/docs/cli#qwenpaw-models).
 
+### Why is Discover Models unavailable for my custom provider?
+
+**Discover Models** is only available for providers whose APIs are known and
+implemented by QwenPaw for model discovery, such as supported local providers
+and selected built-in providers.
+
+For custom providers and most third-party OpenAI-compatible endpoints, QwenPaw
+cannot assume that `GET /v1/models` exists, returns the expected schema, or
+lists only models that are compatible with chat. In these cases, add models
+manually on the provider's **Models** page:
+
+1. Open **Settings → Models**.
+2. Select your custom provider.
+3. Click **Models → Add Model**.
+4. Enter the provider's exact **Model ID** and a display **Model Name**.
+5. Use **Test Connection** to verify the model.
+
 ### How to use QwenPaw-Flash series models
 
 QwenPaw-Flash is a family of models tuned by the QwenPaw team for QwenPaw's core
@@ -312,7 +328,6 @@ download and start it.
    or [Hugging Face](https://huggingface.co/agentscope-ai/models). These model
    variants use suffixes such as `Q8_0` or `Q4_K_M`, for example
    [QwenPaw-Flash-4B-Q4_K_M](https://www.modelscope.cn/models/AgentScope/QwenPaw-Flash-4B-Q4_K_M).
-
    - Download with ModelScope CLI:
 
      ```bash

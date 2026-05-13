@@ -50,7 +50,6 @@ docker run -p 127.0.0.1:8088:8088 \
 > 1. **如果你使用的是 CMD（.bat）：脚本执行成功但无法写入`Path`**
 >
 >    脚本已完成文件安装，由于 **受限语言模式** ，脚本无法自动写入环境变量，此时只需手动配置：
->
 >    - **找到安装目录**：
 >      - 检查 `uv` 是否可用：在 CMD 中输入 `uv --version` ，如果显示版本号，则**只需配置 QwenPaw 路径**；如果提示 `'uv' 不是内部或外部命令，也不是可运行的程序或批处理文件。`，则需同时配置两者。
 >      - uv路径（任选其一，取决于安装位置，若`uv`不可用则填）：通常在`%USERPROFILE%\.local\bin`、`%USERPROFILE%\AppData\Local\uv`或 Python 安装目录下的 `Scripts` 文件夹
@@ -258,6 +257,18 @@ QwenPaw 已开源，官方仓库地址：
 
 命令行也可使用 `qwenpaw models` 系列命令完成配置、下载和切换，详情请见文档 [CLI → 模型与环境变量 → qwenpaw models](https://qwenpaw.agentscope.io/docs/cli#qwenpaw-models)。
 
+### 为什么我的自定义提供商不能自动获取模型？
+
+**自动获取模型** 只适用于 QwenPaw 已明确适配模型发现 API 的提供商，例如部分内置提供商和受支持的本地提供商。
+
+对于自定义提供商和大多数第三方 OpenAI 兼容接口，QwenPaw 不能假设它们一定提供 `GET /v1/models`，也不能保证返回结构符合预期，或返回的模型都适合聊天场景。因此这类提供商通常需要手动添加模型：
+
+1. 打开 **设置 → 模型**。
+2. 选择你的自定义提供商。
+3. 进入 **模型 → 添加模型**。
+4. 填写服务商实际使用的 **模型 ID** 和用于显示的 **模型名称**。
+5. 使用 **测试连接** 验证模型是否可用。
+
 ### 如何使用 QwenPaw-Flash 系列模型
 
 QwenPaw-Flash 是 QwenPaw 官方根据 QwenPaw 的应用场景专门调优的系列模型，共有 2B, 4B 和 9B 三个版本，且每个版本除原始模型外还提供了 4 bit 和 8 bit 两种量化版本，适合不同的显存环境和性能需求。
@@ -278,7 +289,6 @@ QwenPaw 内置的本地提供商均可接入 QwenPaw-Flash 模型：
 **Ollama**:
 
 1. 从 [ModelScope](https://www.modelscope.cn/organization/AgentScope?tab=model) 或 [Hugging Face](https://huggingface.co/agentscope-ai/models) 下载 QwenPaw-Flash 量化版模型，这些模型后缀为 `Q8_0` 或 `Q4_K_M`，例如 [QwenPaw-Flash-4B-Q4_K_M](https://www.modelscope.cn/models/AgentScope/QwenPaw-Flash-4B-Q4_K_M)。
-
    - 使用 ModelScope CLI 下载：
 
      ```bash
