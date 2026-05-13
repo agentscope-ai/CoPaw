@@ -1047,7 +1047,6 @@ curl -X POST http://127.0.0.1:8088/api/pets \
   -d '{"name": "Luna", "species": "rabbit"}'
 ```
 
-
 **Notes:**
 
 - `prefix` must start with `/` and must not be just `/` — use a
@@ -1240,7 +1239,7 @@ api.register_shutdown_hook(
 
 ### register_http_router
 
-Mount a `fastapi.APIRouter` under `/api` + *prefix*.
+Mount a `fastapi.APIRouter` under `/api` + _prefix_.
 
 ```python
 api.register_http_router(

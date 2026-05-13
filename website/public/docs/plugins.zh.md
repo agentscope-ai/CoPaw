@@ -1028,7 +1028,6 @@ curl -X POST http://127.0.0.1:8088/api/pets \
   -d '{"name": "Luna", "species": "rabbit"}'
 ```
 
-
 **说明：**
 
 - `prefix` 必须以 `/` 开头，且不能仅为 `/`，应使用有语义的片段（如 `/pets`）。完整路径恒为 `/api` + 你的 `prefix`。
@@ -1216,7 +1215,7 @@ api.register_shutdown_hook(
 
 ### register_http_router
 
-将 `fastapi.APIRouter` 挂载到 `/api` + *prefix* 下。
+将 `fastapi.APIRouter` 挂载到 `/api` + _prefix_ 下。
 
 ```python
 api.register_http_router(
