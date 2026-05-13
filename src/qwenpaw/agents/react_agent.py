@@ -750,8 +750,8 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         nb = getattr(self, "plan_notebook", None)
 
-        # Lock BEFORE executing create_plan / revise_current_plan so that
-        # parallel tool calls (asyncio.gather) cannot sneak an execution
+        # Pre-lock BEFORE executing create_plan / revise_current_plan so that
+        # parallel tool calls (asyncio.gather) cannot slip an execution
         # tool past the gate before the lock is set.
         # pylint: disable=protected-access
         if nb is not None and tool_name in {
@@ -941,13 +941,17 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
     @staticmethod
     def _filter_plan_tools(msg: Msg, nb: Any) -> Msg:
-        """Strip non-plan tool_use blocks when awaiting user confirmation."""
+        """Arm `_plan_awaiting_user_confirm` before any tool runs.
+
+        Race-prevention: when the assistant message carries `create_plan` /
+        `revise_current_plan` alongside other ``tool_use`` blocks, callers
+        of ``asyncio.gather`` may hit `_acting()`` on sibling tools before
+        the mutation tool executes. Setting the lock here (before tools run)
+        makes `check_plan_tool_gate` refuse non-plan-management tools while
+        still returning a readable tool_result instead of stripping blocks.
+        """
         if nb is None or not isinstance(msg.content, list):
             return msg
-
-        from ..plan.hints import _PLAN_TOOLS_WHILE_AWAITING_USER_CONFIRM
-
-        wl = _PLAN_TOOLS_WHILE_AWAITING_USER_CONFIRM
         mut = ("create_plan", "revise_current_plan")
         if any(
             isinstance(b, dict)
@@ -957,16 +961,6 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         ):
             # pylint: disable-next=protected-access
             nb._plan_awaiting_user_confirm = True
-        if getattr(nb, "_plan_awaiting_user_confirm", False):
-            kept = [
-                b
-                for b in msg.content
-                if not isinstance(b, dict)
-                or b.get("type") != "tool_use"
-                or b.get("name", "") in wl
-            ]
-            if len(kept) != len(msg.content):
-                msg.content = kept
         return msg
 
     # pylint: disable=too-many-branches
@@ -984,6 +978,10 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
            then record the finding in the capability cache.
         3. If the model IS marked as multimodal but still errors on
            media, log a warning about possibly inaccurate capability flag.
+        4. Plan gate: `_filter_plan_tools` pre-locks when the assistant
+           schedules plan mutation tools; `_plan_text_only_after_mutation`
+           forces ``tool_choice="none"`` once so the model cannot issue
+           execution tools immediately after ``create_plan`` / revise.
 
         Calls ``super()._reasoning`` to keep the ToolGuardMixin
         interception active.
