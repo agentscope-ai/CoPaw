@@ -6,6 +6,10 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
+from agentscope.message import Msg
+
+from qwenpaw.app.channels.renderer import MessageRenderer, RenderStyle
+from qwenpaw.app.runner.utils import agentscope_msg_to_message
 from qwenpaw.providers.openai_chat_model_compat import (
     OpenAIChatModelCompat,
     _sanitize_tool_call,
@@ -25,6 +29,16 @@ class CompatHarnessOpenAIChatModel(OpenAIChatModelCompat):
         ):
             responses.append(response)
         return responses
+
+    def parse_completion_for_test(
+        self,
+        start_datetime: datetime,
+        response: Any,
+    ) -> Any:
+        return self._parse_openai_completion_response(
+            start_datetime,
+            response,
+        )
 
 
 class FakeAsyncStream:
@@ -58,6 +72,21 @@ def _make_chunk(tool_calls: list[Any]) -> Any:
     )
     choice = SimpleNamespace(delta=delta)
     return SimpleNamespace(usage=None, choices=[choice])
+
+
+def _render_with_thinking_filter(content: list[dict[str, Any]]) -> list[Any]:
+    runtime_messages = agentscope_msg_to_message(
+        Msg(
+            name="assistant",
+            role="assistant",
+            content=content,
+        ),
+    )
+    renderer = MessageRenderer(RenderStyle(filter_thinking=True))
+    parts = []
+    for message in runtime_messages:
+        parts.extend(renderer.message_to_parts(message))
+    return parts
 
 
 async def test_stream_parser_skips_tool_call_without_function() -> None:
@@ -106,6 +135,72 @@ async def test_stream_parser_skips_tool_call_without_function() -> None:
     assert tool_blocks
     assert tool_blocks[-1]["name"] == "ping"
     assert tool_blocks[-1]["input"] == {"x": 1}
+
+
+def test_completion_reasoning_content_in_model_extra_is_filterable() -> None:
+    model = CompatHarnessOpenAIChatModel(
+        "dummy",
+        api_key="sk-test",
+        stream=False,
+    )
+    response = SimpleNamespace(
+        id="resp_1",
+        usage=None,
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    model_extra={
+                        "reasoning_content": "hidden reasoning",
+                    },
+                    content="visible answer",
+                    audio=None,
+                    tool_calls=None,
+                ),
+            ),
+        ],
+    )
+
+    parsed = model.parse_completion_for_test(datetime.now(), response)
+
+    assert parsed.content[0] == {
+        "type": "thinking",
+        "thinking": "hidden reasoning",
+    }
+    parts = _render_with_thinking_filter(parsed.content)
+    assert [part.text for part in parts] == ["visible answer"]
+
+
+async def test_stream_reasoning_content_in_model_extra_is_filterable() -> None:
+    model = CompatHarnessOpenAIChatModel(
+        "dummy",
+        api_key="sk-test",
+        stream=True,
+    )
+    delta = SimpleNamespace(
+        model_extra={
+            "reasoning_content": "hidden reasoning",
+        },
+        content="visible answer",
+        tool_calls=None,
+    )
+    stream = FakeAsyncStream(
+        [
+            SimpleNamespace(
+                id="resp_1",
+                usage=None,
+                choices=[SimpleNamespace(delta=delta)],
+            ),
+        ],
+    )
+
+    responses = await model.parse_stream_for_test(datetime.now(), stream)
+
+    assert responses[-1].content[0] == {
+        "type": "thinking",
+        "thinking": "hidden reasoning",
+    }
+    parts = _render_with_thinking_filter(responses[-1].content)
+    assert [part.text for part in parts] == ["visible answer"]
 
 
 def test_sanitize_tool_call_normalizes_non_string_arguments() -> None:
