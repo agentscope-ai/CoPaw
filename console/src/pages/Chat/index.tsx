@@ -376,6 +376,7 @@ function useMessageHistoryNavigation(
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isChatActive()) return;
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
 
       const target = e.target as HTMLElement;
       const isChatSender =
@@ -1056,6 +1057,7 @@ export default function ChatPage() {
           />
         ) : undefined,
         attachments: {
+          multiple: true,
           trigger: function (props: any) {
             const tooltipKey = multimodalCaps.supportsMultimodal
               ? multimodalCaps.supportsImage && !multimodalCaps.supportsVideo

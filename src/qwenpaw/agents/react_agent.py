@@ -30,7 +30,7 @@ from .prompt import (
     build_system_prompt_from_working_dir,
     get_active_model_supports_multimodal,
 )
-from .skills_manager import (
+from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
     get_workspace_skills_dir,
@@ -171,7 +171,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         )
         # Initialize parent ReActAgent
         init_kwargs: dict[str, Any] = {
-            "name": "Friday",
+            "name": agent_config.name or "QwenPaw",
             "model": model,
             "sys_prompt": sys_prompt,
             "toolkit": toolkit,
@@ -242,13 +242,16 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
                 enabled_tools = {
                     name: tool.enabled for name, tool in builtin_tools.items()
                 }
-                # Only execute_shell_command supports async_execution
+                # Only selected long-running tools support async_execution.
+                async_capable_tool_names = {
+                    "execute_shell_command",
+                    "delegate_external_agent",
+                }
                 async_execution_tools = {
-                    "execute_shell_command": builtin_tools.get(
-                        "execute_shell_command",
-                    ).async_execution
-                    if "execute_shell_command" in builtin_tools
-                    else False,
+                    name: builtin_tools.get(name).async_execution
+                    if name in builtin_tools
+                    else False
+                    for name in async_capable_tool_names
                 }
         except Exception as e:
             logger.warning(
@@ -1321,6 +1324,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             set_current_workspace_dir,
             set_current_recent_max_bytes,
             set_current_shell_command_timeout,
+            set_current_shell_command_executable,
         )
 
         set_current_workspace_dir(self._workspace_dir)
@@ -1331,6 +1335,9 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         )
         set_current_shell_command_timeout(
             self._agent_config.running.shell_command_timeout,
+        )
+        set_current_shell_command_executable(
+            self._agent_config.running.shell_command_executable or None,
         )
 
         # Process file and media blocks in messages
