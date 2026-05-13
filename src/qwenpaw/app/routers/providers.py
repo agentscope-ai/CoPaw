@@ -60,6 +60,7 @@ async def get_provider_manager(request: Request) -> ProviderManager:
 class ProviderConfigRequest(BaseModel):
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
+    headers: Optional[dict[str, str]] = Field(default=None)
     chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Chat model class name for protocol selection",
@@ -91,6 +92,7 @@ class CreateCustomProviderRequest(BaseModel):
     id: str = Field(...)
     name: str = Field(...)
     default_base_url: str = Field(default="")
+    headers: dict[str, str] = Field(default_factory=dict)
     api_key_prefix: str = Field(default="")
     chat_model: ChatModelName = Field(default="OpenAIChatModel")
     models: List[ModelInfo] = Field(default_factory=list)
@@ -188,6 +190,7 @@ async def configure_provider(
         {
             "api_key": body.api_key,
             "base_url": body.base_url,
+            "headers": body.headers,
             "chat_model": body.chat_model,
             "generate_kwargs": body.generate_kwargs,
         },
@@ -223,6 +226,7 @@ async def create_custom_provider_endpoint(
                 id=body.id,
                 name=body.name,
                 base_url=body.default_base_url,
+                headers=body.headers,
                 api_key_prefix=body.api_key_prefix,
                 chat_model=body.chat_model,
                 extra_models=body.models,
@@ -252,6 +256,10 @@ class TestProviderRequest(BaseModel):
         default=None,
         description="Optional chat model class to test protocol behavior",
     )
+    headers: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Optional HTTP headers to test",
+    )
 
 
 class TestModelRequest(BaseModel):
@@ -270,6 +278,10 @@ class DiscoverModelsRequest(BaseModel):
     chat_model: Optional[ChatModelName] = Field(
         default=None,
         description="Optional chat model class to use for discovery",
+    )
+    headers: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Optional HTTP headers to use for discovery",
     )
 
 
@@ -310,6 +322,8 @@ async def test_provider(
             tmp_provider.api_key = body.api_key
         if body and body.base_url:
             tmp_provider.base_url = body.base_url
+        if body and body.headers is not None:
+            tmp_provider.headers = body.headers
         ok, msg = await tmp_provider.check_connection()
         return TestConnectionResponse(
             success=ok,
@@ -352,6 +366,7 @@ async def discover_models(
             {
                 "api_key": body.api_key if body else None,
                 "base_url": body.base_url if body else None,
+                "headers": body.headers if body else None,
             },
         )
         if not ok:

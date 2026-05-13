@@ -46,10 +46,46 @@ else:
 class OpenAIProvider(Provider):
     """Provider implementation for OpenAI API and compatible endpoints."""
 
+    def default_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.base_url in DASHSCOPE_BASE_URLS:
+            headers["x-dashscope-agentapp"] = json.dumps(
+                {
+                    "agentType": "QwenPaw",
+                    "deployType": "UnKnown",
+                    "moduleCode": "model",
+                    "agentCode": "UnKnown",
+                },
+                ensure_ascii=False,
+            )
+        elif self.base_url == CODING_DASHSCOPE_BASE_URL:
+            headers["X-DashScope-Cdpl"] = json.dumps(
+                {
+                    "agentType": "QwenPaw",
+                    "deployType": "UnKnown",
+                    "moduleCode": "model",
+                    "agentCode": "UnKnown",
+                },
+                ensure_ascii=False,
+            )
+        elif self.base_url == TOKEN_PLAN_BASE_URL:
+            headers["X-DashScope-Cdpl"] = json.dumps(
+                {
+                    "agentType": "QwenPaw",
+                    "deployType": "UnKnown",
+                    "moduleCode": "model",
+                    "agentCode": "UnKnown",
+                },
+                ensure_ascii=False,
+            )
+        headers.update(self.headers or {})
+        return headers
+
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         return AsyncOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
+            default_headers=self.default_headers() or None,
             timeout=timeout,
         )
 
@@ -145,44 +181,10 @@ class OpenAIProvider(Provider):
     def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
         from .openai_chat_model_compat import OpenAIChatModelCompat
 
-        client_kwargs = {"base_url": self.base_url}
-
-        if self.base_url in DASHSCOPE_BASE_URLS:
-            client_kwargs["default_headers"] = {
-                "x-dashscope-agentapp": json.dumps(
-                    {
-                        "agentType": "QwenPaw",
-                        "deployType": "UnKnown",
-                        "moduleCode": "model",
-                        "agentCode": "UnKnown",
-                    },
-                    ensure_ascii=False,
-                ),
-            }
-        elif self.base_url == CODING_DASHSCOPE_BASE_URL:
-            client_kwargs["default_headers"] = {
-                "X-DashScope-Cdpl": json.dumps(
-                    {
-                        "agentType": "QwenPaw",
-                        "deployType": "UnKnown",
-                        "moduleCode": "model",
-                        "agentCode": "UnKnown",
-                    },
-                    ensure_ascii=False,
-                ),
-            }
-        elif self.base_url == TOKEN_PLAN_BASE_URL:
-            client_kwargs["default_headers"] = {
-                "X-DashScope-Cdpl": json.dumps(
-                    {
-                        "agentType": "QwenPaw",
-                        "deployType": "UnKnown",
-                        "moduleCode": "model",
-                        "agentCode": "UnKnown",
-                    },
-                    ensure_ascii=False,
-                ),
-            }
+        client_kwargs: dict[str, Any] = {"base_url": self.base_url}
+        default_headers = self.default_headers()
+        if default_headers:
+            client_kwargs["default_headers"] = default_headers
 
         return OpenAIChatModelCompat(
             model_name=model_id,

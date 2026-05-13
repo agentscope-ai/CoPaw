@@ -138,6 +138,7 @@ async def test_add_custom_provider_and_reload_from_storage(
         name="Custom OpenAI",
         base_url="https://custom.example/v1",
         api_key="sk-custom",
+        headers={"User-Agent": "QwenPaw Test"},
         models=[ModelInfo(id="custom-model", name="Custom Model")],
     )
 
@@ -163,6 +164,7 @@ async def test_add_custom_provider_and_reload_from_storage(
     assert loaded.is_custom is True
     assert loaded.base_url == "https://custom.example/v1"
     assert loaded.api_key == "sk-custom"
+    assert loaded.headers == {"User-Agent": "QwenPaw Test"}
     assert [m.id for m in loaded.models] == ["custom-model"]
     assert loaded_builtin_conflict is not None
     assert isinstance(loaded_builtin_conflict, OpenAIProvider)

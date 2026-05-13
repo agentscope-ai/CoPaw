@@ -86,6 +86,10 @@ class ProviderInfo(BaseModel):
     name: str = Field(..., description="Human-readable provider name")
     base_url: str = Field(default="", description="API base URL")
     api_key: str = Field(default="", description="API key for authentication")
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional HTTP headers sent to provider API requests.",
+    )
     chat_model: str = Field(
         default="OpenAIChatModel",
         description="AgentScope ChatModel name (e.g., 'OpenAIChatModel')",
@@ -210,6 +214,16 @@ class Provider(ProviderInfo, ABC):
             self.base_url = str(config["base_url"]).strip()
         if "api_key" in config and config["api_key"] is not None:
             self.api_key = str(config["api_key"]).strip()
+        if (
+            "headers" in config
+            and config["headers"] is not None
+            and isinstance(config["headers"], dict)
+        ):
+            self.headers = {
+                str(key).strip(): str(value)
+                for key, value in config["headers"].items()
+                if str(key).strip()
+            }
         if (
             self.is_custom
             and "chat_model" in config
@@ -356,6 +370,7 @@ class Provider(ProviderInfo, ABC):
             name=self.name,
             base_url=self.base_url,
             api_key=api_key,
+            headers=self.headers,
             chat_model=self.chat_model,
             models=[m.model_dump() for m in self.models],
             extra_models=[m.model_dump() for m in self.extra_models],

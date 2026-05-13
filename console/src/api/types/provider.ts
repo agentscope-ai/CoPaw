@@ -30,6 +30,7 @@ export interface ProviderInfo {
   require_api_key: boolean;
   api_key: string;
   base_url: string;
+  headers?: Record<string, string>;
   generate_kwargs: Record<string, unknown>;
   /** Provider-specific metadata (e.g. base_url_options for region selection). */
   meta?: Record<string, unknown>;
@@ -44,6 +45,7 @@ export interface BaseUrlOption {
 export interface ProviderConfigRequest {
   api_key?: string;
   base_url?: string;
+  headers?: Record<string, string>;
   chat_model?: string;
   generate_kwargs?: Record<string, unknown>;
 }
@@ -77,6 +79,7 @@ export interface CreateCustomProviderRequest {
   id: string;
   name: string;
   default_base_url?: string;
+  headers?: Record<string, string>;
   api_key_prefix?: string;
   chat_model?: string;
   models?: ModelInfo[];
@@ -169,6 +172,7 @@ export interface TestConnectionResponse {
 export interface TestProviderRequest {
   api_key?: string;
   base_url?: string;
+  headers?: Record<string, string>;
   chat_model?: string;
   generate_kwargs?: Record<string, unknown>;
   include_extended?: boolean;

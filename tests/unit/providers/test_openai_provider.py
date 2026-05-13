@@ -158,6 +158,7 @@ async def test_update_config_updates_non_none_values_and_get_info() -> None:
             "api_key": "sk-new",
             "chat_model": "OpenAIChatModel",
             "api_key_prefix": "sk-",
+            "headers": {"User-Agent": "QwenPaw Test"},
             "generate_kwargs": {"temperature": 0.2, "top_p": 0.9},
         },
     )
@@ -169,12 +170,14 @@ async def test_update_config_updates_non_none_values_and_get_info() -> None:
     assert provider.api_key == "sk-new"
     assert provider.chat_model == "OpenAIChatModel"
     assert provider.api_key_prefix == "sk-"
+    assert provider.headers == {"User-Agent": "QwenPaw Test"}
     assert provider.generate_kwargs == {"temperature": 0.2, "top_p": 0.9}
     assert info.name == "OpenAI Custom"
     assert info.base_url == "https://new.example/v1"
     assert info.api_key == "sk-new"
     assert info.chat_model == "OpenAIChatModel"
     assert info.api_key_prefix == "sk-"
+    assert info.headers == {"User-Agent": "QwenPaw Test"}
     assert info.generate_kwargs == {"temperature": 0.2, "top_p": 0.9}
     assert info.is_custom
     assert not info.support_connection_check
@@ -183,6 +186,7 @@ async def test_update_config_updates_non_none_values_and_get_info() -> None:
 async def test_update_config_skips_none_values() -> None:  # noqa: E501
     provider = _make_provider()
     provider.api_key_prefix = "sk-"
+    provider.headers = {"User-Agent": "Existing"}
     provider.generate_kwargs = {"temperature": 0.1}
 
     provider.update_config(
@@ -192,6 +196,7 @@ async def test_update_config_skips_none_values() -> None:  # noqa: E501
             "api_key": None,
             "chat_model": None,
             "api_key_prefix": None,
+            "headers": None,
             "generate_kwargs": None,
         },
     )
@@ -203,13 +208,38 @@ async def test_update_config_skips_none_values() -> None:  # noqa: E501
     assert provider.api_key == "sk-test"
     assert provider.chat_model == "OpenAIChatModel"
     assert provider.api_key_prefix == "sk-"
+    assert provider.headers == {"User-Agent": "Existing"}
     assert provider.generate_kwargs == {"temperature": 0.1}
     assert info.name == "OpenAI"
     assert info.base_url == "https://mock-openai.local/v1"
     assert info.api_key == "sk-******"
     assert info.chat_model == "OpenAIChatModel"
     assert info.api_key_prefix == "sk-"
+    assert info.headers == {"User-Agent": "Existing"}
     assert info.generate_kwargs == {"temperature": 0.1}
+
+
+def test_default_headers_include_custom_headers() -> None:
+    provider = _make_provider()
+    provider.headers = {
+        "User-Agent": "Mozilla/5.0",
+        "X-Custom": "enabled",
+    }
+
+    assert provider.default_headers() == {
+        "User-Agent": "Mozilla/5.0",
+        "X-Custom": "enabled",
+    }
+
+
+def test_custom_headers_can_override_builtin_default_headers() -> None:
+    provider = _make_provider()
+    provider.base_url = openai_provider_module.DASHSCOPE_BASE_URLS[0]
+    provider.headers = {
+        "x-dashscope-agentapp": "custom",
+    }
+
+    assert provider.default_headers()["x-dashscope-agentapp"] == "custom"
 
 
 async def test_update_config_does_not_update_chat_model() -> None:

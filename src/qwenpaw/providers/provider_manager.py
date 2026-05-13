@@ -1712,6 +1712,8 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
                     ]
                 if not provider.freeze_url and "base_url" in config:
                     provider.base_url = config["base_url"]
+                if "headers" in config:
+                    provider.headers = config["headers"]
                 self._save_provider(provider, is_builtin=True)
             # Migrate custom providers
             for provider_id, data in custom_providers.items():
@@ -1720,6 +1722,7 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
                     name=data.get("name", provider_id),
                     base_url=data.get("base_url", ""),
                     api_key=data.get("api_key", ""),
+                    headers=data.get("headers", {}),
                     is_custom=True,
                 )
                 if "models" in data:
@@ -1763,6 +1766,7 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
                 if not builtin.freeze_url:
                     builtin.base_url = provider.base_url
                 builtin.api_key = provider.api_key
+                builtin.headers = provider.headers
                 builtin_model_ids = {m.id for m in builtin.models}
                 builtin.extra_models = [
                     m
@@ -1953,6 +1957,8 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
                     provider_info.api_key = saved_config["api_key"]
                 if "base_url" in saved_config:
                     provider_info.base_url = saved_config["base_url"]
+                if "headers" in saved_config:
+                    provider_info.headers = saved_config["headers"]
                 if "generate_kwargs" in saved_config:
                     provider_info.generate_kwargs = saved_config[
                         "generate_kwargs"
