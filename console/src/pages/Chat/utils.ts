@@ -184,6 +184,43 @@ export function toDisplayUrl(url: string | undefined): string {
   return chatApi.filePreviewUrl(url.startsWith("/") ? url : `/${url}`);
 }
 
+/** Extract a readable filename from a path or URL. */
+export function getFileNameFromUrl(url: string | undefined): string {
+  if (!url) return "";
+  const withoutQuery = url.split(/[?#]/, 1)[0].replace(/\\/g, "/");
+  const fileName = withoutQuery.split("/").filter(Boolean).pop() || "";
+  try {
+    return decodeURIComponent(fileName);
+  } catch {
+    return fileName;
+  }
+}
+
+/** Normalize backend media content so the chat renderer can show it well. */
+export function normalizeDisplayContentPart(part: any): any {
+  const p = { ...part };
+  if (p.type === "image" && typeof p.image_url === "string") {
+    p.image_url = toDisplayUrl(p.image_url);
+  }
+  if (p.type === "file" && (p.file_url || p.file_id)) {
+    const sourceUrl = (p.file_url as string | undefined) || p.file_id;
+    p.file_url = toDisplayUrl(sourceUrl);
+    p.file_name =
+      p.file_name ||
+      p.fileName ||
+      p.filename ||
+      getFileNameFromUrl(sourceUrl) ||
+      "file";
+  }
+  if (p.type === "audio" && typeof p.data === "string") {
+    p.data = toDisplayUrl(p.data);
+  }
+  if (p.type === "video" && typeof p.video_url === "string") {
+    p.video_url = toDisplayUrl(p.video_url);
+  }
+  return p;
+}
+
 // ---------------------------------------------------------------------------
 // DOM utilities
 // ---------------------------------------------------------------------------

@@ -130,6 +130,19 @@
   [class*="bubble-user"] [class*="markdown"] {
     white-space: pre-wrap;
   }
+
+  [class*="bubble-image"] {
+    max-width: min(320px, 100%);
+  }
+
+  [class*="bubble-image"] [class$="-image"],
+  [class*="bubble-image"] [class*="-image-img"],
+  [class*="bubble-image"] img {
+    width: min(320px, 100%) !important;
+    height: auto !important;
+    max-height: 360px;
+    object-fit: contain !important;
+  }
 }
 
 /* Dark mode scrollbar for disabled overlay */

@@ -9,7 +9,7 @@ import api, {
   type ChatStatus,
   type Message,
 } from "../../../api";
-import { toDisplayUrl } from "../utils";
+import { normalizeDisplayContentPart } from "../utils";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -99,23 +99,7 @@ const extractTextFromContent = (content: unknown): string => {
 };
 
 function resolveContentItemUrl(c: ContentItem): ContentItem {
-  if (c.type === "image" && c.image_url) {
-    return { ...c, image_url: toDisplayUrl(c.image_url as string) };
-  }
-  if (c.type === "audio" && c.data) {
-    return { ...c, data: toDisplayUrl(c.data as string) };
-  }
-  if (c.type === "video" && c.video_url) {
-    return { ...c, video_url: toDisplayUrl(c.video_url as string) };
-  }
-  if (c.type === "file" && (c.file_url || c.file_id)) {
-    return {
-      ...c,
-      file_url: toDisplayUrl((c.file_url as string) || (c.file_id as string)),
-      file_name: (c.filename as string) || (c.file_name as string) || "file",
-    };
-  }
-  return c;
+  return normalizeDisplayContentPart(c) as ContentItem;
 }
 
 /** Map backend message content to request card content (text + image + file). */
@@ -141,7 +125,9 @@ function contentToRequestParts(
 function normalizeOutputMessageContent(content: unknown): unknown {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return content;
-  return content as ContentItem[];
+  return (content as ContentItem[]).map(
+    (c) => normalizeDisplayContentPart(c) as ContentItem,
+  );
 }
 
 /**

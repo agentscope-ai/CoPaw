@@ -5,6 +5,8 @@ import {
   buildModelError,
   toStoredName,
   normalizeContentUrls,
+  normalizeDisplayContentPart,
+  getFileNameFromUrl,
   toDisplayUrl,
 } from "./utils";
 import type { CopyableResponse } from "./utils";
@@ -241,5 +243,54 @@ describe("toDisplayUrl", () => {
     expect(toDisplayUrl("file:///uploads/img.png")).toBe(
       "http://localhost:8000/uploads/img.png",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// display media normalization
+// ---------------------------------------------------------------------------
+describe("getFileNameFromUrl", () => {
+  it("extracts file name from URL path", () => {
+    expect(getFileNameFromUrl("http://host/files/preview/report.pdf")).toBe(
+      "report.pdf",
+    );
+  });
+
+  it("strips query string and decodes URL encoding", () => {
+    expect(
+      getFileNameFromUrl("/files/preview/%E6%8A%A5%E5%91%8A.pdf?token=abc"),
+    ).toBe("报告.pdf");
+  });
+
+  it("handles Windows-style paths", () => {
+    expect(getFileNameFromUrl("C:\\tmp\\image.png")).toBe("image.png");
+  });
+});
+
+describe("normalizeDisplayContentPart", () => {
+  it("normalizes file URL and preserves filename aliases", () => {
+    const result = normalizeDisplayContentPart({
+      type: "file",
+      file_url: "/reports/output.pdf",
+      filename: "output.pdf",
+    });
+    expect(result.file_url).toBe("http://localhost:8000/reports/output.pdf");
+    expect(result.file_name).toBe("output.pdf");
+  });
+
+  it("derives file_name from file_url when backend omits it", () => {
+    const result = normalizeDisplayContentPart({
+      type: "file",
+      file_url: "/reports/output.pdf?token=abc",
+    });
+    expect(result.file_name).toBe("output.pdf");
+  });
+
+  it("normalizes image URLs for assistant output", () => {
+    const result = normalizeDisplayContentPart({
+      type: "image",
+      image_url: "/images/result.png",
+    });
+    expect(result.image_url).toBe("http://localhost:8000/images/result.png");
   });
 });
