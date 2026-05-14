@@ -32,6 +32,11 @@ class FakeWorkspace:
     task_tracker = FakeTaskTracker()
 
 
+def get_fake_workspace() -> FakeWorkspace:
+    """Return a fake workspace dependency."""
+    return FakeWorkspace()
+
+
 async def test_get_chat_returns_placeholder_initial_messages(
     tmp_path: Path,
 ) -> None:
@@ -66,7 +71,7 @@ async def test_get_chat_returns_placeholder_initial_messages(
     app.include_router(router, prefix="/api")
     app.dependency_overrides[get_chat_manager] = lambda: chat_manager
     app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[get_workspace] = lambda: FakeWorkspace()
+    app.dependency_overrides[get_workspace] = get_fake_workspace
     transport = ASGITransport(app=app)
 
     async with AsyncClient(
