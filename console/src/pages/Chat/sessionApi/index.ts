@@ -320,18 +320,79 @@ const resolveRealId = (
 const STORAGE_PREFIX = "qwenpaw_pending_user_msg_";
 
 function savePendingUserMessage(sessionId: string, text: string): void {
+  const normalizedText = text.trim();
+  if (!normalizedText) return;
+
   try {
-    sessionStorage.setItem(`${STORAGE_PREFIX}${sessionId}`, text);
+    writePendingUserMessages(sessionId, [
+      ...loadPendingUserMessages(sessionId),
+      normalizedText,
+    ]);
   } catch {
     /* quota exceeded – ignore */
   }
 }
 
-function loadPendingUserMessage(sessionId: string): string {
+function parsePendingUserMessages(value: string | null): string[] {
+  if (!value) return [];
+
   try {
-    return sessionStorage.getItem(`${STORAGE_PREFIX}${sessionId}`) || "";
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item): item is string =>
+          typeof item === "string" && item.trim().length > 0,
+      );
+    }
   } catch {
-    return "";
+    // Legacy storage used a plain string. Fall through and preserve it.
+  }
+
+  return value.trim() ? [value] : [];
+}
+
+function loadPendingUserMessages(sessionId: string): string[] {
+  try {
+    return parsePendingUserMessages(
+      sessionStorage.getItem(`${STORAGE_PREFIX}${sessionId}`),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writePendingUserMessages(sessionId: string, messages: string[]): void {
+  const normalizedMessages = messages
+    .map((message) => message.trim())
+    .filter(Boolean);
+
+  if (normalizedMessages.length === 0) {
+    clearPendingUserMessage(sessionId);
+    return;
+  }
+
+  sessionStorage.setItem(
+    `${STORAGE_PREFIX}${sessionId}`,
+    JSON.stringify(normalizedMessages),
+  );
+}
+
+function movePendingUserMessages(
+  fromSessionId: string,
+  toSessionId: string,
+): void {
+  if (!fromSessionId || !toSessionId || fromSessionId === toSessionId) return;
+
+  try {
+    const messages = loadPendingUserMessages(fromSessionId);
+    if (messages.length === 0) return;
+    writePendingUserMessages(toSessionId, [
+      ...loadPendingUserMessages(toSessionId),
+      ...messages,
+    ]);
+    clearPendingUserMessage(fromSessionId);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -347,7 +408,7 @@ function clearPendingUserMessage(sessionId: string): void {
 // SessionApi
 // ---------------------------------------------------------------------------
 
-class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
+export class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   private sessionList: IAgentScopeRuntimeWebUISession[] = [];
 
   /**
@@ -440,44 +501,80 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   onSessionCreated: ((sessionId: string) => void) | null = null;
 
   /**
-   * When reconnecting to a running conversation, the backend history may not
-   * include the latest user message (it's only persisted after generation
-   * completes). If generating, look up the cached text from sessionStorage
-   * and patch it into the message list.
-   *
-   * When not generating the conversation is done — clear the cached entry.
+   * Patch user messages that the backend has not persisted yet. This covers
+   * interrupted chats as well as active generations.
    */
-  private patchLastUserMessage(
+  private buildPendingUserCard(text: string): IAgentScopeRuntimeWebUIMessage {
+    return buildUserCard({
+      content: [{ type: "text", text }],
+      role: ROLE_USER,
+    } as Message);
+  }
+
+  private getUserCardText(message: IAgentScopeRuntimeWebUIMessage): string {
+    return extractTextFromContent(
+      message?.cards?.[0]?.data?.input?.[0]?.content,
+    ).trim();
+  }
+
+  private patchPendingUserMessages(
     messages: IAgentScopeRuntimeWebUIMessage[],
-    generating: boolean,
     backendSessionId: string,
   ): void {
-    if (!generating) {
-      clearPendingUserMessage(backendSessionId);
-      return;
+    const pendingTexts = loadPendingUserMessages(backendSessionId);
+    if (pendingTexts.length === 0) return;
+
+    const patchedMessages: IAgentScopeRuntimeWebUIMessage[] = [];
+    let pendingIndex = 0;
+    let insertedMissingPending = false;
+
+    for (const message of messages) {
+      if (message.role !== ROLE_USER) {
+        patchedMessages.push(message);
+        continue;
+      }
+
+      const userText = this.getUserCardText(message);
+      if (!userText) {
+        if (pendingIndex < pendingTexts.length) {
+          patchedMessages.push(
+            this.buildPendingUserCard(pendingTexts[pendingIndex]),
+          );
+          pendingIndex += 1;
+          insertedMissingPending = true;
+        } else {
+          patchedMessages.push(message);
+        }
+        continue;
+      }
+
+      const matchedIndex = pendingTexts.indexOf(userText, pendingIndex);
+      if (matchedIndex >= 0) {
+        while (pendingIndex < matchedIndex) {
+          patchedMessages.push(
+            this.buildPendingUserCard(pendingTexts[pendingIndex]),
+          );
+          pendingIndex += 1;
+          insertedMissingPending = true;
+        }
+        pendingIndex = matchedIndex + 1;
+      }
+
+      patchedMessages.push(message);
     }
 
-    const cachedText = loadPendingUserMessage(backendSessionId);
-    if (!cachedText) return;
+    while (pendingIndex < pendingTexts.length) {
+      patchedMessages.push(
+        this.buildPendingUserCard(pendingTexts[pendingIndex]),
+      );
+      pendingIndex += 1;
+      insertedMissingPending = true;
+    }
 
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.role === ROLE_USER) {
-      const text = extractTextFromContent(
-        lastMsg?.cards?.[0]?.data?.input?.[0]?.content,
-      );
-      if (!text) {
-        lastMsg.cards = buildUserCard({
-          content: [{ type: "text", text: cachedText }],
-          role: ROLE_USER,
-        } as Message).cards;
-      }
-    } else {
-      messages.push(
-        buildUserCard({
-          content: [{ type: "text", text: cachedText }],
-          role: ROLE_USER,
-        } as Message),
-      );
+    messages.splice(0, messages.length, ...patchedMessages);
+
+    if (!insertedMissingPending) {
+      clearPendingUserMessage(backendSessionId);
     }
   }
 
@@ -633,7 +730,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const chatHistory = await api.getChat(backendId);
     const generating = isGenerating(chatHistory);
     const messages = convertMessages(chatHistory.messages || []);
-    this.patchLastUserMessage(messages, generating, backendId);
+    this.patchPendingUserMessages(messages, backendId);
 
     const session: ExtendedSession = {
       id: displayId,
@@ -703,6 +800,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const { list, realId } = resolveRealId(this.sessionList, tempId);
     this.sessionList = list;
     if (realId) {
+      movePendingUserMessages(tempId, realId);
       this.notifyRealIdResolved(tempId);
       this.onSessionIdResolved?.(tempId, realId);
     }
