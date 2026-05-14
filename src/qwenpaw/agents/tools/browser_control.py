@@ -756,7 +756,13 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
                 "resourceType": getattr(req, "resource_type", None),
             },
         )
+    def on_crash(_p):
+        logger.error("Browser page crashed: %s", page_id)
 
+    page.on("crash", on_crash)
+
+    requests_list = state["network_requests"].setdefault(page_id, [])
+    
     def on_response(res):
         for r in requests_list:
             if r.get("url") == res.url and "status" not in r:
@@ -829,21 +835,47 @@ async def _ensure_browser(
             f"CDP connection lost (was: {cdp_url}). "
             "Reconnect with action='connect_cdp'."
         )
+        _reset_browser_state(state)
         return False
 
     # Check browser state based on mode
     if _USE_SYNC_PLAYWRIGHT:
-        if state["_sync_context"] is not None and (
-            state["_sync_browser"] is not None or state["user_data_dir"]
-        ):
-            _touch_activity(state)
-            return True
+        if state["_sync_context"] is not None:
+            # Check if sync browser is still connected
+            browser = state.get("_sync_browser")
+            is_connected = True
+            if browser:
+                try:
+                    is_connected = browser.is_connected()
+                except Exception:
+                    is_connected = False
+
+            if is_connected:
+                _touch_activity(state)
+                return True
+            else:
+                logger.warning(
+                    "Sync browser process disconnected, resetting state",
+                )
+                _reset_browser_state(state)
     else:
         # Accept both regular context (browser+context) and persistent context
         # (context only, no separate browser object)
         if state["context"] is not None:
-            _touch_activity(state)
-            return True
+            # Check if async browser is still connected
+            browser = state.get("browser")
+            is_connected = True
+            if browser:
+                is_connected = browser.is_connected()
+
+            if is_connected:
+                _touch_activity(state)
+                return True
+            else:
+                logger.warning(
+                    "Async browser process disconnected, resetting state",
+                )
+                _reset_browser_state(state)
 
     try:
         if _USE_SYNC_PLAYWRIGHT:
@@ -3955,6 +3987,27 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
                 indent=2,
             ),
         )
+async def stop_all_browsers() -> None:
+    """Gracefully stop all active browser instances across all workspaces.
+
+    This should be called during application shutdown to ensure no zombie
+    browser processes are left behind.
+    """
+    if not _workspace_states:
+        return
+
+    logger.info("Stopping all browser instances...")
+    # Use list() to avoid mutation during iteration if stop resets state
+    for state in list(_workspace_states.values()):
+        if _is_browser_running(state):
+            try:
+                await _action_stop(state)
+            except Exception as e:
+                logger.error(
+                    "Failed to stop browser for workspace %s: %s",
+                    state.get("workspace_id", "unknown"),
+                    e,
+                )
 
 
 async def browser_use(  # pylint: disable=R0911,R0912
@@ -4194,7 +4247,8 @@ async def browser_use(  # pylint: disable=R0911,R0912
     _ws_id = _cwd.name if _cwd else "default"
     _ws_dir = str(_cwd) if _cwd else ""
     state = _get_workspace_state(_ws_id, _ws_dir)
-
+    _touch_activity(state)
+    
     action = (action or "").strip().lower()
     if not action:
         return _tool_response(
