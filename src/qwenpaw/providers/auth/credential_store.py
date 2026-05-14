@@ -1,0 +1,96 @@
+# -*- coding: utf-8 -*-
+"""Encrypted local storage for OAuth provider credentials."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from pathlib import Path
+
+from ...constant import SECRET_DIR
+from ...security.secret_store import decrypt_dict_fields, encrypt_dict_fields
+from .models import OAuthCredential
+
+logger = logging.getLogger(__name__)
+
+OAUTH_SECRET_FIELDS = frozenset(
+    {
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "client_secret",
+    },
+)
+
+
+class OAuthCredentialStore:
+    """Persist OAuth credentials under ``SECRET_DIR/providers/oauth``."""
+
+    def __init__(self, root: Path | None = None) -> None:
+        self.root = Path(root) if root is not None else (
+            SECRET_DIR / "providers" / "oauth"
+        )
+
+    def save(self, credential: OAuthCredential) -> None:
+        """Save a credential with sensitive fields encrypted."""
+        if not credential.access_token:
+            raise ValueError("Cannot save OAuth credential without access token")
+
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._chmod_best_effort(self.root, 0o700)
+
+        data = credential.model_dump()
+        data["version"] = 1
+        encrypted = encrypt_dict_fields(data, OAUTH_SECRET_FIELDS)
+        path = self._path_for(credential.provider_id)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(encrypted, f, ensure_ascii=False, indent=2)
+        self._chmod_best_effort(path, 0o600)
+
+    def load(self, provider_id: str) -> OAuthCredential | None:
+        """Load and decrypt a credential, returning ``None`` on corruption."""
+        path = self._path_for(provider_id)
+        if not path.exists():
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("Credential file is not a JSON object")
+            data.pop("version", None)
+            decrypted = decrypt_dict_fields(data, OAUTH_SECRET_FIELDS)
+            for field in OAUTH_SECRET_FIELDS:
+                value = decrypted.get(field)
+                if isinstance(value, str) and value.startswith("ENC:"):
+                    raise ValueError(f"Failed to decrypt field '{field}'")
+            return OAuthCredential.model_validate(decrypted)
+        except Exception as exc:
+            logger.warning(
+                "Failed to load OAuth credential for provider '%s'; "
+                "ignoring corrupt credential file (%s)",
+                provider_id,
+                exc.__class__.__name__,
+            )
+            return None
+
+    def delete(self, provider_id: str) -> None:
+        """Delete a credential if it exists."""
+        try:
+            self._path_for(provider_id).unlink()
+        except FileNotFoundError:
+            return
+
+    def exists(self, provider_id: str) -> bool:
+        """Return whether a credential file exists."""
+        return self._path_for(provider_id).exists()
+
+    def _path_for(self, provider_id: str) -> Path:
+        return self.root / f"{provider_id}.json"
+
+    @staticmethod
+    def _chmod_best_effort(path: Path, mode: int) -> None:
+        try:
+            os.chmod(path, mode)
+        except OSError:
+            pass
