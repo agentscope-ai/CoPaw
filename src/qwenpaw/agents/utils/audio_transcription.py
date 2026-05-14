@@ -14,13 +14,25 @@ import logging
 import os
 import shutil
 import threading
+from pathlib import Path
 from typing import List, Optional, Tuple
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
 _LOCAL_WHISPER_MODEL_ENV = "QWENPAW_LOCAL_WHISPER_MODEL"
 _LOCAL_WHISPER_DOWNLOAD_ROOT_ENV = "QWENPAW_LOCAL_WHISPER_DOWNLOAD_ROOT"
 _DEFAULT_LOCAL_WHISPER_MODEL = "base"
+
+
+class AudioTranscriptionError(RuntimeError):
+    """Raised when transcription cannot run and the caller needs details."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
 
 # ------------------------------------------------------------------
 # Cached local-whisper model (lazy singleton)
@@ -40,6 +52,77 @@ def _local_whisper_model_settings() -> Tuple[str, Optional[str]]:
         os.environ.get(_LOCAL_WHISPER_DOWNLOAD_ROOT_ENV, "").strip() or None
     )
     return model, download_root
+
+
+def _default_whisper_download_root() -> Path:
+    """Return openai-whisper's default model cache directory."""
+    return Path(os.path.expanduser("~")) / ".cache" / "whisper"
+
+
+def _whisper_model_cache_path(
+    whisper_module,
+    model_name: str,
+    download_root: Optional[str],
+) -> Optional[Path]:
+    """Return the expected local checkpoint path for a named Whisper model."""
+    if Path(model_name).is_file():
+        return Path(model_name)
+
+    model_urls = getattr(whisper_module, "_MODELS", {})
+    url = model_urls.get(model_name) if isinstance(model_urls, dict) else None
+    if not url:
+        return None
+
+    filename = Path(urlparse(url).path).name or f"{model_name}.pt"
+    root = (
+        Path(download_root)
+        if download_root
+        else _default_whisper_download_root()
+    )
+    return root / filename
+
+
+def _local_whisper_model_status(whisper_module) -> tuple[bool, Optional[str]]:
+    """Return whether the configured local Whisper model is already cached."""
+    model_name, download_root = _local_whisper_model_settings()
+    path = _whisper_model_cache_path(whisper_module, model_name, download_root)
+    if path is None:
+        return False, None
+    return path.is_file(), str(path)
+
+
+def _local_whisper_unavailable_message(status: dict) -> str:
+    """Build a user-actionable local Whisper availability message."""
+    if (
+        status.get("ffmpeg_installed")
+        and status.get("whisper_installed")
+        and not status.get("model_available")
+    ):
+        model = status.get("model") or _DEFAULT_LOCAL_WHISPER_MODEL
+        path = status.get("model_path") or "the Whisper cache directory"
+        return (
+            "Local Whisper dependencies are installed, but Whisper model "
+            f"'{model}' is not cached at {path}. "
+            "For offline use, pre-download the model on an online machine or "
+            f"set {_LOCAL_WHISPER_MODEL_ENV} to an existing model file and "
+            f"{_LOCAL_WHISPER_DOWNLOAD_ROOT_ENV} to an existing cache "
+            "directory."
+        )
+
+    missing = []
+    if not status["ffmpeg_installed"]:
+        missing.append("ffmpeg")
+    if not status["whisper_installed"]:
+        missing.append("openai-whisper")
+
+    if not missing:
+        return "Local Whisper is unavailable."
+
+    return (
+        "Local Whisper is unavailable. Missing: "
+        f"{', '.join(missing)}. "
+        "Install the missing dependencies to use local transcription."
+    )
 
 
 def _get_local_whisper_model():
@@ -165,27 +248,48 @@ def check_local_whisper_available() -> dict:
             "available": bool,
             "ffmpeg_installed": bool,
             "whisper_installed": bool,
+            "offline_available": bool,
+            "model_available": bool,
         }
     """
     ffmpeg_ok = shutil.which("ffmpeg") is not None
 
     whisper_ok = False
+    whisper_module = None
     try:
-        import whisper as _whisper  # noqa: F401
+        import whisper as _whisper
 
         whisper_ok = True
+        whisper_module = _whisper
     except ImportError:
         pass
 
     model_name, download_root = _local_whisper_model_settings()
+    model_available = False
+    model_path = None
+    if whisper_module is not None:
+        model_available, model_path = _local_whisper_model_status(
+            whisper_module,
+        )
 
-    return {
+    status = {
         "available": ffmpeg_ok and whisper_ok,
+        "offline_available": ffmpeg_ok and whisper_ok and model_available,
         "ffmpeg_installed": ffmpeg_ok,
         "whisper_installed": whisper_ok,
+        "model_available": model_available,
         "model": model_name,
-        "download_root": download_root,
+        "model_path": model_path,
+        "download_root": (
+            download_root or str(_default_whisper_download_root())
+        ),
     }
+    if status["offline_available"]:
+        status["message"] = "Local Whisper is ready for offline use."
+    else:
+        status["message"] = _local_whisper_unavailable_message(status)
+
+    return status
 
 
 # ------------------------------------------------------------------
@@ -201,17 +305,12 @@ async def _transcribe_local_whisper(file_path: str) -> Optional[str]:
     """
     status = check_local_whisper_available()
     if not status["available"]:
-        missing = []
-        if not status["ffmpeg_installed"]:
-            missing.append("ffmpeg")
-        if not status["whisper_installed"]:
-            missing.append("openai-whisper")
-        logger.warning(
-            "Local Whisper unavailable (missing: %s). "
-            "Install the missing dependencies to use local transcription.",
-            ", ".join(missing),
+        message = status["message"]
+        logger.warning(message)
+        raise AudioTranscriptionError(
+            "LOCAL_WHISPER_UNAVAILABLE",
+            message,
         )
-        return None
 
     def _run():
         model = _get_local_whisper_model()
@@ -232,13 +331,27 @@ async def _transcribe_local_whisper(file_path: str) -> Optional[str]:
             file_path,
         )
         return None
-    except Exception:
+    except AudioTranscriptionError:
+        raise
+    except Exception as exc:
+        status = check_local_whisper_available()
+        if status["available"] and not status.get("model_available"):
+            message = f"{status['message']} Original error: {exc}"
+            logger.warning(message, exc_info=True)
+            raise AudioTranscriptionError(
+                "LOCAL_WHISPER_MODEL_UNAVAILABLE",
+                message,
+            ) from exc
+
+        message = f"Local Whisper transcription failed for {file_path}: {exc}"
         logger.warning(
-            "Local Whisper transcription failed for %s",
-            file_path,
+            message,
             exc_info=True,
         )
-        return None
+        raise AudioTranscriptionError(
+            "LOCAL_WHISPER_TRANSCRIPTION_FAILED",
+            message,
+        ) from exc
 
 
 def _get_configured_provider_creds() -> Optional[Tuple[str, str]]:
@@ -333,14 +446,21 @@ async def _transcribe_whisper_api(file_path: str) -> Optional[str]:
 # ------------------------------------------------------------------
 
 
-async def transcribe_audio(file_path: str) -> Optional[str]:
+async def transcribe_audio(
+    file_path: str,
+    *,
+    raise_errors: bool = False,
+) -> Optional[str]:
     """Transcribe an audio file to text.
 
     Dispatches to either the Whisper API or local Whisper based on the
     ``transcription_provider_type`` config setting.  When the setting is
     ``"disabled"`` (the default), returns ``None`` immediately.
 
-    Returns the transcribed text, or ``None`` on failure.
+    Returns the transcribed text, or ``None`` on failure.  When
+    ``raise_errors`` is true, local Whisper setup/runtime failures are raised
+    as :class:`AudioTranscriptionError` so API callers can surface actionable
+    messages instead of a generic transcription failure.
     """
     from ...config import load_config
 
@@ -350,7 +470,12 @@ async def transcribe_audio(file_path: str) -> Optional[str]:
         logger.debug("Transcription is disabled; skipping")
         return None
     if provider_type == "local_whisper":
-        return await _transcribe_local_whisper(file_path)
+        try:
+            return await _transcribe_local_whisper(file_path)
+        except AudioTranscriptionError:
+            if raise_errors:
+                raise
+            return None
     if provider_type == "whisper_api":
         return await _transcribe_whisper_api(file_path)
 

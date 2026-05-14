@@ -486,7 +486,10 @@ async def post_transcribe_audio(
     file: UploadFile = File(..., description="Audio file to transcribe"),
 ) -> dict:
     """Transcribe uploaded audio file using configured Whisper provider."""
-    from ...agents.utils.audio_transcription import transcribe_audio
+    from ...agents.utils.audio_transcription import (
+        AudioTranscriptionError,
+        transcribe_audio,
+    )
 
     # Check transcription is enabled
     config = load_config()
@@ -550,7 +553,13 @@ async def post_transcribe_audio(
         tmp_path = tmp.name
 
     try:
-        text = await transcribe_audio(tmp_path)
+        try:
+            text = await transcribe_audio(tmp_path, raise_errors=True)
+        except AudioTranscriptionError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": exc.code, "message": exc.message},
+            ) from exc
         if text is None:
             raise HTTPException(
                 status_code=500,
