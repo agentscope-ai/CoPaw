@@ -533,6 +533,14 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
         except Exception as e:
             logger.error(f"Error stopping TokenUsageManager: {e}")
 
+        # Stop all browser instances
+        from ..agents.tools.browser_control import stop_all_browsers
+
+        try:
+            await stop_all_browsers()
+        except Exception as e:
+            logger.error(f"Error stopping browsers during shutdown: {e}")
+
         logger.info("Application shutdown complete")
 
 
