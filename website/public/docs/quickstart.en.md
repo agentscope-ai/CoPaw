@@ -123,6 +123,7 @@ Then open a new terminal (the installer adds QwenPaw to your PATH automatically)
 > 1. **If using CMD (.bat): Script executes successfully but fails to write to `Path`**
 >
 >    The script completes file installation. Due to **Constrained Language Mode**, it cannot automatically update environment variables. Manually configure as follows:
+>
 >    - **Locate the installation directory**:
 >      - Check if `uv` is available: Enter `uv --version` in CMD. If a version number appears, **only configure the QwenPaw path**. If you receive `'uv' is not recognized as an internal or external command, operable program or batch file,` configure both paths.
 >      - uv path (choose one based on installation location; fill if `uv` is unavailable): Typically `%USERPROFILE%\.local\bin`, `%USERPROFILE%\AppData\Local\uv`, or the `Scripts` folder within your Python installation directory
@@ -233,10 +234,12 @@ or running commands.
 
 1. **Download the installer**
    Go to [GitHub Releases](https://github.com/agentscope-ai/QwenPaw/releases) to download the version for your system:
+
    - Windows: `QwenPaw-Setup-<version>.exe`
    - macOS: `QwenPaw-<version>-macOS.zip`
 
 2. **Install and launch**
+
    - **Windows**: Double-click the `.exe` file to install following the wizard, then double-click the desktop shortcut to launch
    - **macOS**: Extract the `.zip` to get `QwenPaw.app`, first time requires right-click and select "Open" to bypass system security restrictions
 
