@@ -3032,6 +3032,107 @@ class TestDingTalkHandlerRichContent:
 
         assert result == []
 
+    def test_process_quoted_text_message(self, rich_handler):
+        """Quoted plain text should be prepended as context."""
+        raw_data = {
+            "robotCode": "robot_123",
+            "text": {
+                "isReplyMsg": True,
+                "repliedMsg": {
+                    "msgType": "text",
+                    "content": {"text": "previous message"},
+                },
+            },
+        }
+        text_parts = []
+        content_parts = []
+
+        rich_handler._process_quoted_message(
+            raw_data,
+            text_parts,
+            content_parts,
+        )
+
+        assert text_parts == ["[quoted message: previous message]"]
+        assert not content_parts
+
+    def test_process_quoted_file_message(self, rich_handler):
+        """Quoted file messages should resolve their download code."""
+        raw_data = {
+            "robotCode": "robot_123",
+            "text": {
+                "isReplyMsg": True,
+                "repliedMsg": {
+                    "msgType": "file",
+                    "content": {
+                        "downloadCode": "file_dl",
+                        "fileName": "report.pdf",
+                    },
+                },
+            },
+        }
+        file_part = MagicMock()
+        text_parts = []
+        content_parts = []
+
+        with patch.object(
+            rich_handler,
+            "_fetch_download_url_and_content",
+            return_value=file_part,
+        ) as mock_fetch:
+            rich_handler._process_quoted_message(
+                raw_data,
+                text_parts,
+                content_parts,
+            )
+
+        mock_fetch.assert_called_once_with(
+            "file_dl",
+            "robot_123",
+            "file",
+            filename_hint="report.pdf",
+        )
+        assert not text_parts
+        assert content_parts == [file_part]
+
+    def test_process_quoted_rich_text_message(self, rich_handler):
+        """Quoted richText should preserve both text and image parts."""
+        raw_data = {
+            "robotCode": "robot_123",
+            "text": {
+                "isReplyMsg": True,
+                "repliedMsg": {
+                    "msgType": "richText",
+                    "content": {
+                        "richText": [
+                            {"msgType": "text", "content": "quoted text"},
+                            {
+                                "msgType": "picture",
+                                "downloadCode": "image_dl",
+                            },
+                        ],
+                    },
+                },
+            },
+        }
+        image_part = MagicMock()
+        text_parts = []
+        content_parts = []
+
+        with patch.object(
+            rich_handler,
+            "_fetch_download_url_and_content",
+            return_value=image_part,
+        ):
+            rich_handler._process_quoted_message(
+                raw_data,
+                text_parts,
+                content_parts,
+            )
+
+        assert text_parts == ["[quoted message: quoted text]"]
+        assert content_parts == [image_part]
+
     def test_parse_rich_content_exception_handled(self, rich_handler):
         """Exceptions in parsing should be handled."""
         incoming = MagicMock()
