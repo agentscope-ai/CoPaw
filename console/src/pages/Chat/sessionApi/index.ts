@@ -18,6 +18,8 @@ import { toDisplayUrl } from "../utils";
 const DEFAULT_USER_ID = "default";
 const DEFAULT_CHANNEL = "console";
 const DEFAULT_SESSION_NAME = "New Chat";
+const REAL_ID_RESOLVE_RETRY_ATTEMPTS = 3;
+const REAL_ID_RESOLVE_RETRY_DELAY_MS = 250;
 const ROLE_TOOL = "tool";
 const ROLE_USER = "user";
 const ROLE_ASSISTANT = "assistant";
@@ -277,6 +279,9 @@ const isGenerating = (chatHistory: ChatHistory): boolean => {
   return last.role === ROLE_USER;
 };
 
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Resolve and persist the real backend UUID for a local timestamp session.
  * Stores the real UUID as realId while keeping the timestamp as id, so the
@@ -417,7 +422,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
    * Called when a temporary timestamp session id is resolved to a real backend
    * UUID. Consumers (e.g. Chat/index.tsx) can register here to update the URL.
    */
-  onSessionIdResolved: ((tempId: string, realId: string) => void) | null = null;
+  onSessionIdResolved: ((realId: string, tempId: string) => void) | null = null;
 
   /**
    * Called after a session is removed. Consumers can register here to clear
@@ -512,6 +517,34 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   }
 
   /**
+   * Refresh the chat list once and try to bind a local timestamp session to
+   * the backend UUID that uses the same session_id.
+   */
+  private async refreshAndResolveRealId(
+    tempId: string,
+  ): Promise<string | null> {
+    await this.getSessionList();
+    return this.resolveAndNotify(tempId);
+  }
+
+  private async resolveRealIdWithRetry(
+    tempId: string,
+    attempts = REAL_ID_RESOLVE_RETRY_ATTEMPTS,
+  ): Promise<string | null> {
+    const currentRealId = this.getRealIdForSession(tempId);
+    if (currentRealId) return currentRealId;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const realId = await this.refreshAndResolveRealId(tempId);
+      if (realId) return realId;
+      if (attempt < attempts - 1) {
+        await delay(REAL_ID_RESOLVE_RETRY_DELAY_MS);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns the real backend UUID for a session identified by id (which may be
    * a local timestamp). Returns null when not yet resolved or not found.
    */
@@ -520,6 +553,19 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       | ExtendedSession
       | undefined;
     return s?.realId ?? null;
+  }
+
+  async getBackendIdForSession(sessionId: string): Promise<string | null> {
+    if (!sessionId) return null;
+
+    const realId = this.getRealIdForSession(sessionId);
+    if (realId) return realId;
+
+    if (isLocalTimestamp(sessionId)) {
+      return this.resolveRealIdWithRetry(sessionId);
+    }
+
+    return sessionId;
   }
 
   /** Apply listChats to sessionList; merge realId and generating by session_id. */
@@ -699,13 +745,14 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
    * After fetching the latest session list, try to resolve a local timestamp
    * session to its real backend UUID and notify listeners.
    */
-  private resolveAndNotify(tempId: string): void {
+  private resolveAndNotify(tempId: string): string | null {
     const { list, realId } = resolveRealId(this.sessionList, tempId);
     this.sessionList = list;
     if (realId) {
       this.notifyRealIdResolved(tempId);
-      this.onSessionIdResolved?.(tempId, realId);
+      this.onSessionIdResolved?.(realId, tempId);
     }
+    return realId;
   }
 
   async updateSession(session: Partial<IAgentScopeRuntimeWebUISession>) {
@@ -717,12 +764,14 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
       const existing = this.sessionList[index] as ExtendedSession;
       if (isLocalTimestamp(existing.id) && !existing.realId) {
-        const tempId = existing.id;
-        this.getSessionList().then(() => this.resolveAndNotify(tempId));
+        void this.resolveRealIdWithRetry(existing.id).catch(() => undefined);
       }
     } else {
       const tempId = session.id!;
-      await this.getSessionList().then(() => this.resolveAndNotify(tempId));
+      const realId = await this.refreshAndResolveRealId(tempId);
+      if (!realId && isLocalTimestamp(tempId)) {
+        void this.resolveRealIdWithRetry(tempId).catch(() => undefined);
+      }
     }
 
     return [...this.sessionList];
@@ -752,14 +801,23 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       | ExtendedSession
       | undefined;
 
-    const deleteId =
+    let deleteId =
       existing?.realId ?? (isLocalTimestamp(sessionId) ? null : sessionId);
+
+    if (!deleteId && isLocalTimestamp(sessionId)) {
+      deleteId = await this.resolveRealIdWithRetry(sessionId);
+    }
 
     if (deleteId) await api.deleteChat(deleteId);
 
-    this.sessionList = this.sessionList.filter((s) => s.id !== sessionId);
+    this.sessionList = this.sessionList.filter((s) => {
+      const extended = s as ExtendedSession;
+      return (
+        s.id !== sessionId && s.id !== deleteId && extended.realId !== deleteId
+      );
+    });
 
-    const resolvedId = existing?.realId ?? sessionId;
+    const resolvedId = deleteId ?? sessionId;
     this.onSessionRemoved?.(resolvedId);
 
     return [...this.sessionList];
