@@ -69,14 +69,14 @@ export const providerApi = {
     ),
 
   getProviderAuthStatus: (providerId: string, flowId?: string) => {
-    const url = new URL(
-      `/models/${encodeURIComponent(providerId)}/auth/status`,
-      window.location.origin,
-    );
-    if (flowId) {
-      url.searchParams.set("flow_id", flowId);
+    const path = `/models/${encodeURIComponent(providerId)}/auth/status`;
+    if (!flowId) {
+      return request<AuthStatusResult>(path);
     }
-    return request<AuthStatusResult>(url.pathname + url.search);
+
+    const searchParams = new URLSearchParams();
+    searchParams.set("flow_id", flowId);
+    return request<AuthStatusResult>(`${path}?${searchParams.toString()}`);
   },
 
   logoutProviderAuth: (providerId: string) =>
