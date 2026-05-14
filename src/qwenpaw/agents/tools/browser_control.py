@@ -3987,6 +3987,8 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
                 indent=2,
             ),
         )
+
+
 async def stop_all_browsers() -> None:
     """Gracefully stop all active browser instances across all workspaces.
 
