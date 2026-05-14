@@ -175,12 +175,10 @@ class AnthropicProvider(Provider):
                 ),
             }
 
-        self.generate_kwargs = self.get_effective_generate_kwargs(model_id)
-
-        if "max_tokens" in self.generate_kwargs:
-            max_tokens = self.generate_kwargs.pop("max_tokens")
-        else:
-            max_tokens = 16384
+        effective_generate_kwargs = self.get_effective_generate_kwargs(
+            model_id,
+        )
+        max_tokens = effective_generate_kwargs.pop("max_tokens", 16384)
 
         return AnthropicChatModel(
             model_name=model_id,
@@ -189,7 +187,7 @@ class AnthropicProvider(Provider):
             api_key=self.api_key,
             stream_tool_parsing=False,
             client_kwargs=client_kwargs,
-            generate_kwargs=self.get_effective_generate_kwargs(model_id),
+            generate_kwargs=effective_generate_kwargs,
         )
 
     async def probe_model_multimodal(
