@@ -4250,7 +4250,7 @@ async def browser_use(  # pylint: disable=R0911,R0912
     _ws_id = _cwd.name if _cwd else "default"
     _ws_dir = str(_cwd) if _cwd else ""
     state = _get_workspace_state(_ws_id, _ws_dir)
-    _touch_activity(state))
+    _touch_activity(state)
 
     action = (action or "").strip().lower()
     if not action:
