@@ -183,8 +183,9 @@ async def test_provider_without_required_api_key_is_not_required(
     info = await provider.get_info()
 
     assert status.status == ProviderAuthStatus.NOT_REQUIRED
-    assert info.auth_type == ProviderAuthType.NONE
+    assert info.auth_type == ProviderAuthType.API_KEY
     assert info.auth is not None
+    assert info.auth.type == ProviderAuthType.NONE
     assert info.auth.status == ProviderAuthStatus.NOT_REQUIRED
 
 

@@ -8,6 +8,8 @@ import logging
 import os
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from ...constant import SECRET_DIR
 from ...security.secret_store import decrypt_dict_fields, encrypt_dict_fields
 from .models import OAuthCredential
@@ -69,12 +71,18 @@ class OAuthCredentialStore:
                 if isinstance(value, str) and value.startswith("ENC:"):
                     raise ValueError(f"Failed to decrypt field '{field}'")
             return OAuthCredential.model_validate(decrypted)
-        except Exception as exc:
+        except (
+            json.JSONDecodeError,
+            OSError,
+            ValueError,
+            ValidationError,
+        ) as exc:
             logger.warning(
                 "Failed to load OAuth credential for provider '%s'; "
-                "ignoring corrupt credential file (%s)",
+                "ignoring unreadable or invalid credential file: %s",
                 provider_id,
-                exc.__class__.__name__,
+                exc,
+                exc_info=True,
             )
             return None
 
