@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -35,6 +36,17 @@ class A2AListCommandHandler(BaseControlCommandHandler):
 
         workspace_dir = context.workspace.workspace_dir
         agents_cfg = _load_a2a_agents(workspace_dir)
+        raw_args = context.args.get("_raw_args", "").strip()
+
+        # /a2a <agent_name> <message> — delegate to a2a_call tool
+        if raw_args:
+            return await self._handle_direct_call(agents_cfg, raw_args)
+
+        # /a2a — list agents
+        return await self._handle_list(agents_cfg)
+
+    async def _handle_list(self, agents_cfg: dict[str, dict]) -> str:
+        from modules.a2a.client_manager import get_a2a_manager
 
         if not agents_cfg:
             return "暂无已注册的远程 A2A Agent。\n\n使用 POST /a2a/agents 注册新的 Agent，或在 A2A 管理页面添加。"
@@ -49,7 +61,7 @@ class A2AListCommandHandler(BaseControlCommandHandler):
             desc = card_info.get("description", "") if card_info else ""
             status_icon = "🟢" if status == "connected" else "⚪"
 
-            line = f"\n{status_icon} **/{alias}**"
+            line = f"\n{status_icon} **{alias}**"
             if name:
                 line += f" — {name}"
             if desc:
@@ -58,8 +70,56 @@ class A2AListCommandHandler(BaseControlCommandHandler):
                 line += f"\n   状态: {status}"
             lines.append(line)
 
-        lines.append("\n---\n使用 `/{alias} 你的问题` 直接向远程 Agent 发送消息，例如：")
+        lines.append("\n---\n使用 `/a2a <agent_name> <message>` 直接向远程 Agent 发送消息，例如：")
         for alias in agents_cfg:
-            lines.append(f"  `/{alias} 如何部署 ECS？`")
+            lines.append(f"  `/a2a {alias} 如何部署 ECS？`")
 
         return "\n".join(lines)
+
+    async def _handle_direct_call(self, agents_cfg: dict[str, dict], raw_args: str) -> str:
+        from .a2a_call import a2a_call
+
+        parts = raw_args.split(None, 1)
+        if len(parts) < 2:
+            return f"用法：`/a2a <agent_name> <message>`\n\n使用 `/a2a` 查看可用的 agent 列表。"
+
+        agent_name, message = parts[0].strip(), parts[1].strip()
+        if not message:
+            return f"用法：`/a2a <agent_name> <message>`\n\n消息内容不能为空。"
+
+        if agent_name not in agents_cfg:
+            available = ", ".join(agents_cfg.keys()) if agents_cfg else "无"
+            return f"未找到别名为 '{agent_name}' 的已注册 A2A Agent。\n\n可用别名：{available}"
+
+        accumulated_text = ""
+        last_error = ""
+        try:
+            async for tool_resp in a2a_call(
+                message=message,
+                agent_alias=agent_name,
+            ):
+                for block in tool_resp.content:
+                    if block.get("type") == "text":
+                        try:
+                            payload = json.loads(block["text"])
+                            accumulated_text = payload.get("response_text", "")
+                            if payload.get("error"):
+                                last_error = payload["error"]
+                            if payload.get("task_state") in ("completed", "failed", "error", "canceled"):
+                                break
+                        except json.JSONDecodeError:
+                            accumulated_text = block["text"]
+        except Exception as e:
+            logger.error("A2A direct call failed for %s: %s", agent_name, e)
+            last_error = str(e)
+
+        if last_error and not accumulated_text:
+            return f"[远程 Agent '{agent_name}' 调用失败] 错误：{last_error}"
+
+        if last_error and accumulated_text:
+            return f"{accumulated_text}\n\n[调用完成，但有错误: {last_error}]"
+
+        if not accumulated_text:
+            return f"[远程 Agent '{agent_name}' 返回空响应]"
+
+        return accumulated_text
