@@ -286,6 +286,83 @@ def test_agent_running_config_llm_retry_persists(
     assert reloaded_config.running.llm_backoff_cap == 8.0
 
 
+def test_legacy_embedding_config_migrates_to_reme_light(
+    mock_agent_workspace,
+):  # pylint: disable=redefined-outer-name
+    """Legacy running.embedding_config is read through the new ReMe path."""
+    import json
+
+    agent_json_path = mock_agent_workspace / "agent.json"
+    with open(agent_json_path, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    raw_data["running"] = {
+        "embedding_config": {
+            "backend": "openai",
+            "api_key": "legacy-key",
+            "base_url": "https://embeddings.example.com/v1",
+            "model_name": "bge-m3",
+            "dimensions": 1024,
+            "enable_cache": False,
+            "use_dimensions": True,
+            "max_cache_size": 200,
+            "max_input_length": 4096,
+            "max_batch_size": 8,
+        },
+    }
+    with open(agent_json_path, "w", encoding="utf-8") as f:
+        json.dump(raw_data, f)
+
+    agent_config = load_agent_config("test_agent")
+    embedding = (
+        agent_config.running.reme_light_memory_config.embedding_model_config
+    )
+
+    assert embedding.api_key == "legacy-key"
+    assert embedding.base_url == "https://embeddings.example.com/v1"
+    assert embedding.model_name == "bge-m3"
+    assert embedding.enable_cache is False
+    assert embedding.use_dimensions is True
+    assert embedding.max_batch_size == 8
+
+
+def test_modern_embedding_config_wins_over_legacy_config(
+    mock_agent_workspace,
+):  # pylint: disable=redefined-outer-name
+    """A populated new ReMe embedding config is not overwritten."""
+    import json
+
+    agent_json_path = mock_agent_workspace / "agent.json"
+    with open(agent_json_path, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    raw_data["running"] = {
+        "embedding_config": {
+            "api_key": "legacy-key",
+            "base_url": "https://legacy.example.com/v1",
+            "model_name": "legacy-model",
+        },
+        "reme_light_memory_config": {
+            "embedding_model_config": {
+                "api_key": "modern-key",
+                "base_url": "https://modern.example.com/v1",
+                "model_name": "modern-model",
+            },
+        },
+    }
+    with open(agent_json_path, "w", encoding="utf-8") as f:
+        json.dump(raw_data, f)
+
+    agent_config = load_agent_config("test_agent")
+    embedding = (
+        agent_config.running.reme_light_memory_config.embedding_model_config
+    )
+
+    assert embedding.api_key == "modern-key"
+    assert embedding.base_url == "https://modern.example.com/v1"
+    assert embedding.model_name == "modern-model"
+
+
 def test_agent_running_config_rejects_backoff_cap_below_base():
     """Test that backoff cap cannot be lower than backoff base."""
     with pytest.raises(ConfigurationException):

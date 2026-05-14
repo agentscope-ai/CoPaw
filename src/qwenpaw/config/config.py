@@ -562,6 +562,58 @@ class EmbeddingModelConfig(BaseModel):
     )
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    """Return a model/dict value as a shallow dict."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(exclude_none=True)
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _embedding_config_has_user_values(value: Any) -> bool:
+    """Return True when an embedding config carries non-default values."""
+    data = _as_dict(value)
+    if not data:
+        return False
+
+    defaults = EmbeddingModelConfig().model_dump()
+    for key, val in data.items():
+        if key not in defaults or val is None:
+            continue
+        if isinstance(val, str):
+            if val.strip() and val != defaults[key]:
+                return True
+            continue
+        if val != defaults[key]:
+            return True
+    return False
+
+
+def _migrate_legacy_embedding_config(data: Any) -> Any:
+    """Copy legacy running.embedding_config into the current ReMe path."""
+    if not isinstance(data, dict):
+        return data
+
+    legacy = data.get("embedding_config")
+    if not _embedding_config_has_user_values(legacy):
+        return data
+
+    reme_config = _as_dict(data.get("reme_light_memory_config"))
+    current = reme_config.get("embedding_model_config")
+    if _embedding_config_has_user_values(current):
+        return data
+
+    migrated = dict(data)
+    migrated_reme = dict(reme_config)
+    migrated_embedding = EmbeddingModelConfig.model_validate(
+        _as_dict(legacy),
+    ).model_dump()
+    migrated_reme["embedding_model_config"] = migrated_embedding
+    migrated["reme_light_memory_config"] = migrated_reme
+    return migrated
+
+
 class ADBPGMemoryConfig(BaseModel):
     """ADBPG (AnalyticDB for PostgreSQL) memory configuration."""
 
@@ -818,6 +870,12 @@ class AgentsRunningConfig(BaseModel):
     """Agent runtime behavior configuration."""
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_embedding_config(cls, data: Any) -> Any:
+        """Preserve pre-ReMe embedding config from older agent.json files."""
+        return _migrate_legacy_embedding_config(data)
 
     max_iters: int = Field(
         default=100,
