@@ -363,6 +363,48 @@ class TestGetToHandle:
         assert ch.get_to_handle_from_request(req) == "12345"
 
 
+class TestToHandleFromTarget:
+    def test_shared_group_session_routes_to_group(self):
+        ch = _make_channel()
+        assert (
+            ch.to_handle_from_target(
+                user_id="67890",
+                session_id="onebot:g:67890",
+            )
+            == "group:67890"
+        )
+
+    def test_group_member_session_routes_to_group(self):
+        ch = _make_channel(share_session_in_group=False)
+        assert (
+            ch.to_handle_from_target(
+                user_id="12345",
+                session_id="onebot:67890:12345",
+            )
+            == "group:67890"
+        )
+
+    def test_explicit_group_handle_is_preserved(self):
+        ch = _make_channel()
+        assert (
+            ch.to_handle_from_target(
+                user_id="group:67890",
+                session_id="onebot:67890",
+            )
+            == "group:67890"
+        )
+
+    def test_private_session_falls_back_to_user_id(self):
+        ch = _make_channel()
+        assert (
+            ch.to_handle_from_target(
+                user_id="12345",
+                session_id="onebot:12345",
+            )
+            == "12345"
+        )
+
+
 # ===================================================================
 # Send methods
 # ===================================================================

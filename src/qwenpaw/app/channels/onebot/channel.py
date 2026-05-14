@@ -627,6 +627,22 @@ class OneBotChannel(BaseChannel):
             meta.get("sender_id") or getattr(request, "user_id", "") or "",
         )
 
+    def to_handle_from_target(self, *, user_id: str, session_id: str) -> str:
+        user_id = str(user_id or "")
+        session_id = str(session_id or "")
+        if user_id.startswith("group:"):
+            return user_id
+
+        parts = session_id.split(":", 2)
+        if len(parts) == 3 and parts[0] == "onebot":
+            session_marker, session_target = parts[1], parts[2]
+            if session_marker == "g" and session_target:
+                return f"group:{session_target}"
+            if session_marker and session_target:
+                return f"group:{session_marker}"
+
+        return user_id
+
     # ------------------------------------------------------------------
     # Sending messages (To NapCat)
     # ------------------------------------------------------------------
