@@ -173,11 +173,25 @@ def _is_missing_reasoning_content_error(exc: Exception) -> bool:
     return "reasoning_content" in str(exc)
 
 
+def _extract_reasoning_content(msg: dict[str, Any]) -> str:
+    """Return preserved thinking text for providers that require it."""
+    content = msg.get("content")
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "thinking":
+                continue
+            for key in ("thinking", "reasoning_content", "text"):
+                value = block.get(key)
+                if isinstance(value, str) and value:
+                    return value
+    return " "
+
+
 def _inject_reasoning_content(
     args: tuple,
     kwargs: dict[str, Any],
 ) -> bool:
-    """Add ``reasoning_content = " "`` to assistant messages that lack it.
+    """Add ``reasoning_content`` to assistant messages that lack it.
 
     Modifies the formatted message dicts **in-place** so the subsequent
     retry sees the updated values.  Returns *True* when at least one
@@ -199,7 +213,7 @@ def _inject_reasoning_content(
             and msg.get("role") == "assistant"
             and "reasoning_content" not in msg
         ):
-            msg["reasoning_content"] = " "
+            msg["reasoning_content"] = _extract_reasoning_content(msg)
             modified = True
 
     return modified
