@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import errno
 import logging
 import os
+import socket
 
 import click
 import uvicorn
@@ -10,6 +12,42 @@ import uvicorn
 from ..constant import LOG_LEVEL_ENV
 from ..config.utils import write_last_api
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
+
+
+def _bind_preflight_error(host: str, port: int) -> OSError | None:
+    """Return address-in-use errors before the app startup side effects."""
+    try:
+        addr_infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_STREAM,
+        )
+    except socket.gaierror:
+        return None
+
+    for family, socktype, proto, _canonname, sockaddr in addr_infos:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.bind(sockaddr)
+                sock.listen(1)
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                return exc
+    return None
+
+
+def _ensure_bind_available(host: str, port: int) -> None:
+    """Fail early when the configured HTTP bind is already occupied."""
+    bind_error = _bind_preflight_error(host, port)
+    if bind_error is None:
+        return
+
+    suggested_port = 8090 if port == 8088 else port + 1
+    raise click.ClickException(
+        f"Cannot start QwenPaw app because {host}:{port} is already in use. "
+        "Stop the existing service with `qwenpaw shutdown`, or choose another "
+        f"port such as `qwenpaw app --port {suggested_port}`.",
+    )
 
 
 @click.command("app")
@@ -64,8 +102,8 @@ def app_cmd(
     # Handle deprecated --workers parameter
     if workers is not None:
         click.echo(
-            "⚠️  WARNING: --workers option is deprecated and will be removed "
-            "in a future version.",
+            "WARNING: --workers option is deprecated and will be removed in "
+            "a future version.",
             err=True,
         )
         click.echo(
@@ -74,6 +112,8 @@ def app_cmd(
             err=True,
         )
         click.echo(err=True)
+
+    _ensure_bind_available(host, port)
 
     # Persist last used host/port for other terminals
     if host == "0.0.0.0":
