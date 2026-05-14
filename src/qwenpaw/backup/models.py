@@ -64,6 +64,14 @@ class CreateBackupRequest(BaseModel):
         description="Agent IDs to include when scope.include_agents is True. "
         "Must be the explicit list (even for 'all agents').",
     )
+    keep_last: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional retention policy. When set, keep only the newest N "
+            "backup archives after this backup is created."
+        ),
+    )
 
 
 class RestoreBackupRequest(BaseModel):

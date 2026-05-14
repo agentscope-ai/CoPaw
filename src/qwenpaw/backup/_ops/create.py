@@ -10,10 +10,11 @@ from typing import Any, AsyncGenerator
 
 from .._utils.constants import META_FILE, zip_path
 from .._utils.meta import finalize_backup_meta
-from ..models import BackupMeta, CreateBackupRequest
+from ..models import BackupMeta, CreateBackupRequest, DeleteBackupsResponse
 from ...config.utils import load_config
 from ...constant import BACKUP_DIR
 from .create_helpers import add_files_to_zip
+from .storage import _delete_sync, _list_sync
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ async def create_stream(
         asyncio.to_thread(
             _create_with_progress,
             meta,
+            req.keep_last,
             req.agents,
             _put,
             stop_event,
@@ -115,6 +117,7 @@ def _write_meta_and_finalize(
 
 def _create_with_progress(
     meta: BackupMeta,
+    keep_last: int | None,
     req_agents: list[str],
     put: Any,
     stop_event: threading.Event,
@@ -133,7 +136,15 @@ def _create_with_progress(
         dest = zip_path(meta.id)
         tmp = dest.with_suffix(".tmp")
         try:
-            _compress_to_tmp(meta, req_agents, put, stop_event, tmp, dest)
+            _compress_to_tmp(
+                meta,
+                keep_last,
+                req_agents,
+                put,
+                stop_event,
+                tmp,
+                dest,
+            )
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
@@ -146,6 +157,7 @@ def _create_with_progress(
 
 def _compress_to_tmp(
     meta: BackupMeta,
+    keep_last: int | None,
     req_agents: list[str],
     put: Any,
     stop_event: threading.Event,
@@ -213,6 +225,46 @@ def _compress_to_tmp(
         return
 
     tmp.replace(dest)  # atomic on both Windows and Linux
+    retention = _apply_backup_retention(keep_last, meta.id)
+    if retention.deleted or retention.failed:
+        put(
+            {
+                "type": "retention",
+                "deleted": retention.deleted,
+                "failed": retention.failed,
+                "percent": 95,
+            },
+        )
     put(
         {"type": "done", "meta": meta.model_dump(mode="json"), "percent": 100},
     )
+
+
+def _apply_backup_retention(
+    keep_last: int | None,
+    protected_backup_id: str,
+) -> DeleteBackupsResponse:
+    """Prune old backups when a create request opts into retention."""
+    if keep_last is None:
+        return DeleteBackupsResponse()
+
+    backups = _list_sync()
+    kept_ids = {protected_backup_id}
+    delete_ids: list[str] = []
+    for backup in backups:
+        if backup.id == protected_backup_id:
+            continue
+        if len(kept_ids) < keep_last:
+            kept_ids.add(backup.id)
+        else:
+            delete_ids.append(backup.id)
+
+    if not delete_ids:
+        return DeleteBackupsResponse()
+
+    logger.info(
+        "Applying backup retention keep_last=%d, deleting %d old backup(s)",
+        keep_last,
+        len(delete_ids),
+    )
+    return _delete_sync(delete_ids)
