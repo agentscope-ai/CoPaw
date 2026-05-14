@@ -11,30 +11,67 @@ Transcription is only attempted when explicitly enabled via the
 
 import asyncio
 import logging
+import os
 import shutil
 import threading
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+_LOCAL_WHISPER_MODEL_ENV = "QWENPAW_LOCAL_WHISPER_MODEL"
+_LOCAL_WHISPER_DOWNLOAD_ROOT_ENV = "QWENPAW_LOCAL_WHISPER_DOWNLOAD_ROOT"
+_DEFAULT_LOCAL_WHISPER_MODEL = "base"
+
 # ------------------------------------------------------------------
 # Cached local-whisper model (lazy singleton)
 # ------------------------------------------------------------------
 _local_whisper_model = None
+_local_whisper_model_key: Tuple[str, Optional[str]] | None = None
 _local_whisper_lock = threading.Lock()
+
+
+def _local_whisper_model_settings() -> Tuple[str, Optional[str]]:
+    """Return the configured local Whisper model and optional cache root."""
+    model = (
+        os.environ.get(_LOCAL_WHISPER_MODEL_ENV, "").strip()
+        or _DEFAULT_LOCAL_WHISPER_MODEL
+    )
+    download_root = (
+        os.environ.get(_LOCAL_WHISPER_DOWNLOAD_ROOT_ENV, "").strip() or None
+    )
+    return model, download_root
 
 
 def _get_local_whisper_model():
     """Return a cached whisper model, loading it on first call."""
-    global _local_whisper_model  # noqa: PLW0603
-    if _local_whisper_model is not None:
+    global _local_whisper_model, _local_whisper_model_key  # noqa: PLW0603
+    model_name, download_root = _local_whisper_model_settings()
+    model_key = (model_name, download_root)
+
+    if (
+        _local_whisper_model is not None
+        and _local_whisper_model_key == model_key
+    ):
         return _local_whisper_model
     with _local_whisper_lock:
-        if _local_whisper_model is not None:
+        if (
+            _local_whisper_model is not None
+            and _local_whisper_model_key == model_key
+        ):
             return _local_whisper_model
         import whisper
 
-        _local_whisper_model = whisper.load_model("base")
+        kwargs = {}
+        if download_root:
+            kwargs["download_root"] = download_root
+
+        logger.info(
+            "Loading local Whisper model '%s'%s",
+            model_name,
+            (f" from cache root '{download_root}'" if download_root else ""),
+        )
+        _local_whisper_model = whisper.load_model(model_name, **kwargs)
+        _local_whisper_model_key = model_key
         return _local_whisper_model
 
 
@@ -140,10 +177,14 @@ def check_local_whisper_available() -> dict:
     except ImportError:
         pass
 
+    model_name, download_root = _local_whisper_model_settings()
+
     return {
         "available": ffmpeg_ok and whisper_ok,
         "ffmpeg_installed": ffmpeg_ok,
         "whisper_installed": whisper_ok,
+        "model": model_name,
+        "download_root": download_root,
     }
 
 
