@@ -77,9 +77,19 @@ async def _client_with_chat(tmp_path: Path) -> tuple[AsyncClient, str]:
 
     app = FastAPI()
     app.include_router(router, prefix="/api")
-    app.dependency_overrides[get_chat_manager] = lambda: chat_manager
-    app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[get_workspace] = lambda: FakeWorkspace()
+
+    def get_test_chat_manager() -> ChatManager:
+        return chat_manager
+
+    def get_test_session() -> SafeJSONSession:
+        return session
+
+    def get_test_workspace() -> FakeWorkspace:
+        return FakeWorkspace()
+
+    app.dependency_overrides[get_chat_manager] = get_test_chat_manager
+    app.dependency_overrides[get_session] = get_test_session
+    app.dependency_overrides[get_workspace] = get_test_workspace
     transport = ASGITransport(app=app)
     client = AsyncClient(transport=transport, base_url="http://test")
     return client, chat.id
