@@ -107,6 +107,8 @@
   },
   "chat": {
     "modelSelectTooltip": "Pilih model",
+    "modelErrorTitle": "Permintaan model gagal",
+    "modelErrorStatus": "Permintaan model gagal (HTTP {{status}}). Periksa konfigurasi model dan coba lagi.",
     "newChatTooltip": "Chat baru",
     "searchTooltip": "Cari semua chat",
     "chatHistoryTooltip": "Riwayat chat",
