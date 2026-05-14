@@ -21,29 +21,30 @@ from .models import (
     BuiltinSkillVariant,
 )
 from .store import (
-    _build_skill_metadata,
-    _classify_pool_skill_source,
-    _copy_skill_dir,
-    _default_pool_manifest,
-    _default_workspace_manifest,
-    _extract_version,
-    _is_pool_builtin_entry,
-    _mutate_json,
-    _normalize_skill_manifest_entry,
-    _read_frontmatter_safe_from_path,
-    _read_json,
-    _write_json_atomic,
+    build_skill_metadata,
+    classify_pool_skill_source,
+    copy_skill_dir,
+    default_pool_manifest,
+    default_workspace_manifest,
+    extract_version,
     get_pool_skill_manifest_path,
     get_skill_pool_dir,
     get_workspace_skill_manifest_path,
     get_workspace_skills_dir,
+    is_pool_builtin_entry,
+    mutate_json,
+    normalize_skill_manifest_entry,
+    read_frontmatter_safe_from_path,
+    read_json,
     read_skill_manifest,
     read_skill_pool_manifest,
+    safe_skill_dir,
+    write_json_atomic,
 )
 
 logger = logging.getLogger(__name__)
 
-_BUILTIN_SKILL_LANGUAGES = ("en", "zh")
+BUILTIN_SKILL_LANGUAGES = ("en", "zh")
 _BUILTIN_SKILL_DIR_RE = re.compile(
     r"^(?P<name>.+)-(?P<language>en|zh)$",
 )
@@ -55,17 +56,22 @@ _builtin_cache: dict[str, Any] = {}
 _BUILTIN_CACHE_LOCK = threading.Lock()
 
 
+# ---------------------------------------------------------------------------
+# Builtin skill language preference
+# ---------------------------------------------------------------------------
+
+
 def _normalize_builtin_skill_language(
     language: str | None,
     *,
     fallback: str = "en",
 ) -> str:
     normalized = str(language or "").strip().lower()
-    if normalized in _BUILTIN_SKILL_LANGUAGES:
+    if normalized in BUILTIN_SKILL_LANGUAGES:
         return normalized
     if fallback == "":
         return ""
-    return fallback if fallback in _BUILTIN_SKILL_LANGUAGES else "en"
+    return fallback if fallback in BUILTIN_SKILL_LANGUAGES else "en"
 
 
 def get_builtin_skill_language_preference() -> str:
@@ -105,6 +111,11 @@ def set_builtin_skill_language_preference(language: str) -> None:
         ] = _normalize_builtin_skill_language(
             language,
         )
+
+
+# ---------------------------------------------------------------------------
+# Packaged builtin discovery + variant selection
+# ---------------------------------------------------------------------------
 
 
 def _parse_builtin_skill_identity(
@@ -148,7 +159,7 @@ def _iter_packaged_builtin_variants() -> Iterator[BuiltinSkillVariant]:
         if identity is None:
             continue
 
-        post = _read_frontmatter_safe_from_path(
+        post = read_frontmatter_safe_from_path(
             skill_md_path,
             identity.name,
         )
@@ -159,7 +170,7 @@ def _iter_packaged_builtin_variants() -> Iterator[BuiltinSkillVariant]:
             skill_dir=skill_dir,
             skill_md_path=skill_md_path,
             description=str(post.get("description", "") or ""),
-            version_text=_extract_version(post),
+            version_text=extract_version(post),
         )
 
 
@@ -209,7 +220,7 @@ def _iter_packaged_builtin_dirs() -> Iterator[Path]:
             yield skill_dir
 
 
-def _get_packaged_builtin_versions() -> dict[str, str]:
+def get_packaged_builtin_versions() -> dict[str, str]:
     """Return packaged builtin names mapped to their version text."""
     registry = _get_packaged_builtin_registry()
     versions: dict[str, str] = {}
@@ -222,6 +233,11 @@ def _get_packaged_builtin_versions() -> dict[str, str]:
 def get_builtin_skills_dir() -> Path:
     """Return the packaged built-in skill directory."""
     return Path(__file__).resolve().parent.parent / "skills"
+
+
+# ---------------------------------------------------------------------------
+# Skill config -> environment variable overrides
+# ---------------------------------------------------------------------------
 
 
 def _stringify_skill_env_value(value: Any) -> str:
@@ -370,6 +386,11 @@ def apply_skill_config_env_overrides(
             _release_skill_env_key(env_key)
 
 
+# ---------------------------------------------------------------------------
+# Builtin import candidate building
+# ---------------------------------------------------------------------------
+
+
 def _resolve_pool_builtin_language(
     skill_name: str,
     entry: dict[str, Any],
@@ -480,7 +501,7 @@ def _build_builtin_import_candidate(
     pref = preferred_language or get_builtin_skill_language_preference()
     canonical_name = _canonical_builtin_skill_name(skill_name, registry)
     variants = registry.get(canonical_name) or {}
-    current = _normalize_skill_manifest_entry(
+    current = normalize_skill_manifest_entry(
         pool_skills.get(canonical_name),
     )
     current_version_text = str(current.get("version_text", "") or "")
@@ -628,6 +649,11 @@ def _collect_builtin_import_conflicts(
     return conflicts
 
 
+# ---------------------------------------------------------------------------
+# Builtin import execution + pool initialization
+# ---------------------------------------------------------------------------
+
+
 def import_builtin_skills(
     imports: list[dict[str, Any]] | None = None,
     *,
@@ -705,18 +731,18 @@ def import_builtin_skills(
     updated: list[str] = []
     unchanged: list[str] = []
     manifest_path = get_pool_skill_manifest_path()
-    manifest_default = _default_pool_manifest()
+    manifest_default = default_pool_manifest()
 
     def _process(payload: dict[str, Any]) -> dict[str, list[Any]]:
         skills = payload.setdefault("skills", {})
         payload["builtin_skill_names"] = sorted(registry.keys())
         for skill_name, language in normalized_imports:
             variant = registry[skill_name][language]
-            target = pool_dir / skill_name
+            target = safe_skill_dir(pool_dir, skill_name)
             existing = skills.get(skill_name) or {}
 
             if not target.exists():
-                _copy_skill_dir(variant.skill_dir, target)
+                copy_skill_dir(variant.skill_dir, target)
                 imported.append(skill_name)
             elif (
                 existing.get("source") == "builtin"
@@ -734,10 +760,10 @@ def import_builtin_skills(
             ):
                 unchanged.append(skill_name)
             else:
-                _copy_skill_dir(variant.skill_dir, target)
+                copy_skill_dir(variant.skill_dir, target)
                 updated.append(skill_name)
 
-            entry = _build_skill_metadata(
+            entry = build_skill_metadata(
                 skill_name,
                 target,
                 source="builtin",
@@ -758,7 +784,7 @@ def import_builtin_skills(
             "conflicts": conflicts,
         }
 
-    return _mutate_json(
+    return mutate_json(
         manifest_path,
         manifest_default,
         _process,
@@ -777,7 +803,7 @@ def migrate_pool_builtin_language_fields() -> bool:
         skills = payload.setdefault("skills", {})
         changed = False
         for skill_name, entry in skills.items():
-            if not _is_pool_builtin_entry(entry):
+            if not is_pool_builtin_entry(entry):
                 continue
             variants = registry.get(skill_name) or {}
             if not variants:
@@ -804,9 +830,9 @@ def migrate_pool_builtin_language_fields() -> bool:
         return changed
 
     return bool(
-        _mutate_json(
+        mutate_json(
             get_pool_skill_manifest_path(),
-            _default_pool_manifest(),
+            default_pool_manifest(),
             _update,
         ),
     )
@@ -822,7 +848,7 @@ def ensure_skill_pool_initialized() -> bool:
 
     manifest_path = get_pool_skill_manifest_path()
     if not manifest_path.exists():
-        _write_json_atomic(manifest_path, _default_pool_manifest())
+        write_json_atomic(manifest_path, default_pool_manifest())
         created = True
 
     if created:
@@ -830,6 +856,11 @@ def ensure_skill_pool_initialized() -> bool:
     else:
         migrate_pool_builtin_language_fields()
     return created
+
+
+# ---------------------------------------------------------------------------
+# Manifest reconciliation (pool + workspace)
+# ---------------------------------------------------------------------------
 
 
 def reconcile_pool_manifest() -> dict[str, Any]:
@@ -848,7 +879,7 @@ def reconcile_pool_manifest() -> dict[str, Any]:
     pool_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = get_pool_skill_manifest_path()
     if not manifest_path.exists():
-        _write_json_atomic(manifest_path, _default_pool_manifest())
+        write_json_atomic(manifest_path, default_pool_manifest())
 
     registry = _get_packaged_builtin_registry()
     pref = get_builtin_skill_language_preference()
@@ -867,7 +898,7 @@ def reconcile_pool_manifest() -> dict[str, Any]:
 
         for skill_name, skill_dir in sorted(discovered.items()):
             raw_existing = skills.get(skill_name)
-            existing = _normalize_skill_manifest_entry(raw_existing)
+            existing = normalize_skill_manifest_entry(raw_existing)
             if raw_existing not in (None, existing):
                 logger.warning(
                     (
@@ -877,7 +908,7 @@ def reconcile_pool_manifest() -> dict[str, Any]:
                     skill_name,
                 )
             try:
-                source, protected = _classify_pool_skill_source(
+                source, protected = classify_pool_skill_source(
                     skill_name,
                     skill_dir,
                     existing,
@@ -886,13 +917,13 @@ def reconcile_pool_manifest() -> dict[str, Any]:
                 has_config = "config" in existing
                 config = existing.get("config") if has_config else None
                 existing_tags = existing.get("tags")
-                new_entry = _build_skill_metadata(
+                new_entry = build_skill_metadata(
                     skill_name,
                     skill_dir,
                     source=source,
                     protected=protected,
                 )
-                if source == "builtin" or _is_pool_builtin_entry(existing):
+                if source == "builtin" or is_pool_builtin_entry(existing):
                     language = _resolve_pool_builtin_language(
                         skill_name,
                         existing or new_entry,
@@ -923,9 +954,9 @@ def reconcile_pool_manifest() -> dict[str, Any]:
 
         return payload
 
-    return _mutate_json(
+    return mutate_json(
         manifest_path,
-        _default_pool_manifest(),
+        default_pool_manifest(),
         _update,
     )
 
@@ -951,10 +982,10 @@ def reconcile_workspace_manifest(workspace_dir: Path) -> dict[str, Any]:
     workspace_skills_dir = get_workspace_skills_dir(workspace_dir)
     workspace_skills_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = get_workspace_skill_manifest_path(workspace_dir)
-    builtin_versions = _get_packaged_builtin_versions()
+    builtin_versions = get_packaged_builtin_versions()
 
     if not manifest_path.exists():
-        _write_json_atomic(manifest_path, _default_workspace_manifest())
+        write_json_atomic(manifest_path, default_workspace_manifest())
 
     def _update(payload: dict[str, Any]) -> dict[str, Any]:
         payload.setdefault("skills", {})
@@ -968,7 +999,7 @@ def reconcile_workspace_manifest(workspace_dir: Path) -> dict[str, Any]:
 
         for skill_name, skill_dir in sorted(discovered.items()):
             raw_existing = skills.get(skill_name)
-            existing = _normalize_skill_manifest_entry(raw_existing)
+            existing = normalize_skill_manifest_entry(raw_existing)
             if raw_existing not in (None, existing):
                 logger.warning(
                     (
@@ -993,7 +1024,7 @@ def reconcile_workspace_manifest(workspace_dir: Path) -> dict[str, Any]:
                         else "customized"
                     )
 
-                metadata = _build_skill_metadata(
+                metadata = build_skill_metadata(
                     skill_name,
                     skill_dir,
                     source=source,
@@ -1028,11 +1059,16 @@ def reconcile_workspace_manifest(workspace_dir: Path) -> dict[str, Any]:
 
         return payload
 
-    return _mutate_json(
+    return mutate_json(
         manifest_path,
-        _default_workspace_manifest(),
+        default_workspace_manifest(),
         _update,
     )
+
+
+# ---------------------------------------------------------------------------
+# Workspace listing + runtime skill resolution
+# ---------------------------------------------------------------------------
 
 
 def list_workspaces() -> list[dict[str, str]]:
@@ -1093,6 +1129,11 @@ def ensure_skills_initialized(workspace_dir: Path) -> None:
     reconcile_workspace_manifest(workspace_dir)
 
 
+# ---------------------------------------------------------------------------
+# Builtin sync status + update notices
+# ---------------------------------------------------------------------------
+
+
 def get_pool_builtin_sync_status(
     *,
     pool_skills: dict[str, Any] | None = None,
@@ -1113,15 +1154,15 @@ def get_pool_builtin_sync_status(
 
     pref = get_builtin_skill_language_preference()
     if pool_skills is None:
-        manifest = _read_json(
+        manifest = read_json(
             get_pool_skill_manifest_path(),
-            _default_pool_manifest(),
+            default_pool_manifest(),
         )
         pool_skills = manifest.get("skills", {})
     result: dict[str, dict[str, Any]] = {}
     for name, variants in registry.items():
         pool_entry = pool_skills.get(name)
-        if pool_entry is None or not _is_pool_builtin_entry(pool_entry):
+        if pool_entry is None or not is_pool_builtin_entry(pool_entry):
             continue
         language = _resolve_pool_builtin_language(
             name,
@@ -1153,7 +1194,7 @@ def get_pool_builtin_sync_status(
                 "available_languages": sorted(variants.keys()),
             }
     for name, pool_entry in pool_skills.items():
-        if not _is_pool_builtin_entry(pool_entry):
+        if not is_pool_builtin_entry(pool_entry):
             continue
         if name in registry:
             continue
@@ -1188,9 +1229,9 @@ def get_pool_builtin_update_notice() -> dict[str, Any]:
     """
     registry = _get_packaged_builtin_registry()
     pref = get_builtin_skill_language_preference()
-    manifest = _read_json(
+    manifest = read_json(
         get_pool_skill_manifest_path(),
-        _default_pool_manifest(),
+        default_pool_manifest(),
     )
     pool_skills = manifest.get("skills", {})
 
@@ -1329,7 +1370,7 @@ def update_single_builtin(
 
     manifest = read_skill_pool_manifest()
     existing = manifest.get("skills", {}).get(canonical_name)
-    if existing is None or not _is_pool_builtin_entry(existing):
+    if existing is None or not is_pool_builtin_entry(existing):
         raise SkillsError(
             message=f"'{canonical_name}' is not a builtin pool skill",
         )
@@ -1359,9 +1400,9 @@ def update_single_builtin(
     target = pool_dir / canonical_name
 
     def _update(payload: dict[str, Any]) -> dict[str, Any]:
-        _copy_skill_dir(variant.skill_dir, target)
+        copy_skill_dir(variant.skill_dir, target)
         payload.setdefault("skills", {})
-        entry = _build_skill_metadata(
+        entry = build_skill_metadata(
             canonical_name,
             target,
             source="builtin",
@@ -1377,8 +1418,8 @@ def update_single_builtin(
         payload["skills"][canonical_name] = entry
         return entry
 
-    return _mutate_json(
+    return mutate_json(
         get_pool_skill_manifest_path(),
-        _default_pool_manifest(),
+        default_pool_manifest(),
         _update,
     )
