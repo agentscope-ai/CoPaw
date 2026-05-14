@@ -762,7 +762,7 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
 
     page.on("crash", on_crash)
 
-    requests_list = state["network_requests"].setdefault(page_id, []))
+    requests_list = state["network_requests"].setdefault(page_id, [])
 
     def on_response(res):
         for r in requests_list:
