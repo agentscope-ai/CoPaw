@@ -134,6 +134,17 @@ async def batch_delete_chats(
 @router.get("/{chat_id}", response_model=ChatHistory)
 async def get_chat(
     chat_id: str,
+    offset: Optional[int] = Query(
+        None,
+        ge=0,
+        description="Optional zero-based message offset",
+    ),
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        le=500,
+        description="Optional maximum number of messages to return",
+    ),
     mgr: ChatManager = Depends(get_chat_manager),
     session: SafeJSONSession = Depends(get_session),
     workspace=Depends(get_workspace),
@@ -173,6 +184,10 @@ async def get_chat(
 
     memories = await memory.get_memory(prepend_summary=False)
     messages = agentscope_msg_to_message(memories)
+    if offset is not None or limit is not None:
+        start = offset or 0
+        end = None if limit is None else start + limit
+        messages = messages[start:end]
     return ChatHistory(messages=messages, status=status)
 
 
