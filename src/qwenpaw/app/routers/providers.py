@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Literal, Optional
 from copy import deepcopy
+from typing import List, Literal, Optional
+from urllib.parse import urlsplit
 
 from fastapi import (
     APIRouter,
@@ -78,6 +79,42 @@ def get_provider_auth_manager(
         auth_manager = ProviderAuthManager(manager)
         request.app.state.provider_auth_manager = auth_manager
     return auth_manager
+
+
+def _validate_auth_redirect_uri(
+    request: Request,
+    provider_id: str,
+    body: AuthStartRequest,
+) -> None:
+    """Ensure redirect_uri cannot target an attacker-controlled origin."""
+    if body.redirect_uri is None:
+        return
+
+    redirect_uri = urlsplit(body.redirect_uri)
+    callback_uri = urlsplit(
+        str(
+            request.url_for(
+                "provider_auth_callback",
+                provider_id=provider_id,
+            ),
+        ),
+    )
+    if (
+        redirect_uri.scheme.lower(),
+        redirect_uri.netloc.lower(),
+        redirect_uri.path,
+    ) != (
+        callback_uri.scheme.lower(),
+        callback_uri.netloc.lower(),
+        callback_uri.path,
+    ) or redirect_uri.fragment:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "redirect_uri must target this provider's auth callback "
+                "endpoint"
+            ),
+        )
 
 
 class ProviderConfigRequest(BaseModel):
@@ -202,10 +239,12 @@ async def list_all_providers(
     summary="Start provider authentication",
 )
 async def start_provider_auth(
+    request: Request,
     auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
     provider_id: str = Path(...),
     body: AuthStartRequest = Body(default_factory=AuthStartRequest),
 ) -> AuthStartResult:
+    _validate_auth_redirect_uri(request, provider_id, body)
     try:
         return await auth_manager.start(provider_id, body)
     except ProviderAuthError as exc:

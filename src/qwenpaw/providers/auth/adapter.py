@@ -31,7 +31,12 @@ class ProviderAuthAdapter(ABC):
         provider: Provider,
         request: AuthStartRequest,
     ) -> AuthStartResult:
-        """Start an authentication flow."""
+        """Start an authentication flow.
+
+        Adapters must not trust arbitrary redirect URIs or metadata from the
+        client. If a redirect URI is used, it must match a configured callback
+        URI or a URI already validated by the API layer.
+        """
 
     async def poll(
         self,

@@ -206,7 +206,12 @@ async def test_oauth_provider_start_returns_standard_schema(
     api_client,
 ) -> None:
     async with api_client:
-        response = await api_client.post("/api/models/oauth/auth/start")
+        response = await api_client.post(
+            "/api/models/oauth/auth/start",
+            json={
+                "redirect_uri": ("http://test/api/models/oauth/auth/callback"),
+            },
+        )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -219,6 +224,19 @@ async def test_oauth_provider_start_returns_standard_schema(
         "interval": None,
         "message": "",
     }
+
+
+async def test_oauth_provider_start_rejects_external_redirect_uri(
+    api_client,
+) -> None:
+    async with api_client:
+        response = await api_client.post(
+            "/api/models/oauth/auth/start",
+            json={"redirect_uri": "https://evil.test/callback"},
+        )
+
+    assert response.status_code == 400
+    assert "redirect_uri" in response.json()["detail"]
 
 
 async def test_status_and_logout_return_standard_schema(api_client) -> None:

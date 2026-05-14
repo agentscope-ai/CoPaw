@@ -43,8 +43,20 @@ class ProviderAuthInfo(BaseModel):
 
 
 class AuthStartRequest(BaseModel):
-    redirect_uri: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    redirect_uri: str | None = Field(
+        default=None,
+        description=(
+            "Optional OAuth callback URI. API routes must validate this "
+            "against the configured callback endpoint before adapters use it."
+        ),
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Provider-specific non-sensitive flow metadata. Adapters must "
+            "validate any keys they consume."
+        ),
+    )
 
 
 class AuthStartResult(BaseModel):
