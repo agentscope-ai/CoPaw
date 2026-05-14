@@ -7,7 +7,56 @@ paired and ordered to prevent API errors.
 import json
 import logging
 
+from json_repair import repair_json
+
 logger = logging.getLogger(__name__)
+
+
+def _normalize_raw_tool_input(
+    parsed: object,
+    tool_name: str | None = None,
+) -> dict | None:
+    """Return a usable tool input dict from parsed raw input."""
+    if not isinstance(parsed, dict) or not parsed:
+        return None
+
+    raw_name = parsed.get("name")
+    raw_arguments = parsed.get("arguments")
+    if isinstance(raw_name, str) and raw_arguments is not None:
+        if tool_name and raw_name and raw_name != tool_name:
+            return None
+        if isinstance(raw_arguments, dict) and raw_arguments:
+            return raw_arguments
+        if isinstance(raw_arguments, str):
+            return _parse_raw_tool_input(raw_arguments)
+        return None
+
+    return parsed
+
+
+def _parse_raw_tool_input(
+    raw_input: object,
+    tool_name: str | None = None,
+) -> dict | None:
+    """Parse raw tool input, accepting JSON and common malformed variants."""
+    if isinstance(raw_input, dict):
+        return _normalize_raw_tool_input(raw_input, tool_name)
+    if not isinstance(raw_input, str):
+        return None
+
+    raw = raw_input.strip()
+    if not raw or raw == "{}":
+        return None
+
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        try:
+            parsed = json.loads(repair_json(raw, stream_stable=True))
+        except (TypeError, ValueError):
+            return None
+
+    return _normalize_raw_tool_input(parsed, tool_name)
 
 
 def extract_tool_ids(msg) -> tuple[set[str], set[str]]:
@@ -286,26 +335,27 @@ def _repair_empty_tool_inputs(
 
                 # If input is empty but raw_input has content, try to parse
                 if not input_field and raw_input and raw_input != "{}":
-                    try:
-                        parsed = json.loads(raw_input)
-                        if isinstance(parsed, dict) and parsed:
-                            # Success! Update the input field
-                            block["input"] = parsed
-                            repaired = True
-                            logger.info(
-                                "Repaired tool_use input from raw_input: "
-                                "id=%s, name=%s, keys=%s",
-                                block.get("id"),
-                                block.get("name"),
-                                list(parsed.keys()),
-                            )
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(
-                            "Failed to repair tool_use input from raw_input: "
-                            "id=%s, name=%s, error=%s",
+                    parsed = _parse_raw_tool_input(
+                        raw_input,
+                        block.get("name"),
+                    )
+                    if isinstance(parsed, dict) and parsed:
+                        # Success! Update the input field
+                        block["input"] = parsed
+                        repaired = True
+                        logger.info(
+                            "Repaired tool_use input from raw_input: "
+                            "id=%s, name=%s, keys=%s",
                             block.get("id"),
                             block.get("name"),
-                            e,
+                            list(parsed.keys()),
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to repair tool_use input from raw_input: "
+                            "id=%s, name=%s",
+                            block.get("id"),
+                            block.get("name"),
                         )
 
             new_blocks.append(block)

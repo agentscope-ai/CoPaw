@@ -58,7 +58,10 @@ from .tools import (
     view_video,
     write_file,
 )
-from .utils import process_file_and_media_blocks_in_message
+from .utils import (
+    _repair_empty_tool_inputs,
+    process_file_and_media_blocks_in_message,
+)
 from ..constant import (
     MEDIA_UNSUPPORTED_PLACEHOLDER,
     WORKING_DIR,
@@ -248,9 +251,11 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
                     "delegate_external_agent",
                 }
                 async_execution_tools = {
-                    name: builtin_tools.get(name).async_execution
-                    if name in builtin_tools
-                    else False
+                    name: (
+                        builtin_tools.get(name).async_execution
+                        if name in builtin_tools
+                        else False
+                    )
                     for name in async_capable_tool_names
                 }
         except Exception as e:
@@ -1047,6 +1052,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
                             "rejects_media",
                             True,
                         )
+                    _repair_empty_tool_inputs([msg])
                     return msg
                 finally:
                     self._set_formatter_media_strip(False)
@@ -1081,7 +1087,9 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         msg = self._filter_plan_tools(msg, nb)
 
-        return await self._auto_continue_if_text_only(msg, tool_choice)
+        msg = await self._auto_continue_if_text_only(msg, tool_choice)
+        _repair_empty_tool_inputs([msg])
+        return msg
 
     # pylint: disable=too-many-branches
     async def _summarizing(self) -> Msg:

@@ -319,6 +319,75 @@ class TestRepairEmptyToolInputs:
         result = _repair_empty_tool_inputs([msg])
         assert result[0].content[0]["input"] == {}
 
+    def test_repairs_non_strict_json_from_raw_input(self):
+        msg = _msg(
+            [
+                {
+                    "type": "tool_use",
+                    "id": "id1",
+                    "name": "write_file",
+                    "input": {},
+                    "raw_input": (
+                        '{file_path: "notes.txt", '
+                        'content: "body with {still: text}"}'
+                    ),
+                },
+            ],
+        )
+        result = _repair_empty_tool_inputs([msg])
+        assert result[0].content[0]["input"] == {
+            "file_path": "notes.txt",
+            "content": "body with {still: text}",
+        }
+
+    def test_repairs_full_tool_call_wrapper_from_raw_input(self):
+        raw = json.dumps(
+            {
+                "name": "write_file",
+                "arguments": {
+                    "file_path": "notes.txt",
+                    "content": "hello",
+                },
+            },
+        )
+        msg = _msg(
+            [
+                {
+                    "type": "tool_use",
+                    "id": "id1",
+                    "name": "write_file",
+                    "input": {},
+                    "raw_input": raw,
+                },
+            ],
+        )
+        result = _repair_empty_tool_inputs([msg])
+        assert result[0].content[0]["input"] == {
+            "file_path": "notes.txt",
+            "content": "hello",
+        }
+
+    def test_skips_full_tool_call_wrapper_for_mismatched_name(self):
+        raw = json.dumps(
+            {
+                "name": "read_file",
+                "arguments": {"file_path": "notes.txt"},
+            },
+        )
+        msg = _msg(
+            [
+                {
+                    "type": "tool_use",
+                    "id": "id1",
+                    "name": "write_file",
+                    "input": {},
+                    "raw_input": raw,
+                },
+            ],
+        )
+        result = _repair_empty_tool_inputs([msg])
+        assert result[0].content[0]["input"] == {}
+
     def test_returns_original_when_no_change(self):
         msgs = [_msg([_tool_use("id1")])]
         result = _repair_empty_tool_inputs(msgs)
