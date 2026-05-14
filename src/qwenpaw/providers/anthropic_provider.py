@@ -175,7 +175,9 @@ class AnthropicProvider(Provider):
                 ),
             }
 
-        effective_generate_kwargs = self.get_effective_generate_kwargs(model_id)
+        effective_generate_kwargs = self.get_effective_generate_kwargs(
+            model_id,
+        )
         max_tokens = effective_generate_kwargs.pop("max_tokens", 16384)
 
         return AnthropicChatModel(
