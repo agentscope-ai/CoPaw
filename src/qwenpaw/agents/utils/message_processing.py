@@ -21,6 +21,55 @@ from .file_handling import download_file_from_base64, download_file_from_url
 logger = logging.getLogger(__name__)
 
 
+def _audio_media_type_from_block(block: dict, data: str) -> str:
+    media_type = block.get("media_type")
+    if isinstance(media_type, str) and media_type:
+        return media_type
+
+    audio_format = str(block.get("format") or "").lstrip(".")
+    if audio_format:
+        return _media_type_from_path(f"audio.{audio_format}")
+    return _media_type_from_path(data)
+
+
+def _extract_audio_data_source(block: dict):
+    data = block.get("data")
+    if not isinstance(data, str) or not data:
+        return None, None
+
+    media_type = _audio_media_type_from_block(block, data)
+    parsed = urllib.parse.urlparse(data)
+    if parsed.scheme in {"http", "https", "file"}:
+        filename = os.path.basename(parsed.path) or None
+        return {
+            "type": "url",
+            "url": data,
+            "media_type": media_type,
+        }, filename
+
+    if os.path.isfile(data):
+        local_path = Path(data).resolve()
+        return {
+            "type": "url",
+            "url": local_path.as_uri(),
+            "media_type": media_type,
+        }, local_path.name
+
+    if os.path.isabs(data):
+        local_path = Path(data)
+        return {
+            "type": "url",
+            "url": local_path.as_uri(),
+            "media_type": media_type,
+        }, local_path.name
+
+    return {
+        "type": "base64",
+        "data": data,
+        "media_type": media_type,
+    }, None
+
+
 async def _process_single_file_block(
     source: dict,
     filename: Optional[str],
@@ -72,6 +121,11 @@ def _extract_source_and_filename(block: dict, block_type: str):
         return block.get("source", {}), block.get("filename")
 
     source = block.get("source", {})
+    if block_type == "audio" and not source:
+        source, filename = _extract_audio_data_source(block)
+        if source is not None:
+            return source, filename
+
     if not isinstance(source, dict):
         return None, None
 
