@@ -9,7 +9,8 @@
  */
 
 function buildPlugin() {
-  const { React, antd, antdIcons, getApiUrl, getApiToken } = (window as any).QwenPaw.host;
+  const { React, antd, antdIcons, getApiUrl, getApiToken } = (window as any)
+    .QwenPaw.host;
   const {
     Card,
     Table,
@@ -58,7 +59,8 @@ function buildPlugin() {
 
   function getCellString(value: any): string {
     if (typeof value === "string") return value;
-    if (value && typeof value === "object" && "text" in value) return value.text;
+    if (value && typeof value === "object" && "text" in value)
+      return value.text;
     return String(value ?? "");
   }
 
@@ -98,7 +100,9 @@ function buildPlugin() {
       try {
         const parsed = JSON.parse(output);
         if (Array.isArray(parsed)) {
-          const textBlock = parsed.find((b: any) => b?.type === "text" && b?.text);
+          const textBlock = parsed.find(
+            (b: any) => b?.type === "text" && b?.text,
+          );
           return textBlock?.text ?? null;
         }
         if (typeof parsed === "string") return parsed;
@@ -121,8 +125,11 @@ function buildPlugin() {
     if (text.startsWith("Error:")) return text;
     const confirmMatch = text.match(/^用户选择了「(.+?)」并确认部署$/);
     if (confirmMatch) return `已确认部署「${confirmMatch[1]}」`;
-    const adjustWithChoice = text.match(/^用户选择「(.+?)」并要求调整[：:](.+)$/);
-    if (adjustWithChoice) return `已选择「${adjustWithChoice[1]}」并调整：${adjustWithChoice[2]}`;
+    const adjustWithChoice = text.match(
+      /^用户选择「(.+?)」并要求调整[：:](.+)$/,
+    );
+    if (adjustWithChoice)
+      return `已选择「${adjustWithChoice[1]}」并调整：${adjustWithChoice[2]}`;
     if (text === "用户确认部署") return "已确认部署";
     const adjustLegacy = text.match(/^用户要求调整资源[：:](.+)$/);
     if (adjustLegacy) return `已反馈调整意见：${adjustLegacy[1]}`;
@@ -132,11 +139,21 @@ function buildPlugin() {
   // ── proposal_choice renderer ─────────────────────────────────────────
 
   const TABLE_HEADERS = [
-    "资源类型", "资源用途", "规格", "地域", "数量",
-    "计费方式", "时长", "原价", "优惠", "预估算费用",
+    "资源类型",
+    "资源用途",
+    "规格",
+    "地域",
+    "数量",
+    "计费方式",
+    "时长",
+    "原价",
+    "优惠",
+    "预估算费用",
   ];
 
-  const HEADER_KEYWORDS = new Set(TABLE_HEADERS.map((h: string) => h.toLowerCase()));
+  const HEADER_KEYWORDS = new Set(
+    TABLE_HEADERS.map((h: string) => h.toLowerCase()),
+  );
 
   function isHeaderRow(row: any[]): boolean {
     if (!Array.isArray(row) || row.length !== 10) return false;
@@ -174,9 +191,15 @@ function buildPlugin() {
     if (typeof cell === "string") return cell;
     if (cell && typeof cell === "object" && cell.text) {
       if (cell.url) {
-        return React.createElement("a", {
-          href: cell.url, target: "_blank", rel: "noopener noreferrer",
-        }, cell.text);
+        return React.createElement(
+          "a",
+          {
+            href: cell.url,
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+          cell.text,
+        );
       }
       return cell.text;
     }
@@ -188,22 +211,25 @@ function buildPlugin() {
     const [adjustText, setAdjustText] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-    const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
+    const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>(
+      {},
+    );
     // Use ref to survive re-renders from SSE data updates
     const submittedRef = React.useRef(false);
     const submitResultRef = React.useRef<string | null>(null);
     const [, forceUpdate] = useState(0);
 
     const content = data?.content;
-    const hasOutput = content && content.length >= 2 && content[1]?.data?.output;
+    const hasOutput =
+      content && content.length >= 2 && content[1]?.data?.output;
 
     const completedFromServer = useMemo(
       () => parseCompletedResult(content),
       [content],
     );
 
-    const isCompleted = submittedRef.current || hasOutput || completedFromServer !== null;
-
+    const isCompleted =
+      submittedRef.current || hasOutput || completedFromServer !== null;
 
     const parsed = useMemo(() => {
       const args = parseToolArgs(data);
@@ -211,16 +237,21 @@ function buildPlugin() {
       if (!rawData) return null;
 
       try {
-        const inner = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+        const inner =
+          typeof rawData === "string" ? JSON.parse(rawData) : rawData;
 
         // Parse strategy_names first — needed for split heuristics
         let names: string[];
         if (args.strategy_names) {
           try {
-            const sn = typeof args.strategy_names === "string"
-              ? JSON.parse(args.strategy_names) : args.strategy_names;
+            const sn =
+              typeof args.strategy_names === "string"
+                ? JSON.parse(args.strategy_names)
+                : args.strategy_names;
             names = Array.isArray(sn) ? sn : [];
-          } catch { names = []; }
+          } catch {
+            names = [];
+          }
         } else if (inner?.proposal_names) {
           names = inner.proposal_names;
         } else {
@@ -231,13 +262,23 @@ function buildPlugin() {
 
         let proposals: any[][][];
         if (Array.isArray(inner) && inner.length > 0) {
-          const isFlat = Array.isArray(inner[0]) && inner[0].length === 10 && !Array.isArray(inner[0][0]);
+          const isFlat =
+            Array.isArray(inner[0]) &&
+            inner[0].length === 10 &&
+            !Array.isArray(inner[0][0]);
           if (isFlat) {
-            const cleaned = (inner as any[][]).filter((r: any[]) => !isHeaderRow(r));
-            const summaryCount = cleaned.filter((r: any[]) => isSummaryRowCheck(r)).length;
+            const cleaned = (inner as any[][]).filter(
+              (r: any[]) => !isHeaderRow(r),
+            );
+            const summaryCount = cleaned.filter((r: any[]) =>
+              isSummaryRowCheck(r),
+            ).length;
             if (summaryCount >= 2) {
               proposals = splitFlatRowsIntoProposals(cleaned);
-            } else if (expectedCount >= 2 && cleaned.length >= expectedCount * 2) {
+            } else if (
+              expectedCount >= 2 &&
+              cleaned.length >= expectedCount * 2
+            ) {
               // strategy_names says N proposals but no summary rows to split on:
               // divide rows evenly into N groups
               const chunkSize = Math.ceil(cleaned.length / expectedCount);
@@ -249,13 +290,16 @@ function buildPlugin() {
               proposals = [cleaned];
             }
           } else {
-            proposals = (inner as any[][][]).map(
-              (p: any[][]) => p.filter((r: any[]) => Array.isArray(r) && r.length === 10 && !isHeaderRow(r)),
+            proposals = (inner as any[][][]).map((p: any[][]) =>
+              p.filter(
+                (r: any[]) =>
+                  Array.isArray(r) && r.length === 10 && !isHeaderRow(r),
+              ),
             );
           }
         } else if (inner?.proposals) {
-          proposals = (inner.proposals as any[][][]).map(
-            (p: any[][]) => p.filter((r: any[]) => !isHeaderRow(r)),
+          proposals = (inner.proposals as any[][][]).map((p: any[][]) =>
+            p.filter((r: any[]) => !isHeaderRow(r)),
           );
         } else {
           return null;
@@ -283,13 +327,16 @@ function buildPlugin() {
     const handleSubmit = useCallback(async () => {
       if (!sessionId || isCompleted || !parsed) return;
       const chosenIdx = isMulti ? selectedIndex : 0;
-      const chosenName = parsed.names[chosenIdx ?? 0] || `方案${(chosenIdx ?? 0) + 1}`;
+      const chosenName =
+        parsed.names[chosenIdx ?? 0] || `方案${(chosenIdx ?? 0) + 1}`;
 
       let resultText: string;
       if (actionType === "confirm") {
         resultText = `用户选择了「${chosenName}」并确认部署`;
       } else {
-        resultText = `用户选择「${chosenName}」并要求调整：${adjustText.trim() || "未填写具体要求"}`;
+        resultText = `用户选择「${chosenName}」并要求调整：${
+          adjustText.trim() || "未填写具体要求"
+        }`;
       }
 
       setSubmitting(true);
@@ -303,37 +350,66 @@ function buildPlugin() {
           submitResultRef.current = `已选择「${chosenName}」并调整：${adjustText.trim()}`;
         }
         forceUpdate((n: number) => n + 1);
-        antdMessage.success(actionType === "confirm" ? "已确认部署方案" : "已提交调整意见");
+        antdMessage.success(
+          actionType === "confirm" ? "已确认部署方案" : "已提交调整意见",
+        );
       } else {
         antdMessage.error("操作失败，请重试");
       }
-    }, [sessionId, isCompleted, parsed, actionType, adjustText, selectedIndex, isMulti]);
+    }, [
+      sessionId,
+      isCompleted,
+      parsed,
+      actionType,
+      adjustText,
+      selectedIndex,
+      isMulti,
+    ]);
 
-    const isLoading = data?.status === "in_progress" || data?.status === "created";
+    const isLoading =
+      data?.status === "in_progress" || data?.status === "created";
 
     if (!parsed) {
       if (isLoading) {
-        return React.createElement("div", {
-          style: {
-            width: "100%", borderRadius: 10, border: "1px solid #f0f0f0",
-            background: "#fff", padding: "24px 16px", margin: "4px 0",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+        return React.createElement(
+          "div",
+          {
+            style: {
+              width: "100%",
+              borderRadius: 10,
+              border: "1px solid #f0f0f0",
+              background: "#fff",
+              padding: "24px 16px",
+              margin: "4px 0",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            },
           },
-        },
           React.createElement(Spin, { size: "default" }),
-          React.createElement(Text, { type: "secondary", style: { fontSize: 13 } },
-            "正在生成资源方案..."),
+          React.createElement(
+            Text,
+            { type: "secondary", style: { fontSize: 13 } },
+            "正在生成资源方案...",
+          ),
         );
       }
-      return React.createElement(Card, { size: "small", style: { margin: "4px 0" } },
-        React.createElement(Text, { type: "secondary" }, "无法解析方案数据"));
+      return React.createElement(
+        Card,
+        { size: "small", style: { margin: "4px 0" } },
+        React.createElement(Text, { type: "secondary" }, "无法解析方案数据"),
+      );
     }
 
     const { proposals, names } = parsed;
 
     const columns = TABLE_HEADERS.map((header: string, idx: number) => ({
-      title: header, dataIndex: `col_${idx}`, key: `col_${idx}`,
-      render: (val: any) => renderCellValue(val), ellipsis: idx < 3,
+      title: header,
+      dataIndex: `col_${idx}`,
+      key: `col_${idx}`,
+      render: (val: any) => renderCellValue(val),
+      ellipsis: idx < 3,
     }));
 
     // Determine status label text
@@ -344,14 +420,24 @@ function buildPlugin() {
       statusText = submitResultRef.current || completedFromServer || "已确认";
     }
 
-    const statusTag = React.createElement(Tag, {
-      color: statusColor, style: { marginLeft: 4 },
-    }, statusText);
+    const statusTag = React.createElement(
+      Tag,
+      {
+        color: statusColor,
+        style: { marginLeft: 4 },
+      },
+      statusText,
+    );
 
-    const titleEl = React.createElement(Space, { size: 8 },
+    const titleEl = React.createElement(
+      Space,
+      { size: 8 },
       React.createElement("span", null, "☁️"),
-      React.createElement(Text, { strong: true, style: { fontSize: 14 } },
-        isCompleted ? "资源配置方案" : "请确认您的资源配置方案"),
+      React.createElement(
+        Text,
+        { strong: true, style: { fontSize: 14 } },
+        isCompleted ? "资源配置方案" : "请确认您的资源配置方案",
+      ),
       statusTag,
     );
 
@@ -380,196 +466,385 @@ function buildPlugin() {
 
       const tableData = proposal.map((row: any[], rIdx: number) => {
         const record: Record<string, any> = { key: rIdx };
-        row.forEach((cell: any, cIdx: number) => { record[`col_${cIdx}`] = cell; });
+        row.forEach((cell: any, cIdx: number) => {
+          record[`col_${cIdx}`] = cell;
+        });
         return record;
       });
 
       const cardBorder = isSelected ? "2px solid #1677ff" : "1px solid #e8e8e8";
       const cardShadow = isSelected ? "0 0 0 2px #e6f4ff" : "none";
 
-      return React.createElement("div", {
-        key: pIdx,
-        style: {
-          flex: 1, minWidth: 240, border: cardBorder, borderRadius: 8,
-          cursor: isMulti ? "pointer" : "default",
-          transition: "all 0.2s ease", boxShadow: cardShadow, background: "#fff",
+      return React.createElement(
+        "div",
+        {
+          key: pIdx,
+          style: {
+            flex: 1,
+            minWidth: 240,
+            border: cardBorder,
+            borderRadius: 8,
+            cursor: isMulti ? "pointer" : "default",
+            transition: "all 0.2s ease",
+            boxShadow: cardShadow,
+            background: "#fff",
+          },
+          onClick: isMulti ? () => setSelectedIndex(pIdx) : undefined,
         },
-        onClick: isMulti ? () => setSelectedIndex(pIdx) : undefined,
-      },
-        React.createElement("div", { style: { padding: "10px 12px" } },
+        React.createElement(
+          "div",
+          { style: { padding: "10px 12px" } },
           // Proposal name
-          React.createElement(Text, {
-            strong: true, style: { fontSize: 14, display: "block", marginBottom: 8 },
-          }, names[pIdx]),
+          React.createElement(
+            Text,
+            {
+              strong: true,
+              style: { fontSize: 14, display: "block", marginBottom: 8 },
+            },
+            names[pIdx],
+          ),
           // Resource list
           ...resources.map((r: any, idx: number) =>
-            React.createElement("div", {
-              key: idx,
-              style: {
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "4px 0", borderBottom: idx < resources.length - 1 ? "1px solid #f5f5f5" : "none",
+            React.createElement(
+              "div",
+              {
+                key: idx,
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "4px 0",
+                  borderBottom:
+                    idx < resources.length - 1 ? "1px solid #f5f5f5" : "none",
+                },
               },
-            },
-              React.createElement("div", { style: { flex: 1, minWidth: 0 } },
-                React.createElement("span", { style: { fontSize: 12, color: "#262626" } }, r.type),
-                r.spec && React.createElement("span", {
-                  style: { fontSize: 11, color: "#8c8c8c", marginLeft: 6 },
-                }, r.spec),
+              React.createElement(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                React.createElement(
+                  "span",
+                  { style: { fontSize: 12, color: "#262626" } },
+                  r.type,
+                ),
+                r.spec &&
+                  React.createElement(
+                    "span",
+                    {
+                      style: { fontSize: 11, color: "#8c8c8c", marginLeft: 6 },
+                    },
+                    r.spec,
+                  ),
               ),
-              !isEmptyCost(r.cost) && React.createElement("span", {
-                style: { fontSize: 12, color: "#595959", flexShrink: 0, marginLeft: 8 },
-              }, getCellString(r.cost)),
+              !isEmptyCost(r.cost) &&
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 12,
+                      color: "#595959",
+                      flexShrink: 0,
+                      marginLeft: 8,
+                    },
+                  },
+                  getCellString(r.cost),
+                ),
             ),
           ),
           // Total cost
-          totalCostDisplay && React.createElement("div", {
-            style: {
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              marginTop: 6, paddingTop: 6, borderTop: "1px dashed #e8e8e8",
-            },
-          },
-            React.createElement("span", { style: { fontSize: 12, fontWeight: 500 } }, "合计"),
-            React.createElement("span", {
-              style: { fontSize: 14, fontWeight: 700, color: "#fa541c" },
-            }, totalCostDisplay),
-          ),
+          totalCostDisplay &&
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: 6,
+                  paddingTop: 6,
+                  borderTop: "1px dashed #e8e8e8",
+                },
+              },
+              React.createElement(
+                "span",
+                { style: { fontSize: 12, fontWeight: 500 } },
+                "合计",
+              ),
+              React.createElement(
+                "span",
+                {
+                  style: { fontSize: 14, fontWeight: 700, color: "#fa541c" },
+                },
+                totalCostDisplay,
+              ),
+            ),
           // Details toggle
-          React.createElement("div", {
-            style: {
-              display: "flex", alignItems: "center", gap: 4, color: "#8c8c8c",
-              fontSize: 12, cursor: "pointer", marginTop: 6,
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                color: "#8c8c8c",
+                fontSize: 12,
+                cursor: "pointer",
+                marginTop: 6,
+              },
+              onClick: (e: any) => {
+                e.stopPropagation();
+                setExpandedCards((prev: Record<number, boolean>) => ({
+                  ...prev,
+                  [pIdx]: !prev[pIdx],
+                }));
+              },
             },
-            onClick: (e: any) => {
-              e.stopPropagation();
-              setExpandedCards((prev: Record<number, boolean>) => ({ ...prev, [pIdx]: !prev[pIdx] }));
-            },
-          },
-            React.createElement(expanded && DownOutlined ? DownOutlined : (RightOutlined || "span"), {
-              style: { fontSize: 10 },
-            }),
-            React.createElement("span", null, `明细 · ${displayRows.length} 项`),
+            React.createElement(
+              expanded && DownOutlined ? DownOutlined : RightOutlined || "span",
+              {
+                style: { fontSize: 10 },
+              },
+            ),
+            React.createElement(
+              "span",
+              null,
+              `明细 · ${displayRows.length} 项`,
+            ),
           ),
-          expanded && React.createElement("div", {
-            onClick: (e: any) => e.stopPropagation(),
-            style: { marginTop: 4, maxHeight: 260, overflow: "auto" },
-          },
-            React.createElement(Table, {
-              columns, dataSource: tableData, pagination: false,
-              size: "small", scroll: { x: "max-content" },
-            }),
-          ),
+          expanded &&
+            React.createElement(
+              "div",
+              {
+                onClick: (e: any) => e.stopPropagation(),
+                style: { marginTop: 4, maxHeight: 260, overflow: "auto" },
+              },
+              React.createElement(Table, {
+                columns,
+                dataSource: tableData,
+                pagination: false,
+                size: "small",
+                scroll: { x: "max-content" },
+              }),
+            ),
         ),
       );
     });
 
     // Disclaimer
-    const disclaimer = React.createElement("div", {
-      style: {
-        background: "#fffbe6", border: "1px solid #ffe58f", borderRadius: 6,
-        padding: "8px 12px", marginBottom: 10, display: "flex",
-        alignItems: "flex-start", gap: 8,
+    const disclaimer = React.createElement(
+      "div",
+      {
+        style: {
+          background: "#fffbe6",
+          border: "1px solid #ffe58f",
+          borderRadius: 6,
+          padding: "8px 12px",
+          marginBottom: 10,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 8,
+        },
       },
-    },
       InfoCircleOutlined
-        ? React.createElement(InfoCircleOutlined, { style: { color: "#faad14", fontSize: 14, flexShrink: 0, marginTop: 1 } })
+        ? React.createElement(InfoCircleOutlined, {
+            style: {
+              color: "#faad14",
+              fontSize: 14,
+              flexShrink: 0,
+              marginTop: 1,
+            },
+          })
         : React.createElement("span", null, "⚠️"),
-      React.createElement("span", {
-        style: { fontSize: 12, color: "#8c6e00", lineHeight: 1.5 },
-      }, "在服务部署与配置过程中，可能因实际资源需求变化导致资源变配及费用调整，请及时关注实际资源使用情况与账单详情。"),
+      React.createElement(
+        "span",
+        {
+          style: { fontSize: 12, color: "#8c6e00", lineHeight: 1.5 },
+        },
+        "在服务部署与配置过程中，可能因实际资源需求变化导致资源变配及费用调整，请及时关注实际资源使用情况与账单详情。",
+      ),
     );
 
     // Action section (confirm or adjust)
-    const actionSection = !isCompleted && sessionId && !(isMulti && selectedIndex === null) &&
-      React.createElement("div", null,
-        React.createElement("div", {
-          style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 },
-        },
-          // Confirm option
-          React.createElement("div", {
+    const actionSection =
+      !isCompleted &&
+      sessionId &&
+      !(isMulti && selectedIndex === null) &&
+      React.createElement(
+        "div",
+        null,
+        React.createElement(
+          "div",
+          {
             style: {
-              flex: 1, minWidth: 140, border: `1px solid ${actionType === "confirm" ? "#1677ff" : "#e8e8e8"}`,
-              borderRadius: 6, padding: "8px 12px", cursor: "pointer",
-              transition: "all 0.15s ease", display: "flex", alignItems: "center", gap: 8,
-              background: actionType === "confirm" ? "#e6f4ff" : "transparent",
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 8,
             },
-            onClick: () => setActionType("confirm"),
           },
+          // Confirm option
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: 1,
+                minWidth: 140,
+                border: `1px solid ${
+                  actionType === "confirm" ? "#1677ff" : "#e8e8e8"
+                }`,
+                borderRadius: 6,
+                padding: "8px 12px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background:
+                  actionType === "confirm" ? "#e6f4ff" : "transparent",
+              },
+              onClick: () => setActionType("confirm"),
+            },
             React.createElement(Radio, { checked: actionType === "confirm" }),
-            React.createElement("span", { style: { fontSize: 13 } }, "确认部署"),
+            React.createElement(
+              "span",
+              { style: { fontSize: 13 } },
+              "确认部署",
+            ),
           ),
           // Adjust option
-          React.createElement("div", {
-            style: {
-              flex: 1, minWidth: 140, border: `1px solid ${actionType === "adjust" ? "#1677ff" : "#e8e8e8"}`,
-              borderRadius: 6, padding: "8px 12px", transition: "all 0.15s ease",
-              background: actionType === "adjust" ? "#e6f4ff" : "transparent",
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: 1,
+                minWidth: 140,
+                border: `1px solid ${
+                  actionType === "adjust" ? "#1677ff" : "#e8e8e8"
+                }`,
+                borderRadius: 6,
+                padding: "8px 12px",
+                transition: "all 0.15s ease",
+                background: actionType === "adjust" ? "#e6f4ff" : "transparent",
+              },
             },
-          },
-            React.createElement("div", {
-              style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" },
-              onClick: () => setActionType("adjust"),
-            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                },
+                onClick: () => setActionType("adjust"),
+              },
               React.createElement(Radio, { checked: actionType === "adjust" }),
-              React.createElement("span", { style: { fontSize: 13 } }, "调整资源"),
+              React.createElement(
+                "span",
+                { style: { fontSize: 13 } },
+                "调整资源",
+              ),
             ),
-            actionType === "adjust" && React.createElement(TextArea, {
-              value: adjustText,
-              onChange: (e: any) => setAdjustText(e.target.value),
-              placeholder: "请输入调整要求",
-              autoSize: { minRows: 1, maxRows: 3 },
-              style: { fontSize: 12, marginTop: 6 },
-            }),
+            actionType === "adjust" &&
+              React.createElement(TextArea, {
+                value: adjustText,
+                onChange: (e: any) => setAdjustText(e.target.value),
+                placeholder: "请输入调整要求",
+                autoSize: { minRows: 1, maxRows: 3 },
+                style: { fontSize: 12, marginTop: 6 },
+              }),
           ),
         ),
         // Footer
-        React.createElement("div", {
-          style: {
-            display: "flex", justifyContent: "space-between",
-            alignItems: "center", paddingTop: 8,
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingTop: 8,
+            },
           },
-        },
-          React.createElement(Text, { type: "secondary", style: { fontSize: 11 } },
+          React.createElement(
+            Text,
+            { type: "secondary", style: { fontSize: 11 } },
             isMulti
               ? "一小时后未操作将自动选择第一个方案"
               : "一小时后未操作将自动确认部署",
           ),
-          React.createElement(Button, {
-            type: "primary", size: "small", loading: submitting, onClick: handleSubmit,
-            disabled: actionType === "adjust" && !adjustText.trim(),
-          }, actionType === "confirm" ? "确认部署" : "提交调整"),
+          React.createElement(
+            Button,
+            {
+              type: "primary",
+              size: "small",
+              loading: submitting,
+              onClick: handleSubmit,
+              disabled: actionType === "adjust" && !adjustText.trim(),
+            },
+            actionType === "confirm" ? "确认部署" : "提交调整",
+          ),
         ),
       );
 
     // Multi-proposal hint
-    const multiHint = isMulti && selectedIndex === null && !isCompleted &&
-      React.createElement("div", {
-        style: { textAlign: "center", padding: "8px 0 4px", color: "rgba(0,0,0,0.45)", fontSize: 12 },
-      }, "请点击选择一个方案后继续操作");
+    const multiHint =
+      isMulti &&
+      selectedIndex === null &&
+      !isCompleted &&
+      React.createElement(
+        "div",
+        {
+          style: {
+            textAlign: "center",
+            padding: "8px 0 4px",
+            color: "rgba(0,0,0,0.45)",
+            fontSize: 12,
+          },
+        },
+        "请点击选择一个方案后继续操作",
+      );
 
-    return React.createElement("div", {
-      style: {
-        width: "100%", borderRadius: 10, border: "1px solid #f0f0f0",
-        overflow: "hidden", background: "#fff", padding: "12px 16px", margin: "4px 0",
+    return React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          borderRadius: 10,
+          border: "1px solid #f0f0f0",
+          overflow: "hidden",
+          background: "#fff",
+          padding: "12px 16px",
+          margin: "4px 0",
+        },
       },
-    },
       // Header
       React.createElement("div", { style: { marginBottom: 10 } }, titleEl),
       // Proposals grid
-      React.createElement("div", {
-        style: { display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" },
-      }, ...proposalCards),
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            gap: 10,
+            marginBottom: 12,
+            flexWrap: "wrap",
+          },
+        },
+        ...proposalCards,
+      ),
       multiHint,
       disclaimer,
       !isCompleted && actionSection,
     );
   }
 
-// ── manage_prd renderer ───────────────────────────────────────────────
+  // ── manage_prd renderer ───────────────────────────────────────────────
 
-function ManagePRDRender({ data }: { data: any }) {
+  function ManagePRDRender({ data }: { data: any }) {
     const [prd, setPrd] = useState<any>(null);
     const [fetchError, setFetchError] = useState(false);
-    const isLoading = data?.status === "in_progress" || data?.status === "created";
+    const isLoading =
+      data?.status === "in_progress" || data?.status === "created";
 
     const loopDir = useMemo(() => {
       const args = parseToolArgs(data);
@@ -588,7 +863,7 @@ function ManagePRDRender({ data }: { data: any }) {
 
     const isSuccess = toolResult?.status === "ok";
     const isError = toolResult?.status === "error";
-    const errorMessage = isError ? (toolResult?.message || "未知错误") : null;
+    const errorMessage = isError ? toolResult?.message || "未知错误" : null;
 
     const fetchPrd = useCallback(async () => {
       if (!loopDir) return;
@@ -600,7 +875,10 @@ function ManagePRDRender({ data }: { data: any }) {
           getApiUrl(`/prd?loop_dir=${encodeURIComponent(loopDir)}`),
           { headers },
         );
-        if (!res.ok) { setFetchError(true); return; }
+        if (!res.ok) {
+          setFetchError(true);
+          return;
+        }
         const json = await res.json();
         if (json && Array.isArray(json.userStories)) {
           setPrd(json);
@@ -618,93 +896,158 @@ function ManagePRDRender({ data }: { data: any }) {
     }, [isLoading, isSuccess, loopDir, fetchPrd]);
 
     if (isLoading) {
-      return React.createElement("div", {
-        style: {
-          width: "100%", borderRadius: 10, border: "1px solid #f0f0f0",
-          background: "#fff", padding: "24px 16px", margin: "4px 0",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+      return React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            borderRadius: 10,
+            border: "1px solid #f0f0f0",
+            background: "#fff",
+            padding: "24px 16px",
+            margin: "4px 0",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 12,
+          },
         },
-      },
         React.createElement(Spin, { size: "default" }),
-        React.createElement(Text, { type: "secondary", style: { fontSize: 13 } },
-          "正在更新 PRD..."),
+        React.createElement(
+          Text,
+          { type: "secondary", style: { fontSize: 13 } },
+          "正在更新 PRD...",
+        ),
       );
     }
 
     if (isError) {
-      return React.createElement("div", {
-        style: {
-          width: "100%", borderRadius: 10, border: "1px solid #fff1f0",
-          background: "#fff1f0", padding: "12px 16px", margin: "4px 0",
-          display: "flex", alignItems: "center", gap: 8,
+      return React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            borderRadius: 10,
+            border: "1px solid #fff1f0",
+            background: "#fff1f0",
+            padding: "12px 16px",
+            margin: "4px 0",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          },
         },
-      },
-        React.createElement(Text, { type: "danger", style: { fontSize: 13 } },
-          `PRD 格式错误，将会修正：${errorMessage}`),
+        React.createElement(
+          Text,
+          { type: "danger", style: { fontSize: 13 } },
+          `PRD 格式错误，将会修正：${errorMessage}`,
+        ),
       );
     }
 
     if (!isSuccess || fetchError || !prd) return null;
 
-const stories = prd.userStories;
-    const sortedStories = [...stories].sort((a: any, b: any) => (a.priority || 99) - (b.priority || 99));
+    const stories = prd.userStories;
+    const sortedStories = [...stories].sort(
+      (a: any, b: any) => (a.priority || 99) - (b.priority || 99),
+    );
     const passedCount = stories.filter((s: any) => s.passes).length;
 
-const storyColumns = [
+    const storyColumns = [
       {
-        title: "状态", key: "status", width: 50, align: "center" as const,
+        title: "状态",
+        key: "status",
+        width: 50,
+        align: "center" as const,
         render: (_: any, record: any) => {
           if (record.passes) {
             const icon = CheckCircleOutlined
-              ? React.createElement(CheckCircleOutlined, { style: { color: "#52c41a", fontSize: 18 } })
+              ? React.createElement(CheckCircleOutlined, {
+                  style: { color: "#52c41a", fontSize: 18 },
+                })
               : "✅";
             return React.createElement(Tooltip, { title: "已完成" }, icon);
           }
           const icon = FieldTimeOutlined
-            ? React.createElement(FieldTimeOutlined, { style: { color: "#faad14", fontSize: 18 } })
+            ? React.createElement(FieldTimeOutlined, {
+                style: { color: "#faad14", fontSize: 18 },
+              })
             : "🕐";
           return React.createElement(Tooltip, { title: "待处理" }, icon);
         },
       },
       {
-        title: "ID", dataIndex: "id", key: "id", width: 85,
-        render: (val: string) => React.createElement(Tag, { color: "blue" }, val),
+        title: "ID",
+        dataIndex: "id",
+        key: "id",
+        width: 85,
+        render: (val: string) =>
+          React.createElement(Tag, { color: "blue" }, val),
       },
       {
-        title: "标题", dataIndex: "title", key: "title",
-        render: (val: string) => React.createElement(Text, { strong: true }, val),
+        title: "标题",
+        dataIndex: "title",
+        key: "title",
+        render: (val: string) =>
+          React.createElement(Text, { strong: true }, val),
       },
       {
-        title: "优先级", key: "priority", width: 70,
+        title: "优先级",
+        key: "priority",
+        width: 70,
         render: (_: any, record: any) => {
           const p = record.priority;
-          return React.createElement(Tag, { color: "default" }, p != null ? String(p) : "-");
+          return React.createElement(
+            Tag,
+            { color: "default" },
+            p != null ? String(p) : "-",
+          );
         },
       },
       {
-        title: "描述", dataIndex: "description", key: "description",
+        title: "描述",
+        dataIndex: "description",
+        key: "description",
         ellipsis: true,
       },
       {
-        title: "验收标准", key: "acceptance", width: 200,
+        title: "验收标准",
+        key: "acceptance",
+        width: 200,
         render: (_: any, record: any) => {
           const criteria = record.acceptanceCriteria;
           if (typeof criteria === "string") {
-            return React.createElement("div", { style: { fontSize: 12, color: "#666", whiteSpace: "pre-wrap" } },
-              criteria.length > 100 ? criteria.slice(0, 100) + "..." : criteria);
+            return React.createElement(
+              "div",
+              {
+                style: { fontSize: 12, color: "#666", whiteSpace: "pre-wrap" },
+              },
+              criteria.length > 100 ? criteria.slice(0, 100) + "..." : criteria,
+            );
           }
           if (Array.isArray(criteria)) {
-            return React.createElement("div", { style: { fontSize: 12, color: "#666" } },
-              criteria.length > 2 ? criteria.slice(0, 2).join(", ") + "..." : criteria.join(", "));
+            return React.createElement(
+              "div",
+              { style: { fontSize: 12, color: "#666" } },
+              criteria.length > 2
+                ? criteria.slice(0, 2).join(", ") + "..."
+                : criteria.join(", "),
+            );
           }
           return "-";
         },
       },
     ];
 
-    const titleEl = React.createElement(Space, { size: 8 },
-      FileTextOutlined ? React.createElement(FileTextOutlined, { style: { color: "#1677ff" } }) : null,
-      React.createElement("span", { style: { fontSize: 14 } },
+    const titleEl = React.createElement(
+      Space,
+      { size: 8 },
+      FileTextOutlined
+        ? React.createElement(FileTextOutlined, { style: { color: "#1677ff" } })
+        : null,
+      React.createElement(
+        "span",
+        { style: { fontSize: 14 } },
         React.createElement(Text, { strong: true }, prd.project || "PRD"),
       ),
     );
@@ -718,29 +1061,56 @@ const storyColumns = [
       style: { marginBottom: 4 },
     });
 
-    return React.createElement("div", {
-      style: {
-        width: "100%", borderRadius: 10, border: "1px solid #f0f0f0",
-        overflow: "hidden", background: "#fff", padding: "12px 16px", margin: "4px 0",
+    return React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          borderRadius: 10,
+          border: "1px solid #f0f0f0",
+          overflow: "hidden",
+          background: "#fff",
+          padding: "12px 16px",
+          margin: "4px 0",
+        },
       },
-    },
       React.createElement("div", { style: { marginBottom: 8 } }, titleEl),
       React.createElement(Descriptions, {
-        size: "small", column: { xs: 1, sm: 2, md: 3 }, style: { marginBottom: 12 },
+        size: "small",
+        column: { xs: 1, sm: 2, md: 3 },
+        style: { marginBottom: 12 },
         bordered: false,
         items: [
-          { key: "progress", label: "进度", children: `${passedCount}/${stories.length} 完成` },
+          {
+            key: "progress",
+            label: "进度",
+            children: `${passedCount}/${stories.length} 完成`,
+          },
         ],
       }),
       storyTable,
-      React.createElement("div", { style: { fontSize: 11, color: "#8c8c8c", display: "flex", alignItems: "center", gap: 8 } },
+      React.createElement(
+        "div",
+        {
+          style: {
+            fontSize: 11,
+            color: "#8c8c8c",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          },
+        },
         CheckCircleOutlined
-          ? React.createElement(CheckCircleOutlined, { style: { color: "#52c41a", fontSize: 14 } })
+          ? React.createElement(CheckCircleOutlined, {
+              style: { color: "#52c41a", fontSize: 14 },
+            })
           : "✅",
         React.createElement("span", null, "已完成"),
         React.createElement("span", { style: { margin: "0 4px" } }, "·"),
         FieldTimeOutlined
-          ? React.createElement(FieldTimeOutlined, { style: { color: "#faad14", fontSize: 14 } })
+          ? React.createElement(FieldTimeOutlined, {
+              style: { color: "#faad14", fontSize: 14 },
+            })
           : "🕐",
         React.createElement("span", null, "待处理"),
       ),
@@ -752,13 +1122,18 @@ const storyColumns = [
   function A2ACallRender({ data }: { data: any }) {
     const status = data?.status || "";
     const isLoading = status === "in_progress" || status === "created";
-    const isCompleted = status === "completed" || status === "canceled" || status === "failed";
+    const isCompleted =
+      status === "completed" || status === "canceled" || status === "failed";
     const toolResultRef = React.useRef<any>(null);
 
     const toolArgs = useMemo(() => {
       const argsStr = data?.content?.[0]?.data?.arguments;
       if (!argsStr) return null;
-      try { return JSON.parse(argsStr); } catch { return null; }
+      try {
+        return JSON.parse(argsStr);
+      } catch {
+        return null;
+      }
     }, [data?.content?.[0]?.data?.arguments]);
 
     const toolResult = useMemo(() => {
@@ -770,24 +1145,33 @@ const storyColumns = [
         if (!rawOutput) continue;
         let textContent = "";
         if (Array.isArray(rawOutput)) {
-          const textBlock = rawOutput.find((b: any) => b?.type === "text" && b?.text);
+          const textBlock = rawOutput.find(
+            (b: any) => b?.type === "text" && b?.text,
+          );
           textContent = textBlock?.text || "";
         } else if (typeof rawOutput === "string") {
           try {
             const parsed = JSON.parse(rawOutput);
-            if (typeof parsed === "object" && parsed?.response_text) return parsed;
+            if (typeof parsed === "object" && parsed?.response_text)
+              return parsed;
             if (Array.isArray(parsed)) {
               const tb = parsed.find((b: any) => b?.type === "text" && b?.text);
-              if (tb?.text) { textContent = tb.text; }
+              if (tb?.text) {
+                textContent = tb.text;
+              }
             }
-          } catch { textContent = rawOutput; }
+          } catch {
+            textContent = rawOutput;
+          }
         }
         if (!textContent) continue;
         try {
           const result = JSON.parse(textContent);
           if (isCompleted) toolResultRef.current = result;
           return result;
-        } catch { return null; }
+        } catch {
+          return null;
+        }
       }
       return null;
     }, [data?.content, isCompleted]);
@@ -802,80 +1186,139 @@ const storyColumns = [
     const eventCount = toolResult?.event_count || 0;
 
     const stateColor: Record<string, string> = {
-      completed: "#52c41a", failed: "#ff4d4f", error: "#ff4d4f",
-      canceled: "#faad14", working: "#1677ff",
+      completed: "#52c41a",
+      failed: "#ff4d4f",
+      error: "#ff4d4f",
+      canceled: "#faad14",
+      working: "#1677ff",
     };
     const stateLabelText: Record<string, string> = {
-      completed: "已完成", failed: "失败", error: "出错",
-      canceled: "已取消", working: "执行中",
+      completed: "已完成",
+      failed: "失败",
+      error: "出错",
+      canceled: "已取消",
+      working: "执行中",
     };
 
-    const color = isLoading ? "#1677ff" : (stateColor[taskState] || "#d9d9d9");
-    const label = isLoading ? "执行中..." : (stateLabelText[taskState] || taskState || "完成");
+    const color = isLoading ? "#1677ff" : stateColor[taskState] || "#d9d9d9";
+    const label = isLoading
+      ? "执行中..."
+      : stateLabelText[taskState] || taskState || "完成";
 
     const displayText = errorText
       ? `错误: ${errorText}`
       : responseText || "等待响应...";
 
-    const headerEl = React.createElement(Space, { size: 8 },
+    const headerEl = React.createElement(
+      Space,
+      { size: 8 },
       React.createElement("span", null, "🔗"),
-      React.createElement(Text, { strong: true, style: { fontSize: 14 } },
-        `A2A 调用: ${displayName}`),
+      React.createElement(
+        Text,
+        { strong: true, style: { fontSize: 14 } },
+        `A2A 调用: ${displayName}`,
+      ),
       React.createElement(Tag, { color: color }, label),
     );
 
-    const loadingSpinner = isLoading && !responseText
-      ? React.createElement("div", {
-          style: {
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 12px", marginBottom: 12,
-            background: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 6,
-          },
-        },
-        React.createElement(Spin, { size: "small" }),
-        React.createElement(Text, { style: { fontSize: 12, color: "#52c41a" } },
-          `正在连接 ${displayName}...`),
-      )
-      : null;
+    const loadingSpinner =
+      isLoading && !responseText
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                marginBottom: 12,
+                background: "#f6ffed",
+                border: "1px solid #b7eb8f",
+                borderRadius: 6,
+              },
+            },
+            React.createElement(Spin, { size: "small" }),
+            React.createElement(
+              Text,
+              { style: { fontSize: 12, color: "#52c41a" } },
+              `正在连接 ${displayName}...`,
+            ),
+          )
+        : null;
 
-    const streamingIndicator = isLoading && responseText
-      ? React.createElement("div", {
-          style: {
-            background: "#e6f4ff", border: "1px solid #91caff", borderRadius: 6,
-            padding: "8px 12px", marginBottom: 12,
-          },
-        },
-        React.createElement(Text, { style: { fontSize: 12, color: "#1677ff" } },
-          `实时进度 (已接收 ${eventCount} 个事件):`),
-      )
-      : null;
+    const streamingIndicator =
+      isLoading && responseText
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                background: "#e6f4ff",
+                border: "1px solid #91caff",
+                borderRadius: 6,
+                padding: "8px 12px",
+                marginBottom: 12,
+              },
+            },
+            React.createElement(
+              Text,
+              { style: { fontSize: 12, color: "#1677ff" } },
+              `实时进度 (已接收 ${eventCount} 个事件):`,
+            ),
+          )
+        : null;
 
-    const resultEl = React.createElement("div", {
-      style: {
-        background: "#fafafa", border: "1px solid #d9d9d9", borderRadius: 6,
-        padding: "12px 16px",
+    const resultEl = React.createElement(
+      "div",
+      {
+        style: {
+          background: "#fafafa",
+          border: "1px solid #d9d9d9",
+          borderRadius: 6,
+          padding: "12px 16px",
+        },
       },
-    },
-      React.createElement(Text, { style: { fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word" } },
-        displayText),
+      React.createElement(
+        Text,
+        {
+          style: {
+            fontSize: 12,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          },
+        },
+        displayText,
+      ),
     );
 
-    return React.createElement("div", {
-      style: {
-        width: "100%", borderRadius: 10, border: "1px solid #f0f0f0",
-        overflow: "hidden", background: "#fff", padding: "12px 16px", margin: "4px 0",
+    return React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          borderRadius: 10,
+          border: "1px solid #f0f0f0",
+          overflow: "hidden",
+          background: "#fff",
+          padding: "12px 16px",
+          margin: "4px 0",
+        },
       },
-    },
       React.createElement("div", { style: { marginBottom: 12 } }, headerEl),
       loadingSpinner,
       streamingIndicator,
       resultEl,
-      React.createElement("div", {
-        style: { fontSize: 11, color: "#8c8c8c", marginTop: 8 },
-      },
+      React.createElement(
+        "div",
+        {
+          style: { fontSize: 11, color: "#8c8c8c", marginTop: 8 },
+        },
         `事件数: ${eventCount}`,
-        toolResult?.task_id ? ` | 任务ID: ${toolResult.task_id.slice(0, 12)}...` : "",
-        toolResult?.context_id ? ` | 会话: ${toolResult.context_id.slice(0, 12)}...` : "",
+        toolResult?.task_id
+          ? ` | 任务ID: ${toolResult.task_id.slice(0, 12)}...`
+          : "",
+        toolResult?.context_id
+          ? ` | 会话: ${toolResult.context_id.slice(0, 12)}...`
+          : "",
       ),
     );
   }
@@ -926,20 +1369,32 @@ const storyColumns = [
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(agentId ? { "X-Agent-Id": agentId } : {}),
     };
-    const resp = await fetch(url, { ...opts, headers: { ...headers, ...(opts?.headers || {}) } });
+    const resp = await fetch(url, {
+      ...opts,
+      headers: { ...headers, ...(opts?.headers || {}) },
+    });
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");
       throw new Error(body || `HTTP ${resp.status}`);
     }
-    if (resp.status === 204 || resp.headers.get("content-length") === "0") return null;
+    if (resp.status === 204 || resp.headers.get("content-length") === "0")
+      return null;
     return resp.json();
   }
 
   function A2ACard(props: { agent: any; onClick: () => void }) {
     const { agent, onClick } = props;
     const isConnected = agent.status === "connected";
-    const statusColor = isConnected ? "#52c41a" : agent.status === "error" ? "#ff4d4f" : "#d9d9d9";
-    const statusText = isConnected ? "已连接" : agent.status === "error" ? "错误" : "未连接";
+    const statusColor = isConnected
+      ? "#52c41a"
+      : agent.status === "error"
+      ? "#ff4d4f"
+      : "#d9d9d9";
+    const statusText = isConnected
+      ? "已连接"
+      : agent.status === "error"
+      ? "错误"
+      : "未连接";
     const authLabels: Record<string, string> = {
       gateway: "阿里云Agent Hub",
       bearer: "Bearer Token",
@@ -957,10 +1412,18 @@ const storyColumns = [
           Space,
           null,
           React.createElement(Badge, { color: statusColor }),
-          React.createElement("span", null, agent.name || agent.alias || agent.url),
+          React.createElement(
+            "span",
+            null,
+            agent.name || agent.alias || agent.url,
+          ),
         ),
         extra: agent.auth_type
-          ? React.createElement(Tag, { color: "blue" }, authLabels[agent.auth_type] || agent.auth_type)
+          ? React.createElement(
+              Tag,
+              { color: "blue" },
+              authLabels[agent.auth_type] || agent.auth_type,
+            )
           : null,
       },
       React.createElement(
@@ -975,17 +1438,31 @@ const storyColumns = [
           agent.url,
         ),
         agent.description
-          ? React.createElement("div", { style: { marginBottom: 4, color: "#999" } }, agent.description)
+          ? React.createElement(
+              "div",
+              { style: { marginBottom: 4, color: "#999" } },
+              agent.description,
+            )
           : null,
         agent.skills?.length > 0
           ? React.createElement(
               "div",
               null,
-              agent.skills.slice(0, 3).map((s: any, i: number) =>
-                React.createElement(Tag, { key: i, style: { fontSize: 11 } }, s.name),
-              ),
+              agent.skills
+                .slice(0, 3)
+                .map((s: any, i: number) =>
+                  React.createElement(
+                    Tag,
+                    { key: i, style: { fontSize: 11 } },
+                    s.name,
+                  ),
+                ),
               agent.skills.length > 3
-                ? React.createElement(Tag, { style: { fontSize: 11 } }, `+${agent.skills.length - 3}`)
+                ? React.createElement(
+                    Tag,
+                    { style: { fontSize: 11 } },
+                    `+${agent.skills.length - 3}`,
+                  )
                 : null,
             )
           : null,
@@ -1043,14 +1520,21 @@ const storyColumns = [
       }
     }, []);
 
-    useEffect(() => { fetchAgents(); }, [currentAgentId]);
+    useEffect(() => {
+      fetchAgents();
+    }, [currentAgentId]);
 
     const handleCreateClick = useCallback(() => {
       setIsCreateMode(true);
       setActiveAgent(null);
       setDrawerOpen(true);
       form.resetFields();
-      form.setFieldsValue({ url: "", alias: "", auth_type: "", auth_token: "" });
+      form.setFieldsValue({
+        url: "",
+        alias: "",
+        auth_type: "",
+        auth_token: "",
+      });
     }, [form]);
 
     const handleCardClick = useCallback((agent: any) => {
@@ -1070,7 +1554,9 @@ const storyColumns = [
       let values: any;
       try {
         values = await form.validateFields();
-      } catch { return; }
+      } catch {
+        return;
+      }
       const body = {
         url: String(values.url || "").trim(),
         alias: String(values.alias || "").trim() || undefined,
@@ -1080,7 +1566,10 @@ const storyColumns = [
       if (!body.url) return;
       setSaving(true);
       try {
-        await a2aFetch(API_BASE, { method: "POST", body: JSON.stringify(body) });
+        await a2aFetch(API_BASE, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
         antdMsg.success("A2A Agent 注册成功");
         await fetchAgents();
         handleClose();
@@ -1102,7 +1591,9 @@ const storyColumns = [
         okButtonProps: { danger: true },
         async onOk() {
           try {
-            await a2aFetch(`${API_BASE}/${encodeURIComponent(alias)}`, { method: "DELETE" });
+            await a2aFetch(`${API_BASE}/${encodeURIComponent(alias)}`, {
+              method: "DELETE",
+            });
             antdMsg.success("A2A Agent 已删除");
             await fetchAgents();
             handleClose();
@@ -1118,9 +1609,12 @@ const storyColumns = [
       const alias = activeAgent.alias || activeAgent.url;
       setRefreshing(true);
       try {
-        const updated = await a2aFetch(`${API_BASE}/${encodeURIComponent(alias)}/refresh`, {
-          method: "POST",
-        });
+        const updated = await a2aFetch(
+          `${API_BASE}/${encodeURIComponent(alias)}/refresh`,
+          {
+            method: "POST",
+          },
+        );
         antdMsg.success("Agent Card 已刷新");
         await fetchAgents();
         if (updated) setActiveAgent(updated);
@@ -1139,8 +1633,14 @@ const storyColumns = [
       { form, layout: "vertical" },
       React.createElement(
         Form.Item,
-        { name: "url", label: "Agent URL", rules: [{ required: true, message: "请输入 Agent URL" }] },
-        React.createElement(Input, { placeholder: "https://agent.example.com" }),
+        {
+          name: "url",
+          label: "Agent URL",
+          rules: [{ required: true, message: "请输入 Agent URL" }],
+        },
+        React.createElement(Input, {
+          placeholder: "https://agent.example.com",
+        }),
       ),
       React.createElement(
         Form.Item,
@@ -1153,15 +1653,33 @@ const storyColumns = [
         React.createElement(
           Select,
           { allowClear: true, placeholder: "无认证" },
-          React.createElement(Select.Option, { value: "bearer" }, "Bearer Token"),
+          React.createElement(
+            Select.Option,
+            { value: "bearer" },
+            "Bearer Token",
+          ),
           React.createElement(Select.Option, { value: "api_key" }, "API Key"),
-          React.createElement(Select.Option, { value: "gateway" }, "阿里云Agent Hub"),
+          React.createElement(
+            Select.Option,
+            { value: "gateway" },
+            "阿里云Agent Hub",
+          ),
         ),
       ),
       authTypeValue === "gateway"
         ? React.createElement(
             "div",
-            { style: { marginBottom: 16, padding: "8px 12px", background: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 6, fontSize: 12, color: "#52c41a" } },
+            {
+              style: {
+                marginBottom: 16,
+                padding: "8px 12px",
+                background: "#f6ffed",
+                border: "1px solid #b7eb8f",
+                borderRadius: 6,
+                fontSize: 12,
+                color: "#52c41a",
+              },
+            },
             "阿里云Agent Hub 模式将自动使用环境变量中的 AK-SK 换取 Bearer Token",
           )
         : null,
@@ -1169,7 +1687,9 @@ const storyColumns = [
         ? React.createElement(
             Form.Item,
             { name: "auth_token", label: "认证凭证" },
-            React.createElement(Input.Password, { placeholder: "Bearer Token 或 API Key" }),
+            React.createElement(Input.Password, {
+              placeholder: "Bearer Token 或 API Key",
+            }),
           )
         : null,
     );
@@ -1182,26 +1702,66 @@ const storyColumns = [
           React.createElement(
             Descriptions,
             { column: 1, bordered: true, size: "small" },
-            React.createElement(Descriptions.Item, { label: "URL" }, activeAgent.url),
-            React.createElement(Descriptions.Item, { label: "别名" }, activeAgent.alias || "-"),
-            React.createElement(Descriptions.Item, { label: "Agent 名称" }, activeAgent.name || "-"),
+            React.createElement(
+              Descriptions.Item,
+              { label: "URL" },
+              activeAgent.url,
+            ),
+            React.createElement(
+              Descriptions.Item,
+              { label: "别名" },
+              activeAgent.alias || "-",
+            ),
+            React.createElement(
+              Descriptions.Item,
+              { label: "Agent 名称" },
+              activeAgent.name || "-",
+            ),
             React.createElement(
               Descriptions.Item,
               { label: "状态" },
               React.createElement(Badge, {
-                color: activeAgent.status === "connected" ? "#52c41a" : activeAgent.status === "error" ? "#ff4d4f" : "#d9d9d9",
-                text: activeAgent.status === "connected" ? "已连接" : activeAgent.status === "error" ? "错误" : "未连接",
+                color:
+                  activeAgent.status === "connected"
+                    ? "#52c41a"
+                    : activeAgent.status === "error"
+                    ? "#ff4d4f"
+                    : "#d9d9d9",
+                text:
+                  activeAgent.status === "connected"
+                    ? "已连接"
+                    : activeAgent.status === "error"
+                    ? "错误"
+                    : "未连接",
               }),
             ),
-            React.createElement(Descriptions.Item, { label: "认证类型" },
+            React.createElement(
+              Descriptions.Item,
+              { label: "认证类型" },
               activeAgent.auth_type
-                ? React.createElement(Tag, { color: "blue" },
-                    ({ gateway: "阿里云Agent Hub", bearer: "Bearer Token", api_key: "API Key" } as any)[activeAgent.auth_type] || activeAgent.auth_type,
+                ? React.createElement(
+                    Tag,
+                    { color: "blue" },
+                    (
+                      {
+                        gateway: "阿里云Agent Hub",
+                        bearer: "Bearer Token",
+                        api_key: "API Key",
+                      } as any
+                    )[activeAgent.auth_type] || activeAgent.auth_type,
                   )
                 : "无认证",
             ),
-            React.createElement(Descriptions.Item, { label: "描述" }, activeAgent.description || "-"),
-            React.createElement(Descriptions.Item, { label: "版本" }, activeAgent.version || "-"),
+            React.createElement(
+              Descriptions.Item,
+              { label: "描述" },
+              activeAgent.description || "-",
+            ),
+            React.createElement(
+              Descriptions.Item,
+              { label: "版本" },
+              activeAgent.version || "-",
+            ),
           ),
           activeAgent.skills?.length > 0
             ? React.createElement(
@@ -1213,7 +1773,13 @@ const storyColumns = [
                     Card,
                     { key: i, size: "small", style: { marginBottom: 8 } },
                     React.createElement("strong", null, s.name),
-                    s.description ? React.createElement("div", { style: { color: "#666", fontSize: 12 } }, s.description) : null,
+                    s.description
+                      ? React.createElement(
+                          "div",
+                          { style: { color: "#666", fontSize: 12 } },
+                          s.description,
+                        )
+                      : null,
                   ),
                 ),
               )
@@ -1223,16 +1789,44 @@ const storyColumns = [
                 "div",
                 { style: { marginTop: 16 } },
                 React.createElement("h4", null, "能力"),
-                React.createElement(Space, null,
-                  React.createElement(Tag, { color: activeAgent.capabilities.streaming ? "green" : "default" }, "Streaming"),
-                  React.createElement(Tag, { color: activeAgent.capabilities.push_notifications ? "green" : "default" }, "Push Notifications"),
+                React.createElement(
+                  Space,
+                  null,
+                  React.createElement(
+                    Tag,
+                    {
+                      color: activeAgent.capabilities.streaming
+                        ? "green"
+                        : "default",
+                    },
+                    "Streaming",
+                  ),
+                  React.createElement(
+                    Tag,
+                    {
+                      color: activeAgent.capabilities.push_notifications
+                        ? "green"
+                        : "default",
+                    },
+                    "Push Notifications",
+                  ),
                 ),
               )
             : null,
           activeAgent.error
             ? React.createElement(
                 "div",
-                { style: { marginTop: 16, padding: "8px 12px", background: "#fff2f0", border: "1px solid #ffccc7", borderRadius: 6, fontSize: 12, color: "#ff4d4f" } },
+                {
+                  style: {
+                    marginTop: 16,
+                    padding: "8px 12px",
+                    background: "#fff2f0",
+                    border: "1px solid #ffccc7",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    color: "#ff4d4f",
+                  },
+                },
                 activeAgent.error,
               )
             : null,
@@ -1244,7 +1838,9 @@ const storyColumns = [
               Button,
               {
                 type: "primary",
-                icon: ReloadOutlined ? React.createElement(ReloadOutlined) : null,
+                icon: ReloadOutlined
+                  ? React.createElement(ReloadOutlined)
+                  : null,
                 loading: refreshing,
                 onClick: handleRefresh,
               },
@@ -1254,7 +1850,9 @@ const storyColumns = [
               Button,
               {
                 danger: true,
-                icon: DeleteOutlined ? React.createElement(DeleteOutlined) : null,
+                icon: DeleteOutlined
+                  ? React.createElement(DeleteOutlined)
+                  : null,
                 onClick: handleDelete,
               },
               "删除",
@@ -1266,7 +1864,9 @@ const storyColumns = [
     const drawerEl = React.createElement(
       Drawer,
       {
-        title: isCreateMode ? "注册远程 A2A Agent" : (activeAgent?.name || activeAgent?.alias || "Agent 详情"),
+        title: isCreateMode
+          ? "注册远程 A2A Agent"
+          : activeAgent?.name || activeAgent?.alias || "Agent 详情",
         open: drawerOpen,
         onClose: handleClose,
         width: 480,
@@ -1275,7 +1875,11 @@ const storyColumns = [
               Space,
               { style: { float: "right" } },
               React.createElement(Button, { onClick: handleClose }, "取消"),
-              React.createElement(Button, { type: "primary", loading: saving, onClick: handleSubmit }, "注册"),
+              React.createElement(
+                Button,
+                { type: "primary", loading: saving, onClick: handleSubmit },
+                "注册",
+              ),
             )
           : null,
       },
@@ -1284,14 +1888,25 @@ const storyColumns = [
 
     const headerEl = React.createElement(
       "div",
-      { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        },
+      },
       React.createElement("h2", { style: { margin: 0 } }, "A2A 远程 Agent"),
       React.createElement(
         Space,
         null,
         React.createElement(
           Button,
-          { icon: ReloadOutlined ? React.createElement(ReloadOutlined) : null, onClick: fetchAgents, loading },
+          {
+            icon: ReloadOutlined ? React.createElement(ReloadOutlined) : null,
+            onClick: fetchAgents,
+            loading,
+          },
           "刷新列表",
         ),
         React.createElement(
@@ -1313,24 +1928,24 @@ const storyColumns = [
           React.createElement(Spin, { size: "large" }),
         )
       : agents.length === 0
-        ? React.createElement(Empty, { description: "暂无注册的远程 A2A Agent" })
-        : React.createElement(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
-                gap: 12,
-              },
+      ? React.createElement(Empty, { description: "暂无注册的远程 A2A Agent" })
+      : React.createElement(
+          "div",
+          {
+            style: {
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gap: 12,
             },
-            ...agents.map((agent: any) =>
-              React.createElement(A2ACard, {
-                key: agent.alias || agent.url,
-                agent,
-                onClick: () => handleCardClick(agent),
-              }),
-            ),
-          );
+          },
+          ...agents.map((agent: any) =>
+            React.createElement(A2ACard, {
+              key: agent.alias || agent.url,
+              agent,
+              onClick: () => handleCardClick(agent),
+            }),
+          ),
+        );
 
     return React.createElement(
       "div",
@@ -1366,6 +1981,86 @@ const storyColumns = [
   // ── Patchable module overrides (QwenPaw ≥ 1.1.4b1) ─────────────────
 
   patchWelcomeAndTheme();
+  patchA2aSlashCommand();
+}
+
+// ── / A2A slash command: fetch intercept for a2a_call routing ────────
+
+function patchA2aSlashCommand() {
+  const QP = (window as any).QwenPaw;
+  const { getApiUrl } = QP.host;
+
+  const A2A_HINT_TEMPLATE = (alias: string, userMsg: string) =>
+    `[A2A_DIRECT_CALL] 用户通过 /${alias} 指定了远程 A2A Agent。请立即使用 a2a_call 工具将以下问题原样转发给 agent 别名 "${alias}"，不要自己回答、不要修改内容、不要添加额外解释。用户原始问题如下：\n---\n${userMsg}\n---\n请仅使用 a2a_call(agent_alias="${alias}", message="上述用户原始问题") 来转发，然后将远程 agent 的回复结果返回给用户。`;
+
+  function extractA2aSlash(
+    text: string,
+  ): { alias: string; cleanMsg: string } | null {
+    const match = text.match(/^\/([\w.-]+)\s+(.+)$/s);
+    if (match) return { alias: match[1], cleanMsg: match[2] };
+    return null;
+  }
+
+  function processContent(content: any): any {
+    if (typeof content === "string") {
+      const info = extractA2aSlash(content.trim());
+      if (info && info.cleanMsg) {
+        return A2A_HINT_TEMPLATE(info.alias, info.cleanMsg);
+      }
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content.map((item: any) => {
+        if (item.type === "text" && typeof item.text === "string") {
+          const info = extractA2aSlash(item.text.trim());
+          if (info && info.cleanMsg) {
+            return {
+              ...item,
+              text: A2A_HINT_TEMPLATE(info.alias, info.cleanMsg),
+            };
+          }
+        }
+        return item;
+      });
+    }
+    return content;
+  }
+
+  const chatUrl = getApiUrl("/console/chat");
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function (
+    input: any,
+    init?: RequestInit,
+  ): Promise<Response> {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+        ? input.url
+        : String(input);
+
+    if (url === chatUrl && init?.body) {
+      try {
+        const body = JSON.parse(init.body as string);
+        if (body.input && Array.isArray(body.input)) {
+          body.input = body.input.map((msg: any) => {
+            if (msg.role === "user" && msg.content) {
+              return { ...msg, content: processContent(msg.content) };
+            }
+            return msg;
+          });
+          init = { ...init, body: JSON.stringify(body) };
+        }
+      } catch {}
+    }
+
+    return originalFetch(input, init);
+  };
+
+  console.info(
+    "[cloudpaw] / A2A slash command system-hint injection initialized",
+  );
 }
 
 // ── First-install default agent selection ────────────────────────────
@@ -1389,29 +2084,41 @@ function ensureDefaultAgent() {
       parsed.state.selectedAgent = CLOUDPAW_MASTER_AGENT_ID;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          version: 0,
+          state: {
+            selectedAgent: CLOUDPAW_MASTER_AGENT_ID,
+            agents: [],
+            lastChatIdByAgent: {},
+          },
+        }),
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
         version: 0,
         state: {
           selectedAgent: CLOUDPAW_MASTER_AGENT_ID,
           agents: [],
           lastChatIdByAgent: {},
         },
-      }));
-    }
-  } catch { /* ignore */ }
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
 
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-      version: 0,
-      state: {
-        selectedAgent: CLOUDPAW_MASTER_AGENT_ID,
-        agents: [],
-        lastChatIdByAgent: {},
-      },
-    }));
-  } catch { /* ignore */ }
-
-  console.info("[cloudpaw] Set default agent to cloud-orchestrator for first-time user");
+  console.info(
+    "[cloudpaw] Set default agent to cloud-orchestrator for first-time user",
+  );
   window.location.reload();
 }
 
@@ -1423,7 +2130,9 @@ function patchWelcomeAndTheme() {
 
   const configModule = modules["Chat/OptionsPanel/defaultConfig"];
   if (!configModule?.configProvider) {
-    console.warn("[cloudpaw] configProvider not found — skipping welcome/theme patch");
+    console.warn(
+      "[cloudpaw] configProvider not found — skipping welcome/theme patch",
+    );
     return;
   }
 
@@ -1445,25 +2154,29 @@ function patchWelcomeAndTheme() {
     ja: "クラウドリソースのデプロイ、インフラの管理、Alibaba Cloudでのサービスオーケストレーションをお手伝いします。左上のドロップダウンから「CloudPaw-Master」を選択してタスクを開始してください。複雑なタスクには /mission コマンドで Mission Mode を起動し、自動分解・実行できます。",
     ru: "Я могу помочь вам развернуть облачные ресурсы и управлять инфраструктурой на Alibaba Cloud. Выберите 'CloudPaw-Master' в выпадающем списке в левом верхнем углу, чтобы начать. Для сложных задач используйте /mission для автоматической декомпозиции и выполнения.",
   };
-  const promptSets: Record<string, Array<{label: string; value: string}>> = {
+  const promptSets: Record<string, Array<{ label: string; value: string }>> = {
     zh: [
       {
         label: "创建个人主页并部署到云端",
-        value: "/mission 帮我创建一个个人主页并上线到云端。页面包含：个人介绍、技能展示、项目经历、联系方式，所有个人信息请先用占位符代替。风格简洁清爽，适配手机和电脑。请使用阿里云 ECS 部署。",
+        value:
+          "/mission 帮我创建一个个人主页并上线到云端。页面包含：个人介绍、技能展示、项目经历、联系方式，所有个人信息请先用占位符代替。风格简洁清爽，适配手机和电脑。请使用阿里云 ECS 部署。",
       },
       {
         label: "快速发布 API 服务到云端",
-        value: "/mission 帮我把一个 API 服务快速发布到云端。我希望默认提供 /health 和 /hello 两个接口，并给我可直接调用的地址和示例请求，配置尽量简单清晰。",
+        value:
+          "/mission 帮我把一个 API 服务快速发布到云端。我希望默认提供 /health 和 /hello 两个接口，并给我可直接调用的地址和示例请求，配置尽量简单清晰。",
       },
     ],
     en: [
       {
         label: "Create a personal homepage and deploy to the cloud",
-        value: "/mission Help me create a personal homepage and deploy it to the cloud. The page should include: personal introduction, skills, project experience, and contact info — please use placeholders for all personal information. The style should be clean and minimal, responsive for mobile and desktop. Please deploy using Alibaba Cloud ECS.",
+        value:
+          "/mission Help me create a personal homepage and deploy it to the cloud. The page should include: personal introduction, skills, project experience, and contact info — please use placeholders for all personal information. The style should be clean and minimal, responsive for mobile and desktop. Please deploy using Alibaba Cloud ECS.",
       },
       {
         label: "Deploy an API service to the cloud",
-        value: "/mission Help me quickly deploy an API service to the cloud. I want it to provide /health and /hello endpoints by default, and give me a callable URL with example requests. Keep the configuration as simple and clean as possible.",
+        value:
+          "/mission Help me quickly deploy an API service to the cloud. I want it to provide /health and /hello endpoints by default, and give me a callable URL with example requests. Keep the configuration as simple and clean as possible.",
       },
     ],
   };

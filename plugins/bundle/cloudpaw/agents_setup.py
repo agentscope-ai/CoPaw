@@ -39,14 +39,24 @@ def register_extra_tools(agent_id: str, extra_tools: dict[str, dict]) -> None:
         agent_cfg.tools = ToolsConfig()
 
     changed = False
-    _SYNC_FIELDS = ("enabled", "async_execution", "description", "icon", "display_to_user")
+    _SYNC_FIELDS = (
+        "enabled",
+        "async_execution",
+        "description",
+        "icon",
+        "display_to_user",
+    )
     for tool_name, tool_spec in extra_tools.items():
         if tool_name not in agent_cfg.tools.builtin_tools:
             agent_cfg.tools.builtin_tools[tool_name] = BuiltinToolConfig(
                 **tool_spec,
             )
             changed = True
-            logger.info("Registered tool '%s' for agent %s", tool_name, agent_id)
+            logger.info(
+                "Registered tool '%s' for agent %s",
+                tool_name,
+                agent_id,
+            )
             continue
 
         # Tool already exists in config (e.g. as a default builtin) — sync
@@ -63,21 +73,29 @@ def register_extra_tools(agent_id: str, extra_tools: dict[str, dict]) -> None:
                 changed = True
                 logger.info(
                     "Updated tool '%s' field %s=%r for agent %s",
-                    tool_name, field, new_value, agent_id,
+                    tool_name,
+                    field,
+                    new_value,
+                    agent_id,
                 )
 
     if changed:
         try:
             save_agent_config(agent_id, agent_cfg)
         except Exception as exc:
-            logger.warning("Failed to save tools for agent %s: %s", agent_id, exc)
+            logger.warning(
+                "Failed to save tools for agent %s: %s",
+                agent_id,
+                exc,
+            )
 
 
 def _build_acp_config(spec: dict[str, Any]) -> Any:
     """Build an ACPConfig from the spec's acp_agent definition.
 
     ACP child processes inherit the parent's full os.environ automatically
-    (see ACPService._open_conversation: env={**os.environ, **agent_config.env}),
+    (see ACPService._open_conversation:
+    env={**os.environ, **agent_config.env}),
     so Alibaba Cloud credentials (AK/SK) are passed implicitly.  We only need
     to inject LLM provider config that iac-code reads from IAC_CODE_* vars.
     """
@@ -118,6 +136,7 @@ def _inject_llm_env(env: dict[str, str]) -> None:
 
     try:
         from qwenpaw.providers.provider_manager import ProviderManager
+
         pm = ProviderManager()
         active_slot = pm.get_active_model()
         if active_slot is None:
@@ -141,7 +160,8 @@ def _inject_llm_env(env: dict[str, str]) -> None:
             "deepseek": "DeepSeek",
         }
         iac_provider = _PROVIDER_MAP.get(
-            provider_id.lower(), "OpenAPICompatible"
+            provider_id.lower(),
+            "OpenAPICompatible",
         )
 
         if iac_provider:
@@ -155,7 +175,8 @@ def _inject_llm_env(env: dict[str, str]) -> None:
 
         logger.info(
             "Injected LLM config for iac-code: provider=%s, model=%s",
-            iac_provider, model,
+            iac_provider,
+            model,
         )
     except Exception as exc:
         logger.debug("Failed to inject LLM config for iac-code: %s", exc)
@@ -176,7 +197,9 @@ def ensure_builtin_agents() -> None:
         from qwenpaw.config.utils import load_config, save_config
         from qwenpaw.constant import WORKING_DIR
     except ImportError:
-        logger.error("Cannot import config modules; agent registration skipped")
+        logger.error(
+            "Cannot import config modules; agent registration skipped",
+        )
         return
 
     config = load_config()
@@ -192,8 +215,10 @@ def ensure_builtin_agents() -> None:
     for spec in _AGENT_SPECS:
         agent_id = spec["agent_id"]
         expected_ws = (
-            Path(WORKING_DIR) / "workspaces" / agent_id
-        ).expanduser().resolve()
+            (Path(WORKING_DIR) / "workspaces" / agent_id)
+            .expanduser()
+            .resolve()
+        )
 
         if agent_id in config.agents.profiles:
             ref = config.agents.profiles[agent_id]
@@ -201,7 +226,9 @@ def ensure_builtin_agents() -> None:
             if actual != expected_ws:
                 logger.warning(
                     "Agent %s workspace mismatch (%s vs %s); skipping",
-                    agent_id, actual, expected_ws,
+                    agent_id,
+                    actual,
+                    expected_ws,
                 )
                 continue
         else:
@@ -214,7 +241,11 @@ def ensure_builtin_agents() -> None:
             logger.info("Registered agent %s at %s", agent_id, expected_ws)
 
         running_overrides = spec.get("running_overrides", {})
-        running_cfg = AgentsRunningConfig(**running_overrides) if running_overrides else AgentsRunningConfig()
+        running_cfg = (
+            AgentsRunningConfig(**running_overrides)
+            if running_overrides
+            else AgentsRunningConfig()
+        )
 
         acp_config = _build_acp_config(spec) if "acp_agent" in spec else None
 
@@ -299,6 +330,7 @@ def _seed_persona_md_files(
 
     try:
         from qwenpaw.agents.prompt import _get_agent_md_dir
+
         generic_md = _get_agent_md_dir(language)
         if generic_md and generic_md.exists():
             for name in ("MEMORY.md",):
@@ -334,14 +366,21 @@ def _install_workspace_skills(
         src = pool_dir / skill_name
         dst = ws_skills / skill_name
         if not src.exists():
-            logger.warning("Skill %s not in pool, cannot install to workspace", skill_name)
+            logger.warning(
+                "Skill %s not in pool, cannot install to workspace",
+                skill_name,
+            )
             continue
         if dst.exists():
             continue
         try:
             shutil.copytree(src, dst)
         except Exception as e:
-            logger.warning("Failed to install skill %s to workspace: %s", skill_name, e)
+            logger.warning(
+                "Failed to install skill %s to workspace: %s",
+                skill_name,
+                e,
+            )
 
     reconcile_workspace_manifest(workspace_dir)
 
@@ -359,4 +398,7 @@ def _install_workspace_skills(
             encoding="utf-8",
         )
     except Exception as exc:
-        logger.warning("Failed to enable skills in workspace manifest: %s", exc)
+        logger.warning(
+            "Failed to enable skills in workspace manifest: %s",
+            exc,
+        )

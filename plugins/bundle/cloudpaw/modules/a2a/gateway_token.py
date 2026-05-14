@@ -55,19 +55,28 @@ class GatewayTokenProvider:
     async def _refresh_token(self) -> str:
         if not self._ak or not self._sk:
             raise RuntimeError(
-                "ALIBABA_CLOUD_ACCESS_KEY_ID / SECRET not configured"
+                "ALIBABA_CLOUD_ACCESS_KEY_ID / SECRET not configured",
             )
 
         cmd = [
-            "aliyun", "ramoauth", "GenerateAccessToken",
-            "--ClientId", self._client_id,
-            "--endpoint", self._endpoint,
-            "--version", "2026-04-21",
-            "--access-key-id", self._ak,
-            "--access-key-secret", self._sk,
-            "--method", "POST",
+            "aliyun",
+            "ramoauth",
+            "GenerateAccessToken",
+            "--ClientId",
+            self._client_id,
+            "--endpoint",
+            self._endpoint,
+            "--version",
+            "2026-04-21",
+            "--access-key-id",
+            self._ak,
+            "--access-key-secret",
+            self._sk,
+            "--method",
+            "POST",
             "--force",
-            "--Scope", self._scope,
+            "--Scope",
+            self._scope,
         ]
 
         logger.info("Refreshing gateway token via aliyun CLI...")
@@ -81,7 +90,7 @@ class GatewayTokenProvider:
         if proc.returncode != 0:
             err_msg = (stderr or stdout).decode().strip()
             raise RuntimeError(
-                f"Token refresh failed (exit={proc.returncode}): {err_msg}"
+                f"Token refresh failed (exit={proc.returncode}): {err_msg}",
             )
 
         data = json.loads(stdout.decode())
@@ -89,7 +98,7 @@ class GatewayTokenProvider:
         token = d.get("AccessToken", d.get("access_token", ""))
         if not token:
             raise RuntimeError(
-                f"No AccessToken in response: {stdout.decode()[:500]}"
+                f"No AccessToken in response: {stdout.decode()[:500]}",
             )
 
         expires_in = int(d.get("ExpiresIn", 3600))
@@ -100,6 +109,7 @@ class GatewayTokenProvider:
 
         logger.info(
             "Gateway token refreshed (length=%d, expires_in=%ds)",
-            len(token), expires_in,
+            len(token),
+            expires_in,
         )
         return token

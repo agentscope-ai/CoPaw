@@ -10,9 +10,14 @@ def mount_routers() -> None:
     """Mount plugin API routers onto the FastAPI app."""
     try:
         from fastapi import APIRouter, Query
+
+        # pylint: disable=no-name-in-module
         from qwenpaw.app.interaction import InteractionManager
 
-        interaction_router = APIRouter(prefix="/interaction", tags=["interaction"])
+        interaction_router = APIRouter(
+            prefix="/interaction",
+            tags=["interaction"],
+        )
 
         from pydantic import BaseModel
 
@@ -25,6 +30,7 @@ def mount_routers() -> None:
             success = InteractionManager.resolve(body.session_id, body.result)
             if not success:
                 from fastapi import HTTPException
+
                 raise HTTPException(
                     status_code=404,
                     detail="No pending interaction for this session",
@@ -42,13 +48,17 @@ def mount_routers() -> None:
 
             prd_path = Path(loop_dir).expanduser().resolve() / "prd.json"
             if not prd_path.exists():
-                raise HTTPException(status_code=404, detail="prd.json not found")
+                raise HTTPException(
+                    status_code=404,
+                    detail="prd.json not found",
+                )
             try:
                 return json.loads(prd_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
                 raise HTTPException(
-                    status_code=400, detail=f"Invalid prd.json: {exc}",
-                )
+                    status_code=400,
+                    detail=f"Invalid prd.json: {exc}",
+                ) from exc
 
         from routers.a2a import router as a2a_router
 
@@ -72,7 +82,8 @@ def _reorder_catch_all(app) -> None:
     """
     try:
         catch_all_indices = [
-            i for i, r in enumerate(app.routes)
+            i
+            for i, r in enumerate(app.routes)
             if getattr(r, "path", "") == "/{full_path:path}"
         ]
         if not catch_all_indices:
@@ -82,7 +93,8 @@ def _reorder_catch_all(app) -> None:
             app.routes.append(route)
             logger.info(
                 "Moved SPA catch-all route from position %d to end (%d)",
-                idx, len(app.routes) - 1,
+                idx,
+                len(app.routes) - 1,
             )
     except Exception as exc:
         logger.warning("Failed to reorder catch-all route: %s", exc)
@@ -93,7 +105,12 @@ def _inject_routers(routers: list) -> None:
     app = None
     try:
         from agentscope_runtime.engine.app import AgentApp
-        agent_app = AgentApp._instances.get(AgentApp) if hasattr(AgentApp, '_instances') else None
+
+        agent_app = (
+            AgentApp._instances.get(AgentApp)
+            if hasattr(AgentApp, "_instances")
+            else None
+        )
         if agent_app:
             app = agent_app.app
     except Exception:
@@ -102,7 +119,8 @@ def _inject_routers(routers: list) -> None:
     if app is None:
         try:
             from qwenpaw.app._app import app as _app
-            if hasattr(_app, 'state'):
+
+            if hasattr(_app, "state"):
                 app = _app
         except Exception:
             pass
@@ -110,7 +128,7 @@ def _inject_routers(routers: list) -> None:
     if app is None:
         logger.warning(
             "Cannot find FastAPI app instance; plugin routers not mounted. "
-            "This is expected during CLI-only usage."
+            "This is expected during CLI-only usage.",
         )
         return
 
