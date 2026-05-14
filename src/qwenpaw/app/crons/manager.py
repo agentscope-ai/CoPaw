@@ -63,6 +63,10 @@ class CronManager:
         self._states: Dict[str, CronJobState] = {}
         self._history: Dict[str, list[CronExecutionRecord]] = {}
         self._rt: Dict[str, _Runtime] = {}
+        self._shared_session_locks: Dict[
+            tuple[str, str, str],
+            asyncio.Lock,
+        ] = {}
         self._started = False
 
     async def start(self) -> None:
@@ -448,6 +452,21 @@ class CronManager:
         interval_seconds = parse_heartbeat_every(every)
         return IntervalTrigger(seconds=interval_seconds)
 
+    def _get_shared_session_lock(
+        self,
+        job: CronJobSpec,
+    ) -> asyncio.Lock | None:
+        if job.task_type != "agent" or not job.runtime.share_session:
+            return None
+        target = job.dispatch.target
+        session_id = target.session_id or f"cron:{job.id}"
+        key = (job.dispatch.channel, target.user_id or "", session_id)
+        lock = self._shared_session_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._shared_session_locks[key] = lock
+        return lock
+
     async def _scheduled_callback(self, job_id: str) -> None:
         job = await self._repo.get_job(job_id)
         if not job:
@@ -517,7 +536,12 @@ class CronManager:
             delivery_failed = False
 
             try:
-                execution_result = await self._executor.execute(job)
+                session_lock = self._get_shared_session_lock(job)
+                if session_lock is None:
+                    execution_result = await self._executor.execute(job)
+                else:
+                    async with session_lock:
+                        execution_result = await self._executor.execute(job)
                 execution_succeeded = True
                 delivery_failed = (
                     execution_result.get("delivery_status") == "failed"
