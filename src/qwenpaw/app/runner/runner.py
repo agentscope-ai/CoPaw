@@ -31,7 +31,7 @@ from .mission_dispatch import (
     detect_active_mission_phase,
 )
 from .session import SafeJSONSession
-from .utils import build_env_context
+from .utils import agentscope_msg_to_message, build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
 from ...agents.react_agent import QwenPawAgent
 from ...exceptions import convert_model_exception
@@ -189,7 +189,7 @@ class AgentRunner(Runner):
             if close < 0:
                 return None
             name = rest[1:close].strip().lower()
-            user_input = rest[close + 1 :].strip()
+            user_input = rest[close + 1:].strip()
             return (name, user_input) if name else None
 
         # /name input — plain form
@@ -627,6 +627,16 @@ class AgentRunner(Runner):
                     user_id,
                     channel,
                     name=name,
+                )
+                initial_messages = [
+                    message.model_dump(mode="json")
+                    for message in agentscope_msg_to_message(msgs)
+                ]
+                await self.session.ensure_session_placeholder(
+                    session_id=session_id,
+                    user_id=user_id,
+                    channel=channel,
+                    initial_messages=initial_messages,
                 )
                 logger.debug(f"Runner: Got chat: {chat.id}")
             else:
