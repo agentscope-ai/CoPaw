@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Leaf tool backing the ``/make-skill`` flow.
-
-Lives alongside the other built-in agent tools (``file_io.py``,
-``shell.py``, …); the rest of the make-skill feature (service,
-prompt) is under :mod:`qwenpaw.agents.skill_system.make_skill`.
-"""
+"""Tool backing the ``/make-skill`` flow."""
 from __future__ import annotations
 
 import logging
@@ -25,7 +20,7 @@ from ..skill_system.store import normalize_skill_dir_name
 logger = logging.getLogger(__name__)
 
 
-def _text_response(text: str) -> ToolResponse:
+def _tool_text_response(text: str) -> ToolResponse:
     """Wrap text in a single-TextBlock ToolResponse."""
     return ToolResponse(content=[TextBlock(type="text", text=text)])
 
@@ -50,7 +45,7 @@ async def materialize_skill(
         body: The SKILL.md body, no frontmatter.
     """
     if not name or not description or not body:
-        return _text_response(
+        return _tool_text_response(
             "**materialize_skill is missing required input**\n\n"
             "Need non-empty `name`, `description`, and `body`. "
             "Re-derive them from `plan.name` and `plan.description` "
@@ -60,7 +55,7 @@ async def materialize_skill(
 
     workspace_dir = get_current_workspace_dir()
     if workspace_dir is None:
-        return _text_response(
+        return _tool_text_response(
             "**Workspace directory not set in context**; cannot "
             "materialize. This is an internal error — abandon "
             "the plan.",
@@ -72,7 +67,7 @@ async def materialize_skill(
     try:
         normalized_name = normalize_skill_dir_name(name)
     except Exception as e:  # pylint: disable=broad-except
-        return _text_response(
+        return _tool_text_response(
             f"**Invalid skill name** `{name}`: {e}\n\n"
             "Call `revise_current_plan` to fix `plan.name` and "
             "try again.",
@@ -81,7 +76,7 @@ async def materialize_skill(
     conflict = name_conflict(workspace_dir, normalized_name)
     if conflict:
         conflict_name, suggested = conflict
-        return _text_response(
+        return _tool_text_response(
             f"**Skill named `{conflict_name}` already exists in "
             f"this workspace.**\n\n"
             f"Call `revise_current_plan` to switch `plan.name` to "
@@ -129,9 +124,9 @@ async def materialize_skill(
                 "again, or abandon the plan if the failure is "
                 "not recoverable."
             )
-        return _text_response(text)
+        return _tool_text_response(text)
 
-    return _text_response(
+    return _tool_text_response(
         f"**Skill created and enabled**: `{skill_name}`\n\n"
         f"Visible via `/skills`; invoke with `/{skill_name}`.",
     )

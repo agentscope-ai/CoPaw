@@ -1,34 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Prompt templates for the ``/make-skill`` flow.
+"""Prompt templates for the ``/make-skill`` flow."""
 
-The flow has two distinct LLM phases — and so two prompts:
-
-1. :func:`build_make_skill_plan_prompt` — *phase A* (drafting). The
-   runner prepends ``/plan `` to this body. It tells the LLM how to
-   shape ``plan.name`` and ``plan.description`` as a COMPACT human
-   preview, and instructs it to copy the phase-B prompt verbatim into
-   the single subtask's ``description``.
-
-2. :func:`build_make_skill_subtask_description` — *phase B*
-   (execution). This is the literal text that lives inside the
-   subtask description. After the user approves the plan and the
-   LLM transitions the subtask to ``in_progress``,
-   :func:`qwenpaw.plan.hints._compact_plan_text` injects the full
-   ``subtask.description`` into the per-turn hint.
-   It rides on the existing ``/plan`` hint mechanism.
-
-   Two branches selected by ``skill_available``:
-
-   - ``True`` — the built-in ``skill-maker`` agent skill is enabled
-     in the current workspace+channel. Subtask body is short and
-     points the LLM at the skill (whose path is already in the
-     ``# Agent Skills`` system-prompt block). The skill's SKILL.md
-     carries the full writing guidance.
-   - ``False`` — the skill is not enabled. Subtask body carries an
-     inline compact fallback so ``/make-skill`` still works, and
-     instructs the LLM to surface a brief enable-the-skill reminder
-     to the user *after* ``materialize_skill`` succeeds.
-"""
 from __future__ import annotations
 
 SKILL_MAKER_NAME = "skill-maker"
@@ -250,8 +222,7 @@ def build_make_skill_plan_prompt(
         f"  description: use the following text as the subtask "
         f"description. You may translate it to match the user's "
         f"language, but PRESERVE the `materialize_skill` parameter "
-        f"list (name / description / body / focus / summary) "
-        f"exactly:\n"
+        f"list (name / description / body) exactly:\n"
         f"  ---\n"
         f"{subtask_desc}\n"
         f"  ---\n"
