@@ -46,6 +46,7 @@ import { clearAuthToken } from "../api/config";
 import { authApi } from "../api/modules/auth";
 import api from "../api";
 import { usePlugins } from "../plugins/PluginContext";
+import { useMobileNav } from "../contexts/MobileNavContext";
 import styles from "./index.module.less";
 import { useTheme } from "../contexts/ThemeContext";
 import { KEY_TO_PATH, DEFAULT_OPEN_KEYS } from "./constants";
@@ -53,15 +54,6 @@ import { KEY_TO_PATH, DEFAULT_OPEN_KEYS } from "./constants";
 // ── Layout ────────────────────────────────────────────────────────────────
 
 const { Sider } = Layout;
-const MOBILE_SIDEBAR_QUERY = "(max-width: 768px)";
-
-function isMobileSidebarViewport() {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia(MOBILE_SIDEBAR_QUERY).matches
-  );
-}
 const INBOX_BADGE_POLLING_MS = 6000;
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -78,13 +70,22 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   const { message } = useAppMessage();
   const { isDark } = useTheme();
   const { pluginRoutes } = usePlugins();
+  const { isMobile, sidebarOpen, closeSidebar } = useMobileNav();
   const [authEnabled, setAuthEnabled] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountLoading, setAccountLoading] = useState(false);
   const [accountForm] = Form.useForm();
   const [collapsed, setCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(isMobileSidebarViewport);
   const [hasInboxUnread, setHasInboxUnread] = useState(false);
+
+  // On mobile we never render the collapsed rail — the entire sidebar is an
+  // off-canvas drawer, so force-expand while mobile is active.
+  const effectiveCollapsed = isMobile ? false : collapsed;
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    if (isMobile) closeSidebar();
+  };
 
   // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -95,29 +96,6 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof window.matchMedia !== "function"
-    ) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(MOBILE_SIDEBAR_QUERY);
-    const syncMobileSidebar = () => {
-      setIsMobile(mediaQuery.matches);
-      if (mediaQuery.matches) {
-        setCollapsed(true);
-      }
-    };
-
-    syncMobileSidebar();
-    mediaQuery.addEventListener("change", syncMobileSidebar);
-
-    return () => {
-      mediaQuery.removeEventListener("change", syncMobileSidebar);
-    };
-  }, []);
   useEffect(() => {
     const loadUnreadState = async () => {
       try {
@@ -368,67 +346,67 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     },
     {
       key: "control-group",
-      label: collapsed ? null : t("nav.control"),
+      label: effectiveCollapsed ? null : t("nav.control"),
       children: [
         {
           key: "channels",
-          label: collapsed ? null : t("nav.channels"),
+          label: effectiveCollapsed ? null : t("nav.channels"),
           icon: <SparkWifiLine size={16} />,
         },
         {
           key: "sessions",
-          label: collapsed ? null : t("nav.sessions"),
+          label: effectiveCollapsed ? null : t("nav.sessions"),
           icon: <SparkUserGroupLine size={16} />,
         },
         {
           key: "cron-jobs",
-          label: collapsed ? null : t("nav.cronJobs"),
+          label: effectiveCollapsed ? null : t("nav.cronJobs"),
           icon: <SparkDateLine size={16} />,
         },
         {
           key: "heartbeat",
-          label: collapsed ? null : t("nav.heartbeat"),
+          label: effectiveCollapsed ? null : t("nav.heartbeat"),
           icon: <SparkVoiceChat01Line size={16} />,
         },
       ],
     },
     {
       key: "agent-group",
-      label: collapsed ? null : t("nav.agent"),
+      label: effectiveCollapsed ? null : t("nav.agent"),
       children: [
         {
           key: "workspace",
-          label: collapsed ? null : t("nav.workspace"),
+          label: effectiveCollapsed ? null : t("nav.workspace"),
           icon: <SparkLocalFileLine size={16} />,
         },
         {
           key: "skills",
-          label: collapsed ? null : t("nav.skills"),
+          label: effectiveCollapsed ? null : t("nav.skills"),
           icon: <SparkMagicWandLine size={16} />,
         },
         {
           key: "tools",
-          label: collapsed ? null : t("nav.tools"),
+          label: effectiveCollapsed ? null : t("nav.tools"),
           icon: <SparkToolLine size={16} />,
         },
         {
           key: "mcp",
-          label: collapsed ? null : t("nav.mcp"),
+          label: effectiveCollapsed ? null : t("nav.mcp"),
           icon: <SparkMcpMcpLine size={16} />,
         },
         {
           key: "acp",
-          label: collapsed ? null : t("nav.acp"),
+          label: effectiveCollapsed ? null : t("nav.acp"),
           icon: <SparkScanLine size={16} />,
         },
         {
           key: "agent-config",
-          label: collapsed ? null : t("nav.agentConfig"),
+          label: effectiveCollapsed ? null : t("nav.agentConfig"),
           icon: <SparkModifyLine size={16} />,
         },
         {
           key: "agent-stats",
-          label: collapsed ? null : t("nav.agentStats"),
+          label: effectiveCollapsed ? null : t("nav.agentStats"),
           icon: <SparkBarChartLine size={16} />,
         },
       ],
@@ -440,51 +418,51 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   const settingsMenuItems: MenuProps["items"] = [
     {
       key: "settings-group",
-      label: collapsed ? null : t("nav.settings"),
+      label: effectiveCollapsed ? null : t("nav.settings"),
       children: [
         {
           key: "agents",
-          label: collapsed ? null : t("nav.agents"),
+          label: effectiveCollapsed ? null : t("nav.agents"),
           icon: <SparkAgentLine size={16} />,
         },
         {
           key: "models",
-          label: collapsed ? null : t("nav.models"),
+          label: effectiveCollapsed ? null : t("nav.models"),
           icon: <SparkModePlazaLine size={16} />,
         },
         {
           key: "skill-pool",
-          label: collapsed ? null : t("nav.skillPool", "Skill Pool"),
+          label: effectiveCollapsed ? null : t("nav.skillPool", "Skill Pool"),
           icon: <SparkOtherLine size={16} />,
         },
         {
           key: "environments",
-          label: collapsed ? null : t("nav.environments"),
+          label: effectiveCollapsed ? null : t("nav.environments"),
           icon: <SparkInternetLine size={16} />,
         },
         {
           key: "security",
-          label: collapsed ? null : t("nav.security"),
+          label: effectiveCollapsed ? null : t("nav.security"),
           icon: <SparkBrowseLine size={16} />,
         },
         {
           key: "token-usage",
-          label: collapsed ? null : t("nav.tokenUsage"),
+          label: effectiveCollapsed ? null : t("nav.tokenUsage"),
           icon: <SparkDataLine size={16} />,
         },
         {
           key: "backups",
-          label: collapsed ? null : t("nav.backups"),
+          label: effectiveCollapsed ? null : t("nav.backups"),
           icon: <SparkSaveLine size={16} />,
         },
         {
           key: "voice-transcription",
-          label: collapsed ? null : t("nav.voiceTranscription"),
+          label: effectiveCollapsed ? null : t("nav.voiceTranscription"),
           icon: <SparkMicLine size={16} />,
         },
         {
           key: "debug",
-          label: collapsed ? null : t("nav.debug", "Debug"),
+          label: effectiveCollapsed ? null : t("nav.debug", "Debug"),
           icon: <SparkDebugLine size={16} />,
         },
         {
@@ -500,10 +478,10 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
   if (pluginRoutes.length > 0) {
     settingsMenuItems.push({
       key: "plugins-group",
-      label: collapsed ? null : t("nav.plugins"),
+      label: effectiveCollapsed ? null : t("nav.plugins"),
       children: pluginRoutes.map((route) => ({
         key: route.path.replace(/^\//, ""),
-        label: collapsed ? null : route.label,
+        label: effectiveCollapsed ? null : route.label,
         icon: <span style={{ fontSize: 16 }}>{route.icon}</span>,
       })),
     } as any);
@@ -511,16 +489,24 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // On mobile we always render the *expanded* markup, plus extra classes so
+  // mobile.css can turn the Sider into an off-canvas drawer.
+  const mobileClassNames = isMobile
+    ? ` qwenpaw-console-sidebar-mobile${
+        sidebarOpen ? " qwenpaw-console-sidebar-open" : ""
+      }`
+    : "";
+
   const siderWidth = collapsed ? (isMobile ? 56 : 72) : 240;
 
   return (
     <Sider
       width={siderWidth}
       className={`${styles.sider}${
-        collapsed ? ` ${styles.siderCollapsed}` : ""
-      }${isDark ? ` ${styles.siderDark}` : ""}`}
+        effectiveCollapsed ? ` ${styles.siderCollapsed}` : ""
+      }${isDark ? ` ${styles.siderDark}` : ""}${mobileClassNames}`}
     >
-      {collapsed ? (
+      {effectiveCollapsed ? (
         <nav className={styles.collapsedNav}>
           {collapsedNavItems.map((item) => {
             const isActive = selectedKey === item.key;
@@ -538,7 +524,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
                   className={`${styles.collapsedNavItem} ${
                     isActive ? styles.collapsedNavItemActive : ""
                   }`}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => handleNavigate(item.path)}
                 >
                   {item.icon}
                 </button>
@@ -571,7 +557,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
               openKeys={DEFAULT_OPEN_KEYS}
               onClick={({ key }) => {
                 const path = KEY_TO_PATH[String(key)];
-                if (path) navigate(path);
+                if (path) handleNavigate(path);
               }}
               items={agentMenuItems}
               theme={isDark ? "dark" : "light"}
@@ -589,7 +575,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
             ]}
             onClick={({ key }) => {
               const path = KEY_TO_PATH[String(key)] ?? `/${String(key)}`;
-              navigate(path);
+              handleNavigate(path);
             }}
             items={settingsMenuItems}
             theme={isDark ? "dark" : "light"}
@@ -598,7 +584,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
         </>
       )}
 
-      {authEnabled && !collapsed && (
+      {authEnabled && !effectiveCollapsed && (
         <div className={styles.authActions}>
           <Button
             type="text"
@@ -609,10 +595,10 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
             }}
             block
             className={`${styles.authBtn} ${
-              collapsed ? styles.authBtnCollapsed : ""
+              effectiveCollapsed ? styles.authBtnCollapsed : ""
             }`}
           >
-            {!collapsed && t("account.title")}
+            {!effectiveCollapsed && t("account.title")}
           </Button>
           <Button
             type="text"
@@ -623,28 +609,32 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
             }}
             block
             className={`${styles.authBtn} ${
-              collapsed ? styles.authBtnCollapsed : ""
+              effectiveCollapsed ? styles.authBtnCollapsed : ""
             }`}
           >
-            {!collapsed && t("login.logout")}
+            {!effectiveCollapsed && t("login.logout")}
           </Button>
         </div>
       )}
 
-      <div className={styles.collapseToggleContainer}>
-        <Button
-          type="text"
-          icon={
-            collapsed ? (
-              <SparkMenuExpandLine size={20} />
-            ) : (
-              <SparkMenuFoldLine size={20} />
-            )
-          }
-          onClick={() => setCollapsed(!collapsed)}
-          className={styles.collapseToggle}
-        />
-      </div>
+      {!isMobile && (
+        <div
+          className={`${styles.collapseToggleContainer} qwenpaw-console-sidebar-desktop-collapse`}
+        >
+          <Button
+            type="text"
+            icon={
+              effectiveCollapsed ? (
+                <SparkMenuExpandLine size={20} />
+              ) : (
+                <SparkMenuFoldLine size={20} />
+              )
+            }
+            onClick={() => setCollapsed(!collapsed)}
+            className={styles.collapseToggle}
+          />
+        </div>
+      )}
 
       <Modal
         open={accountModalOpen}

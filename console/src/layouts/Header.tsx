@@ -1,4 +1,4 @@
-import { Layout, Space, Badge, Spin, Tooltip } from "antd";
+import { Layout, Space, Badge, Spin, Tooltip, Dropdown } from "antd";
 import LanguageSwitcher from "../components/LanguageSwitcher/index";
 import ThemeToggleButton from "../components/ThemeToggleButton";
 import { useTranslation } from "react-i18next";
@@ -17,10 +17,17 @@ import {
   compareVersions,
 } from "./constants";
 import { useTheme } from "../contexts/ThemeContext";
+import { useMobileNav } from "../contexts/MobileNavContext";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CopyOutlined, CheckOutlined, TagOutlined } from "@ant-design/icons";
+import {
+  CopyOutlined,
+  CheckOutlined,
+  TagOutlined,
+  MenuOutlined,
+  MoreOutlined,
+} from "@ant-design/icons";
 
 const { Header: AntHeader } = Layout;
 
@@ -52,6 +59,7 @@ function UpdateCodeBlock({ code }: { code: string }) {
 export default function Header() {
   const { t, i18n } = useTranslation();
   const { isDark } = useTheme();
+  const { isMobile, toggleSidebar } = useMobileNav();
   const [version, setVersion] = useState<string>("");
   const [latestVersion, setLatestVersion] = useState<string>("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -151,19 +159,34 @@ export default function Header() {
 
   return (
     <>
-      <AntHeader className={styles.header}>
-        <div className={styles.logoWrapper}>
+      <AntHeader
+        className={`${styles.header} qwenpaw-console-header`}
+      >
+        <div
+          className={`${styles.logoWrapper} qwenpaw-console-header-title`}
+        >
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<MenuOutlined style={{ fontSize: 18 }} />}
+              onClick={toggleSidebar}
+              aria-label={t("nav.menu", "Menu")}
+              className={styles.mobileMenuBtn}
+              style={{ marginRight: 4 }}
+            />
+          )}
           <img
             src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
             alt="QwenPaw"
             className={styles.logoImg}
           />
-          <div className={styles.logoDivider} />
+          <div className={`${styles.logoDivider}${isMobile ? " qwenpaw-logo-divider-mobile-hide" : ""}`} />
           {version && (
             <Badge
               dot={!!hasUpdate}
               color="rgba(255, 157, 77, 1)"
               offset={[4, 28]}
+              className={isMobile ? "qwenpaw-version-badge-mobile-hide" : ""}
             >
               <span
                 className={`${styles.versionBadge} ${
@@ -178,37 +201,87 @@ export default function Header() {
             </Badge>
           )}
         </div>
-        <Space size="middle">
-          <Tooltip title={t("header.changelog")}>
-            <Button
-              type="text"
-              onClick={() => handleNavClick(getReleaseNotesUrl(i18n.language))}
+        <Space
+          size={isMobile ? 4 : "middle"}
+          className="qwenpaw-console-header-actions"
+        >
+          {/* Desktop-only nav links. Hidden on mobile via mobile.css. */}
+          <span className="qwenpaw-console-header-desktop-only">
+            <Space size="middle">
+              <Tooltip title={t("header.changelog")}>
+                <Button
+                  type="text"
+                  onClick={() =>
+                    handleNavClick(getReleaseNotesUrl(i18n.language))
+                  }
+                >
+                  {t("header.changelog")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.docs")}>
+                <Button
+                  type="text"
+                  onClick={() => handleNavClick(getDocsUrl(i18n.language))}
+                >
+                  {t("header.docs")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.faq")}>
+                <Button
+                  type="text"
+                  onClick={() => handleNavClick(getFaqUrl(i18n.language))}
+                >
+                  {t("header.faq")}
+                </Button>
+              </Tooltip>
+              <Tooltip title={t("header.github")}>
+                <Button type="text" onClick={() => handleNavClick(GITHUB_URL)}>
+                  {t("header.github")}
+                </Button>
+              </Tooltip>
+              <div className={styles.headerDivider} />
+            </Space>
+          </span>
+
+          {/* Mobile-only: collapse the above links into a "More" dropdown. */}
+          {isMobile && (
+            <Dropdown
+              trigger={["click"]}
+              placement="bottomRight"
+              menu={{
+                items: [
+                  {
+                    key: "changelog",
+                    label: t("header.changelog"),
+                    onClick: () =>
+                      handleNavClick(getReleaseNotesUrl(i18n.language)),
+                  },
+                  {
+                    key: "docs",
+                    label: t("header.docs"),
+                    onClick: () => handleNavClick(getDocsUrl(i18n.language)),
+                  },
+                  {
+                    key: "faq",
+                    label: t("header.faq"),
+                    onClick: () => handleNavClick(getFaqUrl(i18n.language)),
+                  },
+                  {
+                    key: "github",
+                    label: t("header.github"),
+                    onClick: () => handleNavClick(GITHUB_URL),
+                  },
+                ],
+              }}
             >
-              {t("header.changelog")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("header.docs")}>
-            <Button
-              type="text"
-              onClick={() => handleNavClick(getDocsUrl(i18n.language))}
-            >
-              {t("header.docs")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("header.faq")}>
-            <Button
-              type="text"
-              onClick={() => handleNavClick(getFaqUrl(i18n.language))}
-            >
-              {t("header.faq")}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t("header.github")}>
-            <Button type="text" onClick={() => handleNavClick(GITHUB_URL)}>
-              {t("header.github")}
-            </Button>
-          </Tooltip>
-          <div className={styles.headerDivider} />
+              <Button
+                type="text"
+                icon={<MoreOutlined style={{ fontSize: 18 }} />}
+                aria-label={t("header.more", "More")}
+              />
+            </Dropdown>
+          )}
+
           <LanguageSwitcher />
           <ThemeToggleButton />
         </Space>

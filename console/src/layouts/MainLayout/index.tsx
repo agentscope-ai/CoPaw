@@ -8,6 +8,7 @@ import ConsolePollService from "../../components/ConsolePollService";
 import { ChunkErrorBoundary } from "../../components/ChunkErrorBoundary";
 import { lazyImportWithRetry } from "../../utils/lazyWithRetry";
 import { usePlugins } from "../../plugins/PluginContext";
+import { useMobileNav } from "../../contexts/MobileNavContext";
 import styles from "../index.module.less";
 
 // Chat is eagerly loaded (default landing page)
@@ -44,6 +45,33 @@ const PluginManagerPage = lazyImportWithRetry(
 );
 
 const { Content } = Layout;
+
+/**
+ * Renders the sidebar inline on desktop and as an off-canvas drawer on
+ * mobile. The Sidebar itself reads `useMobileNav()` to switch internal
+ * behaviour; this host is responsible for the mobile overlay + backdrop.
+ */
+function MobileSidebarHost({ children }: { children: React.ReactNode }) {
+  const { isMobile, sidebarOpen, closeSidebar } = useMobileNav();
+
+  if (!isMobile) {
+    // Desktop: render inline as before.
+    return <>{children}</>;
+  }
+
+  return (
+    <>
+      {sidebarOpen && (
+        <div
+          className="qwenpaw-console-mobile-backdrop"
+          onClick={closeSidebar}
+          aria-hidden
+        />
+      )}
+      {children}
+    </>
+  );
+}
 
 const pathToKey: Record<string, string> = {
   "/chat": "chat",
@@ -92,7 +120,9 @@ export default function MainLayout() {
     <Layout className={styles.mainLayout}>
       <Header />
       <Layout>
-        <Sidebar selectedKey={selectedKey} />
+        <MobileSidebarHost>
+          <Sidebar selectedKey={selectedKey} />
+        </MobileSidebarHost>
         <Content className="page-container">
           <ConsolePollService />
           <div className="page-content">

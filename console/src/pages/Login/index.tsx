@@ -74,24 +74,31 @@ export default function LoginPage() {
   return (
     <div
       style={{
-        height: "100vh",
+        minHeight: "100dvh",
+        height: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: "16px",
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+        boxSizing: "border-box",
         background: isDark
           ? "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)"
           : "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
       }}
     >
       <div
+        className="qwenpaw-login-card"
         style={{
-          width: 400,
+          width: "min(400px, 100%)",
           padding: 32,
           borderRadius: 12,
           background: isDark ? "#1f1f1f" : "#fff",
           boxShadow: isDark
             ? "0 4px 24px rgba(0,0,0,0.4)"
             : "0 4px 24px rgba(0,0,0,0.1)",
+          boxSizing: "border-box",
         }}
       >
         <div style={{ textAlign: "center", marginBottom: 32 }}>

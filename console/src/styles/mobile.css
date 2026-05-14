@@ -1,0 +1,597 @@
+/* =============================================================================
+ * Mobile adaptations — applied only at viewport width <= 768px.
+ *
+ * Strategy:
+ *   • Keep the desktop experience untouched (no rules outside the @media block).
+ *   • Use :root CSS vars so individual pages can opt-in to mobile-friendly
+ *     values without duplicating breakpoints.
+ *   • Override ant-design/qwenpaw primitives globally (Modal / Drawer / Table /
+ *     Menu / Form / Tabs / Select dropdowns) so every page benefits.
+ *   • Use 100dvh where possible to avoid iOS Safari viewport shifting when
+ *     the URL bar shows/hides.
+ * ========================================================================== */
+
+/* ─── iOS safe-area variables & general baseline ───────────────────────── */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --mobile-header-height: 44px;
+  --mobile-sidebar-width: min(280px, 84vw);
+  --mobile-z-header: 1100;
+  --mobile-z-sidebar: 1200;
+  --mobile-z-backdrop: 1150;
+}
+
+/* Prevent iOS auto-zoom when focusing text inputs (requires >= 16px base). */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 768px) {
+    input,
+    textarea,
+    select,
+    .ant-input,
+    .ant-input-affix-wrapper input,
+    .qwenpaw-input,
+    .qwenpaw-input-affix-wrapper input,
+    .ant-select-selection-search-input,
+    .qwenpaw-select-selection-search-input,
+    .ant-picker-input > input,
+    .qwenpaw-picker-input > input {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Momentum scrolling everywhere on iOS. */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* =============================================================================
+ * Mobile-only rules
+ * ========================================================================== */
+
+@media (max-width: 768px) {
+  /* Baseline — avoid iOS Safari rubber-banding, honour safe areas. */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  /* Use dynamic viewport height so iOS URL bar collapse/expand does not
+   * chop off the bottom of fixed-height containers. */
+  #root,
+  .ant-layout,
+  .qwenpaw-layout {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  /* ── Top-level layout ────────────────────────────────────────────────── */
+
+  /* Header: slim, sticky, with hamburger on the left. */
+  .qwenpaw-console-header {
+    height: var(--mobile-header-height) !important;
+    padding: 0 10px !important;
+    padding-top: var(--safe-top) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: var(--mobile-z-header);
+  }
+
+  .qwenpaw-console-header-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  /* Hide version badge on mobile to save horizontal space */
+  .qwenpaw-console-header-title .qwenpaw-version-badge-mobile-hide {
+    display: none !important;
+  }
+
+  /* Hide the logo divider on mobile */
+  .qwenpaw-console-header-title .qwenpaw-logo-divider-mobile-hide {
+    display: none !important;
+  }
+
+  /* Hide the desktop-only Changelog / Docs / FAQ / GitHub buttons and the
+   * tiny dividers — we expose them in the mobile "more" menu instead. */
+  .qwenpaw-console-header-desktop-only {
+    display: none !important;
+  }
+
+  .qwenpaw-console-header-actions {
+    gap: 4px !important;
+    flex: 0 0 auto;
+  }
+
+  /* Sidebar collapse button is meaningless on mobile (we use a drawer). */
+  .qwenpaw-console-sidebar-desktop-collapse {
+    display: none !important;
+  }
+
+  /* Sidebar becomes an off-canvas drawer. The Sidebar component applies the
+   * `qwenpaw-console-sidebar-mobile` class when the mobile context is
+   * active; desktop markup stays unchanged. */
+  .qwenpaw-console-sidebar-mobile {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: var(--mobile-sidebar-width) !important;
+    max-width: var(--mobile-sidebar-width) !important;
+    min-width: 0 !important;
+    flex: 0 0 var(--mobile-sidebar-width) !important;
+    height: 100dvh !important;
+    padding-top: calc(var(--safe-top) + 8px) !important;
+    padding-bottom: calc(var(--safe-bottom) + 8px) !important;
+    z-index: var(--mobile-z-sidebar) !important;
+    transform: translate3d(-110%, 0, 0);
+    transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+    box-shadow: none;
+    overflow-y: auto !important;
+  }
+
+  .qwenpaw-console-sidebar-mobile.qwenpaw-console-sidebar-open {
+    transform: translate3d(0, 0, 0);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  /* Backdrop rendered by MainLayout when the mobile drawer is open. */
+  .qwenpaw-console-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: var(--mobile-z-backdrop);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 1;
+    animation: qwenpaw-mobile-fade-in 0.18s ease-out;
+  }
+
+  @keyframes qwenpaw-mobile-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Content area fills remaining space and scrolls. */
+  .page-container {
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .page-content {
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-top: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* PageHeader: wrap & drop horizontal padding a bit. */
+  .page-header,
+  .qwenpaw-console-page-header {
+    padding: 12px 14px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .qwenpaw-console-page-header-center {
+    position: static !important;
+    transform: none !important;
+    width: 100%;
+    order: 3;
+  }
+
+  .qwenpaw-console-page-header-extra {
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+
+  /* ── Ant Design primitives ───────────────────────────────────────────── */
+
+  /* Modal: fill the screen with reasonable margins. Works for both
+   * `ant-*` and the `qwenpaw-*` prefix used by @agentscope-ai/design. */
+  .ant-modal,
+  .qwenpaw-modal {
+    max-width: calc(100vw - 16px) !important;
+    width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    padding-bottom: 0 !important;
+    top: 0 !important;
+  }
+
+  .ant-modal-centered .ant-modal,
+  .qwenpaw-modal-centered .qwenpaw-modal {
+    top: 0 !important;
+  }
+
+  .ant-modal-content,
+  .qwenpaw-modal-content {
+    padding: 16px !important;
+    border-radius: 12px !important;
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+  }
+
+  .ant-modal-body,
+  .qwenpaw-modal-body {
+    padding: 8px 0 !important;
+    max-height: calc(100dvh - 180px);
+    overflow: auto;
+  }
+
+  .ant-modal-footer,
+  .qwenpaw-modal-footer {
+    padding: 12px 0 0 !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ant-modal-footer > button,
+  .qwenpaw-modal-footer > button {
+    flex: 1 1 45%;
+    min-width: 0;
+  }
+
+  /* Drawer: right-edge drawers were 420 / 520 / 600 on desktop — on
+   * mobile, take the full width minus a small margin and ensure footer
+   * buttons stack nicely. */
+  .ant-drawer-right > .ant-drawer-content-wrapper,
+  .ant-drawer-left > .ant-drawer-content-wrapper,
+  .qwenpaw-drawer-right > .qwenpaw-drawer-content-wrapper,
+  .qwenpaw-drawer-left > .qwenpaw-drawer-content-wrapper {
+    width: min(100vw, 100%) !important;
+    max-width: 100vw !important;
+  }
+
+  .ant-drawer-body,
+  .qwenpaw-drawer-body {
+    padding: 16px !important;
+  }
+
+  .ant-drawer-header,
+  .qwenpaw-drawer-header {
+    padding: 12px 14px !important;
+  }
+
+  .ant-drawer-footer,
+  .qwenpaw-drawer-footer {
+    padding: 10px 14px !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Tables: enable horizontal scrolling for wide tables instead of
+   * clipping. Antd already supports this — we just make sure it does
+   * not try to fit the screen width by shrinking columns. */
+  .ant-table-wrapper,
+  .qwenpaw-table-wrapper {
+    width: 100% !important;
+  }
+
+  .ant-table,
+  .qwenpaw-table {
+    font-size: 13px;
+  }
+
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td,
+  .qwenpaw-table-thead > tr > th,
+  .qwenpaw-table-tbody > tr > td {
+    padding: 10px 8px !important;
+    white-space: nowrap;
+  }
+
+  .ant-table-pagination,
+  .qwenpaw-table-pagination {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 12px;
+  }
+
+  /* Forms: stack label + control on narrow screens. */
+  .ant-form-horizontal .ant-form-item,
+  .qwenpaw-form-horizontal .qwenpaw-form-item {
+    flex-direction: column;
+  }
+
+  .ant-form-horizontal .ant-form-item-label,
+  .qwenpaw-form-horizontal .qwenpaw-form-item-label {
+    text-align: left;
+    padding-bottom: 4px;
+    flex: 0 0 auto !important;
+    max-width: 100% !important;
+  }
+
+  .ant-form-horizontal .ant-form-item-control,
+  .qwenpaw-form-horizontal .qwenpaw-form-item-control {
+    flex: 1 1 auto !important;
+    max-width: 100% !important;
+  }
+
+  /* Menu: grow touch targets. */
+  .ant-menu,
+  .qwenpaw-menu {
+    font-size: 14px !important;
+  }
+
+  .ant-menu-inline .ant-menu-item,
+  .ant-menu-inline .ant-menu-submenu-title,
+  .qwenpaw-menu-inline .qwenpaw-menu-item,
+  .qwenpaw-menu-inline .qwenpaw-menu-submenu-title {
+    height: 44px !important;
+    line-height: 44px !important;
+  }
+
+  /* Tabs: let them scroll horizontally rather than wrap. */
+  .ant-tabs-nav,
+  .qwenpaw-tabs-nav {
+    margin-bottom: 8px !important;
+  }
+
+  .ant-tabs-tab,
+  .qwenpaw-tabs-tab {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* Select dropdown: wider portion of screen. */
+  .ant-select-dropdown,
+  .qwenpaw-select-dropdown {
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  /* Buttons: comfortable touch target. */
+  .ant-btn,
+  .qwenpaw-btn {
+    min-height: 36px;
+  }
+
+  .ant-btn-lg,
+  .qwenpaw-btn-lg {
+    min-height: 44px;
+  }
+
+  /* Messages / notifications: inset from screen edges. */
+  .ant-message,
+  .qwenpaw-message {
+    top: calc(var(--safe-top) + 12px) !important;
+  }
+
+  .ant-notification,
+  .qwenpaw-notification {
+    right: 8px !important;
+    left: 8px !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  /* Code blocks / long strings inside the update modal etc. — wrap so we
+   * never trigger horizontal page scroll. */
+  .page-content pre,
+  .page-content code {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  /* ── Login page ──────────────────────────────────────────────────────── */
+
+  .qwenpaw-login-card {
+    width: min(400px, calc(100vw - 24px)) !important;
+    padding: 24px !important;
+  }
+
+  /* ── Chat: remove desktop max-width cap ─────────────────────────────── */
+
+  /* Chat internal header: compact on mobile */
+  [class*="chat-anywhere-layout-right-header"] {
+    height: 40px !important;
+    padding: 0 10px !important;
+  }
+
+  /* Reduce the spacer that pushes chat content below the header */
+  [class*="chat-anywhere-layout-right-has-header"]
+    [class*="bubble-list-scroll"]::before {
+    height: 40px !important;
+    flex: 0 0 40px !important;
+  }
+
+  /* Hide the library's InnerHeader (logo + "Work with QwenPaw" title) on mobile
+     since the global Header already shows the QwenPaw branding */
+  [class*="chat-anywhere-default-header-inner"],
+  .qwenpaw-chat-anywhere-default-header-inner {
+    display: none !important;
+  }
+
+  /* Hide ChatHeaderTitle on mobile — saves ~100px horizontal space */
+  .qwenpaw-chat-header-title-mobile-hide {
+    display: none !important;
+  }
+
+  /* Model selector: compact on mobile */
+  [class*="ModelSelector_trigger"] {
+    padding: 2px 6px !important;
+    font-size: 13px !important;
+    max-width: 180px !important;
+  }
+
+  [class*="ModelSelector_triggerName"] {
+    max-width: 120px !important;
+  }
+
+  .qwenpaw-chat-anywhere-message-list .qwenpaw-bubble-list {
+    max-width: 100% !important;
+    padding: 0 10px;
+  }
+
+  .qwenpaw-chat-anywhere-input,
+  [class*="chat-anywhere-input"] {
+    padding: 8px 10px calc(10px + var(--safe-bottom)) !important;
+  }
+
+  /* PageHeader breadcrumb becomes smaller. */
+  .qwenpaw-console-page-header
+    :global(.breadcrumbCurrent),
+  .qwenpaw-console-page-header-breadcrumb {
+    font-size: 16px !important;
+  }
+}
+
+/* =============================================================================
+ * Extra-small devices (iPhone SE width ~375px) — tighten further.
+ * ========================================================================== */
+@media (max-width: 380px) {
+  .ant-modal,
+  .qwenpaw-modal {
+    max-width: 100vw !important;
+    width: 100vw !important;
+    margin: 0 !important;
+  }
+
+  .ant-modal-content,
+  .qwenpaw-modal-content {
+    border-radius: 0 !important;
+    min-height: 100dvh;
+  }
+}
+
+
+/* =============================================================================
+ * Dark mode mobile overrides
+ * ========================================================================== */
+@media (max-width: 768px) {
+  html.dark-mode .qwenpaw-console-sidebar-mobile {
+    background: #1a1a1a !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark-mode .qwenpaw-console-sidebar-mobile.qwenpaw-console-sidebar-open {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  html.dark-mode .qwenpaw-console-mobile-backdrop {
+    background: rgba(0, 0, 0, 0.65);
+  }
+
+  html.dark-mode .qwenpaw-console-header {
+    background: #1a1a1a !important;
+  }
+
+  /* Dark mode login card */
+  html.dark-mode .qwenpaw-login-card {
+    background: #1f1f1f !important;
+  }
+}
+
+/* =============================================================================
+ * Touch-friendly improvements for all mobile devices
+ * ========================================================================== */
+@media (max-width: 768px) {
+  /* Larger tap targets for icon buttons */
+  .ant-btn-icon-only,
+  .qwenpaw-btn-icon-only {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+
+  /* Prevent horizontal overflow on the entire page */
+  html,
+  body {
+    overflow-x: hidden !important;
+  }
+
+  /* Ensure the inner layout doesn't show the desktop sidebar */
+  .ant-layout > .ant-layout-sider,
+  .qwenpaw-layout > .qwenpaw-layout-sider {
+    /* On mobile, the Sider is rendered with the mobile class and positioned
+       fixed. This rule hides any leftover desktop sider that might appear
+       before the JS hydrates. */
+  }
+
+  /* Card grids: single column on mobile */
+  .ant-row,
+  .qwenpaw-row {
+    flex-wrap: wrap !important;
+  }
+
+  .ant-col,
+  .qwenpaw-col {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Popover / Popconfirm: don't overflow screen */
+  .ant-popover,
+  .qwenpaw-popover {
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  /* Descriptions: stack label/value vertically */
+  .ant-descriptions-item-label,
+  .qwenpaw-descriptions-item-label {
+    display: block !important;
+    padding-bottom: 2px !important;
+  }
+
+  .ant-descriptions-item-content,
+  .qwenpaw-descriptions-item-content {
+    display: block !important;
+  }
+
+  /* Transfer component: stack panels vertically */
+  .ant-transfer,
+  .qwenpaw-transfer {
+    flex-direction: column !important;
+  }
+
+  .ant-transfer-list,
+  .qwenpaw-transfer-list {
+    width: 100% !important;
+    flex: 0 0 auto !important;
+  }
+
+  .ant-transfer-operation,
+  .qwenpaw-transfer-operation {
+    flex-direction: row !important;
+    margin: 8px 0 !important;
+  }
+
+  /* Segmented control: allow wrapping */
+  .ant-segmented,
+  .qwenpaw-segmented {
+    flex-wrap: wrap;
+  }
+
+  /* Steps: vertical on mobile */
+  .ant-steps-horizontal,
+  .qwenpaw-steps-horizontal {
+    flex-direction: column !important;
+  }
+
+  .ant-steps-horizontal .ant-steps-item,
+  .qwenpaw-steps-horizontal .qwenpaw-steps-item {
+    flex: 0 0 auto !important;
+    margin-right: 0 !important;
+    margin-bottom: 8px !important;
+  }
+}

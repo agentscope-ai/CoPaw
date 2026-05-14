@@ -802,12 +802,15 @@ html.dark-mode [class*="chat-anywhere"] [class*="message"] a {
 
 #root {
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
 .ant-layout {
   min-height: 100vh;
+  min-height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
   background: #f9f8f4;
 }

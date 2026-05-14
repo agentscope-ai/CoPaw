@@ -44,10 +44,14 @@ export function PageHeader({
       : buildItemsFromParentCurrent(parent, current);
 
   return (
-    <div className={`${styles.pageHeader} ${className ?? ""}`.trim()}>
+    <div
+      className={`${styles.pageHeader} qwenpaw-console-page-header ${className ?? ""}`.trim()}
+    >
       <div className={styles.leading}>
         <div className={styles.leadingTop}>
-          <div className={styles.breadcrumbHeader}>
+          <div
+            className={`${styles.breadcrumbHeader} qwenpaw-console-page-header-breadcrumb`}
+          >
             {items.map((item, index) => (
               <Fragment key={index}>
                 {index > 0 ? (
@@ -69,8 +73,20 @@ export function PageHeader({
         </div>
         {subRow}
       </div>
-      {center ? <div className={styles.center}>{center}</div> : null}
-      {extra ? <div className={styles.extra}>{extra}</div> : null}
+      {center ? (
+        <div
+          className={`${styles.center} qwenpaw-console-page-header-center`}
+        >
+          {center}
+        </div>
+      ) : null}
+      {extra ? (
+        <div
+          className={`${styles.extra} qwenpaw-console-page-header-extra`}
+        >
+          {extra}
+        </div>
+      ) : null}
     </div>
   );
 }
