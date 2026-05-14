@@ -109,13 +109,12 @@ async def create_channel_service(ws: "Workspace", _):
 
 
 async def create_agent_config_watcher(ws: "Workspace", _):
-    """Create agent config watcher if channel/cron exists.
+    """Create agent config watcher if reloadable services exist.
 
     The watcher only triggers reloads via ``MultiAgentManager`` and
     does not need direct references to channel/cron managers anymore.
-    Creation is still gated on having at least one of them, since
-    workspaces with neither have no externally-visible state that
-    benefits from auto-reload.
+    Creation is gated on services whose config changes benefit from
+    auto-reload, including channels, cron, MCP, and skills.
 
     Args:
         ws: Workspace instance
@@ -127,8 +126,9 @@ async def create_agent_config_watcher(ws: "Workspace", _):
     # pylint: disable=protected-access
     channel_mgr = ws._service_manager.services.get("channel_manager")
     cron_mgr = ws._service_manager.services.get("cron_manager")
+    mcp_mgr = ws._service_manager.services.get("mcp_manager")
 
-    if not (channel_mgr or cron_mgr):
+    if not (channel_mgr or cron_mgr or mcp_mgr):
         return None
 
     from ..agent_config_watcher import AgentConfigWatcher
