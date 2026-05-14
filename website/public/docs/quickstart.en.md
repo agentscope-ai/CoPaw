@@ -5,6 +5,7 @@ This section describes multiple ways to install QwenPaw:
 | Installation Method   | Best For                                      | Advantages                                                  | Prerequisites         |
 | --------------------- | --------------------------------------------- | ----------------------------------------------------------- | --------------------- |
 | **pip install**       | Developers familiar with Python               | Flexible environment control, easy for development          | Python 3.10~3.13      |
+| **uv tool install**   | Users who already have uv                     | Fast isolated tool install with automatic command shims     | uv                    |
 | **Script install**    | Users who don't want manual environment setup | Zero configuration, automatic Python environment management | None                  |
 | **Docker**            | Containerized deployment or production        | Environment isolation, easy migration                       | Docker                |
 | **Alibaba Cloud ECS** | Stable cloud operation                        | One-click deploy, stable and reliable                       | Alibaba Cloud account |
@@ -67,7 +68,27 @@ first and then configure channels.
 
 ---
 
-## Option 2: Script install
+## Option 2: uv tool install
+
+If you already use [uv](https://docs.astral.sh/uv/), install QwenPaw as an isolated command-line tool:
+
+```bash
+uv tool install qwenpaw
+```
+
+This installs the `qwenpaw` command in uv's tool directory and keeps QwenPaw separate from your project virtual environments. If the command is not found after installation, run `uv tool update-shell` or reopen your terminal so uv's tool directory is available on `PATH`.
+
+Then follow [Step 2: Initialize](#step-2-initialize) and [Step 3: Start the server](#step-3-start-the-server) above.
+
+To upgrade this installation later:
+
+```bash
+uv tool upgrade qwenpaw
+```
+
+---
+
+## Option 3: Script install
 
 No Python required — the installer handles everything automatically using [uv](https://docs.astral.sh/uv/).
 
@@ -102,7 +123,6 @@ Then open a new terminal (the installer adds QwenPaw to your PATH automatically)
 > 1. **If using CMD (.bat): Script executes successfully but fails to write to `Path`**
 >
 >    The script completes file installation. Due to **Constrained Language Mode**, it cannot automatically update environment variables. Manually configure as follows:
->
 >    - **Locate the installation directory**:
 >      - Check if `uv` is available: Enter `uv --version` in CMD. If a version number appears, **only configure the QwenPaw path**. If you receive `'uv' is not recognized as an internal or external command, operable program or batch file,` configure both paths.
 >      - uv path (choose one based on installation location; fill if `uv` is unavailable): Typically `%USERPROFILE%\.local\bin`, `%USERPROFILE%\AppData\Local\uv`, or the `Scripts` folder within your Python installation directory
@@ -146,54 +166,11 @@ curl -fsSL ... | bash -s -- --from-source
 
 To upgrade, simply re-run the install command. To uninstall, run `qwenpaw uninstall`.
 
-### Step 2: Initialize
-
-Generate `config.json` and `HEARTBEAT.md` in the working directory (default
-`~/.qwenpaw`). Two options:
-
-- **Quick with defaults** (no interaction, good for running first then editing config):
-  ```bash
-  qwenpaw init --defaults
-  ```
-- **Interactive initialization** (prompts for heartbeat interval, target, active hours, and optional channel and Skills setup):
-  ```bash
-  qwenpaw init
-  ```
-  See [CLI - Getting started](./cli#getting-started).
-
-To overwrite existing config, use `qwenpaw init --force` (you will be prompted).
-After initialization, if no channel is enabled yet, follow the documentation in
-[Channels](./channels) to add DingTalk, Feishu, QQ, etc.
-
-### Step 3: Start the server
-
-```bash
-qwenpaw app
-```
-
-The server listens on `127.0.0.1:8088` by default. If you've already configured
-channels, QwenPaw will reply there. Otherwise, you can complete this section
-first and then configure channels.
-
----
-
-## Option 2: pip install
-
-If you prefer managing Python yourself (requires Python >= 3.10, < 3.14):
-
-```bash
-pip install qwenpaw
-```
-
-Optional: create and activate a virtual environment first (`python -m venv .venv`,
-then `source .venv/bin/activate` on Linux/macOS or `.venv\Scripts\Activate.ps1`
-on Windows). This installs the `qwenpaw` command.
-
 Then follow [Step 2: Initialize](#step-2-initialize) and [Step 3: Start the server](#step-3-start-the-server) above.
 
 ---
 
-## Option 3: Docker
+## Option 4: Docker
 
 Images are on **Docker Hub** (`agentscope/qwenpaw`). Image tags: `latest` (stable);
 `pre` (PyPI pre-release). Also available on Alibaba Cloud ACR for users in China:
@@ -217,7 +194,7 @@ and API keys are stored in the `qwenpaw-secrets` volume; backup archives are sto
 
 ---
 
-## Option 4: Deploy to Alibaba Cloud ECS
+## Option 5: Deploy to Alibaba Cloud ECS
 
 To deploy QwenPaw on Alibaba Cloud, use the ECS one-click deployment:
 
@@ -228,7 +205,7 @@ For detailed steps and instructions, see [Alibaba Cloud Developer Community: Dep
 
 ---
 
-## Option 5: ModelScope Studio one-click setup (no installation)
+## Option 6: ModelScope Studio one-click setup (no installation)
 
 If you don't want to install Python locally, you can deploy QwenPaw to the cloud
 through ModelScope Studio:
@@ -240,7 +217,7 @@ through ModelScope Studio:
 
 ---
 
-## Option 6: Desktop application
+## Option 7: Desktop application
 
 If you're not comfortable with command-line tools, you can download and use
 QwenPaw's desktop application without manually configuring Python environments
@@ -256,12 +233,10 @@ or running commands.
 
 1. **Download the installer**
    Go to [GitHub Releases](https://github.com/agentscope-ai/QwenPaw/releases) to download the version for your system:
-
    - Windows: `QwenPaw-Setup-<version>.exe`
    - macOS: `QwenPaw-<version>-macOS.zip`
 
 2. **Install and launch**
-
    - **Windows**: Double-click the `.exe` file to install following the wizard, then double-click the desktop shortcut to launch
    - **macOS**: Extract the `.zip` to get `QwenPaw.app`, first time requires right-click and select "Open" to bypass system security restrictions
 
