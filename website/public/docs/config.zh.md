@@ -1,12 +1,12 @@
 # 配置与工作目录
 
-CoPaw 的所有配置和数据都存储在**工作目录**中。本页说明：
+QwenPaw 的所有配置和数据都存储在**工作目录**中。本页说明：
 
 - **目录结构** — 文件都在哪里，各目录的作用
 - **环境变量** — 如何用环境变量自定义路径和行为
 - **配置文件** — `config.json` 和 `agent.json` 的完整字段说明
 
-从 **v0.1.0** 开始，CoPaw 支持**多智能体**，配置分为两层：
+从 **v0.1.0** 开始，QwenPaw 支持**多智能体**，配置分为两层：
 
 1. **全局配置**（`config.json`）— 模型提供商、智能体列表、全局设置
 2. **智能体配置**（`agent.json`）— 每个智能体的独立配置（频道、心跳、工具等）
@@ -15,10 +15,10 @@ CoPaw 的所有配置和数据都存储在**工作目录**中。本页说明：
 
 ## 目录结构
 
-默认工作目录是 `~/.copaw`。运行 `copaw init` 后的完整结构：
+默认工作目录是 `~/.qwenpaw`。运行 `qwenpaw init` 后的完整结构：
 
 ```
-$COPAW_WORKING_DIR/                      # 默认 ~/.copaw
+$QWENPAW_WORKING_DIR/                      # 默认 ~/.qwenpaw
 ├── config.json                          # 全局配置
 ├── workspaces/
 │   ├── default/                         # 默认智能体工作区
@@ -41,12 +41,12 @@ $COPAW_WORKING_DIR/                      # 默认 ~/.copaw
     ├── skill.json                       # 池元数据
     └── ...
 
-$COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
+$QWENPAW_SECRET_DIR/                       # 默认 ~/.qwenpaw.secret
 ├── providers.json                       # 模型提供商配置与 API Key
 └── envs.json                            # 环境变量
 ```
 
-> **路径说明：** `$COPAW_WORKING_DIR` 和 `$COPAW_SECRET_DIR` 是环境变量，默认值分别为 `~/.copaw` 和 `~/.copaw.secret`。可通过环境变量自定义，详见下方"环境变量"章节。
+> **路径说明：** `$QWENPAW_WORKING_DIR` 和 `$QWENPAW_SECRET_DIR` 是环境变量，默认值分别为 `~/.qwenpaw` 和 `~/.qwenpaw.secret`。可通过环境变量自定义，详见下方"环境变量"章节。
 
 ---
 
@@ -56,35 +56,35 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
 
 **路径相关：**
 
-| 变量                     | 默认值             | 说明                                                                                        |
-| ------------------------ | ------------------ | ------------------------------------------------------------------------------------------- |
-| `COPAW_WORKING_DIR`      | `~/.copaw`         | 工作目录根路径                                                                              |
-| `COPAW_SECRET_DIR`       | `~/.copaw.secret`  | 敏感数据目录（存放 `providers.json` 和 `envs.json`）。Docker 中默认为 `/app/working.secret` |
-| `COPAW_CONFIG_FILE`      | `config.json`      | 配置文件名（相对于 `COPAW_WORKING_DIR`）                                                    |
-| `COPAW_HEARTBEAT_FILE`   | `HEARTBEAT.md`     | 心跳文件名（相对于智能体工作区）                                                            |
-| `COPAW_JOBS_FILE`        | `jobs.json`        | 定时任务文件名（相对于智能体工作区）                                                        |
-| `COPAW_CHATS_FILE`       | `chats.json`       | 对话历史文件名（相对于智能体工作区）                                                        |
-| `COPAW_TOKEN_USAGE_FILE` | `token_usage.json` | Token 消耗记录文件名（相对于智能体工作区）                                                  |
+| 变量                       | 默认值              | 说明                                                                                        |
+| -------------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| `QWENPAW_WORKING_DIR`      | `~/.qwenpaw`        | 工作目录根路径                                                                              |
+| `QWENPAW_SECRET_DIR`       | `~/.qwenpaw.secret` | 敏感数据目录（存放 `providers.json` 和 `envs.json`）。Docker 中默认为 `/app/working.secret` |
+| `QWENPAW_CONFIG_FILE`      | `config.json`       | 配置文件名（相对于 `QWENPAW_WORKING_DIR`）                                                  |
+| `QWENPAW_HEARTBEAT_FILE`   | `HEARTBEAT.md`      | 心跳文件名（相对于智能体工作区）                                                            |
+| `QWENPAW_JOBS_FILE`        | `jobs.json`         | 定时任务文件名（相对于智能体工作区）                                                        |
+| `QWENPAW_CHATS_FILE`       | `chats.json`        | 对话历史文件名（相对于智能体工作区）                                                        |
+| `QWENPAW_TOKEN_USAGE_FILE` | `token_usage.json`  | Token 消耗记录文件名（相对于智能体工作区）                                                  |
 
 **其他配置：**
 
-| 变量                               | 默认值         | 说明                                                            |
-| ---------------------------------- | -------------- | --------------------------------------------------------------- |
-| `COPAW_LOG_LEVEL`                  | `info`         | 日志级别（`debug` / `info` / `warning` / `error` / `critical`） |
-| `COPAW_MEMORY_COMPACT_THRESHOLD`   | `100000`       | 触发记忆压缩的字符阈值                                          |
-| `COPAW_MEMORY_COMPACT_KEEP_RECENT` | `3`            | 压缩后保留的最近消息数                                          |
-| `COPAW_MEMORY_COMPACT_RATIO`       | `0.7`          | 触发压缩的阈值比例（相对于上下文窗口大小）                      |
-| `COPAW_CONSOLE_STATIC_DIR`         | _（自动检测）_ | 控制台前端静态文件路径                                          |
+| 变量                                 | 默认值         | 说明                                                            |
+| ------------------------------------ | -------------- | --------------------------------------------------------------- |
+| `QWENPAW_LOG_LEVEL`                  | `info`         | 日志级别（`debug` / `info` / `warning` / `error` / `critical`） |
+| `QWENPAW_MEMORY_COMPACT_THRESHOLD`   | `100000`       | 触发记忆压缩的字符阈值                                          |
+| `QWENPAW_MEMORY_COMPACT_KEEP_RECENT` | `3`            | 压缩后保留的最近消息数                                          |
+| `QWENPAW_MEMORY_COMPACT_RATIO`       | `0.7`          | 触发压缩的阈值比例（相对于上下文窗口大小）                      |
+| `QWENPAW_CONSOLE_STATIC_DIR`         | _（自动检测）_ | 控制台前端静态文件路径                                          |
 
 **安全与认证：**
 
-| 变量                       | 默认值  | 说明                                     |
-| -------------------------- | ------- | ---------------------------------------- |
-| `COPAW_AUTH_ENABLED`       | `false` | 是否启用 Web 控制台登录认证              |
-| `COPAW_AUTH_USERNAME`      | -       | 自动注册时的管理员用户名（可选）         |
-| `COPAW_AUTH_PASSWORD`      | -       | 自动注册时的管理员密码（可选）           |
-| `COPAW_TOOL_GUARD_ENABLED` | `true`  | 是否启用工具守卫                         |
-| `COPAW_SKILL_SCAN_MODE`    | `warn`  | 技能扫描模式（`block` / `warn` / `off`） |
+| 变量                         | 默认值  | 说明                                     |
+| ---------------------------- | ------- | ---------------------------------------- |
+| `QWENPAW_AUTH_ENABLED`       | `false` | 是否启用 Web 控制台登录认证              |
+| `QWENPAW_AUTH_USERNAME`      | -       | 自动注册时的管理员用户名（可选）         |
+| `QWENPAW_AUTH_PASSWORD`      | -       | 自动注册时的管理员密码（可选）           |
+| `QWENPAW_TOOL_GUARD_ENABLED` | `true`  | 是否启用工具守卫                         |
+| `QWENPAW_SKILL_SCAN_MODE`    | `warn`  | 技能扫描模式（`block` / `warn` / `off`） |
 
 **记忆与检索：**
 
@@ -99,8 +99,8 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
 
 从 **v0.1.0** 开始，配置文件分为两层：
 
-1. **全局配置** - `~/.copaw/config.json`（提供商、环境变量、智能体列表）
-2. **智能体配置** - `~/.copaw/workspaces/{agent_id}/agent.json`（每个智能体的独立配置）
+1. **全局配置** - `~/.qwenpaw/config.json`（提供商、环境变量、智能体列表）
+2. **智能体配置** - `~/.qwenpaw/workspaces/{agent_id}/agent.json`（每个智能体的独立配置）
 
 ### 全局 config.json
 
@@ -116,7 +116,7 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
         "name": "默认智能体",
         "description": "默认工作区智能体",
         "enabled": true,
-        "workspace_dir": "~/.copaw/workspaces/default"
+        "workspace_dir": "~/.qwenpaw/workspaces/default"
       }
     }
   },
@@ -140,32 +140,32 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
 | --------------------- | -------------- | -------------- | ------------------------------------------------ |
 | `agents.active_agent` | string         | `"default"`    | 当前激活的智能体 ID                              |
 | `agents.profiles`     | object         | `{}`           | 智能体配置引用字典（key 为 agent_id）            |
-| `last_api.host`       | string \| null | `null`         | 上次 `copaw app` 启动的主机地址                  |
-| `last_api.port`       | int \| null    | `null`         | 上次 `copaw app` 启动的端口                      |
+| `last_api.host`       | string \| null | `null`         | 上次 `qwenpaw app` 启动的主机地址                |
+| `last_api.port`       | int \| null    | `null`         | 上次 `qwenpaw app` 启动的端口                    |
 | `show_tool_details`   | bool           | `true`         | 是否在频道消息中显示工具调用/返回详情            |
 | `user_timezone`       | string         | _（系统时区）_ | IANA 时区名称（如 `"Asia/Shanghai"`）            |
 | `last_dispatch`       | object \| null | `null`         | 最近一次消息分发目标（用于心跳 `target="last"`） |
 
 **`agents.profiles[agent_id]`** 引用字段：
 
-| 字段            | 类型   | 必填 | 说明                                                            |
-| --------------- | ------ | ---- | --------------------------------------------------------------- |
-| `id`            | string | 是   | 智能体唯一标识                                                  |
-| `name`          | string | 是   | 智能体显示名称                                                  |
-| `description`   | string | 否   | 智能体描述（用于多智能体协作时的分工判断）                      |
-| `enabled`       | bool   | 是   | 是否启用该智能体                                                |
-| `workspace_dir` | string | 否   | 工作区路径（可选，默认为 `$COPAW_WORKING_DIR/workspaces/{id}`） |
+| 字段            | 类型   | 必填 | 说明                                                              |
+| --------------- | ------ | ---- | ----------------------------------------------------------------- |
+| `id`            | string | 是   | 智能体唯一标识                                                    |
+| `name`          | string | 是   | 智能体显示名称                                                    |
+| `description`   | string | 否   | 智能体描述（用于多智能体协作时的分工判断）                        |
+| `enabled`       | bool   | 是   | 是否启用该智能体                                                  |
+| `workspace_dir` | string | 否   | 工作区路径（可选，默认为 `$QWENPAW_WORKING_DIR/workspaces/{id}`） |
 
 > **向后兼容：** 全局 config.json 中还保留了 `channels`、`mcp`、`tools`、`security` 等字段，用于向后兼容旧版本。在多智能体模式下，这些配置应该在各智能体的 `agent.json` 中设置。
 >
 > **配置优先级：** 智能体的 `agent.json` 优先级高于全局 `config.json`。如果两处都配置了相同字段，系统会使用 `agent.json` 中的值。建议在多智能体模式下，将所有配置都写在各智能体的 `agent.json` 中。
 
-> **模型提供商配置** 存储在 `$COPAW_SECRET_DIR/providers.json`（默认 `~/.copaw.secret/providers.json`）。
-> **环境变量配置** 存储在 `$COPAW_SECRET_DIR/envs.json`（默认 `~/.copaw.secret/envs.json`）。
+> **模型提供商配置** 存储在 `$QWENPAW_SECRET_DIR/providers.json`（默认 `~/.qwenpaw.secret/providers.json`）。
+> **环境变量配置** 存储在 `$QWENPAW_SECRET_DIR/envs.json`（默认 `~/.qwenpaw.secret/envs.json`）。
 
 ### 智能体配置 agent.json
 
-每个智能体在其工作区目录（`$COPAW_WORKING_DIR/workspaces/{agent_id}/`）下有独立的 `agent.json`，用于存储该智能体的所有配置（频道、工具、心跳、MCP、安全等）。这样不同智能体可以有完全不同的配置，互不干扰。
+每个智能体在其工作区目录（`$QWENPAW_WORKING_DIR/workspaces/{agent_id}/`）下有独立的 `agent.json`，用于存储该智能体的所有配置（频道、工具、心跳、MCP、安全等）。这样不同智能体可以有完全不同的配置，互不干扰。
 
 ```json
 {
@@ -221,14 +221,24 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
   },
   "security": {
     "tool_guard": {
-      "enabled": true
+      "enabled": true,
+      "shell_evasion_checks": {
+        "command_substitution": false,
+        "obfuscated_flags": false,
+        "backslash_escaped_whitespace": false,
+        "backslash_escaped_operators": false,
+        "newlines": false,
+        "comment_quote_desync": false,
+        "quoted_newline": false
+      }
     },
     "file_guard": {
       "enabled": true
     },
     "skill_scanner": {
       "mode": "warn"
-    }
+    },
+    "allow_no_auth_hosts": ["127.0.0.1", "::1"]
   },
   "last_dispatch": null
 }
@@ -256,7 +266,7 @@ $COPAW_SECRET_DIR/                       # 默认 ~/.copaw.secret
 - **mattermost** — Mattermost
 - **matrix** — Matrix
 - **wecom** — 企业微信
-- **weixin** — 微信个人（iLink）
+- **wechat** — 微信个人（iLink）
 - **xiaoyi** — 华为小艺
 - **mqtt** — MQTT
 - **voice** — Voice
@@ -302,9 +312,12 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 **基础运行参数：**
 
-| 字段        | 类型 | 默认值 | 说明                                            |
-| ----------- | ---- | ------ | ----------------------------------------------- |
-| `max_iters` | int  | `100`  | ReAct Agent 推理-执行循环的最大轮数（必须 ≥ 1） |
+| 字段                         | 类型  | 默认值  | 说明                                                                                                                                                                                                                     |
+| ---------------------------- | ----- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `max_iters`                  | int   | `100`   | ReAct Agent 推理-执行循环的最大轮数（必须 ≥ 1）                                                                                                                                                                          |
+| `shell_command_timeout`      | float | `60.0`  | `execute_shell_command` 的默认超时时间（秒）。LLM 可在每次调用时通过 timeout 参数覆盖此值                                                                                                                                |
+| `shell_command_executable`   | str   | `""`    | `execute_shell_command` 在 Linux/macOS 上使用的 shell 路径（如 `/bin/bash`、`/bin/zsh`）。Windows 上支持 `powershell.exe` / `pwsh.exe`。留空时依次回退到 `$SHELL` 环境变量，再回退到 `/bin/sh`（Windows 上为 `cmd.exe`） |
+| `auto_continue_on_text_only` | bool  | `false` | 启用后,若模型只返回文本而未调用工具,Agent 会自动重试最多两轮推理                                                                                                                                                         |
 
 **LLM 重试与限流：**
 
@@ -322,53 +335,63 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 **上下文管理：**
 
-| 字段                 | 类型   | 默认值          | 说明                                                  |
-| -------------------- | ------ | --------------- | ----------------------------------------------------- |
-| `max_input_length`   | int    | `131072` (128K) | 模型上下文窗口的最大输入长度（token 数，必须 ≥ 1000） |
-| `history_max_length` | int    | `10000`         | `/history` 命令输出的最大长度（字符数）               |
-| `context_compact`    | object | _（见下方）_    | 上下文压缩配置对象                                    |
+| 字段                       | 类型   | 默认值          | 说明                                                  |
+| -------------------------- | ------ | --------------- | ----------------------------------------------------- |
+| `max_input_length`         | int    | `131072` (128K) | 模型上下文窗口的最大输入长度（token 数，必须 ≥ 1000） |
+| `history_max_length`       | int    | `10000`         | `/history` 命令输出的最大长度（字符数）               |
+| `context_manager_backend`  | string | `"light"`       | 上下文管理器后端类型                                  |
+| `memory_manager_backend`   | string | `"remelight"`   | 记忆管理器后端类型                                    |
+| `light_context_config`     | object | _（见下方）_    | Light 上下文管理器配置                                |
+| `reme_light_memory_config` | object | _（见下方）_    | ReMeLight 记忆管理器配置                              |
 
-**上下文压缩配置（`context_compact` 对象）：**
+**Light 上下文配置（`light_context_config` 对象）：**
 
-| 字段                           | 类型   | 默认值      | 说明                                                                              |
-| ------------------------------ | ------ | ----------- | --------------------------------------------------------------------------------- |
-| `context_compact_enabled`      | bool   | `true`      | 是否启用自动上下文压缩                                                            |
-| `memory_compact_ratio`         | float  | `0.75`      | 触发压缩的阈值比例（相对于 `max_input_length`）。当上下文长度达到此比例时触发压缩 |
-| `memory_reserve_ratio`         | float  | `0.1`       | 压缩后保留的最近上下文比例，确保连续性                                            |
-| `compact_with_thinking_block`  | bool   | `true`      | 压缩时是否包含思考块                                                              |
-| `token_count_model`            | string | `"default"` | 用于 token 计数的模型                                                             |
-| `token_count_use_mirror`       | bool   | `false`     | token 计数时是否使用 HuggingFace 镜像                                             |
-| `token_count_estimate_divisor` | float  | `4.0`       | 基于字节的 token 估算除数（byte_len / divisor）                                   |
+| 字段                           | 类型   | 默认值     | 说明                                            |
+| ------------------------------ | ------ | ---------- | ----------------------------------------------- |
+| `dialog_path`                  | string | `"dialog"` | 对话持久化目录（相对于工作目录）                |
+| `token_count_estimate_divisor` | float  | `4.0`      | 基于字节的 token 估算除数（byte_len / divisor） |
 
-**工具结果压缩配置（`tool_result_compact` 对象）：**
+**Light 上下文压缩配置（`light_context_config.context_compact_config` 对象）：**
 
-| 字段               | 类型 | 默认值  | 说明                                      |
-| ------------------ | ---- | ------- | ----------------------------------------- |
-| `enabled`          | bool | `true`  | 是否启用工具结果压缩                      |
-| `recent_n`         | int  | `2`     | 最近 N 条消息使用 `recent_max_bytes` 阈值 |
-| `old_max_bytes`    | int  | `3000`  | 旧消息的工具结果字节阈值                  |
-| `recent_max_bytes` | int  | `50000` | 最近消息的工具结果字节阈值                |
-| `retention_days`   | int  | `5`     | 工具结果文件保留天数                      |
+| 字段                          | 类型  | 默认值 | 说明                                            |
+| ----------------------------- | ----- | ------ | ----------------------------------------------- |
+| `enabled`                     | bool  | `true` | 是否启用自动上下文压缩                          |
+| `compact_threshold_ratio`     | float | `0.8`  | 触发压缩的阈值比例（相对于 `max_input_length`） |
+| `reserve_threshold_ratio`     | float | `0.1`  | 压缩时保留的最近上下文比例                      |
+| `compact_with_thinking_block` | bool  | `true` | 压缩时是否包含思考块                            |
 
-**记忆配置：**
+**Light 工具结果修剪配置（`light_context_config.tool_result_pruning_config` 对象）：**
 
-| 字段                     | 类型   | 默认值        | 说明                                           |
-| ------------------------ | ------ | ------------- | ---------------------------------------------- |
-| `memory_summary`         | object | _（见下方）_  | 记忆总结与搜索配置对象                         |
-| `embedding_config`       | object | _（见下方）_  | Embedding 模型配置对象（用于语义检索）         |
-| `memory_manager_backend` | string | `"remelight"` | 记忆管理器后端类型（当前仅支持 `"remelight"`） |
+| 字段                           | 类型 | 默认值  | 说明                       |
+| ------------------------------ | ---- | ------- | -------------------------- |
+| `enabled`                      | bool | `true`  | 是否启用工具结果修剪       |
+| `pruning_recent_n`             | int  | `2`     | 最近 N 条消息使用较高阈值  |
+| `pruning_old_msg_max_bytes`    | int  | `3000`  | 旧消息的工具结果字节阈值   |
+| `pruning_recent_msg_max_bytes` | int  | `50000` | 最近消息的工具结果字节阈值 |
+| `offload_retention_days`       | int  | `5`     | 工具结果文件保留天数       |
 
-**记忆总结配置（`memory_summary` 对象）：**
+**ReMeLight 记忆配置（`reme_light_memory_config` 对象）：**
 
-| 字段                            | 类型  | 默认值  | 说明                                                       |
-| ------------------------------- | ----- | ------- | ---------------------------------------------------------- |
-| `memory_summary_enabled`        | bool  | `true`  | 是否在压缩时启用记忆总结                                   |
-| `force_memory_search`           | bool  | `false` | 是否在每轮对话时强制搜索记忆                               |
-| `force_max_results`             | int   | `1`     | 强制记忆搜索时返回的最大结果数                             |
-| `force_min_score`               | float | `0.3`   | 强制记忆搜索时的最低相关度分数（0.0 - 1.0）                |
-| `rebuild_memory_index_on_start` | bool  | `false` | 启动时是否清空并重建记忆搜索索引。false 时仅监控新文件变化 |
+| 字段                            | 类型        | 默认值         | 说明                                                     |
+| ------------------------------- | ----------- | -------------- | -------------------------------------------------------- |
+| `summarize_when_compact`        | bool        | `true`         | 是否在上下文压缩时启用记忆总结                           |
+| `auto_memory_interval`          | int \| null | `null`         | 每隔 N 次用户查询触发自动记忆。null 表示禁用定期自动记忆 |
+| `dream_cron`                    | string      | `"0 23 * * *"` | 梦境记忆优化任务的 Cron 表达式（空字符串禁用）           |
+| `rebuild_memory_index_on_start` | bool        | `false`        | 启动时是否重建记忆搜索索引                               |
+| `recursive_file_watcher`        | bool        | `false`        | 是否递归监控记忆目录                                     |
+| `auto_memory_search_config`     | object      | _（见下方）_   | 自动记忆搜索配置                                         |
+| `embedding_model_config`        | object      | _（见下方）_   | Embedding 模型配置                                       |
 
-**Embedding 配置（`embedding_config` 对象）：**
+**自动记忆搜索配置（`reme_light_memory_config.auto_memory_search_config` 对象）：**
+
+| 字段          | 类型  | 默认值  | 说明                                        |
+| ------------- | ----- | ------- | ------------------------------------------- |
+| `enabled`     | bool  | `false` | 是否在每轮对话时自动执行记忆搜索            |
+| `max_results` | int   | `1`     | 自动搜索时最多返回的结果数                  |
+| `min_score`   | float | `0.1`   | 自动搜索时的最低相关性分数阈值（0.0 - 1.0） |
+| `timeout`     | float | `10.0`  | 自动搜索超时时间（秒）                      |
+
+**Embedding 配置（`reme_light_memory_config.embedding_model_config` 对象）：**
 
 | 字段               | 类型   | 默认值     | 说明                                                |
 | ------------------ | ------ | ---------- | --------------------------------------------------- |
@@ -417,6 +440,24 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 ---
 
+#### `plan` — 计划模式配置
+
+| 字段      | 类型 | 默认值  | 说明             |
+| --------- | ---- | ------- | ---------------- |
+| `enabled` | bool | `false` | 是否启用计划模式 |
+
+启用后,智能体支持 `/plan` 命令进行结构化任务规划与执行。详见 [计划模式](./plan)。
+
+---
+
+#### `approval_level` — 工具执行安全级别
+
+| 字段             | 类型   | 默认值   | 说明                                                                          |
+| ---------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `approval_level` | string | `"AUTO"` | 工具执行安全级别: `STRICT`、`SMART`、`AUTO`、`OFF`。详见 [安全](./security)。 |
+
+---
+
 #### `tools` — 工具配置
 
 控制智能体可用的内置工具。每个工具可以单独启用/禁用，配置是否显示给用户，以及是否异步执行。
@@ -434,6 +475,12 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 - **`tool_guard`** — 工具守卫（运行时检测危险命令和注入攻击）
 - **`file_guard`** — 文件守卫（保护敏感文件访问）
 - **`skill_scanner`** — 技能扫描器（技能启用前扫描恶意代码）
+
+顶层字段：
+
+| 字段                  | 类型     | 默认值                 | 说明                                                  |
+| --------------------- | -------- | ---------------------- | ----------------------------------------------------- |
+| `allow_no_auth_hosts` | string[] | `["127.0.0.1", "::1"]` | IP 白名单，绕过 Web 登录认证。默认允许 localhost 访问 |
 
 > **完整配置说明：** 每个模块的详细字段说明、安全规则、自定义规则配置等请参见 [安全](./security)。
 
@@ -457,33 +504,47 @@ MCP（模型上下文协议）允许智能体连接外部服务（如 Filesystem
 
 ## 模型提供商
 
-CoPaw 需要 LLM 提供商才能运行。配置存储在 `$COPAW_SECRET_DIR/providers.json`（默认 `~/.copaw.secret/providers.json`）。
+QwenPaw 需要 LLM 提供商才能运行。配置存储在 `$QWENPAW_SECRET_DIR/providers.json`（默认 `~/.qwenpaw.secret/providers.json`）。
 
 有三种设置方式：
 
-- **`copaw init`** — 交互式向导，最简单
+- **`qwenpaw init`** — 交互式向导，最简单
 - **控制台 UI** — 在设置 → 模型页面配置
 - **API** — `PUT /providers/{id}` 和 `PUT /providers/active_llm`
 
 **内置提供商列表：**
 
-| 提供商                 | ID                  | 说明                   |
-| ---------------------- | ------------------- | ---------------------- |
-| ModelScope（魔搭）     | `modelscope`        | 魔搭社区模型服务       |
-| DashScope（灵积）      | `dashscope`         | 阿里云灵积模型服务     |
-| 阿里云百炼 Coding Plan | `aliyun-codingplan` | 阿里云百炼 Coding Plan |
-| OpenAI                 | `openai`            | OpenAI API             |
-| Azure OpenAI           | `azure-openai`      | Azure OpenAI Service   |
-| Anthropic              | `anthropic`         | Anthropic Claude API   |
-| Google Gemini          | `gemini`            | Google Gemini API      |
-| CoPaw Local            | `copaw-local`       | 本地 llama.cpp 后端    |
-| Ollama                 | `ollama`            | 本地 Ollama 服务       |
-| LM Studio              | `lmstudio`          | 本地 LM Studio 服务    |
-| 自定义                 | `custom`            | 自定义 OpenAI 兼容服务 |
+| 提供商                                  | ID                       | 说明                          |
+| --------------------------------------- | ------------------------ | ----------------------------- |
+| QwenPaw Local                           | `qwenpaw-local`          | 本地 llama.cpp 后端           |
+| Ollama                                  | `ollama`                 | 本地 Ollama 服务              |
+| LM Studio                               | `lmstudio`               | 本地 LM Studio 服务           |
+| OpenRouter                              | `openrouter`             | OpenRouter 模型聚合平台       |
+| ModelScope（魔搭）                      | `modelscope`             | 魔搭社区模型服务              |
+| DashScope（灵积）                       | `dashscope`              | 阿里云灵积模型服务            |
+| 阿里云百炼 Coding Plan（China）         | `aliyun-codingplan`      | 阿里云百炼 Coding Plan        |
+| 阿里云百炼 Coding Plan（International） | `aliyun-codingplan-intl` | 阿里云百炼 Coding Plan 国际版 |
+| OpenAI                                  | `openai`                 | OpenAI API                    |
+| Azure OpenAI                            | `azure-openai`           | Azure OpenAI Service          |
+| Anthropic                               | `anthropic`              | Anthropic Claude API          |
+| Google Gemini                           | `gemini`                 | Google Gemini API             |
+| DeepSeek                                | `deepseek`               | DeepSeek API                  |
+| Kimi（China）                           | `kimi-cn`                | Moonshot Kimi 国内版          |
+| Kimi（International）                   | `kimi-intl`              | Moonshot Kimi 国际版          |
+| MiniMax（China）                        | `minimax-cn`             | MiniMax 国内版                |
+| MiniMax（International）                | `minimax`                | MiniMax 国际版                |
+| Zhipu（BigModel）                       | `zhipu-cn`               | 智谱国内版标准 API            |
+| Zhipu Coding Plan（BigModel）           | `zhipu-cn-codingplan`    | 智谱国内版 Coding Plan        |
+| Zhipu（Z.AI）                           | `zhipu-intl`             | 智谱国际版标准 API            |
+| Zhipu Coding Plan（Z.AI）               | `zhipu-intl-codingplan`  | 智谱国际版 Coding Plan        |
+| OpenCode                                | `opencode`               | OpenCode Zen 模型服务         |
+| SiliconFlow（China）                    | `siliconflow-cn`         | 硅基流动国内版                |
+| SiliconFlow（International）            | `siliconflow-intl`       | 硅基流动国际版                |
+| 自定义                                  | `custom`                 | 自定义 OpenAI 兼容服务        |
 
 > **完整配置说明：** 每个提供商的详细配置方式、`providers.json` 字段结构、模型发现等请参见 [模型](./models)。
 
-> **提示：** 运行 `copaw init` 跟着提示走就行——它会列出每个提供商的可用模型让你直接选。
+> **提示：** 运行 `qwenpaw init` 跟着提示走就行——它会列出每个提供商的可用模型让你直接选。
 
 ---
 
@@ -491,13 +552,13 @@ CoPaw 需要 LLM 提供商才能运行。配置存储在 `$COPAW_SECRET_DIR/prov
 
 部分工具和 MCP 服务需要额外的 API Key（如网络搜索用的 `TAVILY_API_KEY`）。有三种管理方式：
 
-- **`copaw init`** — 初始化时会问 "Configure environment variables?"
+- **`qwenpaw init`** — 初始化时会问 "Configure environment variables?"
 - **控制台 UI** — 在设置页面编辑
 - **API** — `GET/PUT/DELETE /envs`
 
 设置好的变量会在应用启动时自动加载，所有工具和子进程都可以通过 `os.environ` 读取。
 
-> **注意：** 环境变量的值（如第三方 API Key）的有效性需要用户自行保证。CoPaw 只负责存储和注入，不会校验其正确性。
+> **注意：** 环境变量的值（如第三方 API Key）的有效性需要用户自行保证。QwenPaw 只负责存储和注入，不会校验其正确性。
 
 ---
 
@@ -505,17 +566,17 @@ CoPaw 需要 LLM 提供商才能运行。配置存储在 `$COPAW_SECRET_DIR/prov
 
 技能通过两级目录管理：
 
-- **`$COPAW_WORKING_DIR/skill_pool/`** — 本地共享技能池
-- **`$COPAW_WORKING_DIR/workspaces/{agent_id}/skills/`** — 智能体工作区中的本地技能
+- **`$QWENPAW_WORKING_DIR/skill_pool/`** — 本地共享技能池
+- **`$QWENPAW_WORKING_DIR/workspaces/{agent_id}/skills/`** — 智能体工作区中的本地技能
 
-每个技能是一个包含 `SKILL.md` 文件的子目录。技能的启用状态和配置存储在 `skill.json` 文件中（如 `~/.copaw/workspaces/default/skill.json`）。
+每个技能是一个包含 `SKILL.md` 文件的子目录。技能的启用状态和配置存储在 `skill.json` 文件中（如 `~/.qwenpaw/workspaces/default/skill.json`）。
 
 > **完整配置说明：** `skill.json` 的详细字段结构、技能池管理、广播、上传、Config 运行时注入等请参见 [技能](./skills)。
 
 管理方式：
 
 - **控制台**（智能体 → 技能）— 可视化管理、导入、启用/禁用
-- **`copaw skills config`** — CLI 交互式切换
+- **`qwenpaw skills config`** — CLI 交互式切换
 - **直接编辑** `skill.json` — 手动添加或修改技能
 
 ---
@@ -535,7 +596,7 @@ CoPaw 需要 LLM 提供商才能运行。配置存储在 `$COPAW_SECRET_DIR/prov
 
 ## 小结
 
-- 默认一切都在 **`$COPAW_WORKING_DIR`**（默认 `~/.copaw`）；可通过环境变量自定义。
+- 默认一切都在 **`$QWENPAW_WORKING_DIR`**（默认 `~/.qwenpaw`）；可通过环境变量自定义。
 - 从 **v0.1.0** 开始，配置分为两层：
   - **全局配置**（`config.json`）— 模型提供商、智能体列表、全局设置
   - **智能体配置**（`workspaces/{agent_id}/agent.json`）— 每个智能体的独立配置

@@ -14,15 +14,16 @@ FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim
 # ENV variables
 ENV NODE_ENV=production
 ENV WORKSPACE_DIR=/app
-ENV COPAW_WORKING_DIR=/app/working
-ENV COPAW_SECRET_DIR=/app/working.secret
+ENV QWENPAW_WORKING_DIR=/app/working
+ENV QWENPAW_SECRET_DIR=/app/working.secret
+ENV QWENPAW_BACKUP_DIR=/app/working.backups
 
-# Channel filtering: use COPAW_DISABLED_CHANNELS (exclusion, recommended)
-# or COPAW_ENABLED_CHANNELS (whitelist). Override at runtime with -e.
-ARG COPAW_DISABLED_CHANNELS="imessage"
-ENV COPAW_DISABLED_CHANNELS=${COPAW_DISABLED_CHANNELS}
-ARG COPAW_ENABLED_CHANNELS=""
-ENV COPAW_ENABLED_CHANNELS=${COPAW_ENABLED_CHANNELS}
+# Channel filtering: use QWENPAW_DISABLED_CHANNELS (exclusion, recommended)
+# or QWENPAW_ENABLED_CHANNELS (whitelist). Override at runtime with -e.
+ARG QWENPAW_DISABLED_CHANNELS="imessage"
+ENV QWENPAW_DISABLED_CHANNELS=${QWENPAW_DISABLED_CHANNELS}
+ARG QWENPAW_ENABLED_CHANNELS=""
+ENV QWENPAW_ENABLED_CHANNELS=${QWENPAW_ENABLED_CHANNELS}
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -75,7 +76,7 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Avoid Playwright downloading its own browser when executable_path is used.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Indicate running in container (used e.g. for Chromium --no-sandbox).
-ENV COPAW_RUNNING_IN_CONTAINER=1
+ENV QWENPAW_RUNNING_IN_CONTAINER=1
 
 WORKDIR ${WORKSPACE_DIR}
 
@@ -85,14 +86,14 @@ ENV PATH="/app/venv/bin:$PATH"
 COPY pyproject.toml setup.py README.md ./
 COPY src ./src
 # Inject console dist from build stage (repo does not commit dist).
-COPY --from=console-builder /app/console/dist/ ./src/copaw/console/
-RUN pip install --no-cache-dir .[ollama]
+COPY --from=console-builder /app/console/dist/ ./src/qwenpaw/console/
+# Speed up Python package installation with uv.
+COPY --from=agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/uv:latest /uv /bin/uv
+RUN uv pip install --no-cache-dir . && rm -rf ./build
 
-# Init working dir with default config.json and HEARTBEAT.md (build time).
-RUN copaw init --defaults --accept-security
 
-# CoPaw app port (default 8088). Override at runtime with -e COPAW_PORT=3000.
-ENV COPAW_PORT=8088
+# QwenPaw app port (default 8088). Override at runtime with -e QWENPAW_PORT=3000.
+ENV QWENPAW_PORT=8088
 
 COPY deploy/config/supervisord.conf.template /etc/supervisor/conf.d/supervisord.conf.template
 COPY --chmod=755 deploy/entrypoint.sh /entrypoint.sh

@@ -3,6 +3,7 @@ import { getApiUrl } from "../config";
 import { buildAuthHeaders } from "../authHeaders";
 import type {
   BuiltinImportSpec,
+  BuiltinUpdateNotice,
   HubInstallTaskResponse,
   HubSkillSpec,
   PoolSkillSpec,
@@ -49,6 +50,8 @@ export function invalidateSkillCache(options?: {
     // Targeted invalidation based on options
     if (options.pool && key === "/skills/pool") {
       apiCache.delete(key);
+      apiCache.delete("/skills/pool/builtin-notice");
+      apiCache.delete("/skills/pool/builtin-sources");
     } else if (options.workspaces && key === "/skills/workspaces") {
       apiCache.delete(key);
     } else if (options.agentId && key === `/skills?agent=${options.agentId}`) {
@@ -70,7 +73,6 @@ async function _uploadZip(
   file: File,
   options?: {
     enable?: boolean;
-    overwrite?: boolean;
     target_name?: string;
     rename_map?: Record<string, string>;
   },
@@ -81,9 +83,6 @@ async function _uploadZip(
   const params = new URLSearchParams();
   if (options?.enable !== undefined) {
     params.set("enable", String(options.enable));
-  }
-  if (options?.overwrite !== undefined) {
-    params.set("overwrite", String(options.overwrite));
   }
   if (options?.target_name) {
     params.set("target_name", options.target_name);
@@ -103,7 +102,13 @@ async function _uploadZip(
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    const text = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      // Format like request.ts so parseErrorDetail() can extract structured fields
+      throw new Error(`${response.status} ${response.statusText} - ${text}`);
+    }
+    throw new Error(text || `Request failed: ${response.status}`);
   }
 
   return await response.json();
@@ -138,7 +143,36 @@ export const skillApi = {
     if (cached) return cached;
 
     const data = await request<PoolSkillSpec[]>("/skills/pool");
+    // Ensure data is an array
+    if (!Array.isArray(data)) {
+      throw new Error(
+        `Expected array from /skills/pool but got ${typeof data}`,
+      );
+    }
     setCache(cacheKey, data);
+    return data;
+  },
+
+  refreshSkills: async (agentId?: string) => {
+    const opts: RequestInit = { method: "POST" };
+    if (agentId) opts.headers = new Headers({ "X-Agent-Id": agentId });
+    const data = await request<SkillSpec[]>("/skills/refresh", opts);
+    const cacheKey = `/skills${agentId ? `?agent=${agentId}` : ""}`;
+    setCache(cacheKey, data);
+    return data;
+  },
+
+  refreshSkillPool: async () => {
+    const data = await request<PoolSkillSpec[]>("/skills/pool/refresh", {
+      method: "POST",
+    });
+    // Ensure data is an array
+    if (!Array.isArray(data)) {
+      throw new Error(
+        `Expected array from /skills/pool/refresh but got ${typeof data}`,
+      );
+    }
+    setCache("/skills/pool", data);
     return data;
   },
 
@@ -168,6 +202,7 @@ export const skillApi = {
     content: string;
     source_name?: string;
     config?: Record<string, unknown>;
+    overwrite?: boolean;
   }) =>
     request<{
       success: boolean;
@@ -193,6 +228,7 @@ export const skillApi = {
     content: string;
     source_name?: string;
     config?: Record<string, unknown>;
+    overwrite?: boolean;
   }) =>
     request<{
       success: boolean;
@@ -214,7 +250,40 @@ export const skillApi = {
     }),
 
   batchEnableSkills: (skillNames: string[]) =>
-    request<void>("/skills/batch-enable", {
+    request<{
+      results: Record<
+        string,
+        {
+          success?: boolean;
+          reason?: string;
+          detail?: unknown;
+        }
+      >;
+    }>("/skills/batch-enable", {
+      method: "POST",
+      body: JSON.stringify(skillNames),
+    }),
+
+  batchDisableSkills: (skillNames: string[]) =>
+    request<{
+      results: Record<string, { success: boolean; reason?: string }>;
+    }>("/skills/batch-disable", {
+      method: "POST",
+      body: JSON.stringify(skillNames),
+    }),
+
+  batchDeleteSkills: (skillNames: string[]) =>
+    request<{
+      results: Record<string, { success: boolean; reason?: string }>;
+    }>("/skills/batch-delete", {
+      method: "POST",
+      body: JSON.stringify(skillNames),
+    }),
+
+  batchDeletePoolSkills: (skillNames: string[]) =>
+    request<{
+      results: Record<string, { success: boolean; reason?: string }>;
+    }>("/skills/pool/batch-delete", {
       method: "POST",
       body: JSON.stringify(skillNames),
     }),
@@ -228,7 +297,6 @@ export const skillApi = {
     bundle_url: string;
     version?: string;
     enable?: boolean;
-    overwrite?: boolean;
     target_name?: string;
   }) =>
     request<HubInstallTaskResponse>("/skills/hub/install/start", {
@@ -239,7 +307,6 @@ export const skillApi = {
   importPoolSkillFromHub: (payload: {
     bundle_url: string;
     version?: string;
-    overwrite?: boolean;
     target_name?: string;
   }) =>
     request<{
@@ -268,8 +335,20 @@ export const skillApi = {
   listPoolBuiltinSources: () =>
     request<BuiltinImportSpec[]>("/skills/pool/builtin-sources"),
 
+  getPoolBuiltinNotice: async () => {
+    const cacheKey = "/skills/pool/builtin-notice";
+    const cached = getCached<BuiltinUpdateNotice>(cacheKey);
+    if (cached) return cached;
+
+    const data = await request<BuiltinUpdateNotice>(
+      "/skills/pool/builtin-notice",
+    );
+    setCache(cacheKey, data);
+    return data;
+  },
+
   importSelectedPoolBuiltins: (payload: {
-    skill_names: string[];
+    imports: Array<{ skill_name: string; language: string }>;
     overwrite_conflicts?: boolean;
   }) =>
     request<{
@@ -278,19 +357,26 @@ export const skillApi = {
       unchanged: string[];
       conflicts: Array<{
         skill_name: string;
+        language?: string;
+        status?: string;
+        source_name?: string;
         source_version_text?: string;
         current_version_text?: string;
         current_source?: string;
+        current_language?: string;
       }>;
     }>("/skills/pool/import-builtin", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  updatePoolBuiltin: (skillName: string) =>
+  updatePoolBuiltin: (skillName: string, language: string) =>
     request<Record<string, unknown>>(
       `/skills/pool/${encodeURIComponent(skillName)}/update-builtin`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({ language }),
+      },
     ),
 
   deleteSkillPoolSkill: (skillName: string) =>
@@ -304,8 +390,8 @@ export const skillApi = {
   uploadWorkspaceSkillToPool: (payload: {
     workspace_id: string;
     skill_name: string;
-    new_name?: string;
     overwrite?: boolean;
+    preview_only?: boolean;
   }) =>
     request<{ success: boolean; name: string }>("/skills/pool/upload", {
       method: "POST",
@@ -314,9 +400,10 @@ export const skillApi = {
 
   downloadSkillPoolSkill: (payload: {
     skill_name: string;
-    targets: Array<{ workspace_id: string; target_name?: string }>;
+    targets: Array<{ workspace_id: string }>;
     all_workspaces?: boolean;
     overwrite?: boolean;
+    preview_only?: boolean;
   }) =>
     request<{
       downloaded: Array<{
@@ -326,9 +413,12 @@ export const skillApi = {
       }>;
       conflicts?: Array<{
         reason?: string;
+        skill_name?: string;
         workspace_id?: string;
         workspace_name?: string;
         suggested_name?: string;
+        current_version_text?: string;
+        source_version_text?: string;
       }>;
     }>("/skills/pool/download", {
       method: "POST",
@@ -341,6 +431,24 @@ export const skillApi = {
       {
         method: "PUT",
         body: JSON.stringify(channels),
+      },
+    ),
+
+  updateSkillTags: (skillName: string, tags: string[]) =>
+    request<{ updated: boolean; tags: string[] }>(
+      `/skills/${encodeURIComponent(skillName)}/tags`,
+      {
+        method: "PUT",
+        body: JSON.stringify(tags),
+      },
+    ),
+
+  updatePoolSkillTags: (skillName: string, tags: string[]) =>
+    request<{ updated: boolean; tags: string[] }>(
+      `/skills/pool/${encodeURIComponent(skillName)}/tags`,
+      {
+        method: "PUT",
+        body: JSON.stringify(tags),
       },
     ),
 
@@ -451,7 +559,6 @@ export const skillApi = {
     file: File,
     options?: {
       enable?: boolean;
-      overwrite?: boolean;
       target_name?: string;
       rename_map?: Record<string, string>;
     },
@@ -470,7 +577,6 @@ export const skillApi = {
   uploadSkillPoolZip: (
     file: File,
     options?: {
-      overwrite?: boolean;
       target_name?: string;
       rename_map?: Record<string, string>;
     },

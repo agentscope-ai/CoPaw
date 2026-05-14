@@ -96,10 +96,8 @@ export default function LoginPage() {
       >
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <img
-            src={`${import.meta.env.BASE_URL}${
-              isDark ? "dark-logo.png" : "logo.png"
-            }`}
-            alt="CoPaw"
+            src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
+            alt="QwenPaw"
             style={{ height: 48, marginBottom: 12 }}
           />
           <h2 style={{ margin: 0, fontWeight: 600, fontSize: 20 }}>

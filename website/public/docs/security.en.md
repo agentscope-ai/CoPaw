@@ -1,16 +1,16 @@
 # Security
 
-CoPaw includes built-in security features to protect your agent from malicious inputs and unsafe skills. These are configured in the Console under **Settings → Security**, or via `config.json`.
+QwenPaw includes built-in security features to protect your agent from malicious inputs and unsafe skills. These are configured in the Console under **Settings → Security**, or via `config.json`.
 
 ## Overview
 
-CoPaw's security system consists of three core security layers:
+QwenPaw's security system consists of three core security layers:
 
 ```
 Security Architecture:
 ├─ Tool Guard — Runtime tool call protection
 │  Detects dangerous command patterns, injection attacks, and malicious operations
-│  using regex-based rules
+│  using YAML regex rules plus a quote-aware shell evasion guardian
 │
 ├─ File Guard — Sensitive file access control
 │  Blocks agent access to protected files and directories
@@ -24,7 +24,7 @@ Security Architecture:
 
 **Key concepts**:
 
-- **Tool Guard** inspects tool calls in real-time before execution, using regex rules to detect dangerous patterns
+- **Tool Guard** inspects tool calls in real-time before execution, using YAML regex rules and a dedicated shell evasion guardian to detect dangerous patterns
 - **File Guard** operates independently to protect sensitive files and directories from unauthorized access
 - **Skill Scanner** runs before skills are enabled to detect malicious code and security threats
 - **Web Authentication** (optional) controls access to the Console interface
@@ -37,14 +37,14 @@ The **Tool Guard** scans tool parameters **before** the agent invokes a tool, de
 
 ### How it works
 
-1. When the agent calls a tool, the Tool Guard inspects relevant parameters. Built-in regex rules primarily target **`execute_shell_command`**.
-2. Regex rules detect dangerous patterns, for example:
+1. When the agent calls a tool, the Tool Guard inspects relevant parameters. Checks primarily target **`execute_shell_command`**, combining built-in **YAML rules** (regex signatures) with **`ShellEvasionGuardian`** (quote-aware heuristics for obfuscation and parser differentials).
+2. Together they flag dangerous patterns, for example:
    - `rm -rf /` — Dangerous file deletion
    - SQL-injection-like fragments
    - Command substitution `$(...)` or `` `...` ``
    - Path traversal `../`
    - Privilege escalation `sudo`, `su`
-   - Reverse shells, fork bombs, etc.
+   - Reverse shells, fork bombs, obfuscated flags, Unicode whitespace tricks, etc.
      (Exact coverage depends on built-in and custom rules.)
 3. Each rule has an independent severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO)
 4. For CRITICAL or HIGH findings: in the Console / interactive sessions, the tool call enters a pending-approval flow — you approve or reject before it runs. In non-interactive contexts without a session, findings are logged and execution may still proceed — use **`denied_tools`** to hard-block specific tools or tighten rules when needed.
@@ -61,19 +61,29 @@ In `config.json`:
       "guarded_tools": null,
       "denied_tools": [],
       "custom_rules": [],
-      "disabled_rules": []
+      "disabled_rules": [],
+      "shell_evasion_checks": {
+        "command_substitution": false,
+        "obfuscated_flags": false,
+        "backslash_escaped_whitespace": false,
+        "backslash_escaped_operators": false,
+        "newlines": false,
+        "comment_quote_desync": false,
+        "quoted_newline": false
+      }
     }
   }
 }
 ```
 
-| Field            | Description                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`        | Enable or disable Tool Guard entirely. Can also be set via the `COPAW_TOOL_GUARD_ENABLED` environment variable (takes precedence).                    |
-| `guarded_tools`  | Specify guard scope:<br>• `null` (default) — guard all built-in tools<br>• `[]` — guard nothing<br>• `["tool_a", "tool_b"]` — guard only listed tools |
-| `denied_tools`   | Tools that are always blocked regardless of parameters.                                                                                               |
-| `custom_rules`   | User-defined regex rules (see format below).                                                                                                          |
-| `disabled_rules` | Built-in rule IDs to disable.                                                                                                                         |
+| Field                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`              | Enable or disable Tool Guard entirely. Can also be set via the `QWENPAW_TOOL_GUARD_ENABLED` environment variable (takes precedence).                                                                                                                                                                                                                                                                                                  |
+| `guarded_tools`        | Specify guard scope:<br>• `null` (default) — guard all built-in tools<br>• `[]` — guard nothing<br>• `["tool_a", "tool_b"]` — guard only listed tools                                                                                                                                                                                                                                                                                 |
+| `denied_tools`         | Tools that are always blocked regardless of parameters.                                                                                                                                                                                                                                                                                                                                                                               |
+| `custom_rules`         | User-defined regex rules (see format below).                                                                                                                                                                                                                                                                                                                                                                                          |
+| `disabled_rules`       | Built-in YAML rule IDs to disable (applies to `TOOL_CMD_*` rules only).                                                                                                                                                                                                                                                                                                                                                               |
+| `shell_evasion_checks` | Per-check toggles for the shell evasion guardian. A dict mapping check names to `true`/`false`. **All checks default to `false` (disabled).** Toggle individual checks on from the Console under Settings → Security → Tool Guard, or set them here. Available keys: `command_substitution`, `obfuscated_flags`, `backslash_escaped_whitespace`, `backslash_escaped_operators`, `newlines`, `comment_quote_desync`, `quoted_newline`. |
 
 #### Custom rule format
 
@@ -142,11 +152,32 @@ Each custom rule is a JSON object with the following fields:
 }
 ```
 
+### Execution level (approval_level)
+
+Each agent has an `approval_level` field (in `agent.json`) that controls how Tool Guard handles findings:
+
+| Level      | Behavior                                                               |
+| ---------- | ---------------------------------------------------------------------- |
+| **STRICT** | All tool calls require manual approval before execution                |
+| **SMART**  | Low-risk tool calls are auto-allowed; high-risk calls require approval |
+| **AUTO**   | Only tool calls flagged by guard rules require approval (default)      |
+| **OFF**    | Tool Guard is disabled for this agent; all tool calls execute directly |
+
+Configure in `agent.json`:
+
+```json
+{
+  "approval_level": "AUTO"
+}
+```
+
+Or change it in the Console under **Settings → Agents** in the agent's configuration card.
+
 ### Console management
 
 In the Console under **Settings → Security → Tool Guard** tab, you can:
 
-![tool guard](https://img.alicdn.com/imgextra/i3/O1CN01RI8YBr1JorIWpB4uI_!!6000000001076-2-tps-3822-2064.png)
+![tool guard](https://img.alicdn.com/imgextra/i3/O1CN015wiSQW1h8JHZb0CNX_!!6000000004232-2-tps-3822-2070.png)
 
 - **Enable/disable Tool Guard** — Master switch; when disabled, all tool calls bypass checks
 - **Select guard scope** — Leave empty to guard all tools, or specify a list of tools to guard
@@ -186,10 +217,17 @@ Tool Guard includes the following built-in detection rules (for `execute_shell_c
 
 **Code Execution (CRITICAL/HIGH):**
 
-| Rule ID                    | Severity | Detection Target                    | Description                                       |
-| -------------------------- | -------- | ----------------------------------- | ------------------------------------------------- |
-| `TOOL_CMD_PIPE_TO_SHELL`   | CRITICAL | `curl/wget ... \| bash/sh` patterns | Downloads and immediately executes remote scripts |
-| `TOOL_CMD_OBFUSCATED_EXEC` | HIGH     | `base64 -d \| bash` patterns        | Executes base64-encoded commands                  |
+| Rule ID                       | Severity | Detection Target                                                               | Description                                                                                     |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `TOOL_CMD_PIPE_TO_SHELL`      | CRITICAL | `curl/wget ... \| bash/sh` patterns                                            | Downloads and immediately executes remote scripts                                               |
+| `TOOL_CMD_OBFUSCATED_EXEC`    | HIGH     | `base64 -d \| bash` patterns                                                   | Executes base64-encoded commands                                                                |
+| `TOOL_CMD_IFS_INJECTION`      | HIGH     | `$IFS`, `${...IFS...}`                                                         | Token splitting that can evade naive word-boundary checks                                       |
+| `TOOL_CMD_CONTROL_CHARS`      | CRITICAL | Non-printable control characters (for example NUL)                             | Characters that can hide metacharacters from simple scans                                       |
+| `TOOL_CMD_UNICODE_WHITESPACE` | HIGH     | NBSP, ideographic space, and other Unicode whitespace                          | Whitespace that parsers and Bash may treat differently                                          |
+| `TOOL_CMD_PROC_ENVIRON`       | HIGH     | `/proc/self/environ`, `/proc/<pid>/environ`                                    | Reads process environment blobs (secrets, tokens), often chained with execution or exfiltration |
+| `TOOL_CMD_JQ_SYSTEM`          | HIGH     | `jq` with `system(`                                                            | Shell execution embedded in jq programs                                                         |
+| `TOOL_CMD_JQ_FILE_FLAGS`      | HIGH     | `jq` `-f` / `--from-file`, `--rawfile`, `--slurpfile`, `-L`, `--library-path`  | Reading arbitrary files or loading external jq code paths                                       |
+| `TOOL_CMD_ZSH_DANGEROUS`      | HIGH     | `zmodload`, `emulate ... -c`, `sysopen` / `zpty` / `ztcp`, `zf_*`, `fc ... -e` | zsh builtins that enable raw I/O, network, or execution paths beyond typical binary checks      |
 
 **Privilege Escalation (CRITICAL/HIGH):**
 
@@ -204,11 +242,28 @@ Tool Guard includes the following built-in detection rules (for `execute_shell_c
 | ------------------------ | ---------------------------------- | --------------------------------------------- |
 | `TOOL_CMD_REVERSE_SHELL` | `/dev/tcp`, `nc -e`, `socat EXEC:` | Establishes reverse shells or network tunnels |
 
+### Shell evasion guardian
+
+The engine also runs **`ShellEvasionGuardian`** on `execute_shell_command`. It tracks quoting state to catch obfuscation that pure line- or regex-only checks can miss (for example command substitution outside single quotes, `$'...'` / `$"..."` tricks, backslash-escaped whitespace or shell operators—with a carve-out for common `find ... -exec ... {} \;`—raw newlines or `\r` that split commands while skipping heredocs, `#` comment / quote desync, and quoted newlines followed by `#`-looking lines). Reported rule IDs (severity **HIGH**):
+
+| Rule ID                              | Description                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| `SHELL_EVASION_COMMAND_SUBSTITUTION` | Backticks or command / process substitution–style patterns outside `'`...`'` |
+| `SHELL_EVASION_OBFUSCATED_FLAGS`     | ANSI-C or locale quoting, empty-quote flag tricks, or quoted flag tokens     |
+| `SHELL_EVASION_BACKSLASH_WHITESPACE` | Backslash-escaped space or tab outside quotes                                |
+| `SHELL_EVASION_BACKSLASH_OPERATOR`   | Backslash before `; \| & < >` outside quotes                                 |
+| `SHELL_EVASION_NEWLINE`              | Carriage return or unquoted newline before further command text              |
+| `SHELL_EVASION_COMMENT_QUOTE_DESYNC` | Quote characters inside an unquoted `#` comment line                         |
+| `SHELL_EVASION_QUOTED_NEWLINE`       | Newline inside quotes where the next segment looks like a `#` comment line   |
+
+**Configuration note:** `disabled_rules` in `config.json` applies only to YAML rule IDs (typically `TOOL_CMD_*`). It does **not** control `SHELL_EVASION_*` findings. Shell evasion checks are controlled independently via the `shell_evasion_checks` config (see below). Turning off Tool Guard entirely disables all guardians, including this one.
+
 **Usage recommendations**:
 
 - Keep CRITICAL level rules enabled; these represent the most dangerous operations
 - HIGH level rules can be adjusted based on actual use cases; some legitimate operations may trigger them
-- Use `disabled_rules` config to disable rules that don't apply to your use case
+- Use `disabled_rules` config to disable YAML `TOOL_CMD_*` rules that don't apply to your use case
+- Use `shell_evasion_checks` to toggle individual shell evasion checks (all disabled by default)
 - Use `custom_rules` to add organization-specific security rules
 
 ---
@@ -230,7 +285,7 @@ File Guard operates as the "File Path Guardian" within the Tool Guard engine, wo
 4. **Recursive directory protection** — Paths ending with `/` are treated as directories; all files and subdirectories within are recursively blocked
 5. **Blocking mechanism** — When a match is found, the tool call is blocked with a HIGH-severity finding
 
-**Default protection**: The `{WORKING_DIR}.secret/` directory (which stores API keys, authentication credentials, and provider configurations) is included in the sensitive-file list by default. By default, `WORKING_DIR` is `~/.copaw/`, making the full path `~/.copaw.secret/`.
+**Default protection**: The `{WORKING_DIR}.secret/` directory (which stores API keys, authentication credentials, and provider configurations) is included in the sensitive-file list by default. By default, `WORKING_DIR` is `~/.qwenpaw/`, making the full path `~/.qwenpaw.secret/`.
 
 ### Configuration
 
@@ -241,7 +296,7 @@ In `config.json`:
   "security": {
     "file_guard": {
       "enabled": true,
-      "sensitive_files": ["~/.ssh/", "/etc/passwd", "~/.copaw.secret/"]
+      "sensitive_files": ["~/.ssh/", "/etc/passwd", "~/.qwenpaw.secret/"]
     }
   }
 }
@@ -263,7 +318,7 @@ In `config.json`:
 
 In the Console under **Settings → Security → File Guard** tab, you can:
 
-![file guard](https://img.alicdn.com/imgextra/i1/O1CN01tOHz591o77Z0SsWXA_!!6000000005177-2-tps-3822-2064.png)
+![file guard](https://img.alicdn.com/imgextra/i2/O1CN01Qip9IY1tl29zT8s5L_!!6000000005941-2-tps-3822-2070.png)
 
 - **Enable/disable File Guard** — Independent toggle; controls file protection without affecting other Tool Guard features
 - **View protection list** — Table display of all protected paths:
@@ -310,7 +365,7 @@ The **Skill Scanner** automatically scans skills for security threats before the
 | **Warn**  | Scan and record findings, but allow the skill to proceed. Shows warning notification and logs to Scan Alerts. (default) |
 | **Off**   | Disable scanning entirely; all skills pass through directly.                                                            |
 
-**Configuration priority**: Environment variable `COPAW_SKILL_SCAN_MODE` > Console settings > `config.json`
+**Configuration priority**: Environment variable `QWENPAW_SKILL_SCAN_MODE` > Console settings > `config.json`
 
 Valid values: `block`, `warn`, `off`
 
@@ -357,7 +412,7 @@ The whitelist is useful for:
 
 In the Console under **Settings → Security → Skill Scanner** tab, you can:
 
-![skill scanner](https://img.alicdn.com/imgextra/i2/O1CN01oZHdxC1M983gp03Ox_!!6000000001391-2-tps-3822-2064.png)
+![skill scanner](https://img.alicdn.com/imgextra/i2/O1CN01K1sySe1pqkdpHHCSB_!!6000000005412-2-tps-3822-2070.png)
 
 **Configuration area**:
 
@@ -366,7 +421,7 @@ In the Console under **Settings → Security → Skill Scanner** tab, you can:
 
 **Scan Alerts tab** (shows badge count when alerts exist):
 
-![alarm](https://img.alicdn.com/imgextra/i4/O1CN01B3j7d21yhtWQ7b0NB_!!6000000006611-2-tps-3822-2064.png)
+![alarm](https://img.alicdn.com/imgextra/i4/O1CN01ykUkgG1gI68G7WUGP_!!6000000004118-2-tps-3822-2070.png)
 
 - View all blocked and warned records
 - Click eye icon to view detailed findings
@@ -376,7 +431,7 @@ In the Console under **Settings → Security → Skill Scanner** tab, you can:
 
 **Whitelist tab** (shows badge count when entries exist):
 
-![white list](https://img.alicdn.com/imgextra/i1/O1CN01yZTkBE1EmVBHhaNwh_!!6000000000394-2-tps-3822-2064.png)
+![white list](https://img.alicdn.com/imgextra/i1/O1CN01MPqRpL1TKJ2KxhnDT_!!6000000002363-2-tps-3822-2070.png)
 
 - View all whitelisted skills
 - Shows skill name, content hash (first 16 chars), added time
@@ -388,11 +443,11 @@ In the Console under **Settings → Security → Skill Scanner** tab, you can:
 
 For scenarios requiring deep customization, the scanner supports programmatic configuration:
 
-The scanner uses YAML rule files in `src/copaw/security/skill_scanner/rules/signatures/`. You can customize the scan policy via a YAML policy file:
+The scanner uses YAML rule files in `src/qwenpaw/security/skill_scanner/rules/signatures/`. You can customize the scan policy via a YAML policy file:
 
 ```python
-from copaw.security.skill_scanner import SkillScanner
-from copaw.security.skill_scanner.scan_policy import ScanPolicy
+from qwenpaw.security.skill_scanner import SkillScanner
+from qwenpaw.security.skill_scanner.scan_policy import ScanPolicy
 
 policy = ScanPolicy.from_yaml("my_org_policy.yaml")
 scanner = SkillScanner(policy=policy)
@@ -508,7 +563,7 @@ Here's a complete `config.json` with all security features configured:
       "enabled": true,
       "sensitive_files": [
         "~/.ssh/",
-        "~/.copaw.secret/",
+        "~/.qwenpaw.secret/",
         "/etc/passwd",
         "/etc/shadow",
         ".env",
@@ -534,13 +589,13 @@ Here's a complete `config.json` with all security features configured:
 
 ## Web Authentication
 
-CoPaw supports optional web login authentication to protect the Console from unauthorized access. Authentication is **disabled by default** and must be explicitly enabled via the `COPAW_AUTH_ENABLED` environment variable.
+QwenPaw supports optional web login authentication to protect the Console from unauthorized access. Authentication is **disabled by default** and must be explicitly enabled via the `QWENPAW_AUTH_ENABLED` environment variable.
 
-![login](https://img.alicdn.com/imgextra/i3/O1CN01SP7Ppd289g5e9kKO6_!!6000000007890-2-tps-3822-2064.png)
+![login](https://img.alicdn.com/imgextra/i1/O1CN01wh3Sv01SxPEXpb6Wj_!!6000000002313-2-tps-3822-2070.png)
 
 ### How it works
 
-1. **Enable authentication** — Set `COPAW_AUTH_ENABLED=true` and start CoPaw
+1. **Enable authentication** — Set `QWENPAW_AUTH_ENABLED=true` and start QwenPaw
 2. **Registration flow**:
    - On first visit, the Console shows a **registration page**
    - Create the single admin account (username + password)
@@ -550,10 +605,10 @@ CoPaw supports optional web login authentication to protect the Console from una
    - After entering credentials, a signed token is generated (valid for 7 days)
    - Token is stored in browser localStorage and automatically attached to all API requests
 4. **Auto-registration** (optional):
-   - Set `COPAW_AUTH_USERNAME` and `COPAW_AUTH_PASSWORD` environment variables
-   - CoPaw automatically creates the admin account on startup, skipping web registration
+   - Set `QWENPAW_AUTH_USERNAME` and `QWENPAW_AUTH_PASSWORD` environment variables
+   - QwenPaw automatically creates the admin account on startup, skipping web registration
    - Useful for Docker, Kubernetes, server management panels, and other automated deployments
-5. **Localhost bypass** — Requests from localhost (`127.0.0.1` / `::1`) automatically skip authentication; CLI commands (`copaw app`, `copaw chat`, etc.) work without a token
+5. **Localhost bypass** — Requests from localhost (`127.0.0.1` / `::1`) automatically skip authentication; CLI commands (`qwenpaw app`, `qwenpaw chat`, etc.) work without a token
 
 **Security features**:
 
@@ -564,16 +619,36 @@ CoPaw supports optional web login authentication to protect the Console from una
 
 ### Environment variables
 
-| Variable              | Description                                  | Required |
-| --------------------- | -------------------------------------------- | -------- |
-| `COPAW_AUTH_ENABLED`  | Set to `true` to enable authentication       | **Yes**  |
-| `COPAW_AUTH_USERNAME` | Pre-set admin username for auto-registration | Optional |
-| `COPAW_AUTH_PASSWORD` | Pre-set admin password for auto-registration | Optional |
+| Variable                | Description                                  | Required |
+| ----------------------- | -------------------------------------------- | -------- |
+| `QWENPAW_AUTH_ENABLED`  | Set to `true` to enable authentication       | **Yes**  |
+| `QWENPAW_AUTH_USERNAME` | Pre-set admin username for auto-registration | Optional |
+| `QWENPAW_AUTH_PASSWORD` | Pre-set admin password for auto-registration | Optional |
+
+### Auth-bypass host whitelist
+
+In `config.json`, the `security.allow_no_auth_hosts` field specifies client IP addresses that can access API endpoints without authentication, even when authentication is enabled:
+
+```json
+{
+  "security": {
+    "allow_no_auth_hosts": ["127.0.0.1", "::1"]
+  }
+}
+```
+
+| Field                 | Type          | Default                | Description                                                                          |
+| --------------------- | ------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| `allow_no_auth_hosts` | array[string] | `["127.0.0.1", "::1"]` | Client IP addresses allowed to access `/api/*` routes without authentication tokens. |
+
+This can also be managed from the Console under **Settings → Security**.
+
+> **Security warning**: Adding non-localhost addresses to this list means those IPs can access the full API without credentials. Use with caution and only for trusted hosts on private networks.
 
 **Configuration notes**:
 
-- `COPAW_AUTH_ENABLED=true` is the only required variable to enable authentication
-- `COPAW_AUTH_USERNAME` and `COPAW_AUTH_PASSWORD` are used together:
+- `QWENPAW_AUTH_ENABLED=true` is the only required variable to enable authentication
+- `QWENPAW_AUTH_USERNAME` and `QWENPAW_AUTH_PASSWORD` are used together:
   - Both set → Auto-creates admin account on startup (for automated deployments)
   - Not set or only one set → Register via web UI on first visit (interactive deployments)
 - If a user is already registered, auto-registration environment variables are ignored
@@ -588,14 +663,14 @@ Set environment variables before starting:
 
 ```bash
 # Basic enable (web registration)
-export COPAW_AUTH_ENABLED=true
-copaw app
+export QWENPAW_AUTH_ENABLED=true
+qwenpaw app
 
 # Or: Auto-registration mode
-export COPAW_AUTH_ENABLED=true
-export COPAW_AUTH_USERNAME=admin
-export COPAW_AUTH_PASSWORD=mypassword
-copaw app
+export QWENPAW_AUTH_ENABLED=true
+export QWENPAW_AUTH_USERNAME=admin
+export QWENPAW_AUTH_PASSWORD=mypassword
+qwenpaw app
 ```
 
 To make it permanent, add the `export` lines to your `~/.bashrc`, `~/.zshrc`, or equivalent.
@@ -603,21 +678,21 @@ To make it permanent, add the `export` lines to your `~/.bashrc`, `~/.zshrc`, or
 **Windows (CMD):**
 
 ```cmd
-set COPAW_AUTH_ENABLED=true
+set QWENPAW_AUTH_ENABLED=true
 rem Optional: auto-registration
-rem set COPAW_AUTH_USERNAME=admin
-rem set COPAW_AUTH_PASSWORD=mypassword
-copaw app
+rem set QWENPAW_AUTH_USERNAME=admin
+rem set QWENPAW_AUTH_PASSWORD=mypassword
+qwenpaw app
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-$env:COPAW_AUTH_ENABLED = "true"
+$env:QWENPAW_AUTH_ENABLED = "true"
 # Optional: auto-registration
-# $env:COPAW_AUTH_USERNAME = "admin"
-# $env:COPAW_AUTH_PASSWORD = "mypassword"
-copaw app
+# $env:QWENPAW_AUTH_USERNAME = "admin"
+# $env:QWENPAW_AUTH_PASSWORD = "mypassword"
+qwenpaw app
 ```
 
 #### Docker
@@ -625,32 +700,34 @@ copaw app
 Pass environment variables with `-e` (recommended with auto-registration):
 
 ```bash
-docker run -e COPAW_AUTH_ENABLED=true \
-  -e COPAW_AUTH_USERNAME=admin \
-  -e COPAW_AUTH_PASSWORD=mypassword \
+docker run -e QWENPAW_AUTH_ENABLED=true \
+  -e QWENPAW_AUTH_USERNAME=admin \
+  -e QWENPAW_AUTH_PASSWORD=mypassword \
   -p 127.0.0.1:8088:8088 \
-  -v copaw-data:/app/working \
-  -v copaw-secrets:/app/working.secret \
-  agentscope/copaw:latest
+  -v qwenpaw-data:/app/working \
+  -v qwenpaw-secrets:/app/working.secret \
+  -v qwenpaw-backups:/app/working.backups \
+  agentscope/qwenpaw:latest
 ```
 
-> **Tip**: To skip auto-registration, remove `COPAW_AUTH_USERNAME` and `COPAW_AUTH_PASSWORD` and register via browser on first visit.
+> **Tip**: To skip auto-registration, remove `QWENPAW_AUTH_USERNAME` and `QWENPAW_AUTH_PASSWORD` and register via browser on first visit.
 
 #### docker-compose.yml
 
 ```yaml
 services:
-  copaw:
-    image: agentscope/copaw:latest
+  qwenpaw:
+    image: agentscope/qwenpaw:latest
     ports:
       - "127.0.0.1:8088:8088"
     environment:
-      - COPAW_AUTH_ENABLED=true
-      - COPAW_AUTH_USERNAME=admin
-      - COPAW_AUTH_PASSWORD=mypassword
+      - QWENPAW_AUTH_ENABLED=true
+      - QWENPAW_AUTH_USERNAME=admin
+      - QWENPAW_AUTH_PASSWORD=mypassword
     volumes:
-      - copaw-data:/app/working
-      - copaw-secrets:/app/working.secret
+      - qwenpaw-data:/app/working
+      - qwenpaw-secrets:/app/working.secret
+      - qwenpaw-backups:/app/working.backups
 ```
 
 #### Environment file (.env)
@@ -658,24 +735,24 @@ services:
 You can also use a `.env` file:
 
 ```
-COPAW_AUTH_ENABLED=true
-COPAW_AUTH_USERNAME=admin
-COPAW_AUTH_PASSWORD=mypassword
+QWENPAW_AUTH_ENABLED=true
+QWENPAW_AUTH_USERNAME=admin
+QWENPAW_AUTH_PASSWORD=mypassword
 ```
 
-Then pass it to Docker with `--env-file .env`, or source it in your shell before running `copaw app`.
+Then pass it to Docker with `--env-file .env`, or source it in your shell before running `qwenpaw app`.
 
 ### Disable authentication
 
-Remove or unset the environment variable and restart CoPaw:
+Remove or unset the environment variable and restart QwenPaw:
 
 ```bash
 # Linux / macOS
-unset COPAW_AUTH_ENABLED
-copaw app
+unset QWENPAW_AUTH_ENABLED
+qwenpaw app
 
 # Docker — simply remove the -e flag. The example below includes volumes for persistence.
-docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working -v copaw-secrets:/app/working.secret agentscope/copaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 ```
 
 ### Password reset
@@ -683,7 +760,7 @@ docker run -p 127.0.0.1:8088:8088 -v copaw-data:/app/working -v copaw-secrets:/a
 If you forget your password, use the CLI to reset:
 
 ```bash
-copaw auth reset-password
+qwenpaw auth reset-password
 ```
 
 This command will:
@@ -695,7 +772,7 @@ This command will:
 **Docker deployments**:
 
 ```bash
-docker exec -it <container_name> copaw auth reset-password
+docker exec -it <container_name> qwenpaw auth reset-password
 ```
 
 **Alternative approach**:
@@ -704,9 +781,9 @@ To completely reset the authentication system:
 
 ```bash
 # Delete the auth file
-rm ~/.copaw.secret/auth.json  # or $WORKING_DIR.secret/auth.json
-# Restart CoPaw; re-register on next visit
-copaw app
+rm ~/.qwenpaw.secret/auth.json  # or $WORKING_DIR.secret/auth.json
+# Restart QwenPaw; re-register on next visit
+qwenpaw app
 ```
 
 ### Logout

@@ -1,16 +1,16 @@
 # Console
 
-The **Console** is CoPaw's built-in web interface. After running `copaw app`,
+The **Console** is QwenPaw's built-in web interface. After running `qwenpaw app`,
 open `http://127.0.0.1:8088/` in your browser to enter the Console.
 
 **In the Console, you can:**
 
-- Chat with CoPaw in real time
+- Chat with QwenPaw in real time
 - Enable/disable/configure messaging channels
 - View and manage all chat sessions
 - Manage scheduled jobs and heartbeat
-- Edit CoPaw's persona and behavior files
-- Enable/import skills to extend CoPaw's capabilities
+- Edit QwenPaw's persona and behavior files
+- Enable/import skills to extend QwenPaw's capabilities
 - Toggle tools on or off
 - Manage MCP clients
 - Modify runtime configuration
@@ -34,9 +34,9 @@ walk through each feature in order.
 
 > Sidebar: **Chat → Chat**
 
-This is where you talk to CoPaw. It is the default page when the Console opens.
+This is where you talk to QwenPaw. It is the default page when the Console opens.
 
-![Chat](https://img.alicdn.com/imgextra/i1/O1CN01TZtpUC23sUlflQYuT_!!6000000007311-2-tps-3822-2064.png)
+![Chat](https://img.alicdn.com/imgextra/i2/O1CN01EP1ra01iOAcBvF0TC_!!6000000004402-2-tps-3822-2070.png)
 
 **Choose a model:**
 Use the control at the **top-right** of the chat page to pick the model for the
@@ -44,7 +44,7 @@ current agent.
 
 **Send a message:**
 Type in the input box at the bottom, then press **Enter** or click the send
-button (↑). CoPaw replies in real time.
+button (↑). QwenPaw replies in real time.
 
 **Voice input:**
 The composer supports **voice input** (browser and OS microphone permission
@@ -69,6 +69,36 @@ row to delete it.
 
 ---
 
+## Inbox
+
+> Sidebar: **Inbox → Inbox**
+
+Inbox is the centralized place to handle approvals and review execution results
+from cron jobs and heartbeat runs.
+
+**Unread indicator:**
+The Inbox entry shows an unread dot. Open Inbox regularly to avoid missing
+important notifications.
+
+**Approvals:**
+Approval-required actions triggered from any agent chat in the Console channel
+appear in the Inbox approval page.
+
+![todo](https://img.alicdn.com/imgextra/i3/O1CN01sVXgDs1uRd07B7u7a_!!6000000006034-2-tps-2926-1860.png)
+
+You can handle approvals from all agents in one place (approve / reject /
+cancel task). Approval cards include a countdown; if no action is taken before
+timeout, the request is **rejected by default**. Actions taken here stay in sync
+with approval popups in chat.
+
+**Push messages:**
+For cron jobs and heartbeat, users can choose whether execution results should
+be pushed to Inbox. Click a message to view execution details, including traces.
+
+![todo](https://img.alicdn.com/imgextra/i2/O1CN01iC21Ec20wD8uObwi2_!!6000000006913-2-tps-2886-1878.png)
+
+---
+
 ## Channels
 
 > Sidebar: **Control → Channels**
@@ -76,7 +106,7 @@ row to delete it.
 Manage messaging channels (Console, DingTalk, Feishu, Discord, QQ, WeChat,
 iMessage, etc.): enable/disable and credentials.
 
-![Channels](https://img.alicdn.com/imgextra/i3/O1CN01JPJzU51hn4X0X2C7y_!!6000000004321-2-tps-3822-2064.png)
+![Channels](https://img.alicdn.com/imgextra/i4/O1CN01cqMycR1SeczjROAHu_!!6000000002272-2-tps-3822-2070.png)
 
 **Enable a channel:**
 
@@ -98,7 +128,7 @@ Open the same panel, turn off **Enable**, then click **Save**.
 
 View, filter, and clean up chat sessions across all channels.
 
-![Sessions](https://img.alicdn.com/imgextra/i2/O1CN01UFzPcp1ybTydoQ87f_!!6000000006597-2-tps-3822-2064.png)
+![Sessions](https://img.alicdn.com/imgextra/i4/O1CN01PY9Yhe25Pl9TuEBfz_!!6000000007519-2-tps-3822-2070.png)
 
 **Find sessions:**
 Use the search box to filter by user, or use the dropdown to filter by
@@ -119,15 +149,15 @@ Select rows → click **Batch Delete** → confirm.
 
 > Sidebar: **Control → Cron Jobs**
 
-Create and manage scheduled jobs that CoPaw runs automatically by time.
+Create and manage scheduled jobs that QwenPaw runs automatically by time.
 
-![Cron Jobs](https://img.alicdn.com/imgextra/i2/O1CN018jn4Wm1C9SBJy58mo_!!6000000000038-2-tps-3822-2064.png)
+![Cron Jobs](https://img.alicdn.com/imgextra/i3/O1CN01WsQvrb1dKthp8QMvd_!!6000000003718-2-tps-3822-2070.png)
 
 **Create a new job:**
 
-> If the cron job fails to be created, please refer to the **Troubleshooting Scheduled (Cron) Tasks** section in the [FAQ](https://copaw.agentscope.io/docs/faq) to identify the cause.
+> If the cron job fails to be created, please refer to the **Troubleshooting Scheduled (Cron) Tasks** section in the [FAQ](https://qwenpaw.agentscope.io/docs/faq) to identify the cause.
 
-The **simplest way to create a cron job is to chat directly with CoPaw** and let it handle the creation for you. For example, if you want to receive a reminder to drink water on DingTalk, simply message CoPaw on DingTalk: "Help me create a cron job to remind me to drink water every 5 minutes." Once created, you can view the new task on the Cron Jobs page in the console.
+The **simplest way to create a cron job is to chat directly with QwenPaw** and let it handle the creation for you. For example, if you want to receive a reminder to drink water on DingTalk, simply message QwenPaw on DingTalk: "Help me create a cron job to remind me to drink water every 5 minutes." Once created, you can view the new task on the Cron Jobs page in the console.
 
 Alternatively, you can create tasks directly via the Console interface:
 
@@ -139,7 +169,7 @@ Alternatively, you can create tasks directly via the Console interface:
      expression** (five fields, e.g. `0 9 * * *` = 9:00 daily). Timezone defaults
      to the current agent's user timezone; you can change it here.
    - **Task type & content** — **Text**: send fixed text from **Message content**.
-     **Agent**: fill **Request content**; on each run CoPaw receives the text
+     **Agent**: fill **Request content**; on each run QwenPaw receives the text
      from `content.text` as the request.
    - **Delivery** — Target channel (Console, DingTalk, etc.), target user,
      target session id, and mode (**Stream** = token stream, **Final** = one
@@ -165,10 +195,10 @@ Click **Execute Now** → confirm.
 
 > Sidebar: **Control → Heartbeat**
 
-![Heartbeat](https://img.alicdn.com/imgextra/i1/O1CN01jo9tcj1UfCirFJSqV_!!6000000002544-2-tps-3822-2064.png)
+![Heartbeat](https://img.alicdn.com/imgextra/i1/O1CN017fS5GW1jIxj8FuQXl_!!6000000004526-2-tps-3822-2070.png)
 
 Configure periodic "self-check" for the **currently selected agent**: on each
-tick, send the contents of `HEARTBEAT.md` as a user message to CoPaw, and
+tick, send the contents of `HEARTBEAT.md` as a user message to QwenPaw, and
 optionally deliver the reply to a chosen target.
 
 **Common options:**
@@ -188,16 +218,16 @@ Click **Save** to apply. See [Heartbeat](./heartbeat) for wording and semantics.
 
 > Sidebar: **Workspace → Files**
 
-Edit files that define CoPaw's persona and behavior — `SOUL.md`, `AGENTS.md`,
+Edit files that define QwenPaw's persona and behavior — `SOUL.md`, `AGENTS.md`,
 `HEARTBEAT.md`, etc. — directly in the browser.
 
-> **Multi-agent:** Starting from **v0.1.0**, CoPaw supports **multi-agent** mode.
-> You can run multiple independent agents in one CoPaw instance, each with its own
+> **Multi-agent:** Starting from **v0.1.0**, QwenPaw supports **multi-agent** mode.
+> You can run multiple independent agents in one QwenPaw instance, each with its own
 > workspace, configuration, memory, and history. Agents can collaborate. Use the
 > switcher at the top of the Console to change the active agent. See
 > [Multi-Agent](./multi-agent).
 
-![Files](https://img.alicdn.com/imgextra/i1/O1CN01SKTXEf1VJVZo91mry_!!6000000002632-2-tps-3822-2064.png)
+![Files](https://img.alicdn.com/imgextra/i4/O1CN01iEhSJL1cHP4JHPdio_!!6000000003575-2-tps-3822-2070.png)
 
 **Edit files:**
 
@@ -222,10 +252,10 @@ replaced. Useful for migration and backup restore.
 
 > Sidebar: **Workspace → Skills**
 
-Manage skills that extend CoPaw (e.g. read PDF, create Word, fetch news). More
+Manage skills that extend QwenPaw (e.g. read PDF, create Word, fetch news). More
 detail: [Skills](./skills).
 
-![Skills](https://img.alicdn.com/imgextra/i3/O1CN01UFlTdO1eHWOt2Lnk9_!!6000000003846-2-tps-3822-2064.png)
+![Skills](https://img.alicdn.com/imgextra/i4/O1CN017tsPAI27USRjSJLBA_!!6000000007800-2-tps-3822-2070.png)
 
 **Enable a skill:**
 Click **Enable** at the bottom of a skill card. It takes effect immediately.
@@ -270,8 +300,9 @@ Click a skill card → turn off content preview → edit → **Save**.
 2. Enter the skill URL, then import.
 3. Wait for completion; the skill appears enabled in the list.
 
-**Delete a custom skill:**
-Disable the skill first, then click **Delete** on the card and confirm.
+**Delete a skill:**
+Click **Delete** on the card and confirm. If the skill is enabled, it is
+automatically disabled first.
 
 ---
 
@@ -279,7 +310,7 @@ Disable the skill first, then click **Delete** on the card and confirm.
 
 > Sidebar: **Workspace → Tools**
 
-![Tools](https://img.alicdn.com/imgextra/i4/O1CN01HGD8O31CrQChNfY8h_!!6000000000134-2-tps-3822-2064.png)
+![Tools](https://img.alicdn.com/imgextra/i4/O1CN01ZKnoAE1pqkdpFVQuM_!!6000000005412-2-tps-3822-2070.png)
 
 Toggle **built-in tools** by name (read files, run commands, browser, etc.). When
 off, this agent cannot call that tool in chat.
@@ -295,7 +326,7 @@ to the **current agent** immediately.
 
 Enable/disable/delete **MCP** clients here, or create new ones.
 
-![MCP](https://img.alicdn.com/imgextra/i1/O1CN01Bb3x6520CrvJ1MwlW_!!6000000006814-2-tps-3822-2064.png)
+![MCP](https://img.alicdn.com/imgextra/i3/O1CN01dEioYs1JMv8ln8RE7_!!6000000001015-2-tps-3822-2070.png)
 
 **Create a client**
 Click **Create Client** in the top-right, fill in required fields, then **Create**.
@@ -307,7 +338,7 @@ The new client appears in the list.
 
 > Sidebar: **Workspace → Configuration**
 
-![Runtime Config](https://img.alicdn.com/imgextra/i2/O1CN01EiWgAm22FHEmKkb1x_!!6000000007090-2-tps-3822-2064.png)
+![Runtime Config](https://img.alicdn.com/imgextra/i1/O1CN011l1EnX1YbmDvsXolR_!!6000000003078-2-tps-3822-2070.png)
 
 This page configures **runtime parameters for the current agent**, grouped in
 cards. Click **Save** at the bottom (**Reset** reloads from the server).
@@ -318,7 +349,7 @@ cards. Click **Save** at the bottom (**Reset** reloads from the server).
 - **Context management** — Max input length, etc.
 - **Context compaction** — Compaction threshold ratio, etc.
 - **Tool result compaction** — Recent tool result window, etc.
-- **Memory summarization** — Max forced-search results, etc.
+- **Memory summarization** — Max auto-search results, etc.
 - **Embedding model** — Whether to enable embedding cache, etc.
 
 For mechanics, see [Context](./context) and [Config & working directory](./config).
@@ -329,7 +360,7 @@ For mechanics, see [Context](./context) and [Config & working directory](./confi
 
 > Sidebar: **Settings → Agent management**
 
-![Agent management](https://img.alicdn.com/imgextra/i1/O1CN01ZcpD3S1fMqccCXZXo_!!6000000003993-2-tps-3822-2064.png)
+![Agent management](https://img.alicdn.com/imgextra/i1/O1CN01MlsPdv1yioJgESwhm_!!6000000006613-2-tps-3822-2070.png)
 
 Create, edit, enable/disable, or delete agents. The **Description** field is used
 when multiple agents collaborate — write a clear role.
@@ -346,7 +377,7 @@ path, etc.). See [Multi-Agent](./multi-agent).
 
 Configure LLM providers and select the default model for agents. See [Models](./models) for details on provider and model configuration.
 
-![Models](https://img.alicdn.com/imgextra/i2/O1CN01GumhVY26BqjjKriDe_!!6000000007624-2-tps-3822-2064.png)
+![Models](https://img.alicdn.com/imgextra/i4/O1CN01rePoH21MabpCZyWr1_!!6000000001451-2-tps-3822-2070.png)
 
 On this page you can:
 
@@ -363,7 +394,7 @@ On this page you can:
 
 Global skill management. More detail: [Skills](./skills).
 
-![Skill pool](https://img.alicdn.com/imgextra/i1/O1CN01bQx5Un219x12tqVGu_!!6000000006943-2-tps-3822-2064.png)
+![Skill pool](https://img.alicdn.com/imgextra/i1/O1CN01uDUQGJ1dfVWqWGD8G_!!6000000003763-2-tps-3822-2070.png)
 
 On this page you can:
 
@@ -381,10 +412,10 @@ On this page you can:
 
 > Sidebar: **Settings → Environments**
 
-Manage runtime environment variables needed by CoPaw tools and skills (e.g.
+Manage runtime environment variables needed by QwenPaw tools and skills (e.g.
 `TAVILY_API_KEY`).
 
-![Environment Variables](https://img.alicdn.com/imgextra/i2/O1CN01g5syLq1qYGGVLKdSM_!!6000000005507-2-tps-3822-2064.png)
+![Environment Variables](https://img.alicdn.com/imgextra/i2/O1CN01TpB5YF22AhHMVydps_!!6000000007080-2-tps-3822-2070.png)
 
 **Add a variable:**
 
@@ -402,7 +433,7 @@ Click the **🗑** icon on a row → confirm.
 **Batch delete:**
 Select rows → click **Delete** in the toolbar → confirm.
 
-> **Note:** Variable validity is your responsibility. CoPaw only stores and loads
+> **Note:** Variable validity is your responsibility. QwenPaw only stores and loads
 > values.
 >
 > See [Config — Environment variables](./config#environment-variables).
@@ -413,7 +444,7 @@ Select rows → click **Delete** in the toolbar → confirm.
 
 > Sidebar: **Settings → Security**
 
-![Security](https://img.alicdn.com/imgextra/i3/O1CN019BfbyA1uvOjhmI6rJ_!!6000000006099-2-tps-3822-2064.png)
+![Security](https://img.alicdn.com/imgextra/i4/O1CN01oxB5ns1GH1BksHGtZ_!!6000000000596-2-tps-3822-2070.png)
 
 Tabs for **tool guard**, **file guard**, **skill scanner**, etc.: control
 dangerous-tool parameter blocking, sensitive path access, and skill package
@@ -427,7 +458,7 @@ Click **Save** after changing toggles or rules. Details: [Security](./security).
 
 > Sidebar: **Settings → Token Usage**
 
-![Token Usage](https://img.alicdn.com/imgextra/i3/O1CN01Hk0WIj1UPdFwl1Hex_!!6000000002510-2-tps-3822-2064.png)
+![Token Usage](https://img.alicdn.com/imgextra/i2/O1CN01KYNxoL1Xgz6z9nsVy_!!6000000002954-2-tps-3822-2070.png)
 
 View LLM token usage over a range, by date and model.
 
@@ -441,8 +472,8 @@ View LLM token usage over a range, by date and model.
 Ask e.g. "How many tokens have I used?" or "Show token usage." The agent calls
 `get_token_usage` and returns stats.
 
-> Data is stored in `~/.copaw/token_usage.json`. Override the filename with
-> `COPAW_TOKEN_USAGE_FILE`. See [Config — Environment variables](./config#environment-variables).
+> Data is stored in `~/.qwenpaw/token_usage.json`. Override the filename with
+> `QWENPAW_TOKEN_USAGE_FILE`. See [Config — Environment variables](./config#environment-variables).
 
 ---
 
@@ -450,7 +481,7 @@ Ask e.g. "How many tokens have I used?" or "Show token usage." The agent calls
 
 > Sidebar: **Settings → Voice transcription**
 
-![Voice transcription](https://img.alicdn.com/imgextra/i1/O1CN01xTyvpr21VTdBJNMZ9_!!6000000006990-2-tps-3822-2064.png)
+![Voice transcription](https://img.alicdn.com/imgextra/i3/O1CN01ZdRtQq1TgkRa5kJhr_!!6000000002412-2-tps-3822-2070.png)
 
 Configure how **voice/audio from channels** is handled before it reaches the
 model (same settings apply to voice input in chat and channel voice messages).
@@ -461,7 +492,7 @@ model (same settings apply to voice input in chat and channel voice messages).
 - **Transcription backend** — **Off**; **Whisper API** (OpenAI-compatible
   `audio/transcriptions`; configure keys under [Models](#models) and select the
   provider here); **Local Whisper** (requires `ffmpeg` and
-  `pip install 'copaw[whisper]'`).
+  `pip install 'qwenpaw[whisper]'`).
 
 **Save** applies to newly received audio. Follow on-page help for details.
 

@@ -1,433 +1,103 @@
-import { useEffect, useRef, useState } from "react";
-import { Button, Form, Tooltip } from "@agentscope-ai/design";
-import {
-  DownloadOutlined,
-  ImportOutlined,
-  PlusOutlined,
-  SwapOutlined,
-  UploadOutlined,
-} from "@ant-design/icons";
-import type { PoolSkillSpec, SkillSpec } from "../../../api/types";
+import { useTranslation } from "react-i18next";
+import { PlusOutlined } from "@ant-design/icons";
+import { Button } from "@agentscope-ai/design";
 import {
   SkillCard,
   SkillDrawer,
-  type SkillDrawerFormValues,
-  useConflictRenameModal,
-  ImportHubModal,
   PoolTransferModal,
+  ImportHubModal,
+  HeaderActions,
+  SkillsToolbar,
+  SkillListItem,
 } from "./components";
-import { useSkills } from "./useSkills";
-import { useTranslation } from "react-i18next";
-import { useAgentStore } from "../../../stores/agentStore";
-import { useAppMessage } from "../../../hooks/useAppMessage";
-import api from "../../../api";
-import { invalidateSkillCache } from "../../../api/modules/skill";
-import { parseErrorDetail } from "../../../utils/error";
 import { PageHeader } from "@/components/PageHeader";
+import { useSkillsPage } from "./useSkillsPage";
 import styles from "./index.module.less";
 
 function SkillsPage() {
   const { t } = useTranslation();
-  const { message } = useAppMessage();
-  const { selectedAgent } = useAgentStore();
   const {
     skills,
+    visibleSkills,
+    hasMore,
+    sentinelRef,
+    poolSkills,
+    allTags,
+    sortedSkills,
+    conflictRenameModal,
     loading,
     uploading,
     importing,
-    createSkill,
-    uploadSkill,
-    importFromHub,
-    cancelImport,
+    drawerOpen,
+    importModalOpen,
+    setImportModalOpen,
+    editingSkill,
+    form,
+    fileInputRef,
+    poolModal,
+    setPoolModal,
+    selectedSkills,
+    batchModeEnabled,
+    viewMode,
+    setViewMode,
+    filterOpen,
+    setFilterOpen,
+    searchQuery,
+    setSearchQuery,
+    searchTags,
+    setSearchTags,
+    handleCreate,
+    handleEdit,
+    handleToggleEnabled,
+    handleDelete,
+    handleDrawerClose,
+    handleSubmit,
+    handleUploadToPool,
+    handleDownloadFromPool,
+    handleBatchEnable,
+    handleBatchDisable,
+    handleBatchDelete,
+    handleUploadClick,
+    handleFileChange,
+    handleConfirmImport,
+    closeImportModal,
+    closePoolModal,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+    toggleBatchMode,
     toggleEnabled,
-    deleteSkill,
     refreshSkills,
-  } = useSkills();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [editingSkill, setEditingSkill] = useState<SkillSpec | null>(null);
-  const [hoverKey, setHoverKey] = useState<string | null>(null);
-  const [form] = Form.useForm<SkillDrawerFormValues>();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [poolSkills, setPoolSkills] = useState<PoolSkillSpec[]>([]);
-  const [poolModal, setPoolModal] = useState<"upload" | "download" | null>(
-    null,
-  );
-  const { showConflictRenameModal, conflictRenameModal } =
-    useConflictRenameModal();
-
-  const MAX_UPLOAD_SIZE_MB = 100;
-
-  // Only fetch pool skills when pool modal is opened, not on page load
-  useEffect(() => {
-    if (poolModal === "upload" || poolModal === "download") {
-      void api
-        .listSkillPoolSkills()
-        .then(setPoolSkills)
-        .catch(() => undefined);
-    }
-  }, [poolModal]);
-
-  const closePoolModal = () => {
-    setPoolModal(null);
-  };
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    e.target.value = "";
-
-    if (!file.name.toLowerCase().endsWith(".zip")) {
-      message.warning(t("skills.zipOnly"));
-      return;
-    }
-
-    const sizeMB = file.size / (1024 * 1024);
-    if (sizeMB > MAX_UPLOAD_SIZE_MB) {
-      message.warning(
-        t("skills.fileSizeExceeded", {
-          limit: MAX_UPLOAD_SIZE_MB,
-          size: sizeMB.toFixed(1),
-        }),
-      );
-      return;
-    }
-
-    let renameMap: Record<string, string> | undefined;
-    while (true) {
-      const result = await uploadSkill(file, undefined, renameMap);
-      if (result.success || !result.conflict) break;
-
-      const conflicts = Array.isArray(result.conflict.conflicts)
-        ? result.conflict.conflicts
-        : [];
-      if (conflicts.length === 0) break;
-
-      const newRenames = await showConflictRenameModal(
-        conflicts.map((c: { skill_name: string; suggested_name: string }) => ({
-          key: c.skill_name,
-          label: c.skill_name,
-          suggested_name: c.suggested_name,
-        })),
-      );
-      if (!newRenames) break;
-      renameMap = { ...renameMap, ...newRenames };
-    }
-  };
-
-  const handleCreate = () => {
-    setEditingSkill(null);
-    form.resetFields();
-    form.setFieldsValue({
-      enabled: false,
-      channels: ["all"],
-    });
-    setDrawerOpen(true);
-  };
-
-  const closeImportModal = () => {
-    if (importing) return;
-    setImportModalOpen(false);
-  };
-
-  const handleConfirmImport = async (url: string, targetName?: string) => {
-    const result = await importFromHub(url, targetName);
-    if (result.success) {
-      closeImportModal();
-    } else if (result.conflict) {
-      const detail = result.conflict;
-      const suggested =
-        detail?.suggested_name || detail?.conflicts?.[0]?.suggested_name;
-      if (suggested) {
-        const skillName =
-          detail?.skill_name || detail?.conflicts?.[0]?.skill_name || "";
-        const renameMap = await showConflictRenameModal([
-          {
-            key: skillName,
-            label: skillName,
-            suggested_name: String(suggested),
-          },
-        ]);
-        if (renameMap) {
-          const newName = Object.values(renameMap)[0];
-          if (newName) {
-            await handleConfirmImport(url, newName);
-          }
-        }
-      }
-    }
-  };
-
-  const handleEdit = (skill: SkillSpec) => {
-    setEditingSkill(skill);
-    form.setFieldsValue({
-      name: skill.name,
-      description: skill.description,
-      content: skill.content,
-      enabled: skill.enabled,
-      channels: skill.channels,
-    });
-    setDrawerOpen(true);
-  };
-
-  const handleToggleEnabled = async (skill: SkillSpec, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await toggleEnabled(skill);
-    await refreshSkills();
-  };
-
-  const handleDelete = async (skill: SkillSpec, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    await deleteSkill(skill);
-    // No need to refresh again as deleteSkill already calls fetchSkills
-  };
-
-  const handleDrawerClose = () => {
-    setDrawerOpen(false);
-    setEditingSkill(null);
-  };
-
-  const handleSubmit = async (values: SkillSpec) => {
-    if (editingSkill) {
-      const sourceName = editingSkill.name;
-      const targetName = values.name;
-      try {
-        const result = await api.saveSkill({
-          name: targetName,
-          content: values.content,
-          source_name: sourceName !== targetName ? sourceName : undefined,
-          config: values.config,
-        });
-        await api.updateSkillChannels(result.name, values.channels || ["all"]);
-        if (result.mode === "noop") {
-          setDrawerOpen(false);
-          await refreshSkills();
-          return;
-        }
-        message.success(
-          result.mode === "rename"
-            ? `${t("common.save")}: ${result.name}`
-            : t("common.save"),
-        );
-        setDrawerOpen(false);
-        invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
-        await refreshSkills();
-      } catch (error) {
-        const detail = parseErrorDetail(error);
-        if (detail?.suggested_name) {
-          const renameMap = await showConflictRenameModal([
-            {
-              key: targetName,
-              label: targetName,
-              suggested_name: detail.suggested_name,
-            },
-          ]);
-          if (renameMap) {
-            const newName = Object.values(renameMap)[0];
-            if (newName) {
-              await handleSubmit({ ...values, name: newName });
-            }
-          }
-        } else {
-          message.error(
-            error instanceof Error ? error.message : t("common.save"),
-          );
-        }
-      }
-    } else {
-      const submitName = values.name;
-      const result = await createSkill(
-        submitName,
-        values.content,
-        values.config,
-        true,
-      );
-      if (result.success) {
-        await api.updateSkillChannels(submitName, values.channels || ["all"]);
-        setDrawerOpen(false);
-        invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after updating channels
-        await refreshSkills();
-        return;
-      }
-      if (result.conflict?.suggested_name) {
-        const renameMap = await showConflictRenameModal([
-          {
-            key: submitName,
-            label: submitName,
-            suggested_name: result.conflict!.suggested_name,
-          },
-        ]);
-        if (renameMap) {
-          const newName = Object.values(renameMap)[0];
-          if (newName) {
-            await handleSubmit({ ...values, name: newName });
-          }
-        }
-      }
-    }
-  };
-
-  const handleUploadToPool = async (workspaceSkillNames: string[]) => {
-    if (workspaceSkillNames.length === 0) return;
-    try {
-      for (const skillName of workspaceSkillNames) {
-        let newName: string | undefined;
-        while (true) {
-          try {
-            await api.uploadWorkspaceSkillToPool({
-              workspace_id: selectedAgent,
-              skill_name: skillName,
-              new_name: newName,
-            });
-            break;
-          } catch (error) {
-            const detail = parseErrorDetail(error);
-            if (!detail?.suggested_name) throw error;
-            const renameMap = await showConflictRenameModal([
-              {
-                key: skillName,
-                label: skillName,
-                suggested_name: detail.suggested_name,
-              },
-            ]);
-            if (!renameMap) return;
-            newName = Object.values(renameMap)[0] || undefined;
-          }
-        }
-      }
-      message.success(t("skills.uploadedToPool"));
-      closePoolModal();
-      invalidateSkillCache({ agentId: selectedAgent, pool: true }); // Clear current agent and pool cache
-      await refreshSkills();
-      setPoolSkills(await api.listSkillPoolSkills());
-    } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : t("skills.uploadFailed"),
-      );
-    }
-  };
-
-  const handleDownloadFromPool = async (poolSkillNames: string[]) => {
-    if (poolSkillNames.length === 0) return;
-    try {
-      for (const skillName of poolSkillNames) {
-        let targetName: string | undefined;
-        while (true) {
-          try {
-            await api.downloadSkillPoolSkill({
-              skill_name: skillName,
-              targets: [
-                {
-                  workspace_id: selectedAgent,
-                  target_name: targetName,
-                },
-              ],
-            });
-            break;
-          } catch (error) {
-            const detail = parseErrorDetail(error);
-            const conflict = detail?.conflicts?.[0];
-            if (!conflict?.suggested_name) throw error;
-            const renameMap = await showConflictRenameModal([
-              {
-                key: skillName,
-                label: skillName,
-                suggested_name: conflict.suggested_name,
-              },
-            ]);
-            if (!renameMap) return;
-            targetName = Object.values(renameMap)[0] || undefined;
-          }
-        }
-      }
-      message.success(t("skills.downloadedToWorkspace"));
-      closePoolModal();
-      invalidateSkillCache({ agentId: selectedAgent, pool: true }); // Clear current agent and pool cache
-      await refreshSkills();
-    } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("common.download") + " failed",
-      );
-    }
-  };
+    hardRefresh,
+    cancelImport,
+  } = useSkillsPage();
 
   return (
     <div className={styles.skillsPage}>
       <PageHeader
         items={[{ title: t("nav.agent") }, { title: t("skills.title") }]}
         extra={
-          <div className={styles.headerRight}>
-            <input
-              type="file"
-              accept=".zip"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
-            <div className={styles.headerActionsLeft}>
-              <Tooltip title={t("skills.downloadFromPoolHint")}>
-                <Button
-                  type="default"
-                  className={styles.primaryTransferButton}
-                  onClick={() => setPoolModal("download")}
-                  icon={<DownloadOutlined />}
-                >
-                  {t("skills.downloadFromPool")}
-                </Button>
-              </Tooltip>
-              <Tooltip title={t("skills.uploadToPoolHint")}>
-                <Button
-                  type="default"
-                  className={styles.primaryTransferButton}
-                  onClick={() => setPoolModal("upload")}
-                  icon={<SwapOutlined />}
-                >
-                  {t("skills.uploadToPool")}
-                </Button>
-              </Tooltip>
-            </div>
-            <div className={styles.headerActionsRight}>
-              <Tooltip title={t("skills.uploadZipHint")}>
-                <Button
-                  type="default"
-                  className={styles.creationActionButton}
-                  onClick={handleUploadClick}
-                  icon={<UploadOutlined />}
-                  loading={uploading}
-                  disabled={uploading}
-                >
-                  {t("skills.uploadZip")}
-                </Button>
-              </Tooltip>
-              <Tooltip title={t("skills.importHubHint")}>
-                <Button
-                  type="default"
-                  className={styles.creationActionButton}
-                  onClick={() => setImportModalOpen(true)}
-                  icon={<ImportOutlined />}
-                >
-                  {t("skills.importHub")}
-                </Button>
-              </Tooltip>
-              <Tooltip title={t("skills.createSkillHint")}>
-                <Button
-                  type="primary"
-                  className={styles.primaryActionButton}
-                  onClick={handleCreate}
-                  icon={<PlusOutlined />}
-                >
-                  {t("skills.createSkill")}
-                </Button>
-              </Tooltip>
-            </div>
-          </div>
+          <HeaderActions
+            batchModeEnabled={batchModeEnabled}
+            selectedSkills={selectedSkills}
+            loading={loading}
+            uploading={uploading}
+            fileInputRef={fileInputRef}
+            onSelectAll={selectAll}
+            onClearSelection={clearSelection}
+            onUploadToPool={handleUploadToPool}
+            onBatchEnable={handleBatchEnable}
+            onBatchDisable={handleBatchDisable}
+            onBatchDelete={handleBatchDelete}
+            onToggleBatchMode={toggleBatchMode}
+            onHardRefresh={hardRefresh}
+            onOpenDownloadPool={() => setPoolModal("download")}
+            onOpenUploadPool={() => setPoolModal("upload")}
+            onUploadClick={handleUploadClick}
+            onImportHub={() => setImportModalOpen(true)}
+            onCreate={handleCreate}
+            onFileChange={handleFileChange}
+          />
         }
       />
 
@@ -437,8 +107,22 @@ function SkillsPage() {
         onCancel={closeImportModal}
         onConfirm={handleConfirmImport}
         cancelImport={cancelImport}
-        hint="External hub import is separate from the local Skill Pool."
+        hint={t("skillPool.externalHubHint")}
       />
+
+      {!loading && skills.length > 0 && (
+        <SkillsToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchTags={searchTags}
+          onTagsChange={setSearchTags}
+          allTags={allTags}
+          filterOpen={filterOpen}
+          onFilterOpenChange={setFilterOpen}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
+      )}
 
       {loading ? (
         <div className={styles.loading}>
@@ -455,14 +139,6 @@ function SkillsPage() {
           <p className={styles.emptyStateText}>{t("skills.emptyStateText")}</p>
           <div className={styles.emptyStateActions}>
             <Button
-              type="default"
-              className={styles.primaryTransferButton}
-              onClick={() => setPoolModal("download")}
-              icon={<DownloadOutlined />}
-            >
-              {t("skills.emptyStateDownload")}
-            </Button>
-            <Button
               type="primary"
               className={styles.primaryActionButton}
               onClick={handleCreate}
@@ -472,27 +148,50 @@ function SkillsPage() {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : sortedSkills.length === 0 ? (
+        <div className={styles.noSearchResults}>
+          <span className={styles.noSearchResultsIcon}>🔍</span>
+          <span className={styles.noSearchResultsText}>
+            {t("skills.noSearchResults")}
+          </span>
+        </div>
+      ) : viewMode === "card" ? (
         <div className={styles.skillsGrid}>
-          {skills
-            .slice()
-            .sort((a, b) => {
-              if (a.enabled && !b.enabled) return -1;
-              if (!a.enabled && b.enabled) return 1;
-              return a.name.localeCompare(b.name);
-            })
-            .map((skill) => (
-              <SkillCard
-                key={skill.name}
-                skill={skill}
-                isHover={hoverKey === skill.name}
-                onClick={() => handleEdit(skill)}
-                onMouseEnter={() => setHoverKey(skill.name)}
-                onMouseLeave={() => setHoverKey(null)}
-                onToggleEnabled={(e) => handleToggleEnabled(skill, e)}
-                onDelete={(e) => handleDelete(skill, e)}
-              />
-            ))}
+          {visibleSkills.map((skill) => (
+            <SkillCard
+              key={skill.name}
+              skill={skill}
+              selected={
+                batchModeEnabled ? selectedSkills.has(skill.name) : undefined
+              }
+              onSelect={() => toggleSelect(skill.name)}
+              onClick={() => handleEdit(skill)}
+              onMouseEnter={() => {}}
+              onMouseLeave={() => {}}
+              onToggleEnabled={(e) => handleToggleEnabled(skill, e)}
+              onDelete={(e) => handleDelete(skill, e)}
+            />
+          ))}
+          {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
+        </div>
+      ) : (
+        <div className={styles.skillsList}>
+          {visibleSkills.map((skill) => (
+            <SkillListItem
+              key={skill.name}
+              skill={skill}
+              batchModeEnabled={batchModeEnabled}
+              isSelected={selectedSkills.has(skill.name)}
+              onSelect={() => toggleSelect(skill.name)}
+              onClick={() => handleEdit(skill)}
+              onToggleEnabled={async () => {
+                await toggleEnabled(skill);
+                await refreshSkills();
+              }}
+              onDelete={() => handleDelete(skill)}
+            />
+          ))}
+          {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
         </div>
       )}
 
@@ -511,6 +210,7 @@ function SkillsPage() {
         open={drawerOpen}
         editingSkill={editingSkill}
         form={form}
+        availableTags={allTags}
         onClose={handleDrawerClose}
         onSubmit={handleSubmit}
       />

@@ -5,12 +5,16 @@ import type {
   LocalDownloadSource,
   LocalModelInfo,
   LocalServerStatus,
+  LocalServerUpdateStatus,
   StartLocalServerRequest,
 } from "../types";
 
 export const localModelApi = {
   getLocalServerStatus: () =>
     request<LocalServerStatus>("/local-models/server"),
+
+  getLocalServerUpdateStatus: () =>
+    request<LocalServerUpdateStatus>("/local-models/server/update"),
 
   startLlamacppDownload: () =>
     request<LocalActionResponse>("/local-models/server/download", {
@@ -41,6 +45,14 @@ export const localModelApi = {
     request<LocalActionResponse>("/local-models/models/download", {
       method: "DELETE",
     }),
+
+  deleteLocalModel: (modelId: string) =>
+    request<LocalActionResponse>(
+      `/local-models/models/${encodeURIComponent(modelId)}`,
+      {
+        method: "DELETE",
+      },
+    ),
 
   startLocalServer: (body: StartLocalServerRequest) =>
     request<{ port: number; model_name: string }>("/local-models/server", {

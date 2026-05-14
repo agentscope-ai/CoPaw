@@ -120,12 +120,12 @@ export default function Header() {
       ? "ru"
       : "en";
     const faqLang = lang === "zh" ? "zh" : "en";
-    const url = `https://copaw.agentscope.io/docs/faq.${faqLang}.md`;
+    const url = `https://qwenpaw.agentscope.io/docs/faq.${faqLang}.md`;
     fetch(url, { cache: "no-cache" })
       .then((res) => (res.ok ? res.text() : Promise.reject()))
       .then((text) => {
-        const zhPattern = /###\s*CoPaw如何更新[\s\S]*?(?=\n###|$)/;
-        const enPattern = /###\s*How to update CoPaw[\s\S]*?(?=\n###|$)/;
+        const zhPattern = /###\s*QwenPaw如何更新[\s\S]*?(?=\n###|$)/;
+        const enPattern = /###\s*How to update QwenPaw[\s\S]*?(?=\n###|$)/;
         const match = text.match(faqLang === "zh" ? zhPattern : enPattern);
         setUpdateMarkdown(
           match && lang !== "ru"
@@ -154,12 +154,8 @@ export default function Header() {
       <AntHeader className={styles.header}>
         <div className={styles.logoWrapper}>
           <img
-            src={
-              isDark
-                ? `${import.meta.env.BASE_URL}dark-logo.png`
-                : `${import.meta.env.BASE_URL}logo.png`
-            }
-            alt="CoPaw"
+            src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
+            alt="QwenPaw"
             className={styles.logoImg}
           />
           <div className={styles.logoDivider} />
@@ -259,6 +255,21 @@ export default function Header() {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                a({ href, children, ...props }: any) {
+                  return (
+                    <a
+                      {...props}
+                      href={href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (href) handleNavClick(href);
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {children}
+                    </a>
+                  );
+                },
                 code({ node, className, children, ...props }: any) {
                   const match = /language-(\w+)/.exec(className || "");
                   const isBlock =

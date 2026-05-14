@@ -1,25 +1,19 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, Button } from "@agentscope-ai/design";
 import type { ProviderInfo } from "../../../../../api/types";
 import { ModelManageModal } from "../modals/ModelManageModal";
 import { useTranslation } from "react-i18next";
 import styles from "../../index.module.less";
-import { providerIcon } from "../providerIcon";
+import { ProviderIcon } from "../ProviderIconComponent";
 
 interface LocalProviderCardProps {
   provider: ProviderInfo;
   onSaved: () => void;
-  isHover: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
 }
 
-export function LocalProviderCard({
+export const LocalProviderCard = React.memo(function LocalProviderCard({
   provider,
   onSaved,
-  isHover,
-  onMouseEnter,
-  onMouseLeave,
 }: LocalProviderCardProps) {
   const { t } = useTranslation();
   const [modelManageOpen, setModelManageOpen] = useState(false);
@@ -31,21 +25,10 @@ export function LocalProviderCard({
     : t("models.unavailable");
 
   return (
-    <Card
-      hoverable
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={`${styles.providerCard} ${
-        statusReady ? styles.enabledCard : ""
-      } ${isHover ? styles.hover : styles.normal}`}
-    >
+    <Card hoverable className={styles.providerCard}>
       {/* Card Header with Icon and Status */}
       <div className={styles.cardHeaderRow}>
-        <img
-          src={providerIcon(provider.id)}
-          alt={provider.name}
-          className={styles.providerIcon}
-        />
+        <ProviderIcon providerId={provider.id} size={32} />
         <div className={styles.cardStatusHeader}>
           <span
             className={styles.statusDot}
@@ -88,22 +71,19 @@ export function LocalProviderCard({
         </div>
       </div>
 
-      {/* Actions - only show on hover */}
-      {isHover && (
-        <div className={styles.cardActions}>
-          <Button
-            type="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              setModelManageOpen(true);
-            }}
-            className={styles.actionBtn}
-          >
-            {t("models.models")}
-          </Button>
-        </div>
-      )}
+      <div className={styles.cardActions}>
+        <Button
+          type="default"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            setModelManageOpen(true);
+          }}
+          className={styles.actionBtn}
+        >
+          {t("models.models")}
+        </Button>
+      </div>
 
       <ModelManageModal
         provider={provider}
@@ -113,4 +93,4 @@ export function LocalProviderCard({
       />
     </Card>
   );
-}
+});

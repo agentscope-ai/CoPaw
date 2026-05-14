@@ -1,5 +1,5 @@
 # Deploy website to GitHub Pages (see scripts/website_build.sh).
-# Custom domain: copaw.agentscope.io (CNAME).
+# Custom domain: qwenpaw.agentscope.io (CNAME).
 name: Deploy website to GitHub Pages
 
 on:
@@ -17,6 +17,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only deploy on full releases, skip pre-releases
+    if: github.event.release.prerelease == false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +46,7 @@ jobs:
         run: pnpm run build
 
       # Copy installation scripts so they are served from the website
-      # (e.g. copaw.agentscope.io/install.sh) instead of raw.githubusercontent.com,
+      # (e.g. qwenpaw.agentscope.io/install.sh) instead of raw.githubusercontent.com,
       # which may be blocked by some firewalls.
       - name: Copy installation scripts to dist
         run: cp scripts/install.sh scripts/install.ps1 scripts/install.bat website/dist/
@@ -58,4 +60,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: website/dist
-          cname: copaw.agentscope.io
+          cname: qwenpaw.agentscope.io

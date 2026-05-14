@@ -3,6 +3,10 @@ import type {
   MCPClientInfo,
   MCPClientCreateRequest,
   MCPClientUpdateRequest,
+  MCPToolInfo,
+  MCPOAuthStartRequest,
+  MCPOAuthStartResponse,
+  MCPOAuthStatusResponse,
 } from "../types";
 
 export const mcpApi = {
@@ -50,4 +54,40 @@ export const mcpApi = {
     request<{ message: string }>(`/mcp/${encodeURIComponent(clientKey)}`, {
       method: "DELETE",
     }),
+
+  /**
+   * List tools from a connected MCP server
+   */
+  listMCPTools: (clientKey: string) =>
+    request<MCPToolInfo[]>(`/mcp/${encodeURIComponent(clientKey)}/tools`),
+
+  /**
+   * Start an OAuth 2.1 PKCE flow for a remote MCP client.
+   * Returns the authorization URL to open in a popup.
+   */
+  startOAuth: (clientKey: string, body: MCPOAuthStartRequest) =>
+    request<MCPOAuthStartResponse>(
+      `/mcp/${encodeURIComponent(clientKey)}/oauth/start`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  /**
+   * Get current OAuth token status for an MCP client.
+   */
+  getOAuthStatus: (clientKey: string) =>
+    request<MCPOAuthStatusResponse>(
+      `/mcp/${encodeURIComponent(clientKey)}/oauth/status`,
+    ),
+
+  /**
+   * Revoke / clear OAuth tokens for an MCP client.
+   */
+  revokeOAuth: (clientKey: string) =>
+    request<{ message: string }>(
+      `/mcp/${encodeURIComponent(clientKey)}/oauth`,
+      { method: "DELETE" },
+    ),
 };

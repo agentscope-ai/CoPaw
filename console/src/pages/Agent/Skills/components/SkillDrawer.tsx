@@ -7,34 +7,31 @@ import type { FormInstance } from "antd";
 import type { SkillSpec } from "../../../../api/types";
 import { MarkdownCopy } from "../../../../components/MarkdownCopy/MarkdownCopy";
 import { api } from "../../../../api";
-import { getSkillSyncStatusLabel } from "./skillMetadata";
 
-/**
- * Parse frontmatter from content string.
- * Returns an object with parsed key-value pairs, or null if no valid frontmatter found.
- */
+/** Parse YAML frontmatter from a `---`-delimited content string. */
 export function parseFrontmatter(
   content: string,
 ): Record<string, string> | null {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith("---")) return null;
-
-  const endIndex = trimmed.indexOf("---", 3);
-  if (endIndex === -1) return null;
-
-  const frontmatterBlock = trimmed.slice(3, endIndex).trim();
-  if (!frontmatterBlock) return null;
-
-  const result: Record<string, string> = {};
-  for (const line of frontmatterBlock.split("\n")) {
-    const colonIndex = line.indexOf(":");
-    if (colonIndex > 0) {
-      const key = line.slice(0, colonIndex).trim();
-      const value = line.slice(colonIndex + 1).trim();
-      result[key] = value;
+  try {
+    const trimmed = content.trim();
+    if (!trimmed.startsWith("---")) return null;
+    const endIndex = trimmed.indexOf("---", 3);
+    if (endIndex === -1) return null;
+    const frontmatterBlock = trimmed.slice(3, endIndex).trim();
+    if (!frontmatterBlock) return null;
+    const result: Record<string, string> = {};
+    for (const line of frontmatterBlock.split("\n")) {
+      const colonIndex = line.indexOf(":");
+      if (colonIndex > 0) {
+        const key = line.slice(0, colonIndex).trim();
+        const value = line.slice(colonIndex + 1).trim();
+        result[key] = value;
+      }
     }
+    return result;
+  } catch {
+    return null;
   }
-  return result;
 }
 
 const CHANNEL_OPTIONS = [
@@ -51,14 +48,17 @@ const CHANNEL_OPTIONS = [
   { label: "mqtt", value: "mqtt" },
 ];
 
+export const MAX_TAGS = 8;
+export const MAX_TAG_LENGTH = 16;
+
 export interface SkillDrawerFormValues {
   name: string;
   description?: string;
   content: string;
   enabled?: boolean;
   channels?: string[];
+  tags?: string[];
   source?: string;
-  syncStatus?: string;
   config?: Record<string, unknown>;
 }
 
@@ -66,6 +66,7 @@ interface SkillDrawerProps {
   open: boolean;
   editingSkill: SkillSpec | null;
   form: FormInstance<SkillDrawerFormValues>;
+  availableTags?: string[];
   onClose: () => void;
   onSubmit: (values: SkillSpec) => void;
   onContentChange?: (content: string) => void;
@@ -75,6 +76,7 @@ export function SkillDrawer({
   open,
   editingSkill,
   form,
+  availableTags = [],
   onClose,
   onSubmit,
   onContentChange,
@@ -125,11 +127,8 @@ export function SkillDrawer({
         name: editingSkill.name,
         content: editingSkill.content,
         channels,
+        tags: editingSkill.tags || [],
         source: editingSkill.source,
-        syncStatus: getSkillSyncStatusLabel(
-          editingSkill.sync_to_pool?.status,
-          t,
-        ),
       });
       setConfigError("");
       let active = true;
@@ -328,6 +327,35 @@ export function SkillDrawer({
         </Form.Item>
 
         <Form.Item
+          name="tags"
+          label={t("skillPool.tags")}
+          rules={[
+            {
+              validator: (_, value: string[] | undefined) => {
+                const bad = (value || []).find(
+                  (v) => v.length > MAX_TAG_LENGTH,
+                );
+                if (bad)
+                  return Promise.reject(
+                    t("skillPool.tagTooLong", { max: MAX_TAG_LENGTH }),
+                  );
+                return Promise.resolve();
+              },
+            },
+          ]}
+        >
+          <Select
+            mode="tags"
+            options={availableTags.map((tag) => ({
+              label: tag,
+              value: tag,
+            }))}
+            placeholder={t("skillPool.tagsPlaceholder")}
+            maxCount={MAX_TAGS}
+          />
+        </Form.Item>
+
+        <Form.Item
           label={t("skills.config")}
           validateStatus={configError ? "error" : undefined}
           help={configError || undefined}
@@ -346,10 +374,6 @@ export function SkillDrawer({
         {editingSkill && (
           <>
             <Form.Item name="source" label={t("skills.type")}>
-              <Input disabled />
-            </Form.Item>
-
-            <Form.Item name="syncStatus" label={t("skills.poolSync")}>
               <Input disabled />
             </Form.Item>
           </>

@@ -1,16 +1,27 @@
-import { Form, InputNumber, Select, Card, Alert } from "@agentscope-ai/design";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Card,
+  Alert,
+  Switch,
+} from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
-import { TIMEZONE_OPTIONS } from "../../../../constants/timezone";
+import { useTimezoneOptions } from "../../../../hooks/useTimezoneOptions";
+import { planApi } from "../../../../api/modules/plan";
+import { useAgentStore } from "../../../../stores/agentStore";
+import {
+  CONTEXT_MANAGER_BACKEND_OPTIONS,
+  MEMORY_MANAGER_BACKEND_OPTIONS,
+} from "../../../../constants/backendMappings";
 import styles from "../index.module.less";
 
 const LANGUAGE_OPTIONS = [
   { value: "zh", label: "中文" },
   { value: "en", label: "English" },
   { value: "ru", label: "Русский" },
-];
-
-const MEMORY_MANAGER_BACKEND_OPTIONS = [
-  { value: "remelight", label: "ReMeLight" },
 ];
 
 interface ReactAgentCardProps {
@@ -31,6 +42,40 @@ export function ReactAgentCard({
   onTimezoneChange,
 }: ReactAgentCardProps) {
   const { t } = useTranslation();
+  const { selectedAgent } = useAgentStore();
+  const [planEnabled, setPlanEnabled] = useState(false);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    planApi
+      .getPlanConfig()
+      .then((cfg) => {
+        if (!cancelled) setPlanEnabled(cfg.enabled);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent]);
+
+  const handlePlanToggle = useCallback(
+    async (checked: boolean) => {
+      setPlanLoading(true);
+      const prev = planEnabled;
+      setPlanEnabled(checked);
+      try {
+        const res = await planApi.updatePlanConfig({ enabled: checked });
+        setPlanEnabled(res.enabled);
+      } catch {
+        setPlanEnabled(prev);
+      } finally {
+        setPlanLoading(false);
+      }
+    },
+    [planEnabled],
+  );
+
   return (
     <Card className={styles.formCard} title={t("agentConfig.reactAgentTitle")}>
       <div className={styles.reactAgentRow}>
@@ -63,7 +108,7 @@ export function ReactAgentCard({
                 .toLowerCase()
                 .includes(input.toLowerCase())
             }
-            options={TIMEZONE_OPTIONS}
+            options={useTimezoneOptions()}
             onChange={onTimezoneChange}
             loading={savingTimezone}
             disabled={savingTimezone}
@@ -87,22 +132,93 @@ export function ReactAgentCard({
             placeholder={t("agentConfig.maxItersPlaceholder")}
           />
         </Form.Item>
+
+        <Form.Item
+          label={t("agentConfig.shellCommandTimeout")}
+          name="shell_command_timeout"
+          rules={[
+            {
+              required: true,
+              message: t("agentConfig.shellCommandTimeoutRequired"),
+            },
+            {
+              type: "number",
+              min: 1,
+              message: t("agentConfig.shellCommandTimeoutMin"),
+            },
+          ]}
+          tooltip={t("agentConfig.shellCommandTimeoutTooltip")}
+          className={styles.reactAgentField}
+        >
+          <InputNumber
+            style={{ width: "100%" }}
+            min={1}
+            step={10}
+            placeholder={t("agentConfig.shellCommandTimeoutPlaceholder")}
+          />
+        </Form.Item>
+
+        <Form.Item
+          label={t("agentConfig.shellCommandExecutable")}
+          name="shell_command_executable"
+          tooltip={t("agentConfig.shellCommandExecutableTooltip")}
+          className={styles.reactAgentField}
+        >
+          <Input
+            style={{ width: "100%" }}
+            placeholder={t("agentConfig.shellCommandExecutablePlaceholder")}
+            allowClear
+          />
+        </Form.Item>
       </div>
 
       <Form.Item
-        label={t("agentConfig.memoryManagerBackend")}
-        name="memory_manager_backend"
-        tooltip={t("agentConfig.memoryManagerBackendTooltip")}
+        label={t("agentConfig.autoContinueOnTextOnly")}
+        name="auto_continue_on_text_only"
+        valuePropName="checked"
+        tooltip={t("agentConfig.autoContinueOnTextOnlyTooltip")}
       >
-        <Select
-          options={MEMORY_MANAGER_BACKEND_OPTIONS}
-          style={{ width: "100%" }}
-        />
+        <Switch />
       </Form.Item>
+
+      <Form.Item
+        label={t("agentConfig.autoGenerateSessionTitle")}
+        name={["auto_title_config", "enabled"]}
+        valuePropName="checked"
+        tooltip={t("agentConfig.autoGenerateSessionTitleTooltip")}
+      >
+        <Switch />
+      </Form.Item>
+
+      <div className={styles.reactAgentRow}>
+        <Form.Item
+          label={t("agentConfig.contextManagerBackend")}
+          name="context_manager_backend"
+          tooltip={t("agentConfig.contextManagerBackendTooltip")}
+          className={styles.reactAgentField}
+        >
+          <Select
+            options={CONTEXT_MANAGER_BACKEND_OPTIONS}
+            style={{ width: "100%" }}
+          />
+        </Form.Item>
+
+        <Form.Item
+          label={t("agentConfig.memoryManagerBackend")}
+          name="memory_manager_backend"
+          tooltip={t("agentConfig.memoryManagerBackendTooltip")}
+          className={styles.reactAgentField}
+        >
+          <Select
+            options={MEMORY_MANAGER_BACKEND_OPTIONS}
+            style={{ width: "100%" }}
+          />
+        </Form.Item>
+      </div>
       <Alert
         type="warning"
         showIcon
-        message={t("agentConfig.memoryManagerBackendRestartWarning")}
+        message={t("agentConfig.backendRestartWarning")}
         style={{ marginBottom: 16 }}
       />
 
@@ -127,6 +243,20 @@ export function ReactAgentCard({
           min={1000}
           step={1024}
           placeholder={t("agentConfig.maxContextLengthPlaceholder")}
+        />
+      </Form.Item>
+
+      <Form.Item
+        label={t("agentConfig.planMode", "Plan Mode")}
+        tooltip={t(
+          "agentConfig.planModeTooltip",
+          "Enable plan mode to use /plan <description> for structured task planning",
+        )}
+      >
+        <Switch
+          checked={planEnabled}
+          loading={planLoading}
+          onChange={handlePlanToggle}
         />
       </Form.Item>
     </Card>

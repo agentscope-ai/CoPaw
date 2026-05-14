@@ -6,7 +6,7 @@ This page covers:
 - **Environment variables** — How to customize paths and behavior
 - **Configuration files** — Complete field description for `config.json` and `agent.json`
 
-From **v0.1.0**, CoPaw supports **multi-agent**. Configuration is split into two layers:
+From **v0.1.0**, QwenPaw supports **multi-agent**. Configuration is split into two layers:
 
 1. **Global config** (`config.json`) — Model providers, agent list, global settings
 2. **Agent config** (`agent.json`) — Independent config for each agent (channels, heartbeat, tools, etc.)
@@ -15,10 +15,10 @@ From **v0.1.0**, CoPaw supports **multi-agent**. Configuration is split into two
 
 ## Directory Structure
 
-The default working directory is `~/.copaw`. After running `copaw init`, the complete structure looks like:
+The default working directory is `~/.qwenpaw`. After running `qwenpaw init`, the complete structure looks like:
 
 ```
-$COPAW_WORKING_DIR/                      # Default ~/.copaw
+$QWENPAW_WORKING_DIR/                      # Default ~/.qwenpaw
 ├── config.json                          # Global config
 ├── workspaces/
 │   ├── default/                         # Default agent workspace
@@ -41,23 +41,23 @@ $COPAW_WORKING_DIR/                      # Default ~/.copaw
     ├── skill.json                       # Pool metadata
     └── ...
 
-$COPAW_SECRET_DIR/                       # Default ~/.copaw.secret
+$QWENPAW_SECRET_DIR/                       # Default ~/.qwenpaw.secret
 ├── providers.json                       # Model provider config and API keys
 └── envs.json                            # Environment variables
 ```
 
-> **Path explanation:** `$COPAW_WORKING_DIR` and `$COPAW_SECRET_DIR` are environment variables, with default values of `~/.copaw` and `~/.copaw.secret` respectively. They can be customized via environment variables, see "Environment Variables" section below.
+> **Path explanation:** `$QWENPAW_WORKING_DIR` and `$QWENPAW_SECRET_DIR` are environment variables, with default values of `~/.qwenpaw` and `~/.qwenpaw.secret` respectively. They can be customized via environment variables, see "Environment Variables" section below.
 
 ### Directory Explanation
 
-**Global Directory (`~/.copaw/`)**
+**Global Directory (`~/.qwenpaw/`)**
 
 | File / Directory | Purpose                                               |
 | ---------------- | ----------------------------------------------------- |
 | `config.json`    | Global config (model providers, env vars, agent list) |
 | `workspaces/`    | All agent workspace directories                       |
 
-**Agent Workspace (`~/.copaw/workspaces/{agent_id}/`)**
+**Agent Workspace (`~/.qwenpaw/workspaces/{agent_id}/`)**
 
 | File / Directory   | Purpose                                                      |
 | ------------------ | ------------------------------------------------------------ |
@@ -75,7 +75,7 @@ $COPAW_SECRET_DIR/                       # Default ~/.copaw.secret
 | `memory/`          | Daily memory files (see [Memory](./memory))                  |
 | `browser/`         | Browser user data (cookies, cache, localStorage, etc.)       |
 
-> **Persona files:** Agent behavior and personality are defined by persona files. Running `copaw init` automatically creates template files based on your chosen language (`zh` / `en` / `ru`). For detailed explanation and management, see [Agent Persona](./persona).
+> **Persona files:** Agent behavior and personality are defined by persona files. Running `qwenpaw init` automatically creates template files based on your chosen language (`zh` / `en` / `ru`). For detailed explanation and management, see [Agent Persona](./persona).
 
 > **Multi-Agent:** See the [Multi-Agent](./multi-agent) documentation for details.
 
@@ -87,35 +87,35 @@ You can customize paths and behavior via environment variables:
 
 **Path-related:**
 
-| Variable                 | Default            | Description                                                                                                 |
-| ------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `COPAW_WORKING_DIR`      | `~/.copaw`         | Working directory root path                                                                                 |
-| `COPAW_SECRET_DIR`       | `~/.copaw.secret`  | Sensitive data directory (stores `providers.json` and `envs.json`). Docker default is `/app/working.secret` |
-| `COPAW_CONFIG_FILE`      | `config.json`      | Config file name (relative to `COPAW_WORKING_DIR`)                                                          |
-| `COPAW_HEARTBEAT_FILE`   | `HEARTBEAT.md`     | Heartbeat file name (relative to agent workspace)                                                           |
-| `COPAW_JOBS_FILE`        | `jobs.json`        | Cron jobs file name (relative to agent workspace)                                                           |
-| `COPAW_CHATS_FILE`       | `chats.json`       | Conversation history file name (relative to agent workspace)                                                |
-| `COPAW_TOKEN_USAGE_FILE` | `token_usage.json` | Token usage record file name (relative to agent workspace)                                                  |
+| Variable                   | Default             | Description                                                                                                 |
+| -------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `QWENPAW_WORKING_DIR`      | `~/.qwenpaw`        | Working directory root path                                                                                 |
+| `QWENPAW_SECRET_DIR`       | `~/.qwenpaw.secret` | Sensitive data directory (stores `providers.json` and `envs.json`). Docker default is `/app/working.secret` |
+| `QWENPAW_CONFIG_FILE`      | `config.json`       | Config file name (relative to `QWENPAW_WORKING_DIR`)                                                        |
+| `QWENPAW_HEARTBEAT_FILE`   | `HEARTBEAT.md`      | Heartbeat file name (relative to agent workspace)                                                           |
+| `QWENPAW_JOBS_FILE`        | `jobs.json`         | Cron jobs file name (relative to agent workspace)                                                           |
+| `QWENPAW_CHATS_FILE`       | `chats.json`        | Conversation history file name (relative to agent workspace)                                                |
+| `QWENPAW_TOKEN_USAGE_FILE` | `token_usage.json`  | Token usage record file name (relative to agent workspace)                                                  |
 
 **Other configuration:**
 
-| Variable                           | Default         | Description                                                                 |
-| ---------------------------------- | --------------- | --------------------------------------------------------------------------- |
-| `COPAW_LOG_LEVEL`                  | `info`          | Log level (`debug` / `info` / `warning` / `error` / `critical`)             |
-| `COPAW_MEMORY_COMPACT_THRESHOLD`   | `100000`        | Character threshold to trigger memory compaction                            |
-| `COPAW_MEMORY_COMPACT_KEEP_RECENT` | `3`             | Number of recent messages to keep after compaction                          |
-| `COPAW_MEMORY_COMPACT_RATIO`       | `0.7`           | Threshold ratio for triggering compaction (relative to context window size) |
-| `COPAW_CONSOLE_STATIC_DIR`         | _(auto-detect)_ | Console frontend static files path                                          |
+| Variable                             | Default         | Description                                                                 |
+| ------------------------------------ | --------------- | --------------------------------------------------------------------------- |
+| `QWENPAW_LOG_LEVEL`                  | `info`          | Log level (`debug` / `info` / `warning` / `error` / `critical`)             |
+| `QWENPAW_MEMORY_COMPACT_THRESHOLD`   | `100000`        | Character threshold to trigger memory compaction                            |
+| `QWENPAW_MEMORY_COMPACT_KEEP_RECENT` | `3`             | Number of recent messages to keep after compaction                          |
+| `QWENPAW_MEMORY_COMPACT_RATIO`       | `0.7`           | Threshold ratio for triggering compaction (relative to context window size) |
+| `QWENPAW_CONSOLE_STATIC_DIR`         | _(auto-detect)_ | Console frontend static files path                                          |
 
 **Security & Authentication:**
 
-| Variable                   | Default | Description                                        |
-| -------------------------- | ------- | -------------------------------------------------- |
-| `COPAW_AUTH_ENABLED`       | `false` | Whether to enable Web console login authentication |
-| `COPAW_AUTH_USERNAME`      | -       | Admin username for auto-registration (optional)    |
-| `COPAW_AUTH_PASSWORD`      | -       | Admin password for auto-registration (optional)    |
-| `COPAW_TOOL_GUARD_ENABLED` | `true`  | Whether to enable tool guard                       |
-| `COPAW_SKILL_SCAN_MODE`    | `warn`  | Skill scanning mode (`block` / `warn` / `off`)     |
+| Variable                     | Default | Description                                        |
+| ---------------------------- | ------- | -------------------------------------------------- |
+| `QWENPAW_AUTH_ENABLED`       | `false` | Whether to enable Web console login authentication |
+| `QWENPAW_AUTH_USERNAME`      | -       | Admin username for auto-registration (optional)    |
+| `QWENPAW_AUTH_PASSWORD`      | -       | Admin password for auto-registration (optional)    |
+| `QWENPAW_TOOL_GUARD_ENABLED` | `true`  | Whether to enable tool guard                       |
+| `QWENPAW_SKILL_SCAN_MODE`    | `warn`  | Skill scanning mode (`block` / `warn` / `off`)     |
 
 **Memory & Retrieval:**
 
@@ -127,12 +127,12 @@ You can customize paths and behavior via environment variables:
 Example — use a different working dir for this shell:
 
 ```bash
-export COPAW_WORKING_DIR=/home/me/my_copaw
-copaw app
+export QWENPAW_WORKING_DIR=/home/me/my_qwenpaw
+qwenpaw app
 ```
 
 Config, HEARTBEAT, jobs, memory, etc. will be read/written under
-`/home/me/my_copaw`.
+`/home/me/my_qwenpaw`.
 
 ---
 
@@ -140,8 +140,8 @@ Config, HEARTBEAT, jobs, memory, etc. will be read/written under
 
 Starting from **v0.1.0**, configuration is split into two layers:
 
-1. **Global config** - `~/.copaw/config.json` (providers, environment variables, agent list)
-2. **Agent config** - `~/.copaw/workspaces/{agent_id}/agent.json` (per-agent settings)
+1. **Global config** - `~/.qwenpaw/config.json` (providers, environment variables, agent list)
+2. **Agent config** - `~/.qwenpaw/workspaces/{agent_id}/agent.json` (per-agent settings)
 
 ### Global config.json
 
@@ -180,32 +180,32 @@ Stores globally shared configuration:
 | --------------------- | -------------- | ------------------- | ----------------------------------------------------------------- |
 | `agents.active_agent` | string         | `"default"`         | Currently active agent ID                                         |
 | `agents.profiles`     | object         | `{}`                | Agent profile references (key is agent_id)                        |
-| `last_api.host`       | string \| null | `null`              | Host address from last `copaw app` start                          |
-| `last_api.port`       | int \| null    | `null`              | Port from last `copaw app` start                                  |
+| `last_api.host`       | string \| null | `null`              | Host address from last `qwenpaw app` start                        |
+| `last_api.port`       | int \| null    | `null`              | Port from last `qwenpaw app` start                                |
 | `show_tool_details`   | bool           | `true`              | Whether to show tool call/return details in channel messages      |
 | `user_timezone`       | string         | _(system timezone)_ | IANA timezone name (e.g., `"Asia/Shanghai"`)                      |
 | `last_dispatch`       | object \| null | `null`              | Last message dispatch target (used for heartbeat `target="last"`) |
 
 **`agents.profiles[agent_id]` reference fields:**
 
-| Field           | Type   | Required | Description                                                                 |
-| --------------- | ------ | -------- | --------------------------------------------------------------------------- |
-| `id`            | string | Yes      | Agent unique identifier                                                     |
-| `name`          | string | Yes      | Agent display name                                                          |
-| `description`   | string | No       | Agent description (used for multi-agent collaboration)                      |
-| `enabled`       | bool   | Yes      | Whether to enable this agent                                                |
-| `workspace_dir` | string | No       | Workspace path (optional, defaults to `$COPAW_WORKING_DIR/workspaces/{id}`) |
+| Field           | Type   | Required | Description                                                                   |
+| --------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `id`            | string | Yes      | Agent unique identifier                                                       |
+| `name`          | string | Yes      | Agent display name                                                            |
+| `description`   | string | No       | Agent description (used for multi-agent collaboration)                        |
+| `enabled`       | bool   | Yes      | Whether to enable this agent                                                  |
+| `workspace_dir` | string | No       | Workspace path (optional, defaults to `$QWENPAW_WORKING_DIR/workspaces/{id}`) |
 
 > **Backward compatibility:** The global config.json still supports `channels`, `mcp`, `tools`, `security` and other fields for backward compatibility with older versions. In multi-agent mode, these configurations should be set in each agent's `agent.json`.
 >
 > **Configuration priority:** The agent's `agent.json` takes precedence over the global `config.json`. When the same field is configured in both places, the system uses the value from `agent.json`. For multi-agent mode, it's recommended to put all configurations in each agent's `agent.json`.
 
-> **Model provider configuration** is stored in `$COPAW_SECRET_DIR/providers.json` (default `~/.copaw.secret/providers.json`).
-> **Environment variables** are stored in `$COPAW_SECRET_DIR/envs.json` (default `~/.copaw.secret/envs.json`).
+> **Model provider configuration** is stored in `$QWENPAW_SECRET_DIR/providers.json` (default `~/.qwenpaw.secret/providers.json`).
+> **Environment variables** are stored in `$QWENPAW_SECRET_DIR/envs.json` (default `~/.qwenpaw.secret/envs.json`).
 
 ### Agent config (agent.json)
 
-Each agent has an independent `agent.json` in its workspace directory (`~/.copaw/workspaces/{agent_id}/`) that stores all of its configuration (channels, tools, heartbeat, MCP, security, etc.). This allows different agents to have completely different configurations without interfering with each other.
+Each agent has an independent `agent.json` in its workspace directory (`~/.qwenpaw/workspaces/{agent_id}/`) that stores all of its configuration (channels, tools, heartbeat, MCP, security, etc.). This allows different agents to have completely different configurations without interfering with each other.
 
 ```json
 {
@@ -261,14 +261,24 @@ Each agent has an independent `agent.json` in its workspace directory (`~/.copaw
   },
   "security": {
     "tool_guard": {
-      "enabled": true
+      "enabled": true,
+      "shell_evasion_checks": {
+        "command_substitution": false,
+        "obfuscated_flags": false,
+        "backslash_escaped_whitespace": false,
+        "backslash_escaped_operators": false,
+        "newlines": false,
+        "comment_quote_desync": false,
+        "quoted_newline": false
+      }
     },
     "file_guard": {
       "enabled": true
     },
     "skill_scanner": {
       "mode": "warn"
-    }
+    },
+    "allow_no_auth_hosts": ["127.0.0.1", "::1"]
   },
   "last_dispatch": null
 }
@@ -296,7 +306,7 @@ Each channel has common fields (like `enabled`, `bot_prefix`, access control pol
 - **mattermost** — Mattermost
 - **matrix** — Matrix
 - **wecom** — WeCom (WeChat Work)
-- **weixin** — WeChat Personal (iLink)
+- **wechat** — WeChat Personal (iLink)
 - **xiaoyi** — Huawei XiaoYi
 - **mqtt** — MQTT
 - **voice** — Voice
@@ -349,9 +359,12 @@ Controls agent runtime behavior, retry strategies, context management, and memor
 
 **Basic Runtime:**
 
-| Field       | Type | Default | Description                                                                 |
-| ----------- | ---- | ------- | --------------------------------------------------------------------------- |
-| `max_iters` | int  | `100`   | Maximum number of reasoning-acting iterations for ReAct agent (must be ≥ 1) |
+| Field                        | Type  | Default | Description                                                                                                                                                                                                                      |
+| ---------------------------- | ----- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `max_iters`                  | int   | `100`   | Maximum number of reasoning-acting iterations for ReAct agent (must be ≥ 1)                                                                                                                                                      |
+| `shell_command_timeout`      | float | `60.0`  | Default timeout in seconds for `execute_shell_command`. The LLM may still override this per-call via the timeout parameter                                                                                                       |
+| `shell_command_executable`   | str   | `""`    | Path to the shell used by `execute_shell_command` on Unix/macOS (e.g. `/bin/bash`, `/bin/zsh`). On Windows, supports `powershell.exe` / `pwsh.exe`. When empty, falls back to `$SHELL`, then `/bin/sh` (or `cmd.exe` on Windows) |
+| `auto_continue_on_text_only` | bool  | `false` | When enabled, the agent automatically retries up to two extra reasoning passes if the model responds with text but no tools                                                                                                      |
 
 **LLM Retry & Rate Limiting:**
 
@@ -369,53 +382,63 @@ Controls agent runtime behavior, retry strategies, context management, and memor
 
 **Context Management:**
 
-| Field                | Type   | Default         | Description                                                             |
-| -------------------- | ------ | --------------- | ----------------------------------------------------------------------- |
-| `max_input_length`   | int    | `131072` (128K) | Maximum input length (tokens) for model context window (must be ≥ 1000) |
-| `history_max_length` | int    | `10000`         | Maximum output length (characters) for `/history` command               |
-| `context_compact`    | object | _(see below)_   | Context compaction configuration object                                 |
+| Field                      | Type   | Default         | Description                                                             |
+| -------------------------- | ------ | --------------- | ----------------------------------------------------------------------- |
+| `max_input_length`         | int    | `131072` (128K) | Maximum input length (tokens) for model context window (must be ≥ 1000) |
+| `history_max_length`       | int    | `10000`         | Maximum output length (characters) for `/history` command               |
+| `context_manager_backend`  | string | `"light"`       | Context manager backend type                                            |
+| `memory_manager_backend`   | string | `"remelight"`   | Memory manager backend type                                             |
+| `light_context_config`     | object | _(see below)_   | Light context manager configuration                                     |
+| `reme_light_memory_config` | object | _(see below)_   | ReMeLight memory manager configuration                                  |
 
-**Context Compaction (`context_compact` object):**
+**Light Context Configuration (`light_context_config` object):**
 
-| Field                          | Type   | Default     | Description                                                               |
-| ------------------------------ | ------ | ----------- | ------------------------------------------------------------------------- |
-| `context_compact_enabled`      | bool   | `true`      | Whether to enable automatic context compaction                            |
-| `memory_compact_ratio`         | float  | `0.75`      | Threshold ratio (relative to `max_input_length`) that triggers compaction |
-| `memory_reserve_ratio`         | float  | `0.1`       | Ratio of recent context to preserve after compaction for continuity       |
-| `compact_with_thinking_block`  | bool   | `true`      | Whether to include thinking blocks during compaction                      |
-| `token_count_model`            | string | `"default"` | Model to use for token counting                                           |
-| `token_count_use_mirror`       | bool   | `false`     | Whether to use HuggingFace mirror for token counting                      |
-| `token_count_estimate_divisor` | float  | `4.0`       | Divisor for byte-based token estimation (byte_len / divisor)              |
+| Field                          | Type   | Default    | Description                                                  |
+| ------------------------------ | ------ | ---------- | ------------------------------------------------------------ |
+| `dialog_path`                  | string | `"dialog"` | Dialog persistence directory (relative to working dir)       |
+| `token_count_estimate_divisor` | float  | `4.0`      | Divisor for byte-based token estimation (byte_len / divisor) |
 
-**Tool Result Compaction (`tool_result_compact` object):**
+**Light Context Compaction (`light_context_config.context_compact_config` object):**
 
-| Field              | Type | Default | Description                                        |
-| ------------------ | ---- | ------- | -------------------------------------------------- |
-| `enabled`          | bool | `true`  | Whether to enable tool result compaction           |
-| `recent_n`         | int  | `2`     | Number of recent messages using `recent_max_bytes` |
-| `old_max_bytes`    | int  | `3000`  | Byte threshold for older tool results              |
-| `recent_max_bytes` | int  | `50000` | Byte threshold for recent tool results             |
-| `retention_days`   | int  | `5`     | Number of days to retain tool result files         |
+| Field                         | Type  | Default | Description                                                               |
+| ----------------------------- | ----- | ------- | ------------------------------------------------------------------------- |
+| `enabled`                     | bool  | `true`  | Whether to enable automatic context compaction                            |
+| `compact_threshold_ratio`     | float | `0.8`   | Threshold ratio (relative to `max_input_length`) that triggers compaction |
+| `reserve_threshold_ratio`     | float | `0.1`   | Ratio of recent context to preserve after compaction for continuity       |
+| `compact_with_thinking_block` | bool  | `true`  | Whether to include thinking blocks during compaction                      |
 
-**Memory Configuration:**
+**Light Tool Result Pruning (`light_context_config.tool_result_pruning_config` object):**
 
-| Field                    | Type   | Default       | Description                                                |
-| ------------------------ | ------ | ------------- | ---------------------------------------------------------- |
-| `memory_summary`         | object | _(see below)_ | Memory summarization and search configuration object       |
-| `embedding_config`       | object | _(see below)_ | Embedding model configuration for semantic retrieval       |
-| `memory_manager_backend` | string | `"remelight"` | Memory manager backend type (currently only `"remelight"`) |
+| Field                          | Type | Default | Description                                      |
+| ------------------------------ | ---- | ------- | ------------------------------------------------ |
+| `enabled`                      | bool | `true`  | Whether to enable tool result pruning            |
+| `pruning_recent_n`             | int  | `2`     | Number of recent messages using higher threshold |
+| `pruning_old_msg_max_bytes`    | int  | `3000`  | Byte threshold for older tool results            |
+| `pruning_recent_msg_max_bytes` | int  | `50000` | Byte threshold for recent tool results           |
+| `offload_retention_days`       | int  | `5`     | Number of days to retain tool result files       |
 
-**Memory Summary Configuration (`memory_summary` object):**
+**ReMeLight Memory Configuration (`reme_light_memory_config` object):**
 
-| Field                           | Type  | Default | Description                                                                              |
-| ------------------------------- | ----- | ------- | ---------------------------------------------------------------------------------------- |
-| `memory_summary_enabled`        | bool  | `true`  | Whether to enable memory summarization during compaction                                 |
-| `force_memory_search`           | bool  | `false` | Whether to force memory search on every conversation turn                                |
-| `force_max_results`             | int   | `1`     | Maximum results for forced memory search                                                 |
-| `force_min_score`               | float | `0.3`   | Minimum relevance score for forced memory search (0.0 - 1.0)                             |
-| `rebuild_memory_index_on_start` | bool  | `false` | Whether to rebuild memory search index on startup. false = only monitor new file changes |
+| Field                           | Type        | Default        | Description                                                            |
+| ------------------------------- | ----------- | -------------- | ---------------------------------------------------------------------- |
+| `summarize_when_compact`        | bool        | `true`         | Whether to enable memory summarization during compaction               |
+| `auto_memory_interval`          | int \| null | `null`         | Auto memory every N user queries. null disables periodic auto memory   |
+| `dream_cron`                    | string      | `"0 23 * * *"` | Cron expression for dream-based memory optimization (empty to disable) |
+| `rebuild_memory_index_on_start` | bool        | `false`        | Whether to rebuild memory search index on startup                      |
+| `recursive_file_watcher`        | bool        | `false`        | Whether to watch memory directory recursively                          |
+| `auto_memory_search_config`     | object      | _(see below)_  | Auto memory search configuration                                       |
+| `embedding_model_config`        | object      | _(see below)_  | Embedding model configuration                                          |
 
-**Embedding Configuration (`embedding_config` object):**
+**Auto Memory Search Configuration (`reme_light_memory_config.auto_memory_search_config` object):**
+
+| Field         | Type  | Default | Description                                                |
+| ------------- | ----- | ------- | ---------------------------------------------------------- |
+| `enabled`     | bool  | `false` | Whether to auto search memory on every conversation turn   |
+| `max_results` | int   | `1`     | Maximum results for auto memory search                     |
+| `min_score`   | float | `0.1`   | Minimum relevance score for auto memory search (0.0 - 1.0) |
+| `timeout`     | float | `10.0`  | Timeout in seconds for auto memory search                  |
+
+**Embedding Configuration (`reme_light_memory_config.embedding_model_config` object):**
 
 | Field              | Type   | Default    | Description                                             |
 | ------------------ | ------ | ---------- | ------------------------------------------------------- |
@@ -481,6 +504,24 @@ When `null`, uses the global default model. Can be configured in Console (Agent 
 
 ---
 
+#### `plan` — Plan mode configuration
+
+| Field     | Type | Default | Description                 |
+| --------- | ---- | ------- | --------------------------- |
+| `enabled` | bool | `false` | Whether to enable plan mode |
+
+When enabled, the agent supports `/plan` commands for structured task planning and execution. See [Plan Mode](./plan) for detailed documentation.
+
+---
+
+#### `approval_level` — Tool execution security level
+
+| Field            | Type   | Default  | Description                                                                                     |
+| ---------------- | ------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `approval_level` | string | `"AUTO"` | Tool execution security level: `STRICT`, `SMART`, `AUTO`, or `OFF`. See [Security](./security). |
+
+---
+
 #### `tools` — Tool configuration
 
 Controls the built-in tools available to the agent. Each tool can be individually enabled/disabled, configured whether to show to users, and whether to execute asynchronously.
@@ -498,6 +539,12 @@ Contains three protection modules:
 - **`tool_guard`** — Tool guard (runtime detection of dangerous commands and injection attacks)
 - **`file_guard`** — File guard (protects sensitive file access)
 - **`skill_scanner`** — Skill scanner (scans for malicious code before enabling skills)
+
+Top-level field:
+
+| Field                 | Type     | Default                | Description                                                                    |
+| --------------------- | -------- | ---------------------- | ------------------------------------------------------------------------------ |
+| `allow_no_auth_hosts` | string[] | `["127.0.0.1", "::1"]` | IP whitelist that bypasses web authentication. Localhost is allowed by default |
 
 > **Complete configuration:** Detailed field descriptions, security rules, custom rule configuration, etc. for each module are documented in [Security](./security).
 
@@ -521,25 +568,41 @@ Auto-updated; no manual configuration needed.
 
 ## Model Providers
 
-CoPaw needs an LLM provider to work. You can set it up in three ways:
+QwenPaw needs an LLM provider to work. You can set it up in three ways:
 
-- **`copaw init`** — interactive wizard, the easiest way
+- **`qwenpaw init`** — interactive wizard, the easiest way
 - **Console UI** — in Settings → Models page
 - **API** — `PUT /providers/{id}` and `PUT /providers/active_llm`
 
 **Built-in providers:**
 
-| Provider           | ID                  | Default Base URL                                    | API Key Prefix |
-| ------------------ | ------------------- | --------------------------------------------------- | -------------- |
-| ModelScope         | `modelscope`        | `https://api-inference.modelscope.cn/v1`            | `ms`           |
-| DashScope          | `dashscope`         | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `sk`           |
-| Aliyun Coding Plan | `aliyun-codingplan` | `https://coding.dashscope.aliyuncs.com/v1`          | `sk-sp`        |
-| OpenAI             | `openai`            | `https://api.openai.com/v1`                         | _(any)_        |
-| Azure OpenAI       | `azure-openai`      | _(you set it)_                                      | _(any)_        |
-| Anthropic          | `anthropic`         | `https://api.anthropic.com`                         | _(any)_        |
-| Ollama             | `ollama`            | `http://localhost:11434`                            | _(none)_       |
-| LM Studio          | `lmstudio`          | `http://localhost:1234/v1`                          | _(none)_       |
-| Custom             | `custom`            | _(you set it)_                                      | _(any)_        |
+| Provider                           | ID                       | Default Base URL                                    | API Key Prefix |
+| ---------------------------------- | ------------------------ | --------------------------------------------------- | -------------- |
+| QwenPaw Local                      | `qwenpaw-local`          | _(local)_                                           | _(none)_       |
+| Ollama                             | `ollama`                 | `http://localhost:11434`                            | _(none)_       |
+| LM Studio                          | `lmstudio`               | `http://localhost:1234/v1`                          | _(none)_       |
+| OpenRouter                         | `openrouter`             | `https://openrouter.ai/api/v1`                      | `sk-or-v1-`    |
+| ModelScope                         | `modelscope`             | `https://api-inference.modelscope.cn/v1`            | `ms`           |
+| DashScope                          | `dashscope`              | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `sk`           |
+| Aliyun Coding Plan (China)         | `aliyun-codingplan`      | `https://coding.dashscope.aliyuncs.com/v1`          | `sk-sp`        |
+| Aliyun Coding Plan (International) | `aliyun-codingplan-intl` | `https://coding-intl.dashscope.aliyuncs.com/v1`     | `sk-sp`        |
+| OpenAI                             | `openai`                 | `https://api.openai.com/v1`                         | _(any)_        |
+| Azure OpenAI                       | `azure-openai`           | _(you set it)_                                      | _(any)_        |
+| Anthropic                          | `anthropic`              | `https://api.anthropic.com`                         | _(any)_        |
+| Google Gemini                      | `gemini`                 | `https://generativelanguage.googleapis.com`         | _(any)_        |
+| DeepSeek                           | `deepseek`               | `https://api.deepseek.com`                          | `sk-`          |
+| Kimi (China)                       | `kimi-cn`                | `https://api.moonshot.cn/v1`                        | _(any)_        |
+| Kimi (International)               | `kimi-intl`              | `https://api.moonshot.ai/v1`                        | _(any)_        |
+| MiniMax (China)                    | `minimax-cn`             | `https://api.minimaxi.com/anthropic`                | _(any)_        |
+| MiniMax (International)            | `minimax`                | `https://api.minimax.io/anthropic`                  | _(any)_        |
+| Zhipu (BigModel)                   | `zhipu-cn`               | `https://open.bigmodel.cn/api/paas/v4`              | _(any)_        |
+| Zhipu Coding Plan (BigModel)       | `zhipu-cn-codingplan`    | `https://open.bigmodel.cn/api/coding/paas/v4`       | _(any)_        |
+| Zhipu (Z.AI)                       | `zhipu-intl`             | `https://api.z.ai/api/paas/v4`                      | _(any)_        |
+| Zhipu Coding Plan (Z.AI)           | `zhipu-intl-codingplan`  | `https://api.z.ai/api/coding/paas/v4`               | _(any)_        |
+| OpenCode                           | `opencode`               | `https://opencode.ai/zen/v1`                        | _(any)_        |
+| SiliconFlow (China)                | `siliconflow-cn`         | `https://api.siliconflow.cn/v1`                     | `sk-`          |
+| SiliconFlow (International)        | `siliconflow-intl`       | `https://api.siliconflow.com/v1`                    | `sk-`          |
+| Custom                             | `custom`                 | _(you set it)_                                      | _(any)_        |
 
 For each provider you need to set:
 
@@ -555,11 +618,11 @@ Then choose which provider + model to activate:
 | `provider_id` | Which provider to use (e.g. `dashscope`) |
 | `model`       | Which model to use (e.g. `qwen3-max`)    |
 
-> **Tip:** Run `copaw init` and follow the prompts — it will list available
+> **Tip:** Run `qwenpaw init` and follow the prompts — it will list available
 > models for each provider so you can pick one directly.
 >
 > **Note:** You are responsible for ensuring the API key and base URL are valid.
-> CoPaw does not verify whether the key is correct or has sufficient quota —
+> QwenPaw does not verify whether the key is correct or has sufficient quota —
 > make sure the chosen provider and model are accessible.
 
 ---
@@ -569,7 +632,7 @@ Then choose which provider + model to activate:
 Some tools and MCP services need extra API keys (e.g. `TAVILY_API_KEY` for web search). You can
 manage them in three ways:
 
-- **`copaw init`** — prompts "Configure environment variables?" during setup
+- **`qwenpaw init`** — prompts "Configure environment variables?" during setup
 - **Console UI** — edit on the settings page
 - **API** — `GET/PUT/DELETE /envs`
 
@@ -577,7 +640,7 @@ Set variables are auto-loaded at app startup, so all tools and child processes
 can read them via `os.environ`.
 
 > **Note:** You are responsible for ensuring the values (e.g. third-party API
-> keys) are valid. CoPaw only stores and injects them — it does not verify
+> keys) are valid. QwenPaw only stores and injects them — it does not verify
 > correctness.
 
 ---
@@ -586,20 +649,20 @@ can read them via `os.environ`.
 
 Skills extend the agent's capabilities. Skill files are distributed across two locations:
 
-| Directory                                | Purpose                                           |
-| ---------------------------------------- | ------------------------------------------------- |
-| `~/.copaw/skill_pool/`                   | Local shared pool for built-ins and shared skills |
-| `~/.copaw/workspaces/{agent_id}/skills/` | Skills present in a specific agent's workspace    |
+| Directory                                  | Purpose                                           |
+| ------------------------------------------ | ------------------------------------------------- |
+| `~/.qwenpaw/skill_pool/`                   | Local shared pool for built-ins and shared skills |
+| `~/.qwenpaw/workspaces/{agent_id}/skills/` | Skills present in a specific agent's workspace    |
 
 Each skill is a directory with a `SKILL.md` file (YAML front matter with `name` and `description`), and optional `references/` and `scripts/` subdirectories.
 
-Skill enabled state and configuration are controlled by `~/.copaw/workspaces/{agent_id}/skill.json`.
+Skill enabled state and configuration are controlled by `~/.qwenpaw/workspaces/{agent_id}/skill.json`.
 
 **Manage skills via:**
 
 - Console (Agent → Skills) — Visual management, import, create, enable/disable
-- `copaw init` (choose all / none / custom during setup)
-- `copaw skills config` (interactive toggle)
+- `qwenpaw init` (choose all / none / custom during setup)
+- `qwenpaw skills config` (interactive toggle)
 
 See [Skills](./skills) for detailed documentation.
 
@@ -607,20 +670,20 @@ See [Skills](./skills) for detailed documentation.
 
 ## Memory
 
-CoPaw has persistent cross-conversation memory: it automatically compresses context and saves key information to Markdown files for long-term retention.
+QwenPaw has persistent cross-conversation memory: it automatically compresses context and saves key information to Markdown files for long-term retention.
 
 Memory files are stored in the agent workspace:
 
-| File / Directory                                      | Purpose                                                               |
-| ----------------------------------------------------- | --------------------------------------------------------------------- |
-| `~/.copaw/workspaces/{agent_id}/MEMORY.md`            | Long-lived key information (decisions, preferences, persistent facts) |
-| `~/.copaw/workspaces/{agent_id}/memory/YYYY-MM-DD.md` | Daily logs (notes, runtime context, auto-generated summaries)         |
+| File / Directory                                        | Purpose                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `~/.qwenpaw/workspaces/{agent_id}/MEMORY.md`            | Long-lived key information (decisions, preferences, persistent facts) |
+| `~/.qwenpaw/workspaces/{agent_id}/memory/YYYY-MM-DD.md` | Daily logs (notes, runtime context, auto-generated summaries)         |
 
 ### Embedding Configuration
 
 Memory search relies on vector embeddings for semantic retrieval. Configuration priority: **config file > env var > default**.
 
-Recommended to configure in `agent.json` under `running.embedding_config`, which supports more parameters (e.g., `use_dimensions`). Environment variables serve as fallback only:
+Recommended to configure in `agent.json` under `running.reme_light_memory_config.embedding_model_config`, which supports more parameters (e.g., `use_dimensions`). Environment variables serve as fallback only:
 
 | Variable (Fallback)    | Description                       | Default |
 | ---------------------- | --------------------------------- | ------- |
@@ -634,13 +697,13 @@ Recommended to configure in `agent.json` under `running.embedding_config`, which
 
 ## Summary
 
-- Everything lives under **`~/.copaw`** by default; override with `COPAW_WORKING_DIR` (and related env vars) if needed.
+- Everything lives under **`~/.qwenpaw`** by default; override with `QWENPAW_WORKING_DIR` (and related env vars) if needed.
 - From **v0.1.0**, configuration is split into:
-  - **Global config** (`~/.copaw/config.json`) — providers, environment variables, agent list
-  - **Agent config** (`~/.copaw/workspaces/{agent_id}/agent.json`) — per-agent settings
+  - **Global config** (`~/.qwenpaw/config.json`) — providers, environment variables, agent list
+  - **Agent config** (`~/.qwenpaw/workspaces/{agent_id}/agent.json`) — per-agent settings
 - Daily management is primarily done through the **Console**, or by directly editing configuration files.
 - Agent personality is defined by Markdown files in the workspace directory. See [Agent Persona](./persona) for details.
-- LLM providers are globally configured via `copaw init` or the Console.
+- LLM providers are globally configured via `qwenpaw init` or the Console.
 - Config changes are **auto-reloaded** without restart (polled every 2 seconds).
 - Call the Agent API: **POST** `/api/agent/process` with `X-Agent-Id` header, JSON body, SSE streaming; see [Quick start — Verify install](./quickstart#verify-install-optional) for examples.
 

@@ -58,8 +58,22 @@ export function useSkills() {
       const data = await api.listSkills(selectedAgent);
       setSkills(data || []);
     } catch (error) {
-      console.error("Failed to load skills", error);
-      message.error("Failed to load skills");
+      console.error(t("skills.loadFailed"), error);
+      message.error(t("skills.loadFailed"));
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAgent]);
+
+  const hardRefresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      invalidateSkillCache({ agentId: selectedAgent });
+      const data = await api.refreshSkills(selectedAgent);
+      setSkills(data || []);
+    } catch (error) {
+      console.error(t("skills.refreshFailed"), error);
+      message.error(t("skills.refreshFailed"));
     } finally {
       setLoading(false);
     }
@@ -79,7 +93,7 @@ export function useSkills() {
   ): Promise<SkillActionResult> => {
     try {
       const result = await api.createSkill(name, content, config, enable);
-      message.success("Created successfully");
+      message.success(t("skills.createdSuccessfully"));
       invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
       await fetchSkills();
       await checkScanWarnings(result.name);
@@ -89,7 +103,7 @@ export function useSkills() {
       if (detail?.suggested_name) {
         return { success: false, conflict: detail };
       }
-      handleError(error, "Failed to save");
+      handleError(error, t("skills.saveFailed"));
       return { success: false };
     }
   };
@@ -103,7 +117,6 @@ export function useSkills() {
       setUploading(true);
       const result = await api.uploadSkill(file, {
         enable: true,
-        overwrite: false,
         target_name: targetName,
         rename_map: renameMap,
       });
@@ -140,13 +153,11 @@ export function useSkills() {
   ): Promise<SkillActionResult> => {
     const text = (input || "").trim();
     if (!text) {
-      message.warning("Please provide a hub skill URL");
+      message.warning(t("skills.provideUrl"));
       return { success: false };
     }
     if (!text.startsWith("http://") && !text.startsWith("https://")) {
-      message.warning(
-        "Please enter a valid URL starting with http:// or https://",
-      );
+      message.warning(t("skills.validUrl"));
       return { success: false };
     }
     const timeoutMs = 90_000;
@@ -158,7 +169,6 @@ export function useSkills() {
       const payload = {
         bundle_url: text,
         enable: true,
-        overwrite: false,
         target_name: targetName,
       };
       const task = await api.startHubSkillInstall(payload);
@@ -168,7 +178,9 @@ export function useSkills() {
         const status = await api.getHubSkillInstallStatus(task.task_id);
 
         if (status.status === "completed" && status.result?.installed) {
-          message.success(`Imported skill: ${status.result.name}`);
+          message.success(
+            t("skills.importedSkill", { name: status.result.name }),
+          );
           invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
           await fetchSkills();
           if (status.result.name) {
@@ -192,7 +204,7 @@ export function useSkills() {
             showScanErrorModal(hubResult, t);
             return { success: false };
           }
-          throw new Error(status.error || "Import failed");
+          throw new Error(status.error || t("skills.importFailed"));
         }
 
         if (status.status === "cancelled") {
@@ -216,7 +228,7 @@ export function useSkills() {
 
       return { success: false };
     } catch (error) {
-      handleError(error, "Import failed");
+      handleError(error, t("skills.importFailed"));
       return { success: false };
     } finally {
       importTaskIdRef.current = null;
@@ -242,7 +254,7 @@ export function useSkills() {
             s.name === skill.name ? { ...s, enabled: false } : s,
           ),
         );
-        message.success("Disabled successfully");
+        message.success(t("skills.disabledSuccessfully"));
       } else {
         await api.enableSkill(skill.name);
         setSkills((prev) =>
@@ -250,13 +262,13 @@ export function useSkills() {
             s.name === skill.name ? { ...s, enabled: true } : s,
           ),
         );
-        message.success("Enabled successfully");
+        message.success(t("skills.enabledSuccessfully"));
         await checkScanWarnings(skill.name);
       }
       invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
       return true;
     } catch (error) {
-      handleError(error, "Operation failed");
+      handleError(error, t("skills.operationFailed"));
       return false;
     }
   };
@@ -264,11 +276,11 @@ export function useSkills() {
   const deleteSkill = async (skill: SkillSpec) => {
     const confirmed = await new Promise<boolean>((resolve) => {
       Modal.confirm({
-        title: "Confirm Delete",
-        content: `Are you sure you want to delete skill "${skill.name}"?`,
-        okText: "Delete",
+        title: t("common.confirm"),
+        content: t("skills.deleteConfirm"),
+        okText: t("common.delete"),
         okType: "danger",
-        cancelText: "Cancel",
+        cancelText: t("common.cancel"),
         onOk: () => resolve(true),
         onCancel: () => resolve(false),
       });
@@ -279,14 +291,14 @@ export function useSkills() {
     try {
       const result = await api.deleteSkill(skill.name);
       if (result.deleted) {
-        message.success("Deleted successfully");
+        message.success(t("skills.deleteSuccess"));
         invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
         await fetchSkills();
         return true;
       }
     } catch (error) {
-      console.error("Failed to delete skill", error);
-      message.error("Failed to delete skill");
+      console.error(t("skills.deleteFailed"), error);
+      message.error(t("skills.deleteFailed"));
     }
     return false;
   };
@@ -303,5 +315,6 @@ export function useSkills() {
     toggleEnabled,
     deleteSkill,
     refreshSkills: fetchSkills,
+    hardRefresh,
   };
 }

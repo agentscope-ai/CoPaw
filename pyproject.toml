@@ -1,5 +1,5 @@
 [project]
-name = "copaw"
+name = "qwenpaw"
 dynamic = ["version"]
 description = "CoPaw is a **personal assistant** that runs in your own environment. It talks to you over multiple channels (DingTalk, Feishu, QQ, Discord, iMessage, etc.) and runs scheduled tasks according to your configuration. **What it can do is driven by Skills — the possibilities are open-ended.** Built-in skills include cron, PDF/Office handling, news digest, file reading, and more; you can add custom skills. All data and tasks run on your machine; no third-party hosting."
 readme = "README.md"
@@ -42,15 +42,15 @@ dependencies = [
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "copaw.__version__.__version__"}
+version = {attr = "qwenpaw.__version__.__version__"}
 
 [tool.setuptools]
 packages = { find = { where = ["src"] } }
 include-package-data = true
 
 [tool.setuptools.package-data]
-# Dockerfile copies console build output to src/copaw/console/ (no dist subdir).
-"copaw" = [
+# Dockerfile copies console build output to src/qwenpaw/console/ (no dist subdir).
+"qwenpaw" = [
     "console/**",
     "agents/md_files/**",
     "agents/skills/**",
@@ -65,7 +65,8 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-copaw = "copaw.cli.main:cli"
+qwenpaw = "qwenpaw.cli.main:cli"
+copaw = "qwenpaw.cli.main:cli"
 
 [project.optional-dependencies]
 dev = [
@@ -78,12 +79,15 @@ dev = [
 local = [
     "huggingface_hub>=0.20.0",
 ]
+adbpg = [
+    "psycopg2-binary==2.9.10",
+]
 llamacpp = [
-    "copaw[local]",
+    "qwenpaw[local]",
     "llama-cpp-python>=0.3.0",
 ]
 mlx = [
-    "copaw[local]",
+    "qwenpaw[local]",
     "mlx-lm>=0.10.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 ollama = [
@@ -93,7 +97,18 @@ whisper = [
     "openai-whisper>=20231117",
 ]
 full = [
-    "copaw[local,ollama,llamacpp,whisper,mlx]",
+    "qwenpaw[local,whisper,ollama,llamacpp,mlx]",
+]
+sip = [
+    "pyVoIP>=1.6.0",
+    "dashscope>=1.0.0",
+    "dashscope-realtime>=0.1.0",
+    "audioop-lts; python_version >= '3.13'",
+]
+sip-livekit = [
+    "qwenpaw[sip]",
+    "livekit>=1.0.0",
+    "livekit-api>=0.6.0",
 ]
 
 [tool.pytest.ini_options]

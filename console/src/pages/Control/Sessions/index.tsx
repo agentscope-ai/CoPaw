@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, Form, Modal, Table, Button } from "@agentscope-ai/design";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import { useTranslation } from "react-i18next";
@@ -15,6 +16,7 @@ import styles from "./index.module.less";
 
 function SessionsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const {
     sessions,
     loading,
@@ -88,6 +90,10 @@ function SessionsPage() {
     });
   };
 
+  const handleView = (session: Session) => {
+    navigate(`/chat/${encodeURIComponent(session.id)}`);
+  };
+
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
       message.warning(t("sessions.batchDeleteConfirm", { count: 0 }));
@@ -121,7 +127,6 @@ function SessionsPage() {
       setSaving(true);
       try {
         const updated = {
-          ...editingSession,
           name: values.name,
         };
         const success = await updateSession(editingSession.id, updated);
@@ -137,6 +142,7 @@ function SessionsPage() {
   const columns = createColumns({
     onEdit: handleEdit,
     onDelete: handleDelete,
+    onView: handleView,
     t,
   });
 
@@ -184,6 +190,7 @@ function SessionsPage() {
           scroll={{ x: 1500 }}
           pagination={{
             pageSize: 10,
+            showSizeChanger: false,
           }}
         />
       </Card>

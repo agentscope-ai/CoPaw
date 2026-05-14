@@ -28,17 +28,18 @@ type ScriptPlatform = "mac" | "windows";
 type ScriptWindowsVariant = "cmd" | "ps";
 type CloudPlatform = "aliyun" | "modelscope";
 
-type CopawQuickStartProps = {
+type QuickStartProps = {
   docsBase: string;
 };
 
-const DOCKER_IMAGE = "agentscope/copaw:latest";
+const DOCKER_IMAGE = "agentscope/qwenpaw:latest";
 const MODELSCOPE_URL =
-  "https://modelscope.cn/studios/fork?target=AgentScope/CoPaw";
+  "https://modelscope.cn/studios/fork?target=AgentScope/QwenPaw";
 const ALIYUN_ECS_URL =
   "https://computenest.console.aliyun.com/service/instance/create/cn-hangzhou?type=user&ServiceId=service-1ed84201799f40879884";
 const ALIYUN_DOC_URL = "https://developer.aliyun.com/article/1713682";
-const DESKTOP_RELEASES_URL = "https://github.com/agentscope-ai/CoPaw/releases";
+const DESKTOP_RELEASES_URL =
+  "https://github.com/agentscope-ai/QwenPaw/releases";
 
 const METHOD_ORDER: InstallMethod[] = [
   "pip",
@@ -68,33 +69,33 @@ function MethodTabIcon({ method }: { method: InstallMethod }) {
 }
 
 export const PIP_INSTALL_COMMANDS = [
-  "pip install copaw",
-  "copaw init --defaults",
-  "copaw app",
+  "pip install qwenpaw",
+  "qwenpaw init --defaults",
+  "qwenpaw app",
 ] as const;
 
 const COMMANDS = {
   pip: [...PIP_INSTALL_COMMANDS],
   scriptMac: [
-    "curl -fsSL https://copaw.agentscope.io/install.sh | bash",
-    "copaw init --defaults",
-    "copaw app",
+    "curl -fsSL https://qwenpaw.agentscope.io/install.sh | bash",
+    "qwenpaw init --defaults",
+    "qwenpaw app",
   ],
   scriptWinCmd: [
-    "curl -fsSL https://copaw.agentscope.io/install.bat -o install.bat && install.bat",
-    "copaw init --defaults",
-    "copaw app",
+    "curl -fsSL https://qwenpaw.agentscope.io/install.bat -o install.bat && install.bat",
+    "qwenpaw init --defaults",
+    "qwenpaw app",
   ],
   scriptWinPs: [
-    "irm https://copaw.agentscope.io/install.ps1 | iex",
-    "copaw init --defaults",
-    "copaw app",
+    "irm https://qwenpaw.agentscope.io/install.ps1 | iex",
+    "qwenpaw init --defaults",
+    "qwenpaw app",
   ],
   docker: [
     `docker pull ${DOCKER_IMAGE}`,
     `docker run -p 127.0.0.1:8088:8088 \\
-  -v copaw-data:/app/working \\
-  -v copaw-secrets:/app/working.secret \\
+  -v qwenpaw-data:/app/working \\
+  -v qwenpaw-secrets:/app/working.secret \\
   ${DOCKER_IMAGE}`,
   ],
 } as const;
@@ -151,7 +152,7 @@ function CodeBlock({
           {copied ? t("docs.copied") : t("docs.copy")}
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-x-auto px-4 py-4 text-center md:px-5 md:py-5">
+      <div className="min-h-0 flex-1 overflow-x-auto px-4 py-4 text-center font-mono md:px-5 md:py-5">
         <SyntaxHighlighter
           language="bash"
           style={{
@@ -221,7 +222,7 @@ function CodeBlock({
   );
 }
 
-export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
+export function QuickStart({ docsBase }: QuickStartProps) {
   const { t } = useTranslation();
   const [selectedMethod, setSelectedMethod] = useState<InstallMethod>("pip");
   const [scriptPlatform, setScriptPlatform] = useState<ScriptPlatform>("mac");
@@ -257,10 +258,10 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, margin: "-60px" }}
-        id="copaw-quickstart"
+        id="qwenpaw-quickstart"
       >
         <div
-          className="pointer-events-none absolute left-1/2 top-0 h-px w-screen -translate-x-1/2 animate-[copaw-dash-move-right_1s_linear_infinite]"
+          className="pointer-events-none absolute left-1/2 top-0 h-px w-screen -translate-x-1/2 animate-[qwenpaw-dash-move-right_1s_linear_infinite]"
           style={{
             background:
               "repeating-linear-gradient(to right, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",
@@ -268,7 +269,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
           }}
         />
         <div
-          className="pointer-events-none absolute left-1/2 top-full h-px w-screen -translate-x-1/2 -translate-y-px animate-[copaw-dash-move-left_1s_linear_infinite]"
+          className="pointer-events-none absolute left-1/2 top-full h-px w-screen -translate-x-1/2 -translate-y-px animate-[qwenpaw-dash-move-left_1s_linear_infinite]"
           style={{
             background:
               "repeating-linear-gradient(to right, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",
@@ -277,7 +278,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
         />
         <div className="relative mx-auto max-w-4xl">
           <div
-            className="pointer-events-none absolute bottom-0 left-4 top-0 w-px md:left-0 animate-[copaw-dash-move-down_1s_linear_infinite]"
+            className="pointer-events-none absolute bottom-0 left-4 top-0 w-px md:left-0 animate-[qwenpaw-dash-move-down_1s_linear_infinite]"
             style={{
               background:
                 "repeating-linear-gradient(to bottom, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",
@@ -285,7 +286,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
             }}
           />
           <div
-            className="pointer-events-none absolute bottom-0 right-4 top-0 w-px md:right-0 animate-[copaw-dash-move-up_1s_linear_infinite]"
+            className="pointer-events-none absolute bottom-0 right-4 top-0 w-px md:right-0 animate-[qwenpaw-dash-move-up_1s_linear_infinite]"
             style={{
               background:
                 "repeating-linear-gradient(to bottom, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",
@@ -309,7 +310,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
             </motion.div>
             <div className="relative isolate mx-auto max-w-4xl">
               <div
-                className="pointer-events-none absolute left-1/2 top-0 z-20 h-px w-screen -translate-x-1/2 animate-[copaw-dash-move-left_1s_linear_infinite]"
+                className="pointer-events-none absolute left-1/2 top-0 z-20 h-px w-screen -translate-x-1/2 animate-[qwenpaw-dash-move-left_1s_linear_infinite]"
                 style={{
                   background:
                     "repeating-linear-gradient(to right, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",
@@ -356,7 +357,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                   </div>
 
                   <motion.div
-                    className="flex flex-col p-3 md:p-7"
+                    className="flex min-h-[420px] flex-col p-3 md:min-h-[400px] md:p-7"
                     layout
                     transition={{ duration: 0.3, ease: "easeInOut" }}
                   >
@@ -364,12 +365,12 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                       {t(`quickstart.desc.${selectedMethod}`)}
                     </p>
 
-                    <div className="overflow-y-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                       <AnimatePresence mode="wait" initial={false}>
                         {selectedMethod === "pip" ? (
                           <motion.div
                             key="pip"
-                            className="min-h-[200px]"
+                            className="flex min-h-0 flex-1 flex-col"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -8 }}
@@ -380,7 +381,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                               copied={copiedId === "pip"}
                               onCopy={() => copyLines("pip", COMMANDS.pip)}
                               t={t}
-                              className="min-h-[200px]"
+                              className="min-h-0 flex-1"
                             />
                           </motion.div>
                         ) : null}
@@ -388,7 +389,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                         {selectedMethod === "script" ? (
                           <motion.div
                             key="script"
-                            className="flex min-h-[200px] flex-col gap-3"
+                            className="flex min-h-0 flex-1 flex-col gap-3"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -8 }}
@@ -430,7 +431,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                                 )
                               }
                               t={t}
-                              className="min-h-[140px]"
+                              className="min-h-0 flex-1"
                               headerLeft={
                                 scriptPlatform === "windows" ? (
                                   <div className="inline-flex rounded-lg border border-[#e8e8e8] bg-(--color-fill-tertiary) p-1">
@@ -460,7 +461,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                         {selectedMethod === "docker" ? (
                           <motion.div
                             key="docker"
-                            className="min-h-[200px]"
+                            className="flex min-h-0 flex-1 flex-col"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -8 }}
@@ -473,7 +474,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                                 copyLines("docker", COMMANDS.docker)
                               }
                               t={t}
-                              className="min-h-[200px]"
+                              className="min-h-0 flex-1"
                             />
                           </motion.div>
                         ) : null}
@@ -488,14 +489,14 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                             transition={{ duration: 0.2 }}
                           >
                             <div className="flex justify-center">
-                              <div className="inline-flex rounded-xl border border-[#ebe5df] bg-(--color-fill-tertiary) p-1">
+                              <div className="inline-flex h-11 items-center rounded-xl border border-[#ebe5df] bg-(--color-fill-tertiary) p-1 sm:h-11">
                                 {(["aliyun", "modelscope"] as const).map(
                                   (platform) => (
                                     <button
                                       key={platform}
                                       type="button"
                                       onClick={() => setCloudPlatform(platform)}
-                                      className={`rounded-lg px-4 py-1.5 text-sm font-semibold sm:px-6 sm:py-2 sm:text-[1.05rem] ${
+                                      className={`inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg px-4 text-sm font-semibold leading-none sm:h-10 sm:px-6 sm:text-[1.05rem] ${
                                         cloudPlatform === platform
                                           ? "bg-white text-(--color-text) shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
                                           : "text-(--color-text-secondary)"
@@ -605,7 +606,7 @@ export function CopawQuickStart({ docsBase }: CopawQuickStartProps) {
                 </motion.div>
               </div>
               <div
-                className="pointer-events-none absolute bottom-0 left-1/2 h-px w-screen -translate-x-1/2 animate-[copaw-dash-move-right_1s_linear_infinite]"
+                className="pointer-events-none absolute bottom-0 left-1/2 h-px w-screen -translate-x-1/2 animate-[qwenpaw-dash-move-right_1s_linear_infinite]"
                 style={{
                   background:
                     "repeating-linear-gradient(to right, rgba(255,157,77,0.45) 0 8px, transparent 8px 16px)",

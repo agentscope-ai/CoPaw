@@ -35,7 +35,7 @@ const itemVariants = {
   },
 };
 
-export function CopawFAQ() {
+export function FAQ() {
   const { t, i18n } = useTranslation();
   const [activeCategory, setActiveCategory] =
     useState<FaqCategory>("quickStart");
@@ -93,7 +93,7 @@ export function CopawFAQ() {
                 <li>{t("homeFaq.quickStart.update.li1")}</li>
                 <li>
                   {t("homeFaq.quickStart.update.li2Prefix")}{" "}
-                  <code>pip install --upgrade copaw</code>
+                  <code>pip install --upgrade qwenpaw</code>
                 </li>
                 <li>{t("homeFaq.quickStart.update.li3")}</li>
                 <li>{t("homeFaq.quickStart.update.li4")}</li>
@@ -104,7 +104,7 @@ export function CopawFAQ() {
                     <li>
                       {t("homeFaq.quickStart.update.li5bPrefix")}{" "}
                       <a
-                        href="https://github.com/agentscope-ai/CoPaw/releases"
+                        href="https://github.com/agentscope-ai/QwenPaw/releases"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-(--color-primary) no-underline transition hover:brightness-110"
@@ -117,6 +117,7 @@ export function CopawFAQ() {
                   </ul>
                 </li>
               </ul>
+              <p className="mt-2">{t("homeFaq.quickStart.update.p2")}</p>
             </>
           ),
         },
@@ -127,10 +128,10 @@ export function CopawFAQ() {
             <>
               <p>
                 {t("homeFaq.quickStart.initialize.p1")}{" "}
-                <code>copaw init --defaults</code>
+                <code>qwenpaw init --defaults</code>
               </p>
               <p>
-                {t("homeFaq.quickStart.initialize.p2")} <code>copaw app</code>
+                {t("homeFaq.quickStart.initialize.p2")} <code>qwenpaw app</code>
               </p>
               <p className="mt-2">
                 {t("homeFaq.quickStart.initialize.p3Prefix")}{" "}
@@ -147,7 +148,7 @@ export function CopawFAQ() {
             <>
               {t("homeFaq.quickStart.upgrade.p1")}{" "}
               <a
-                href="https://github.com/agentscope-ai/CoPaw/releases"
+                href="https://github.com/agentscope-ai/QwenPaw/releases"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-(--color-primary) no-underline transition hover:brightness-110"
@@ -189,9 +190,9 @@ export function CopawFAQ() {
               <p className="mt-2">{t("homeFaq.features.models.p3")}</p>
               <p className="mt-2">
                 {t("homeFaq.features.models.p4Prefix")}{" "}
-                <code>copaw models</code> {t("homeFaq.features.models.p4Mid")}{" "}
+                <code>qwenpaw models</code> {t("homeFaq.features.models.p4Mid")}{" "}
                 <Link
-                  to="/docs/cli#copaw-models"
+                  to="/docs/cli#qwenpaw-models"
                   className="text-(--color-primary) no-underline transition hover:brightness-110"
                 >
                   {t("homeFaq.features.models.cliLink")}
@@ -342,7 +343,7 @@ export function CopawFAQ() {
                 <li>
                   {t("homeFaq.troubleshooting.help.s2Prefix")}{" "}
                   <a
-                    href="https://github.com/agentscope-ai/CoPaw/issues"
+                    href="https://github.com/agentscope-ai/QwenPaw/issues"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-(--color-primary) no-underline transition hover:brightness-110"
@@ -350,7 +351,7 @@ export function CopawFAQ() {
                     {t("homeFaq.troubleshooting.help.githubIssues")}
                   </a>{" "}
                   {t("homeFaq.troubleshooting.help.s2Mid")}{" "}
-                  <code>copaw_query_error_qzbx1mv1.json</code>
+                  <code>qwenpaw_query_error_qzbx1mv1.json</code>
                   {t("homeFaq.troubleshooting.help.s2Suffix")}
                 </li>
               </ol>
@@ -374,12 +375,12 @@ export function CopawFAQ() {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.2 }}
-      aria-labelledby="copaw-faq-heading"
+      aria-labelledby="qwenpaw-faq-heading"
     >
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-8 md:grid-cols-[40%_60%] md:gap-12">
           <motion.div variants={itemVariants}>
-            <h2 id="copaw-faq-heading" className={sectionStyles.title}>
+            <h2 id="qwenpaw-faq-heading" className={sectionStyles.title}>
               {t("homeFaq.title")}
             </h2>
             <p
@@ -416,7 +417,7 @@ export function CopawFAQ() {
           </motion.div>
 
           <motion.div className="md:pt-1" variants={itemVariants}>
-            <p className="font-inter mb-5 max-w-[52ch] text-[13px] leading-[1.72] text-(--color-text-tertiary) text-pretty md:mb-16 md:ml-auto md:text-[1rem]">
+            <p className="font-inter mb-5 max-w-[52ch] text-right text-[13px] leading-[1.72] text-(--color-text-tertiary) text-pretty md:mb-16 md:ml-auto md:text-[1rem]">
               {t("homeFaq.intro")}
             </p>
 
@@ -441,7 +442,7 @@ export function CopawFAQ() {
                           : "px-3.5 py-2.5 md:px-5 md:py-3.5"
                       }`}
                     >
-                      <span className="font-newsreader text-[1.75rem] leading-[1.08] text-(--color-text) md:text-[28px]">
+                      <span className="font-newsreader text-[1.5rem] leading-[1.08] text-(--color-text) md:text-[24px]">
                         {faq.question}
                       </span>
                       <span
@@ -452,7 +453,7 @@ export function CopawFAQ() {
                       </span>
                     </button>
                     {isOpen && faq.answer ? (
-                      <div className="px-3.5 pb-3.5 md:px-5 md:pb-5">
+                      <div className="p-4 md:p-6">
                         <div className="font-inter text-[13px] leading-[1.65] text-(--color-text-secondary) md:text-base">
                           {faq.answer}
                         </div>
