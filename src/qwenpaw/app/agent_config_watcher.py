@@ -47,18 +47,28 @@ def _mcp_hash(mcp: Any) -> Optional[int]:
     """Hash of mcp / mcp.clients section for change detection."""
     if mcp is None:
         return None
-    # mcp.clients is the dict of MCP client configs
-    clients = getattr(mcp, "clients", None)
-    if clients is None:
-        return None
-    return hash(str(clients))
+    try:
+        # Pydantic model: mcp.clients is a field
+        clients = getattr(mcp, "clients", None)
+        if clients is not None:
+            return hash(str(clients))
+    except Exception:
+        pass
+    # Fallback: dump entire mcp section
+    try:
+        return hash(str(mcp.model_dump(mode="json")))
+    except Exception:
+        return hash(str(mcp))
 
 
 def _skills_hash(skills: Any) -> Optional[int]:
     """Hash of skills section for change detection."""
     if skills is None:
         return None
-    return hash(str(skills))
+    try:
+        return hash(str(skills.model_dump(mode="json")))
+    except Exception:
+        return hash(str(skills))
 
 
 class AgentConfigWatcher:
