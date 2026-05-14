@@ -65,10 +65,19 @@ async def get_provider_manager(request: Request) -> ProviderManager:
 
 
 def get_provider_auth_manager(
-    manager: ProviderManager,
+    request: Request,
+    manager: ProviderManager = Depends(get_provider_manager),
 ) -> ProviderAuthManager:
-    """Create the auth manager for provider auth endpoints."""
-    return ProviderAuthManager(manager)
+    """Get the shared auth manager for provider auth endpoints."""
+    auth_manager = getattr(
+        request.app.state,
+        "provider_auth_manager",
+        None,
+    )
+    if auth_manager is None:
+        auth_manager = ProviderAuthManager(manager)
+        request.app.state.provider_auth_manager = auth_manager
+    return auth_manager
 
 
 class ProviderConfigRequest(BaseModel):
@@ -193,11 +202,10 @@ async def list_all_providers(
     summary="Start provider authentication",
 )
 async def start_provider_auth(
-    manager: ProviderManager = Depends(get_provider_manager),
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
     provider_id: str = Path(...),
     body: AuthStartRequest = Body(default_factory=AuthStartRequest),
 ) -> AuthStartResult:
-    auth_manager = get_provider_auth_manager(manager)
     try:
         return await auth_manager.start(provider_id, body)
     except ProviderAuthError as exc:
@@ -213,11 +221,10 @@ async def start_provider_auth(
     summary="Get provider authentication status",
 )
 async def get_provider_auth_status(
-    manager: ProviderManager = Depends(get_provider_manager),
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
     provider_id: str = Path(...),
     flow_id: str | None = Query(default=None),
 ) -> AuthStatusResult:
-    auth_manager = get_provider_auth_manager(manager)
     try:
         return await auth_manager.get_status(provider_id, flow_id=flow_id)
     except ProviderAuthError as exc:
@@ -233,10 +240,9 @@ async def get_provider_auth_status(
     summary="Log out provider authentication",
 )
 async def logout_provider_auth(
-    manager: ProviderManager = Depends(get_provider_manager),
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
     provider_id: str = Path(...),
 ) -> AuthStatusResult:
-    auth_manager = get_provider_auth_manager(manager)
     try:
         return await auth_manager.logout(provider_id)
     except ProviderAuthError as exc:
@@ -252,12 +258,11 @@ async def logout_provider_auth(
     summary="Handle provider authentication callback",
 )
 async def provider_auth_callback(
-    manager: ProviderManager = Depends(get_provider_manager),
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
     provider_id: str = Path(...),
     state: str = Query(...),
     code: str = Query(...),
 ) -> AuthStatusResult:
-    auth_manager = get_provider_auth_manager(manager)
     try:
         return await auth_manager.handle_callback(provider_id, state, code)
     except ProviderAuthError as exc:

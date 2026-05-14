@@ -145,7 +145,7 @@ def _provider(
 
 
 @pytest.fixture
-def api_client(tmp_path: Path, monkeypatch):
+def api_client(tmp_path: Path):
     registry = ProviderAuthRegistry()
     registry.register(FakeAuthAdapter())
     fake_manager = FakeProviderManager(
@@ -160,20 +160,12 @@ def api_client(tmp_path: Path, monkeypatch):
 
     app = FastAPI()
     app.state.provider_manager = fake_manager
-    app.include_router(providers_router.router, prefix="/api")
-
-    def _auth_manager(manager):
-        return ProviderAuthManager(
-            manager,
-            credential_store=OAuthCredentialStore(tmp_path / "oauth"),
-            registry=registry,
-        )
-
-    monkeypatch.setattr(
-        providers_router,
-        "get_provider_auth_manager",
-        _auth_manager,
+    app.state.provider_auth_manager = ProviderAuthManager(
+        fake_manager,
+        credential_store=OAuthCredentialStore(tmp_path / "oauth"),
+        registry=registry,
     )
+    app.include_router(providers_router.router, prefix="/api")
     transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://test")
 
