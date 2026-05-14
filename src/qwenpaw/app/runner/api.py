@@ -66,6 +66,17 @@ async def get_session(
 async def list_chats(
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     channel: Optional[str] = Query(None, description="Filter by channel"),
+    offset: Optional[int] = Query(
+        None,
+        ge=0,
+        description="Optional zero-based chat offset",
+    ),
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        le=500,
+        description="Optional maximum number of chats to return",
+    ),
     mgr: ChatManager = Depends(get_chat_manager),
     workspace=Depends(get_workspace),
 ):
@@ -77,6 +88,10 @@ async def list_chats(
         mgr: Chat manager dependency
     """
     chats = await mgr.list_chats(user_id=user_id, channel=channel)
+    if offset is not None or limit is not None:
+        start = offset or 0
+        end = None if limit is None else start + limit
+        chats = chats[start:end]
     tracker = workspace.task_tracker
     result = []
     for spec in chats:
