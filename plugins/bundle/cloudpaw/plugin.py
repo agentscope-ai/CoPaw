@@ -265,6 +265,7 @@ async def _ensure_aliyun_cli() -> None:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             version = result.stdout.strip() or "unknown"
             logger.info("aliyun CLI already installed: %s", version)

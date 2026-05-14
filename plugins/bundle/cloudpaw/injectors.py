@@ -52,6 +52,7 @@ def inject_interaction_module() -> None:
             cls._pending.pop(session_id, None)
 
     mod.InteractionManager = InteractionManager
+    # pylint: disable-next=protected-access
     mod._PendingInteraction = _PendingInteraction
     sys.modules[module_name] = mod
     logger.info("Injected synthetic module: %s", module_name)

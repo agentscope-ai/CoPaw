@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 """Monkey-patch hooks for tools, prompts, and mission mode."""
 
 import logging
@@ -7,7 +8,9 @@ import shutil
 from pathlib import Path
 
 from .constants import (
+    BUILTIN_EXECUTOR_AGENT_ID,
     BUILTIN_ORCHESTRATION_AGENT_ID,
+    BUILTIN_VERIFIER_AGENT_ID,
     PLUGIN_DIR,
 )
 
@@ -22,7 +25,9 @@ _AK_CONSOLE_URL = "https://ram.console.aliyun.com/manage/ak"
 _IAC_CODE_SETTINGS_PATH = Path.home() / ".iac-code" / "settings.yml"
 
 
-def _check_environment_ready() -> str | None:
+def _check_environment_ready() -> (  # pylint: disable=too-many-branches
+    str | None
+):
     """Check that all required components are configured for CloudPaw.
 
     Returns a warning/error message string if any check fails, or None if
@@ -63,7 +68,7 @@ def _check_environment_ready() -> str | None:
         pass
     if not qwenpaw_model_ok:
         issues.append(
-            "❌ QwenPaw 模型未配置\n" "   配置命令: qwenpaw models config",
+            "❌ QwenPaw 模型未配置\n" + "   配置命令: qwenpaw models config",
         )
 
     # 4. iac-code model configured?
@@ -352,7 +357,9 @@ def setup_acp_auto_approve() -> None:
     )
 
 
-def setup_tool_and_prompt_hooks() -> None:
+def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
+    None
+):
     """Monkey-patch QwenPawAgent to add cloudpaw tools and prompt sections."""
     # IaC operations are delegated to iac-code via the built-in async
     # `delegate_external_agent` tool (qwenpaw >= v1.1.7b1).  No CloudPaw-side
@@ -555,11 +562,6 @@ def _patch_mission_master_prompt() -> None:
         )
         return
 
-    from .constants import (
-        BUILTIN_ORCHESTRATION_AGENT_ID,
-        BUILTIN_EXECUTOR_AGENT_ID,
-        BUILTIN_VERIFIER_AGENT_ID,
-    )
     from .prompts.master_prompt import CLOUDPAW_MASTER_PROMPT
 
     _CLOUDPAW_AGENT_IDS = frozenset(

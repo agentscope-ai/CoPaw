@@ -106,6 +106,7 @@ def _inject_routers(routers: list) -> None:
     try:
         from agentscope_runtime.engine.app import AgentApp
 
+        # pylint: disable=protected-access
         agent_app = (
             AgentApp._instances.get(AgentApp)
             if hasattr(AgentApp, "_instances")
