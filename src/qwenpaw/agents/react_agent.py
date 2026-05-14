@@ -798,11 +798,29 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         "需要操作时勿只输出计划或代码块。"
         "</system-hint>"
     )
+    _AUTO_CONTINUE_NO_TEXT_HINT_EN = (
+        "<system-hint>"
+        "Your previous assistant turn contained reasoning/thinking but no "
+        "user-visible text answer. Use the latest tool result and "
+        "conversation to provide a concise visible answer now. Do not stop "
+        "with thinking only."
+        "</system-hint>"
+    )
+    _AUTO_CONTINUE_NO_TEXT_HINT_ZH = (
+        "<system-hint>"
+        "上轮助手只有思考内容，没有用户可见的文字回答。请结合最新工具结果"
+        "和上下文，立即给出简短的可见回答。不要只输出思考内容。"
+        "</system-hint>"
+    )
 
-    def _auto_continue_system_hint(self) -> str:
+    def _auto_continue_system_hint(self, has_visible_text: bool = True) -> str:
         """Pick hint by agent language (zh vs others)."""
         raw_lang = getattr(self._agent_config, "language", None)
         lang = (raw_lang or "").strip().lower()
+        if not has_visible_text:
+            if lang == "zh":
+                return self._AUTO_CONTINUE_NO_TEXT_HINT_ZH
+            return self._AUTO_CONTINUE_NO_TEXT_HINT_EN
         if lang == "zh":
             return self._AUTO_CONTINUE_HINT_ZH
         return self._AUTO_CONTINUE_HINT_EN
@@ -818,20 +836,26 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             return text
         return text[-max_chars:].lstrip()
 
+    @staticmethod
+    def _auto_continue_has_visible_text(msg: Msg) -> bool:
+        return bool((msg.get_text_content() or "").strip())
+
     async def _auto_continue_if_text_only(
         self,
         msg: Msg,
         tool_choice: Literal["auto", "none", "required"] | None,
     ) -> Msg:
-        """Nudge the model when it returns text-only mid-task.
+        """Nudge the model when it returns no-tool output mid-task.
 
         Injects a language-matched hint (with a trailing excerpt of the
         assistant text for self-review) and runs up to
         ``_AUTO_CONTINUE_MAX_EXTRA`` extra ``_reasoning`` passes until a
         tool_use appears or the cap is
-        hit.  Uses the original ``tool_choice`` unchanged (no switching).
-        If an extra pass still returns text-only, keep the prior response to
-        avoid repeated duplicated answers.
+        hit.  Uses the original ``tool_choice`` unchanged (no switching). If
+        the prior response already had visible text and an extra pass still
+        returns text-only, keep the prior response to avoid duplicated
+        answers. If the prior response was thinking-only and an extra pass
+        returns visible text, keep the visible answer.
         """
         from ..plan.hints import should_skip_auto_continue
 
@@ -849,12 +873,13 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         while extra < self._AUTO_CONTINUE_MAX_EXTRA:
             if msg.has_content_blocks("tool_use"):
                 break
+            had_visible_text = self._auto_continue_has_visible_text(msg)
             extra += 1
             tail = self._auto_continue_tail_context(
                 msg,
                 self._AUTO_CONTINUE_TAIL_CHARS,
             )
-            hint_body = self._auto_continue_system_hint()
+            hint_body = self._auto_continue_system_hint(had_visible_text)
             if tail:
                 hint_body += (
                     "\n\n<previous-assistant-tail>\n"
@@ -882,6 +907,15 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             if next_msg.has_content_blocks("tool_use"):
                 msg = next_msg
                 continue
+            if not had_visible_text and self._auto_continue_has_visible_text(
+                next_msg,
+            ):
+                logger.info(
+                    "Auto-continue extra _reasoning produced visible text; "
+                    "replacing thinking-only response",
+                )
+                msg = next_msg
+                break
             logger.info(
                 "Auto-continue extra _reasoning still text-only; "
                 "keeping prior response",
