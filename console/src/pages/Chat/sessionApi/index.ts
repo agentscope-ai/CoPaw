@@ -9,6 +9,7 @@ import api, {
   type ChatStatus,
   type Message,
 } from "../../../api";
+import { normalizeMarkdownTableLineBreaks } from "../../../utils/markdown";
 import { toDisplayUrl } from "../utils";
 
 // ---------------------------------------------------------------------------
@@ -139,9 +140,15 @@ function contentToRequestParts(
   return parts;
 }
 function normalizeOutputMessageContent(content: unknown): unknown {
-  if (typeof content === "string") return content;
+  if (typeof content === "string") {
+    return normalizeMarkdownTableLineBreaks(content);
+  }
   if (!Array.isArray(content)) return content;
-  return content as ContentItem[];
+  return (content as ContentItem[]).map((item) =>
+    item.type === "text" && typeof item.text === "string"
+      ? { ...item, text: normalizeMarkdownTableLineBreaks(item.text) }
+      : item,
+  );
 }
 
 /**

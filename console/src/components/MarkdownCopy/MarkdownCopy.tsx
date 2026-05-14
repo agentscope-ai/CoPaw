@@ -5,7 +5,10 @@ import { XMarkdown } from "@ant-design/x-markdown";
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
 import { useAppMessage } from "../../hooks/useAppMessage";
-import { stripFrontmatter } from "../../utils/markdown";
+import {
+  normalizeMarkdownTableLineBreaks,
+  stripFrontmatter,
+} from "../../utils/markdown";
 import { mermaidComponents } from "../MermaidCodeBlock";
 import styles from "./index.module.less";
 
@@ -59,7 +62,7 @@ export function MarkdownCopy({
   const [editContent, setEditContent] = useState(content);
   const [localShowMarkdown, setLocalShowMarkdown] = useState(showMarkdown);
   const markdownContent = useMemo(
-    () => stripFrontmatter(content || ""),
+    () => normalizeMarkdownTableLineBreaks(stripFrontmatter(content || "")),
     [content],
   );
 

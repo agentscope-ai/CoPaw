@@ -32,6 +32,7 @@ import { ApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
 import { commandsApi } from "../../api/modules/commands";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
 import { planApi } from "../../api/modules/plan";
+import { normalizeMarkdownPayloadLineBreaks } from "../../utils/markdown";
 
 interface ApprovalMessageData {
   requestId: string;
@@ -1092,14 +1093,15 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          const normalizedPayload = normalizeMarkdownPayloadLineBreaks(payload);
 
-          if (payloadRequestsHistoryClear(payload)) {
+          if (payloadRequestsHistoryClear(normalizedPayload)) {
             pendingClearHistoryRef.current = true;
-            if (payloadCompletesResponse(payload)) {
+            if (payloadCompletesResponse(normalizedPayload)) {
               scheduleHistoryClear();
             }
           }
-          return payload as any;
+          return normalizedPayload as any;
         },
         replaceMediaURL: (url: string) => {
           return toDisplayUrl(url);
