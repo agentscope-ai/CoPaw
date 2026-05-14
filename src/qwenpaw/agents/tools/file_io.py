@@ -19,6 +19,30 @@ from ...config.context import (
 )
 from ...constant import WORKING_DIR, TRUNCATION_NOTICE_MARKER
 
+_IMAGE_FILE_EXTENSIONS = {
+    ".apng",
+    ".avif",
+    ".bmp",
+    ".gif",
+    ".heic",
+    ".heif",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
+
+_IMAGE_FILE_SIGNATURES = (
+    b"\x89PNG\r\n\x1a\n",
+    b"\xff\xd8\xff",
+    b"GIF87a",
+    b"GIF89a",
+    b"BM",
+)
+
 
 def _resolve_file_path(file_path: str) -> str:
     """Resolve file path: use absolute path as-is,
@@ -61,6 +85,39 @@ def _get_encoding_for_file(file_path: str) -> str:
     # Default: UTF-8 without BOM (safe for all other files)
     # This includes: .sh, .yaml, .json, .py, .js, .md, etc.
     return "utf-8"
+
+
+def _is_image_file(file_path: str) -> bool:
+    """Return True for common image files that should not be read as text."""
+    path = Path(file_path)
+    if path.suffix.lower() in _IMAGE_FILE_EXTENSIONS:
+        return True
+
+    try:
+        with path.open("rb") as file:
+            header = file.read(16)
+    except OSError:
+        return False
+
+    return any(
+        header.startswith(signature) for signature in _IMAGE_FILE_SIGNATURES
+    ) or (header.startswith(b"RIFF") and header[8:12] == b"WEBP")
+
+
+def _image_read_error(file_path: str) -> ToolResponse:
+    return ToolResponse(
+        content=[
+            TextBlock(
+                type="text",
+                text=(
+                    f"Error: {file_path} is an image file. "
+                    "`read_file` only reads text files and will not decode "
+                    "image bytes as text. Use a vision-capable model or an "
+                    "image-processing skill/tool for visual content."
+                ),
+            ),
+        ],
+    )
 
 
 async def read_file(  # pylint: disable=too-many-return-statements
@@ -130,6 +187,9 @@ async def read_file(  # pylint: disable=too-many-return-statements
                 ),
             ],
         )
+
+    if _is_image_file(file_path):
+        return _image_read_error(file_path)
 
     try:
         content = await read_file_safe(file_path)

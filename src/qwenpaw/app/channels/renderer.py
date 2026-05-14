@@ -92,6 +92,9 @@ class MessageRenderer:
         content = getattr(message, "content", None) or []
         s = self.style
 
+        if isinstance(content, str):
+            content = [TextContent(text=content)] if content else []
+
         if s.filter_thinking and msg_type == MessageType.REASONING:
             return []
 
