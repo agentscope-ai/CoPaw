@@ -393,6 +393,21 @@ def test_update_provider_for_builtin_persists_to_builtin_path(
     assert persisted_azure.base_url == "https://azure-updated.example/v1"
     assert persisted_azure.api_key == "sk-azure-updated"
 
+    ok = manager.update_provider(
+        "anthropic",
+        {
+            "base_url": "https://anthropic-updated.example",
+            "api_key": "sk-ant-updated",
+        },
+    )
+    assert ok is True
+    persisted_anthropic = manager.load_provider("anthropic", is_builtin=True)
+    assert persisted_anthropic is not None
+    assert isinstance(persisted_anthropic, AnthropicProvider)
+    assert persisted_anthropic.freeze_url is False
+    assert persisted_anthropic.base_url == "https://anthropic-updated.example"
+    assert persisted_anthropic.api_key == "sk-ant-updated"
+
 
 def test_update_provider_for_unknown_returns_false(
     isolated_secret_dir,
