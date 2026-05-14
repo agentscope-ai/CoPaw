@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Watch agent.json and trigger a graceful workspace reload on change.
 
 Delegates to ``MultiAgentManager.reload_agent`` so disk-edit reloads
 go through the same atomic workspace swap as frontend saves and wait
-for in-flight tasks. Only triggers when ``channels`` or ``heartbeat``
-hashes change, so runtime bookkeeping rewrites (e.g. ``last_dispatch``)
-do not cause spurious reloads.
+for in-flight tasks. Only triggers when ``channels``, ``heartbeat``,
+``mcp.clients`` or ``skills`` hashes change, so runtime bookkeeping
+rewrites (e.g. ``last_dispatch``) do not cause spurious reloads.
 """
 
 from __future__ import annotations
@@ -27,18 +26,39 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL = 2.0
 
 
-def _channels_hash(channels: Any) -> Optional[int]:
-    """Hash of channels section for change detection."""
-    if channels is None:
+def _hash(obj: Any) -> Optional[int]:
+    """Safely hash any config object to a stable int, or None."""
+    if obj is None:
         return None
-    return hash(str(channels.model_dump(mode="json")))
+    return hash(str(obj.model_dump(mode="json")))
+
+
+def _channels_hash(channels: Any) -> Optional[int]:
+    return _hash(channels)
 
 
 def _heartbeat_hash(hb: Optional["HeartbeatConfig"]) -> int:
-    """Hash of heartbeat config for change detection."""
     if hb is None:
         return hash("None")
-    return hash(str(hb.model_dump(mode="json")))
+    return _hash(hb)
+
+
+def _mcp_hash(mcp: Any) -> Optional[int]:
+    """Hash of mcp / mcp.clients section for change detection."""
+    if mcp is None:
+        return None
+    # mcp.clients is the dict of MCP client configs
+    clients = getattr(mcp, "clients", None)
+    if clients is None:
+        return None
+    return hash(str(clients))
+
+
+def _skills_hash(skills: Any) -> Optional[int]:
+    """Hash of skills section for change detection."""
+    if skills is None:
+        return None
+    return hash(str(skills))
 
 
 class AgentConfigWatcher:
@@ -51,16 +71,6 @@ class AgentConfigWatcher:
         workspace: "Workspace",
         poll_interval: float = DEFAULT_POLL_INTERVAL,
     ):
-        """Initialize agent config watcher.
-
-        Args:
-            agent_id: Agent ID to monitor.
-            workspace_dir: Path to agent's workspace directory.
-            workspace: Owning ``Workspace`` instance. The manager is
-                resolved lazily from it, since ``set_manager`` runs
-                after ``Workspace.start()``.
-            poll_interval: How often to check for changes (seconds).
-        """
         self._agent_id = agent_id
         self._workspace_dir = workspace_dir
         self._config_path = workspace_dir / "agent.json"
@@ -71,8 +81,9 @@ class AgentConfigWatcher:
         self._last_mtime: float = 0.0
         self._last_channels_hash: Optional[int] = None
         self._last_heartbeat_hash: Optional[int] = None
+        self._last_mcp_hash: Optional[int] = None
+        self._last_skills_hash: Optional[int] = None
 
-        # Set before triggering reload; poll loop checks this to stop.
         self._disabled: bool = False
 
     async def start(self) -> None:
@@ -90,10 +101,6 @@ class AgentConfigWatcher:
     async def stop(self) -> None:
         """Stop the polling task (no-op if already disabled)."""
         if self._disabled:
-            logger.info(
-                f"AgentConfigWatcher already disabled for agent "
-                f"{self._agent_id}, skipping cancel",
-            )
             return
         self._disabled = True
         if self._task:
@@ -110,21 +117,18 @@ class AgentConfigWatcher:
     # ------------------------------------------------------------------
 
     def _read_mtime(self) -> float:
-        """Return current mtime of agent.json, 0.0 if missing."""
         try:
             return self._config_path.stat().st_mtime
         except FileNotFoundError:
             return 0.0
 
     def _snapshot(self) -> None:
-        """Record current mtime and section hashes as the new baseline."""
         self._last_mtime = self._read_mtime()
         try:
             agent_config = load_agent_config(self._agent_id)
         except Exception:
             logger.exception(
-                f"AgentConfigWatcher ({self._agent_id}): "
-                f"failed to load initial config",
+                f"AgentConfigWatcher ({self._agent_id}): failed to load config",
             )
             return
         self._last_channels_hash = _channels_hash(
@@ -133,14 +137,17 @@ class AgentConfigWatcher:
         self._last_heartbeat_hash = _heartbeat_hash(
             getattr(agent_config, "heartbeat", None),
         )
+        self._last_mcp_hash = _mcp_hash(
+            getattr(agent_config, "mcp", None),
+        )
+        self._last_skills_hash = _skills_hash(
+            getattr(agent_config, "skills", None),
+        )
 
     def _resolve_manager(self):
-        """Return ``MultiAgentManager`` from the workspace, or ``None``."""
-        # pylint: disable=protected-access
         return getattr(self._workspace, "_manager", None)
 
     async def _poll_loop(self) -> None:
-        """Main polling loop."""
         while not self._disabled:
             try:
                 await asyncio.sleep(self._poll_interval)
@@ -149,8 +156,7 @@ class AgentConfigWatcher:
                 await self._check()
             except Exception:
                 logger.exception(
-                    f"AgentConfigWatcher ({self._agent_id}): "
-                    f"poll iteration failed",
+                    f"AgentConfigWatcher ({self._agent_id}): poll failed",
                 )
 
     async def _check(self) -> None:
@@ -164,8 +170,7 @@ class AgentConfigWatcher:
             agent_config = load_agent_config(self._agent_id)
         except Exception:
             logger.exception(
-                f"AgentConfigWatcher ({self._agent_id}): "
-                f"failed to parse agent.json",
+                f"AgentConfigWatcher ({self._agent_id}): failed to parse",
             )
             return
 
@@ -175,19 +180,24 @@ class AgentConfigWatcher:
         new_heartbeat_hash = _heartbeat_hash(
             getattr(agent_config, "heartbeat", None),
         )
-
-        old_channels_hash = self._last_channels_hash
-        old_heartbeat_hash = self._last_heartbeat_hash
-
-        changed = (
-            new_channels_hash != old_channels_hash
-            or new_heartbeat_hash != old_heartbeat_hash
+        new_mcp_hash = _mcp_hash(
+            getattr(agent_config, "mcp", None),
+        )
+        new_skills_hash = _skills_hash(
+            getattr(agent_config, "skills", None),
         )
 
-        # Refresh hashes regardless so non-meaningful rewrites
-        # (e.g. last_dispatch) re-baseline silently.
+        changed = any([
+            new_channels_hash != self._last_channels_hash,
+            new_heartbeat_hash != self._last_heartbeat_hash,
+            new_mcp_hash != self._last_mcp_hash,
+            new_skills_hash != self._last_skills_hash,
+        ])
+
         self._last_channels_hash = new_channels_hash
         self._last_heartbeat_hash = new_heartbeat_hash
+        self._last_mcp_hash = new_mcp_hash
+        self._last_skills_hash = new_skills_hash
 
         if not changed:
             return
@@ -196,23 +206,19 @@ class AgentConfigWatcher:
         if manager is None:
             logger.warning(
                 f"AgentConfigWatcher ({self._agent_id}): "
-                f"config changed but MultiAgentManager not attached; "
-                f"skipping reload",
+                f"config changed but manager not attached; skipping reload",
             )
             return
 
         self._disabled = True
-
         logger.info(
             f"AgentConfigWatcher ({self._agent_id}): "
-            f"config changed, triggering graceful reload "
-            f"(channels: {old_channels_hash} -> {new_channels_hash}, "
-            f"heartbeat: {old_heartbeat_hash} -> {new_heartbeat_hash})",
+            f"config changed, reloading "
+            f"(channels, heartbeat, mcp, skills)",
         )
         try:
             await manager.reload_agent(self._agent_id)
         except Exception:
             logger.exception(
-                f"AgentConfigWatcher ({self._agent_id}): "
-                f"reload_agent failed",
+                f"AgentConfigWatcher ({self._agent_id}): reload_agent failed",
             )
