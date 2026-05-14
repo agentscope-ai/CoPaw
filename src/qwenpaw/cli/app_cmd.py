@@ -1,15 +1,58 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 
 import click
 import uvicorn
 
-from ..constant import LOG_LEVEL_ENV
+from ..constant import LOG_LEVEL_ENV, EnvVarLoader
 from ..config.utils import write_last_api
 from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
+
+_LOOPBACK_HOSTNAMES = {"localhost"}
+_TRUTHY_ENV_VALUES = {"true", "1", "yes"}
+
+
+def _env_truthy(name: str) -> bool:
+    return EnvVarLoader.get_str(name, "").strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def _is_non_loopback_bind(host: str) -> bool:
+    normalized = (host or "").strip().lower().rstrip(".")
+    if normalized in _LOOPBACK_HOSTNAMES:
+        return False
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    try:
+        return not ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        # Hostnames can resolve to public interfaces, so require an explicit
+        # auth/proxy/override path unless it is a known loopback name.
+        return True
+
+
+def _guard_public_bind_without_auth(
+    host: str,
+    allow_unauth_public: bool,
+) -> None:
+    if allow_unauth_public or not _is_non_loopback_bind(host):
+        return
+    if _env_truthy("QWENPAW_AUTH_ENABLED"):
+        return
+    if _env_truthy("QWENPAW_TRUST_PROXY_AUTH"):
+        return
+
+    raise click.ClickException(
+        "Refusing to bind QwenPaw to non-loopback host "
+        f"'{host}' while authentication is disabled. Set "
+        "QWENPAW_AUTH_ENABLED=true, bind to 127.0.0.1 behind your "
+        "reverse proxy/Tailscale, set QWENPAW_TRUST_PROXY_AUTH=1 when "
+        "external auth terminates before QwenPaw, or pass "
+        "--allow-unauth-public to override.",
+    )
 
 
 @click.command("app")
@@ -45,6 +88,11 @@ from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
     help="Path substrings to hide from uvicorn access log (repeatable).",
 )
 @click.option(
+    "--allow-unauth-public",
+    is_flag=True,
+    help="Allow a non-loopback bind while built-in auth is disabled.",
+)
+@click.option(
     "--workers",
     type=int,
     default=None,
@@ -59,6 +107,7 @@ def app_cmd(
     workers: int,  # pylint: disable=unused-argument
     log_level: str,
     hide_access_paths: tuple[str, ...],
+    allow_unauth_public: bool,
 ) -> None:
     """Run QwenPaw FastAPI app."""
     # Handle deprecated --workers parameter
@@ -74,6 +123,8 @@ def app_cmd(
             err=True,
         )
         click.echo(err=True)
+
+    _guard_public_bind_without_auth(host, allow_unauth_public)
 
     # Persist last used host/port for other terminals
     if host == "0.0.0.0":

@@ -14,7 +14,9 @@ else
 fi
 
 export QWENPAW_PORT="${QWENPAW_PORT:-8088}"
-envsubst '${QWENPAW_PORT}' \
+export QWENPAW_AUTH_ENABLED="${QWENPAW_AUTH_ENABLED:-true}"
+export QWENPAW_TRUST_PROXY_AUTH="${QWENPAW_TRUST_PROXY_AUTH:-}"
+envsubst '${QWENPAW_PORT} ${QWENPAW_AUTH_ENABLED} ${QWENPAW_TRUST_PROXY_AUTH}' \
   < /etc/supervisor/conf.d/supervisord.conf.template \
   > /etc/supervisor/conf.d/supervisord.conf
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
