@@ -746,7 +746,6 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
         logs.append({"level": msg.type, "text": msg.text})
 
     page.on("console", on_console)
-    requests_list = state["network_requests"].setdefault(page_id, [])
 
     def on_request(req):
         requests_list.append(
