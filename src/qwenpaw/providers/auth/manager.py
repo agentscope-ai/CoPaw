@@ -133,12 +133,10 @@ class ProviderAuthManager:
         ):
             return AuthStatusResult(status=ProviderAuthStatus.NOT_REQUIRED)
         if auth_type == ProviderAuthType.API_KEY:
-            return AuthStatusResult(
-                status=(
-                    ProviderAuthStatus.AUTHENTICATED
-                    if bool(provider.api_key)
-                    else ProviderAuthStatus.NOT_CONFIGURED
-                ),
+            raise ProviderAuthError(
+                400,
+                f"Provider '{provider.id}' uses API key authentication "
+                "and does not support logout",
             )
 
         adapter = self._get_oauth_adapter_or_raise(provider)

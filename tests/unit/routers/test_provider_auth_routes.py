@@ -193,6 +193,14 @@ async def test_api_key_provider_start_returns_400(api_client) -> None:
     assert "API key authentication" in response.json()["detail"]
 
 
+async def test_api_key_provider_logout_returns_400(api_client) -> None:
+    async with api_client:
+        response = await api_client.post("/api/models/api/auth/logout")
+
+    assert response.status_code == 400
+    assert "does not support logout" in response.json()["detail"]
+
+
 async def test_oauth_provider_start_returns_standard_schema(
     api_client,
 ) -> None:

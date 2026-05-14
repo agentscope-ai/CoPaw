@@ -153,6 +153,22 @@ async def test_api_key_provider_status_not_configured(tmp_path: Path) -> None:
     assert status.status == ProviderAuthStatus.NOT_CONFIGURED
 
 
+async def test_api_key_provider_logout_is_not_supported(
+    tmp_path: Path,
+) -> None:
+    manager = _manager(
+        tmp_path,
+        {"api": _provider("api", api_key="sk-test")},
+        ProviderAuthRegistry(),
+    )
+
+    with pytest.raises(ProviderAuthError) as exc_info:
+        await manager.logout("api")
+
+    assert exc_info.value.status_code == 400
+    assert "does not support logout" in exc_info.value.message
+
+
 async def test_provider_without_required_api_key_is_not_required(
     tmp_path: Path,
 ) -> None:
