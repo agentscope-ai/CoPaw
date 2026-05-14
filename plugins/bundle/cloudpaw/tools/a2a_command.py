@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -37,14 +38,22 @@ class A2AListCommandHandler(BaseControlCommandHandler):
         agents_cfg = _load_a2a_agents(workspace_dir)
 
         if not agents_cfg:
-            return "暂无已注册的远程 A2A Agent。\n\n使用 POST /a2a/agents 注册新的 Agent，或在 A2A 管理页面添加。"
+            return (
+                "暂无已注册的远程 A2A Agent。\n\n"
+                "使用 POST /a2a/agents 注册新的 Agent，"
+                "或在 A2A 管理页面添加。"
+            )
 
         manager = get_a2a_manager()
 
         lines = ["**已注册的远程 A2A Agent：**\n"]
         for alias, reg in agents_cfg.items():
             card_info = await manager.get_card_info(reg["url"])
-            status = card_info.get("status", "disconnected") if card_info else "disconnected"
+            status = (
+                card_info.get("status", "disconnected")
+                if card_info
+                else "disconnected"
+            )
             name = card_info.get("name", "") if card_info else ""
             desc = card_info.get("description", "") if card_info else ""
             status_icon = "🟢" if status == "connected" else "⚪"

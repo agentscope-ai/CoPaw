@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Skill installation
 # ---------------------------------------------------------------------------
 
+
 def _install_plugin_skills() -> None:
     """Copy plugin skills into the shared skill pool."""
     from .constants import PLUGIN_DIR, _PLUGIN_SKILLS
@@ -39,7 +40,9 @@ def _install_plugin_skills() -> None:
             ensure_skill_pool_initialized,
         )
     except ImportError:
-        logger.error("Cannot import skill_system; skill installation skipped")
+        logger.error(
+            "Cannot import skill_system; skill installation skipped",
+        )
         return
 
     try:
@@ -144,6 +147,7 @@ def _ensure_default_env_vars() -> None:
 # A2A client manager initialization
 # ---------------------------------------------------------------------------
 
+
 def _init_a2a_manager() -> None:
     """Initialize the A2A client manager singleton.
 
@@ -152,6 +156,7 @@ def _init_a2a_manager() -> None:
     """
     try:
         from .modules.a2a.client_manager import get_a2a_manager
+
         get_a2a_manager()
         logger.info("A2A client manager initialized")
     except Exception as e:
@@ -163,6 +168,7 @@ def _register_a2a_command() -> None:
     try:
         from qwenpaw.app.runner.control_commands import register_command
         from .tools.a2a_command import A2AListCommandHandler
+
         register_command(A2AListCommandHandler())
         logger.info("Registered /a2a control command")
     except Exception as e:
@@ -173,6 +179,7 @@ def _register_a2a_command() -> None:
 # Alibaba Cloud CLI (aliyun) detection and auto-install
 # ---------------------------------------------------------------------------
 
+
 def _get_aliyun_cli_url() -> str | None:
     """Return the download URL for aliyun CLI based on OS and architecture."""
     system = platform.system()
@@ -180,11 +187,19 @@ def _get_aliyun_cli_url() -> str | None:
 
     if system == "Darwin":
         if machine in ("arm64", "aarch64"):
-            return "https://aliyuncli.alicdn.com/aliyun-cli-darwin-arm64-latest-amd64.tgz"
-        return "https://aliyuncli.alicdn.com/aliyun-cli-darwin-latest-amd64.tgz"
+            return (
+                "https://aliyuncli.alicdn.com/"
+                "aliyun-cli-darwin-arm64-latest-amd64.tgz"
+            )
+        return (
+            "https://aliyuncli.alicdn.com/aliyun-cli-darwin-latest-amd64.tgz"
+        )
     elif system == "Linux":
         if machine in ("aarch64", "arm64"):
-            return "https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-arm64.tgz"
+            return (
+                "https://aliyuncli.alicdn.com/"
+                "aliyun-cli-linux-latest-arm64.tgz"
+            )
         return "https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz"
     return None
 
@@ -195,7 +210,8 @@ def _install_aliyun_cli_blocking() -> bool:
     if url is None:
         logger.warning(
             "Unsupported platform for auto-install: %s/%s",
-            platform.system(), platform.machine(),
+            platform.system(),
+            platform.machine(),
         )
         return False
 
@@ -205,11 +221,13 @@ def _install_aliyun_cli_blocking() -> bool:
         logger.info("Downloading aliyun CLI from %s", url)
         subprocess.run(
             ["curl", "-fsSL", url, "-o", tgz_path],
-            check=True, timeout=120,
+            check=True,
+            timeout=120,
         )
         subprocess.run(
             ["tar", "-xzf", tgz_path, "-C", tmp_dir],
-            check=True, timeout=30,
+            check=True,
+            timeout=30,
         )
 
         aliyun_bin = os.path.join(tmp_dir, "aliyun")
@@ -224,7 +242,8 @@ def _install_aliyun_cli_blocking() -> bool:
         except PermissionError:
             subprocess.run(
                 ["sudo", "mv", aliyun_bin, dest],
-                check=True, timeout=10,
+                check=True,
+                timeout=10,
             )
 
         os.chmod(dest, 0o755)
@@ -243,7 +262,9 @@ async def _ensure_aliyun_cli() -> None:
         try:
             result = subprocess.run(
                 ["aliyun", "version"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             version = result.stdout.strip() or "unknown"
             logger.info("aliyun CLI already installed: %s", version)
@@ -258,13 +279,14 @@ async def _ensure_aliyun_cli() -> None:
     else:
         logger.warning(
             "aliyun CLI auto-install failed. Install manually: "
-            "https://help.aliyun.com/zh/cli/"
+            "https://help.aliyun.com/zh/cli/",
         )
 
 
 # ---------------------------------------------------------------------------
 # Plugin class
 # ---------------------------------------------------------------------------
+
 
 class CloudPawPlugin:
     """CloudPaw plugin entry point."""
@@ -287,7 +309,11 @@ class CloudPawPlugin:
         """Initialize all CloudPaw components on application startup."""
         from .injectors import inject_interaction_module
         from .agents_setup import ensure_builtin_agents
-        from .hooks import setup_tool_and_prompt_hooks, setup_mission_hooks, setup_acp_auto_approve
+        from .hooks import (
+            setup_tool_and_prompt_hooks,
+            setup_mission_hooks,
+            setup_acp_auto_approve,
+        )
         from .routers_setup import mount_routers
 
         logger.info("CloudPaw plugin starting up...")
@@ -332,6 +358,7 @@ class CloudPawPlugin:
         logger.info("CloudPaw plugin shutting down...")
         try:
             from .modules.a2a.client_manager import shutdown_a2a_manager
+
             await shutdown_a2a_manager()
             logger.info("[CloudPaw] A2A client manager shut down")
         except Exception as e:

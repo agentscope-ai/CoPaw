@@ -39,10 +39,12 @@ _AGENT_SPECS: list[dict[str, Any]] = [
             "通过 ACP 协议直接调用 iac-code 引擎完成 IaC 模板生成、费用估算与资源栈管理。"
         ),
         "persona_pack": "orchestration",
-        "skill_names": sorted([
-            "multi_agent_collaboration",
-            "file_reader",
-        ]),
+        "skill_names": sorted(
+            [
+                "multi_agent_collaboration",
+                "file_reader",
+            ],
+        ),
         "extra_tools": {
             "proposal_choice": {
                 "name": "proposal_choice",
@@ -53,7 +55,9 @@ _AGENT_SPECS: list[dict[str, Any]] = [
             "manage_prd": {
                 "name": "manage_prd",
                 "enabled": True,
-                "description": "操作 PRD stories：create/add/update/delete/mark_passed",
+                "description": (
+                    "操作 PRD stories：" "create/add/update/delete/mark_passed"
+                ),
                 "icon": "📋",
             },
             "delegate_external_agent": {
@@ -99,11 +103,13 @@ _AGENT_SPECS: list[dict[str, Any]] = [
             "以及必要的 Web 自动化操作。"
         ),
         "persona_pack": "executor",
-        "skill_names": sorted([
-            "alicloud_cli",
-            "file_reader",
-            "browser_cdp",
-        ]),
+        "skill_names": sorted(
+            [
+                "alicloud_cli",
+                "file_reader",
+                "browser_cdp",
+            ],
+        ),
         "extra_tools": {
             **_DISABLED_AGENT_TOOLS,
         },
@@ -117,11 +123,13 @@ _AGENT_SPECS: list[dict[str, Any]] = [
             "只产出验证结论，不修改任何资源与应用。"
         ),
         "persona_pack": "verifier",
-        "skill_names": sorted([
-            "alicloud_cli",
-            "file_reader",
-            "browser_cdp",
-        ]),
+        "skill_names": sorted(
+            [
+                "alicloud_cli",
+                "file_reader",
+                "browser_cdp",
+            ],
+        ),
         "extra_tools": {
             **_DISABLED_AGENT_TOOLS,
         },
