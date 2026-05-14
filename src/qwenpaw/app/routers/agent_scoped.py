@@ -22,7 +22,10 @@ class AgentContextMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Extract agentId and root_session_id from path/headers."""
         import logging
-        from ..agent_context import set_current_agent_id
+        from ..agent_context import (
+            set_current_agent_id,
+            set_current_root_session_id,
+        )
 
         logger = logging.getLogger(__name__)
         agent_id = None
@@ -49,10 +52,13 @@ class AgentContextMiddleware(BaseHTTPMiddleware):
         # Extract X-Root-Session-Id header for cross-session approval routing
         root_session_id = request.headers.get("X-Root-Session-Id")
         if root_session_id:
-            # Inject into request.request_context for runner access
-            if not hasattr(request, "request_context"):
-                request.request_context = {}
-            request.request_context["root_session_id"] = root_session_id
+            request_context = getattr(request.state, "request_context", None)
+            if not isinstance(request_context, dict):
+                request_context = {}
+                request.state.request_context = request_context
+            request_context["root_session_id"] = root_session_id
+            request.request_context = request_context
+            set_current_root_session_id(root_session_id)
             logger.debug(
                 "AgentContextMiddleware: root_session_id=%s from "
                 "X-Root-Session-Id header",
