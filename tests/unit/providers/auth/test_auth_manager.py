@@ -9,7 +9,10 @@ import pytest
 
 from qwenpaw.providers.auth.adapter import ProviderAuthAdapter
 from qwenpaw.providers.auth.credential_store import OAuthCredentialStore
-from qwenpaw.providers.auth.manager import ProviderAuthError, ProviderAuthManager
+from qwenpaw.providers.auth.manager import (
+    ProviderAuthError,
+    ProviderAuthManager,
+)
 from qwenpaw.providers.auth.models import (
     AuthStartRequest,
     AuthStartResult,
@@ -58,7 +61,11 @@ class FakeAuthAdapter(ProviderAuthAdapter):
         self.poll_count = 0
         self.logout_called = False
 
-    async def start(self, provider, request: AuthStartRequest) -> AuthStartResult:
+    async def start(
+        self,
+        provider,
+        request: AuthStartRequest,
+    ) -> AuthStartResult:
         return AuthStartResult(
             flow_id="fake-flow",
             flow_type=ProviderAuthFlowType.DEVICE_CODE,
@@ -91,7 +98,11 @@ class FakeAuthAdapter(ProviderAuthAdapter):
             updated_at=1760000001,
         )
 
-    async def logout(self, provider, credential: OAuthCredential | None) -> None:
+    async def logout(
+        self,
+        provider,
+        credential: OAuthCredential | None,
+    ) -> None:
         self.logout_called = True
 
 

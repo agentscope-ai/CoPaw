@@ -28,14 +28,18 @@ class OAuthCredentialStore:
     """Persist OAuth credentials under ``SECRET_DIR/providers/oauth``."""
 
     def __init__(self, root: Path | None = None) -> None:
-        self.root = Path(root) if root is not None else (
-            SECRET_DIR / "providers" / "oauth"
+        self.root = (
+            Path(root)
+            if root is not None
+            else (SECRET_DIR / "providers" / "oauth")
         )
 
     def save(self, credential: OAuthCredential) -> None:
         """Save a credential with sensitive fields encrypted."""
         if not credential.access_token:
-            raise ValueError("Cannot save OAuth credential without access token")
+            raise ValueError(
+                "Cannot save OAuth credential without access token",
+            )
 
         self.root.mkdir(parents=True, exist_ok=True)
         self._chmod_best_effort(self.root, 0o700)

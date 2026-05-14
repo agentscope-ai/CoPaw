@@ -35,8 +35,8 @@ class ProviderAuthAdapter(ABC):
 
     async def poll(
         self,
-        provider: Provider,
-        flow_id: str,
+        provider: Provider,  # pylint: disable=unused-argument
+        flow_id: str,  # pylint: disable=unused-argument
     ) -> AuthStatusResult:
         """Poll an in-progress auth flow."""
         return AuthStatusResult(
@@ -55,7 +55,7 @@ class ProviderAuthAdapter(ABC):
 
     async def refresh(
         self,
-        provider: Provider,
+        provider: Provider,  # pylint: disable=unused-argument
         credential: OAuthCredential,
     ) -> OAuthCredential:
         """Refresh a stored credential if the provider supports it."""
@@ -63,15 +63,15 @@ class ProviderAuthAdapter(ABC):
 
     async def logout(
         self,
-        provider: Provider,
-        credential: OAuthCredential | None,
+        provider: Provider,  # pylint: disable=unused-argument
+        credential: OAuthCredential | None,  # pylint: disable=unused-argument
     ) -> None:
         """Revoke or invalidate credentials with the remote provider."""
         return None
 
     async def get_status(
         self,
-        provider: Provider,
+        provider: Provider,  # pylint: disable=unused-argument
         credential: OAuthCredential | None,
     ) -> AuthStatusResult:
         """Return safe auth status metadata for frontend display."""

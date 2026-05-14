@@ -1,17 +1,33 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=unused-argument,redefined-outer-name
 """Route tests for provider auth endpoints."""
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
-import importlib.util
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+from qwenpaw.providers.auth.adapter import ProviderAuthAdapter
+from qwenpaw.providers.auth.credential_store import OAuthCredentialStore
+from qwenpaw.providers.auth.manager import ProviderAuthManager
+from qwenpaw.providers.auth.models import (
+    AuthStartRequest,
+    AuthStartResult,
+    AuthStatusResult,
+    OAuthCredential,
+    ProviderAuthFlowType,
+    ProviderAuthStatus,
+    ProviderAuthType,
+)
+from qwenpaw.providers.auth.registry import ProviderAuthRegistry
+from qwenpaw.providers.openai_provider import OpenAIProvider
 
 
 class _MockModule(types.ModuleType):
@@ -49,20 +65,6 @@ assert _SPEC is not None and _SPEC.loader is not None
 providers_router = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = providers_router
 _SPEC.loader.exec_module(providers_router)
-from qwenpaw.providers.auth.adapter import ProviderAuthAdapter
-from qwenpaw.providers.auth.credential_store import OAuthCredentialStore
-from qwenpaw.providers.auth.manager import ProviderAuthManager
-from qwenpaw.providers.auth.models import (
-    AuthStartRequest,
-    AuthStartResult,
-    AuthStatusResult,
-    OAuthCredential,
-    ProviderAuthFlowType,
-    ProviderAuthStatus,
-    ProviderAuthType,
-)
-from qwenpaw.providers.auth.registry import ProviderAuthRegistry
-from qwenpaw.providers.openai_provider import OpenAIProvider
 
 pytestmark = pytest.mark.anyio
 
@@ -96,7 +98,11 @@ class FakeAuthAdapter(ProviderAuthAdapter):
     provider_id = "oauth"
     auth_type = ProviderAuthType.OAUTH_DEVICE_CODE
 
-    async def start(self, provider, request: AuthStartRequest) -> AuthStartResult:
+    async def start(
+        self,
+        provider,
+        request: AuthStartRequest,
+    ) -> AuthStartResult:
         return AuthStartResult(
             flow_id="fake-flow",
             flow_type=ProviderAuthFlowType.DEVICE_CODE,
