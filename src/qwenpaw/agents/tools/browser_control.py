@@ -245,6 +245,7 @@ def _get_workspace_state(
 
 # Stop the browser after this many seconds of inactivity (default 10 minutes).
 _BROWSER_IDLE_TIMEOUT = 600.0
+_EXTERNAL_CDP_CONNECT_TIMEOUT = 15.0
 
 
 def _touch_activity(state: dict) -> None:
@@ -533,6 +534,31 @@ async def _wait_for_cdp_ready(
     raise RuntimeError(
         f"Timed out waiting for Chrome CDP endpoint on port {port}: {last_error}",
     )
+
+
+async def _connect_over_cdp_with_timeout(
+    pw: Any,
+    cdp_url: str,
+    timeout: float = _EXTERNAL_CDP_CONNECT_TIMEOUT,
+) -> Any:
+    """Connect to an external CDP endpoint without blocking indefinitely."""
+    return await asyncio.wait_for(
+        pw.chromium.connect_over_cdp(cdp_url),
+        timeout=timeout,
+    )
+
+
+async def _stop_playwright_after_failed_cdp_connect(pw: Any) -> None:
+    """Stop Playwright after a failed external CDP connection attempt."""
+    if pw is None:
+        return
+    try:
+        await pw.stop()
+    except Exception:
+        logger.debug(
+            "Failed to stop Playwright after CDP connect failure",
+            exc_info=True,
+        )
 
 
 async def _start_managed_cdp_browser(
@@ -3903,10 +3929,11 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
             ),
         )
 
+    pw = None
     try:
         async_playwright = _ensure_playwright_async()
         pw = await async_playwright().start()
-        browser = await pw.chromium.connect_over_cdp(cdp_url)
+        browser = await _connect_over_cdp_with_timeout(pw, cdp_url)
         contexts = browser.contexts
         if contexts:
             context = contexts[0]
@@ -3947,7 +3974,23 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
                 indent=2,
             ),
         )
+    except asyncio.TimeoutError:
+        await _stop_playwright_after_failed_cdp_connect(pw)
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": (
+                        "CDP connect timed out after "
+                        f"{_EXTERNAL_CDP_CONNECT_TIMEOUT:g}s: {cdp_url}"
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
     except Exception as e:
+        await _stop_playwright_after_failed_cdp_connect(pw)
         return _tool_response(
             json.dumps(
                 {"ok": False, "error": f"CDP connect failed: {e!s}"},
