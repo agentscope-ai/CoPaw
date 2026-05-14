@@ -119,24 +119,7 @@ export function ChannelDrawer({
   const label = activeKey ? getChannelLabel(activeKey, t) : activeLabel;
   const { message } = useAppMessage();
   const matrixAuthMethod = Form.useWatch("auth_method", form);
-  const matrixUserId = Form.useWatch("user_id", form);
   const isMatrixPasswordAuth = matrixAuthMethod === "password";
-
-  const matrixE2eeTokenWarning =
-    "End-to-end encryption only works with Password authentication. Switch to Password or disable E2EE.";
-
-  const validateMatrixE2eeAuthCompat = async () => {
-    if (
-      form.getFieldValue("encryption") &&
-      form.getFieldValue("auth_method") === "token"
-    ) {
-      throw new Error(matrixE2eeTokenWarning);
-    }
-  };
-
-  const revalidateMatrixE2eeAuth = () => {
-    void form.validateFields(["auth_method", "encryption"]);
-  };
 
   // Parent calls form.setFieldsValue() before the Form mounts, which wins over
   // initialValues. Re-apply auth_method after open so the dropdown is correct.
@@ -218,14 +201,8 @@ export function ChannelDrawer({
             <Form.Item
               name="user_id"
               label="User ID"
-              dependencies={["auth_method", "username"]}
-              rules={[
-                {
-                  required:
-                    isMatrixPasswordAuth && !form.getFieldValue("username"),
-                  message: "Please enter User ID (or provide Username)",
-                },
-              ]}
+              tooltip="Accepts a full MXID (e.g. @bot:matrix.org) or just the localpart (e.g. bot)."
+              rules={[{ required: true, message: "Please enter User ID" }]}
             >
               <Input placeholder="@bot:matrix.org" />
             </Form.Item>
@@ -233,21 +210,17 @@ export function ChannelDrawer({
               name="auth_method"
               label="Auth Method"
               initialValue="token"
-              dependencies={["encryption"]}
-              rules={[{ validator: validateMatrixE2eeAuthCompat }]}
             >
               <Select
                 options={[
                   { value: "token", label: "Token" },
                   { value: "password", label: "Password" },
                 ]}
-                onChange={revalidateMatrixE2eeAuth}
               />
             </Form.Item>
             <Form.Item
               name="access_token"
               label="Access Token"
-              dependencies={["auth_method"]}
               rules={[
                 {
                   required: !isMatrixPasswordAuth,
@@ -259,46 +232,8 @@ export function ChannelDrawer({
               <Input.Password placeholder="syt_..." />
             </Form.Item>
             <Form.Item
-              name="device_name"
-              label="Device Name"
-              rules={[{ required: true }]}
-            >
-              <Input placeholder="device_id" />
-            </Form.Item>
-            <Form.Item
-              name="encryption"
-              label="Enable End-to-End Encryption (You need verify the device after enable E2EE, Only Password Auth supported)"
-              dependencies={["auth_method"]}
-              rules={[
-                { required: true },
-                { validator: validateMatrixE2eeAuthCompat },
-              ]}
-            >
-              <Switch
-                onChange={(checked: boolean) => {
-                  if (checked) form.setFieldValue("access_token", "");
-                  revalidateMatrixE2eeAuth();
-                }}
-              />
-            </Form.Item>
-            <Form.Item
-              name="username"
-              label="Username"
-              dependencies={["auth_method", "user_id"]}
-              rules={[
-                {
-                  required: isMatrixPasswordAuth && !matrixUserId,
-                  message: "Please enter username (or provide User ID)",
-                },
-              ]}
-              hidden={!isMatrixPasswordAuth}
-            >
-              <Input placeholder="Matrix localpart or full MXID" />
-            </Form.Item>
-            <Form.Item
               name="password"
               label="Password"
-              dependencies={["auth_method"]}
               rules={[
                 {
                   required: isMatrixPasswordAuth,
@@ -308,6 +243,22 @@ export function ChannelDrawer({
               hidden={!isMatrixPasswordAuth}
             >
               <Input.Password placeholder="Account password for login" />
+            </Form.Item>
+            <Form.Item
+              name="encryption"
+              label="Enable End-to-End Encryption"
+              tooltip="After enabling, you must verify the device in a Matrix client (e.g. Element). E2EE requires manually installing matrix-nio[e2e] (pip install matrix-nio[e2e])."
+              valuePropName="checked"
+              hidden={!isMatrixPasswordAuth}
+            >
+              <Switch />
+            </Form.Item>
+            <Form.Item
+              name="device_name"
+              label="Device Name"
+              tooltip="A stable device identity for the Matrix client. Defaults to 'qwenpaw-worker' if left empty."
+            >
+              <Input placeholder="qwenpaw-worker" />
             </Form.Item>
           </>
         );
@@ -1323,12 +1274,12 @@ export function ChannelDrawer({
               onSubmit(values);
               return;
             }
-            const authMethod = values.auth_method;
-            if (authMethod === "password") {
-              onSubmit({ ...values, access_token: "" });
-              return;
+            const { auth_method, ...rest } = values;
+            if (auth_method === "password") {
+              onSubmit({ ...rest, access_token: "" });
+            } else {
+              onSubmit({ ...rest, password: "", encryption: false });
             }
-            onSubmit({ ...values, username: "", password: "" });
           }}
         >
           <Form.Item
