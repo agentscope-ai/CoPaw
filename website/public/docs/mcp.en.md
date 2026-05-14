@@ -29,11 +29,13 @@ Both types can be used simultaneously without conflict.
 
 For local MCP servers, you need:
 
-- **Node.js** 18+ ([download](https://nodejs.org/))
+- **Node.js** 18+ ([download](https://nodejs.org/)). An active LTS release such as Node.js 22 is recommended for `npx`-based stdio MCP servers.
 
 ```bash
 node --version  # Check version
 ```
+
+> Use an active Node.js LTS release for local MCP servers. Node.js Current/non-LTS releases such as 25.x can break some MCP packages because their dependencies may rely on module resolution behavior that changed outside LTS.
 
 > Remote MCP servers require no local dependencies.
 
@@ -140,6 +142,8 @@ Tavily is an AI-optimized web search service that enables agents to perform real
 ```
 
 > **Built-in Support**: A `tavily_search` client is automatically created at system startup. It auto-enables when the `TAVILY_API_KEY` environment variable is set. You can also directly modify the tavily mcp configuration.
+
+> If Tavily fails to start with `ERR_UNSUPPORTED_DIR_IMPORT` or a `zod/v3` import error, switch the Docker or local runtime to Node.js 22 LTS and restart QwenPaw.
 
 #### Remote MCP Service
 

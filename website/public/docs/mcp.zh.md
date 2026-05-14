@@ -29,11 +29,13 @@ QwenPaw 为智能体提供两类工具：
 
 使用本地 MCP 服务器需要：
 
-- **Node.js** 18+ （[下载](https://nodejs.org/)）
+- **Node.js** 18+（[下载](https://nodejs.org/)）。基于 `npx` 的 stdio MCP 服务器推荐使用 Node.js 22 等仍在维护的 LTS 版本。
 
 ```bash
 node --version  # 检查版本
 ```
+
+> 本地 MCP 服务器建议使用仍在维护的 Node.js LTS 版本。Node.js Current/非 LTS 版本（例如 25.x）可能因依赖包使用的模块解析行为变化而导致部分 MCP 包无法启动。
 
 > 远程 MCP 服务器无需本地依赖。
 
@@ -140,6 +142,8 @@ Tavily 是一个专为 AI 优化的网络搜索服务，可让智能体进行实
 ```
 
 > **内置支持**：系统启动时会自动创建名为 `tavily_search` 的客户端。如果环境变量中已设置 `TAVILY_API_KEY`，该客户端会自动启用。你也可以直接修改tavily mcp的配置。
+
+> 如果 Tavily 启动时报 `ERR_UNSUPPORTED_DIR_IMPORT` 或 `zod/v3` 导入错误，请将 Docker 或本地运行时切换到 Node.js 22 LTS 后重启 QwenPaw。
 
 #### 远程 MCP 服务
 

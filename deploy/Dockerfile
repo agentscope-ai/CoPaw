@@ -1,7 +1,10 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build console frontend (dist not committed in repo).
 # -----------------------------------------------------------------------------
-FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim AS console-builder
+# Keep Docker on an LTS Node release. Some npx-based MCP servers fail on
+# Node Current releases, for example Node 25.
+ARG NODE_IMAGE=node:22-bookworm-slim
+FROM ${NODE_IMAGE} AS console-builder
 WORKDIR /app
 COPY console /app/console
 RUN cd /app/console && npm ci --include=dev && npm run build
@@ -9,7 +12,7 @@ RUN cd /app/console && npm ci --include=dev && npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: runtime image with Python, Chromium, and app.
 # -----------------------------------------------------------------------------
-FROM agentscope-registry.ap-southeast-1.cr.aliyuncs.com/agentscope/node:slim
+FROM ${NODE_IMAGE}
 
 # ENV variables
 ENV NODE_ENV=production
