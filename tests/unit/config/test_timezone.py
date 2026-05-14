@@ -101,7 +101,9 @@ def test_detect_system_timezone_inner_falls_back_to_utc(
     monkeypatch.setattr(timezone_config, "_probe_python", lambda: None)
     monkeypatch.setattr(timezone_config, "_probe_env", lambda: "Invalid/Zone")
     monkeypatch.setattr(
-        timezone_config, "_probe_windows_registry", lambda: None
+        timezone_config,
+        "_probe_windows_registry",
+        lambda: None,
     )
     monkeypatch.setattr(timezone_config.os, "name", "nt")
 
