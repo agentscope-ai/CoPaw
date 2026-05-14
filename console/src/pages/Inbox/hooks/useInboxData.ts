@@ -148,10 +148,41 @@ export const useInboxData = () => {
 
   useEffect(() => {
     void loadPushMessages();
-    const timer = window.setInterval(() => {
-      void loadPushMessages();
-    }, PUSH_POLLING_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+
+    let timer: number | null = null;
+
+    const startPolling = () => {
+      if (timer) return;
+      timer = window.setInterval(() => {
+        void loadPushMessages();
+      }, PUSH_POLLING_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (timer) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadPushMessages();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === "visible") {
+      startPolling();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [loadPushMessages]);
 
   const markMessageAsRead = useCallback((messageId: string) => {

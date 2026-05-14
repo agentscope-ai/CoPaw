@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Tabs,
   Empty,
@@ -28,18 +28,22 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { ApprovalCard as GlobalApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
-import api from "../../api";
 import { commandsApi } from "../../api/modules/commands";
 import { chatApi } from "../../api/modules/chat";
 import sessionApi from "../Chat/sessionApi";
 import { PushMessageCard } from "./components";
 import { useInboxData } from "./hooks/useInboxData";
-import type { PushMessage } from "./types";
+import { useTraceViewer } from "./hooks/useTraceViewer";
 import { useAgentStore } from "../../stores/agentStore";
 import {
   DEFAULT_AGENT_ID,
   getAgentDisplayName,
 } from "../../utils/agentDisplayName";
+import {
+  getDetailModalTitle,
+  formatToolInput,
+  formatToolBlockContent,
+} from "./utils/traceUtils";
 import styles from "./index.module.less";
 
 type TabKey = "approvals" | "messages";
@@ -57,233 +61,6 @@ const resolveInitialTab = (): TabKey => {
   return "messages";
 };
 
-const buildContentFallbackTrace = (messageItem: PushMessage) => ({
-  events: messageItem.content
-    ? [
-        {
-          at: messageItem.createdAt.getTime() / 1000,
-          event: {
-            role: "assistant",
-            name: "assistant",
-            content: [
-              {
-                type: "text",
-                text: messageItem.content,
-              },
-            ],
-          },
-        },
-      ]
-    : [],
-});
-
-const getPrimaryTraceBlock = (
-  event: Record<string, unknown>,
-): Record<string, unknown> | null => {
-  const content = event.content;
-  if (!Array.isArray(content) || !content.length) return null;
-  const first = content[0];
-  if (!first || typeof first !== "object") return null;
-  return first as Record<string, unknown>;
-};
-
-const isCollapsibleTraceEvent = (
-  kind: string,
-  event: Record<string, unknown>,
-): boolean => {
-  const lowerKind = kind.toLowerCase();
-  if (lowerKind.includes("thinking") || lowerKind.includes("tool")) {
-    return true;
-  }
-  const block = getPrimaryTraceBlock(event);
-  const blockType = String(block?.type || "").toLowerCase();
-  if (
-    blockType === "thinking" ||
-    blockType === "tool_use" ||
-    blockType === "tool_result"
-  ) {
-    return true;
-  }
-  return false;
-};
-
-const extractTraceText = (event: Record<string, unknown>): string => {
-  const block = getPrimaryTraceBlock(event);
-  if (!block) return "";
-  const blockType = String(block.type || "").toLowerCase();
-  if (blockType === "thinking") {
-    const thinking = block.thinking;
-    if (typeof thinking === "string" && thinking.trim()) {
-      return thinking.trim();
-    }
-  }
-  if (blockType === "text") {
-    const text = block.text;
-    if (typeof text === "string" && text.trim()) {
-      return text.trim();
-    }
-  }
-  if (blockType === "tool_result") {
-    const output = block.output;
-    if (Array.isArray(output)) {
-      const textChunks = output
-        .map((item) => {
-          if (!item || typeof item !== "object") return "";
-          const text = (item as Record<string, unknown>).text;
-          return typeof text === "string" ? text : "";
-        })
-        .filter(Boolean);
-      if (textChunks.length) return textChunks.join("\n");
-    }
-  }
-  if (blockType === "tool_use") {
-    const rawInput = block.raw_input;
-    if (typeof rawInput === "string" && rawInput.trim()) {
-      return rawInput.trim();
-    }
-  }
-  return "";
-};
-
-const normalizeTraceKind = (event: Record<string, unknown>): string => {
-  if (event.type === "response_completed") return "response_completed";
-  const block = getPrimaryTraceBlock(event);
-  const blockType = String(block?.type || "").toLowerCase();
-  if (blockType === "thinking") return "thinking";
-  if (blockType === "tool_use") return "tool_call";
-  if (blockType === "tool_result") return "tool_output";
-  if (blockType === "text") return "push_preview";
-  return "event";
-};
-
-type TraceDisplayItem = {
-  at: number;
-  eventType: string;
-  eventRecord: Record<string, unknown>;
-  traceText: string;
-  collapsible: boolean;
-  collapseTitle: string;
-  toolInput?: string;
-  toolOutput?: string;
-  renderKind: "tool_pair" | "normal";
-};
-
-const shouldHideTraceEvent = (
-  eventType: string,
-  eventRecord: Record<string, unknown>,
-): boolean => {
-  const lowerType = eventType.toLowerCase();
-  if (lowerType === "response_completed") return true;
-  if (
-    !extractTraceText(eventRecord) &&
-    !isCollapsibleTraceEvent(eventType, eventRecord)
-  ) {
-    return true;
-  }
-  return false;
-};
-
-const getTraceFoldTitle = (
-  eventType: string,
-  eventRecord: Record<string, unknown>,
-): string => {
-  const lowerType = eventType.toLowerCase();
-  if (lowerType.includes("thinking")) return "Thinking";
-  if (lowerType.includes("tool")) {
-    const block = getPrimaryTraceBlock(eventRecord);
-    const toolName = block?.name;
-    if (typeof toolName === "string" && toolName.trim()) {
-      return toolName;
-    }
-    return "Tool";
-  }
-  return "Details";
-};
-
-const getTraceFoldIcon = (eventType: string) => {
-  const lowerType = eventType.toLowerCase();
-  if (lowerType.includes("thinking")) {
-    return <BulbOutlined />;
-  }
-  if (lowerType.includes("tool")) {
-    return <ToolOutlined />;
-  }
-  return null;
-};
-
-const getToolFieldText = (
-  eventRecord: Record<string, unknown>,
-  field: "tool_input" | "tool_output",
-): string => {
-  const block = getPrimaryTraceBlock(eventRecord);
-  if (!block) return "";
-  const blockType = String(block.type || "").toLowerCase();
-  if (field === "tool_input" && blockType === "tool_use") {
-    const rawInput = block.raw_input;
-    if (typeof rawInput === "string" && rawInput.trim()) return rawInput;
-    const input = block.input;
-    if (input !== undefined) {
-      try {
-        return JSON.stringify(input, null, 2);
-      } catch {
-        return String(input);
-      }
-    }
-  }
-  if (field === "tool_output" && blockType === "tool_result") {
-    const output = block.output;
-    if (output !== undefined) {
-      try {
-        return JSON.stringify(output, null, 2);
-      } catch {
-        return String(output);
-      }
-    }
-  }
-  return "";
-};
-
-const formatToolInput = (text: string): string => {
-  if (!text.trim()) return "{}";
-  return text;
-};
-
-const formatToolBlockContent = (text: string): string => {
-  const normalized = text.trim();
-  if (!normalized) return "";
-  try {
-    const parsed = JSON.parse(normalized);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return text;
-  }
-};
-
-const normalizeDetailTaskName = (title: string): string => {
-  if (!title) return "-";
-  return title
-    .replace(/^(cron result|heartbeat result)\s*[:：]\s*/i, "")
-    .replace(/^(定时任务结果|心跳结果)\s*[:：]\s*/i, "")
-    .trim();
-};
-
-const getDetailModalTitle = (
-  messageItem: PushMessage | null,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string => {
-  if (!messageItem) return t("inbox.messageDetailTitle");
-  const sourceType = (messageItem.metadata?.sourceType || "").toLowerCase();
-  if (sourceType === "cron") {
-    return t("inbox.detailCronTitle", {
-      name: normalizeDetailTaskName(messageItem.title),
-    });
-  }
-  if (sourceType === "heartbeat") {
-    return t("inbox.detailHeartbeatTitle");
-  }
-  return messageItem.title || t("inbox.messageDetailTitle");
-};
-
 const renderMarkdownText = (text: string, className: string) => (
   <div className={className}>
     <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
@@ -297,21 +74,8 @@ export default function InboxPage() {
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<
     string | undefined
   >(undefined);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState<PushMessage | null>(
-    null,
-  );
-  const [traceLoading, setTraceLoading] = useState(false);
-  const [traceData, setTraceData] = useState<{
-    events: Array<{ at: number; event: Record<string, unknown> }>;
-  } | null>(null);
-  const [expandedTraceMap, setExpandedTraceMap] = useState<
-    Record<string, boolean>
-  >({});
   const [messagesPage, setMessagesPage] = useState(1);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
-  const traceContainerRef = useRef<HTMLDivElement | null>(null);
-  const traceScrollTopByMessageRef = useRef<Record<string, number>>({});
   const agents = useAgentStore((state) => state.agents);
   const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
@@ -412,135 +176,19 @@ export default function InboxPage() {
       prev.filter((item) => item.root_session_id !== rootSessionId),
     );
   };
-  const traceEvents = useMemo<TraceDisplayItem[]>(() => {
-    if (!traceData) return [];
-    const normalized = traceData.events
-      .flatMap((item) => {
-        const eventRecord = (item.event || {}) as Record<string, unknown>;
-        const content = eventRecord.content;
-        if (Array.isArray(content) && content.length > 1) {
-          return content.map((block) => {
-            const blockRecord = {
-              ...eventRecord,
-              content: [block],
-            } as Record<string, unknown>;
-            return {
-              ...item,
-              eventRecord: blockRecord,
-              eventType: normalizeTraceKind(blockRecord),
-            };
-          });
-        }
-        const normalizedRecord =
-          Array.isArray(content) && content.length === 1
-            ? eventRecord
-            : ({ ...eventRecord } as Record<string, unknown>);
-        return [
-          {
-            ...item,
-            eventRecord: normalizedRecord,
-            eventType: normalizeTraceKind(normalizedRecord),
-          },
-        ];
-      })
-      .filter(
-        (item) => !shouldHideTraceEvent(item.eventType, item.eventRecord),
-      );
-    const grouped: TraceDisplayItem[] = [];
-    for (let i = 0; i < normalized.length; i += 1) {
-      const current = normalized[i];
-      const traceText = extractTraceText(current.eventRecord);
-      const collapsible = isCollapsibleTraceEvent(
-        current.eventType,
-        current.eventRecord,
-      );
-      const collapseTitle = getTraceFoldTitle(
-        current.eventType,
-        current.eventRecord,
-      );
-
-      if (current.eventType === "tool_call") {
-        const next = normalized[i + 1];
-        const currentToolName = String(current.eventRecord.tool_name || "");
-        const nextToolName = String(next?.eventRecord?.tool_name || "");
-        const canPair =
-          !!next &&
-          next.eventType === "tool_output" &&
-          (!!currentToolName || !!nextToolName)
-            ? currentToolName === nextToolName
-            : true;
-        const toolInput = getToolFieldText(current.eventRecord, "tool_input");
-        if (canPair && next) {
-          const nextTraceText = extractTraceText(next.eventRecord);
-          const toolOutput =
-            getToolFieldText(next.eventRecord, "tool_output") || nextTraceText;
-          grouped.push({
-            at: current.at,
-            eventType: "tool_call",
-            eventRecord: current.eventRecord,
-            traceText,
-            collapsible: true,
-            collapseTitle:
-              collapseTitle ||
-              getTraceFoldTitle(next.eventType, next.eventRecord),
-            toolInput,
-            toolOutput,
-            renderKind: "tool_pair",
-          });
-          i += 1;
-          continue;
-        }
-        grouped.push({
-          at: current.at,
-          eventType: current.eventType,
-          eventRecord: current.eventRecord,
-          traceText,
-          collapsible: true,
-          collapseTitle,
-          toolInput,
-          renderKind: "tool_pair",
-        });
-        continue;
-      }
-
-      if (current.eventType === "tool_output") {
-        const toolOutput =
-          getToolFieldText(current.eventRecord, "tool_output") || traceText;
-        grouped.push({
-          at: current.at,
-          eventType: current.eventType,
-          eventRecord: current.eventRecord,
-          traceText,
-          collapsible: true,
-          collapseTitle,
-          toolOutput,
-          renderKind: "tool_pair",
-        });
-        continue;
-      }
-
-      grouped.push({
-        at: current.at,
-        eventType: current.eventType,
-        eventRecord: current.eventRecord,
-        traceText,
-        collapsible,
-        collapseTitle,
-        renderKind: "normal",
-      });
-    }
-    return grouped;
-  }, [traceData]);
-
-  const copyTraceBlock = async (text: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      message.success(t("common.copied"));
-    } catch {
-      message.error(t("common.copyFailed"));
-    }
-  };
+  const {
+    detailOpen,
+    selectedMessage,
+    traceLoading,
+    traceEvents,
+    expandedTraceMap,
+    traceContainerRef,
+    openMessageDetail,
+    closeDetail,
+    toggleTracePanel,
+    copyTraceBlock,
+    handleTraceScroll,
+  } = useTraceViewer(markMessageAsRead);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -558,35 +206,10 @@ export default function InboxPage() {
     const validIdSet = new Set(pushMessages.map((item) => item.id));
     setSelectedMessageIds((prev) => prev.filter((id) => validIdSet.has(id)));
   }, [pushMessages]);
+
   useEffect(() => {
     setMessagesPage(1);
   }, [selectedAgentFilter]);
-
-  useEffect(() => {
-    setExpandedTraceMap({});
-  }, [traceData, detailOpen]);
-
-  useEffect(() => {
-    if (
-      !detailOpen ||
-      traceLoading ||
-      traceEvents.length <= 0 ||
-      !selectedMessage
-    ) {
-      return;
-    }
-    const messageId = selectedMessage.id;
-    const savedScrollTop = traceScrollTopByMessageRef.current[messageId];
-    const rafId = window.requestAnimationFrame(() => {
-      const container = traceContainerRef.current;
-      if (!container) return;
-      container.scrollTop =
-        typeof savedScrollTop === "number"
-          ? savedScrollTop
-          : container.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [detailOpen, selectedMessage, traceEvents.length, traceLoading]);
 
   const handleViewMessage = (messageId: string) => {
     const found = pushMessages.find((item) => item.id === messageId);
@@ -594,31 +217,7 @@ export default function InboxPage() {
       message.warning(t("inbox.messageNotFound"));
       return;
     }
-    if (!found.read) {
-      markMessageAsRead(found.id);
-    }
-    setSelectedMessage(found.read ? found : { ...found, read: true });
-    setDetailOpen(true);
-    const runId =
-      typeof found.metadata?.payload?.run_id === "string"
-        ? (found.metadata.payload.run_id as string)
-        : undefined;
-    if (!runId) {
-      setTraceData(buildContentFallbackTrace(found));
-      return;
-    }
-    setTraceLoading(true);
-    void api
-      .getInboxTrace(runId)
-      .then((trace) => {
-        setTraceData({
-          events: trace.events || [],
-        });
-      })
-      .catch(() => {
-        setTraceData(buildContentFallbackTrace(found));
-      })
-      .finally(() => setTraceLoading(false));
+    openMessageDetail(found);
   };
 
   const handleMarkAllRead = async () => {
@@ -845,7 +444,7 @@ export default function InboxPage() {
       </div>
       <Modal
         open={detailOpen}
-        onCancel={() => setDetailOpen(false)}
+        onCancel={closeDetail}
         footer={null}
         width={820}
         title={getDetailModalTitle(selectedMessage, t)}
@@ -899,12 +498,10 @@ export default function InboxPage() {
                 </div>
               ) : traceEvents.length > 0 ? (
                 <div
-                  ref={traceContainerRef}
+                  ref={traceContainerRef as React.RefObject<HTMLDivElement>}
                   className={styles.traceContainer}
                   onScroll={(event) => {
-                    if (!selectedMessage) return;
-                    traceScrollTopByMessageRef.current[selectedMessage.id] =
-                      event.currentTarget.scrollTop;
+                    handleTraceScroll(event.currentTarget.scrollTop);
                   }}
                 >
                   <div className={styles.traceTimeline}>
@@ -917,7 +514,13 @@ export default function InboxPage() {
                         collapseTitle,
                       } = item;
                       const kind = eventType;
-                      const foldIcon = getTraceFoldIcon(kind);
+                      const foldIcon = kind
+                        .toLowerCase()
+                        .includes("thinking") ? (
+                        <BulbOutlined />
+                      ) : kind.toLowerCase().includes("tool") ? (
+                        <ToolOutlined />
+                      ) : null;
                       const collapseKey = `trace-${item.at}-${index}`;
                       const isPanelActive = !!expandedTraceMap[collapseKey];
                       return (
@@ -945,10 +548,7 @@ export default function InboxPage() {
                                 const nextActive = Array.isArray(keys)
                                   ? keys.length > 0
                                   : Boolean(keys);
-                                setExpandedTraceMap((prev) => ({
-                                  ...prev,
-                                  [collapseKey]: nextActive,
-                                }));
+                                toggleTracePanel(collapseKey, nextActive);
                               }}
                               className={`${styles.traceCollapse} ${
                                 isPanelActive ? styles.traceCollapseActive : ""
