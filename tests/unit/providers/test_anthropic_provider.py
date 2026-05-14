@@ -28,7 +28,8 @@ def test_get_chat_model_instance_uses_configured_max_tokens(
             captured.update(kwargs)
 
     monkeypatch.setattr(
-        "agentscope.model.AnthropicChatModel",
+        anthropic_provider_module,
+        "AnthropicChatModelCompat",
         FakeAnthropicChatModel,
     )
 
@@ -54,7 +55,8 @@ def test_get_chat_model_instance_uses_default_max_tokens_when_unset(
             captured.update(kwargs)
 
     monkeypatch.setattr(
-        "agentscope.model.AnthropicChatModel",
+        anthropic_provider_module,
+        "AnthropicChatModelCompat",
         FakeAnthropicChatModel,
     )
 
