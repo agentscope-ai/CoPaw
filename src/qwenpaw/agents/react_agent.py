@@ -685,11 +685,13 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
                 if raw_headers
                 else None
             )
+            client_kwargs = rebuild_info.get("client_kwargs") or {}
             rebuilt_client = HttpStatefulClient(
                 name=name,
                 transport=transport,
                 url=rebuild_info.get("url"),
                 headers=headers,
+                **client_kwargs,
             )
             setattr(rebuilt_client, "_qwenpaw_rebuild_info", rebuild_info)
             return rebuilt_client

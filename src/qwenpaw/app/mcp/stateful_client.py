@@ -667,6 +667,29 @@ class HttpStatefulClient(_MCPClientMixin, StatefulClientBase):
         # Tool cache
         self._cached_tools = None
 
+    def _make_sse_httpx_client_factory(self):
+        """Create an SSE httpx factory that preserves custom client kwargs."""
+
+        def httpx_client_factory(
+            headers: dict[str, str] | None = None,
+            timeout: httpx.Timeout | None = None,
+            auth: httpx.Auth | None = None,
+        ) -> httpx.AsyncClient:
+            kwargs: dict[str, Any] = {
+                "follow_redirects": True,
+                **self.client_kwargs,
+            }
+            if headers is not None:
+                kwargs["headers"] = headers
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+            if auth is not None:
+                kwargs["auth"] = auth
+
+            return httpx.AsyncClient(**kwargs)
+
+        return httpx_client_factory
+
     async def _setup_transport(
         self,
         stack: AsyncExitStack,
@@ -697,13 +720,19 @@ class HttpStatefulClient(_MCPClientMixin, StatefulClientBase):
                 streamable_http_client(url=self.url, http_client=http_client),
             )
         else:
+            sse_kwargs: dict[str, Any] = {}
+            if self.client_kwargs:
+                sse_kwargs["httpx_client_factory"] = (
+                    self._make_sse_httpx_client_factory()
+                )
+
             context = await stack.enter_async_context(
                 sse_client(
                     url=self.url,
                     headers=self.headers,
                     timeout=self.timeout,
                     sse_read_timeout=self.sse_read_timeout,
-                    **self.client_kwargs,
+                    **sse_kwargs,
                 ),
             )
         return context[0], context[1]

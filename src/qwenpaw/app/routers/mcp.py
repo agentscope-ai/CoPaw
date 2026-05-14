@@ -45,6 +45,14 @@ class MCPClientInfo(BaseModel):
         default_factory=dict,
         description="HTTP headers for remote transport",
     )
+    tls_verify: bool = Field(
+        default=True,
+        description="Whether TLS certificates are verified",
+    )
+    ca_file: str = Field(
+        default="",
+        description="Optional CA bundle path for remote transport",
+    )
     command: str = Field(
         default="",
         description="Command to launch the MCP server",
@@ -88,6 +96,14 @@ class MCPClientCreateRequest(BaseModel):
         default_factory=dict,
         description="HTTP headers for remote transport",
     )
+    tls_verify: bool = Field(
+        default=True,
+        description="Whether TLS certificates are verified",
+    )
+    ca_file: str = Field(
+        default="",
+        description="Optional CA bundle path for remote transport",
+    )
     command: str = Field(
         default="",
         description="Command to launch the MCP server",
@@ -126,6 +142,14 @@ class MCPClientUpdateRequest(BaseModel):
     headers: Optional[Dict[str, str]] = Field(
         None,
         description="HTTP headers for remote transport",
+    )
+    tls_verify: Optional[bool] = Field(
+        None,
+        description="Whether TLS certificates are verified",
+    )
+    ca_file: Optional[str] = Field(
+        None,
+        description="Optional CA bundle path for remote transport",
     )
     command: Optional[str] = Field(
         None,
@@ -233,6 +257,8 @@ def _build_client_info(key: str, client: MCPClientConfig) -> MCPClientInfo:
         transport=client.transport,
         url=client.url,
         headers=masked_headers,
+        tls_verify=client.tls_verify,
+        ca_file=client.ca_file,
         command=client.command,
         args=client.args,
         env=masked_env,
@@ -393,6 +419,8 @@ async def create_mcp_client(
         transport=client.transport,
         url=client.url,
         headers=client.headers,
+        tls_verify=client.tls_verify,
+        ca_file=client.ca_file,
         command=client.command,
         args=client.args,
         env=client.env,

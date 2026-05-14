@@ -243,8 +243,25 @@ class MCPClientManager:
         return result
 
     @staticmethod
+    def _http_client_kwargs(
+        client_config: "MCPClientConfig",
+    ) -> Dict[str, Any]:
+        """Build extra HTTP client kwargs for remote MCP transports."""
+        if not client_config.tls_verify:
+            return {"verify": False}
+
+        ca_file = client_config.ca_file.strip()
+        if ca_file:
+            return {"verify": os.path.expandvars(ca_file)}
+
+        return {}
+
+    @staticmethod
     def _build_client(client_config: "MCPClientConfig") -> Any:
         """Build MCP client instance by configured transport."""
+        http_client_kwargs = MCPClientManager._http_client_kwargs(
+            client_config,
+        )
         rebuild_info = {
             "name": client_config.name,
             "transport": client_config.transport,
@@ -254,6 +271,7 @@ class MCPClientManager:
             "args": list(client_config.args),
             "env": dict(client_config.env),
             "cwd": client_config.cwd or None,
+            "client_kwargs": dict(http_client_kwargs),
         }
 
         if client_config.transport == "stdio":
@@ -281,6 +299,7 @@ class MCPClientManager:
             transport=client_config.transport,
             url=client_config.url,
             headers=headers or None,
+            **http_client_kwargs,
         )
         setattr(client, "_qwenpaw_rebuild_info", rebuild_info)
         return client

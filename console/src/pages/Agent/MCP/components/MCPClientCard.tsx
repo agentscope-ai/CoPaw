@@ -30,6 +30,8 @@ interface MCPClientUpdate {
   transport?: "stdio" | "streamable_http" | "sse";
   url?: string;
   headers?: Record<string, string>;
+  tls_verify?: boolean;
+  ca_file?: string;
   args?: string[];
   env?: Record<string, string>;
   cwd?: string;
@@ -106,11 +108,13 @@ export const MCPClientCard = React.memo(function MCPClientCard({
 
   const handleSaveJson = async () => {
     try {
-      const parsed = JSON.parse(editedJson);
-      const { key: _key, ...updates } = parsed;
+      const parsed = JSON.parse(editedJson) as MCPClientUpdate & {
+        key?: string;
+      };
+      delete parsed.key;
 
       // Send all updates directly to backend, let backend handle env masking check
-      const success = await onUpdate(client.key, updates);
+      const success = await onUpdate(client.key, parsed);
       if (success) {
         setJsonModalOpen(false);
         setIsEditing(false);
@@ -130,8 +134,8 @@ export const MCPClientCard = React.memo(function MCPClientCard({
       try {
         const data = await api.listMCPTools(client.key);
         setTools(data);
-      } catch (err: any) {
-        const msg = err?.message || "";
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
         if (msg.includes("connecting") || msg.includes("not ready")) {
           setToolsError(t("mcp.toolsConnecting"));
         } else {

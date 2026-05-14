@@ -1251,6 +1251,14 @@ class MCPClientConfig(BaseModel):
     transport: Literal["stdio", "streamable_http", "sse"] = "stdio"
     url: str = ""
     headers: Dict[str, str] = Field(default_factory=dict)
+    tls_verify: bool = Field(
+        default=True,
+        description="Whether remote MCP HTTP clients verify TLS certificates",
+    )
+    ca_file: str = Field(
+        default="",
+        description="Optional CA bundle path for remote MCP HTTP clients",
+    )
     command: str = ""
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)

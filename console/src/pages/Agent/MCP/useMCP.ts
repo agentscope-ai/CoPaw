@@ -5,6 +5,13 @@ import type { MCPClientInfo } from "../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export function useMCP() {
   const { t } = useTranslation();
   const { selectedAgent } = useAgentStore();
@@ -23,7 +30,7 @@ export function useMCP() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [message, t]);
 
   useEffect(() => {
     loadClients();
@@ -40,6 +47,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        tls_verify?: boolean;
+        ca_file?: string;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
@@ -53,13 +62,13 @@ export function useMCP() {
         message.success(t("mcp.createSuccess"));
         await loadClients();
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.createError");
+      } catch (error) {
+        const errorMsg = getErrorMessage(error, t("mcp.createError"));
         message.error(errorMsg);
         return false;
       }
     },
-    [t, loadClients],
+    [message, t, loadClients],
   );
 
   const updateClient = useCallback(
@@ -73,6 +82,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        tls_verify?: boolean;
+        ca_file?: string;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
@@ -83,13 +94,13 @@ export function useMCP() {
         message.success(t("mcp.updateSuccess"));
         await loadClients();
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.updateError");
+      } catch (error) {
+        const errorMsg = getErrorMessage(error, t("mcp.updateError"));
         message.error(errorMsg);
         return false;
       }
     },
-    [t, loadClients],
+    [message, t, loadClients],
   );
 
   const toggleEnabled = useCallback(
@@ -100,11 +111,11 @@ export function useMCP() {
           client.enabled ? t("mcp.disableSuccess") : t("mcp.enableSuccess"),
         );
         await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.toggleError"));
       }
     },
-    [t, loadClients],
+    [message, t, loadClients],
   );
 
   const deleteClient = useCallback(
@@ -113,11 +124,11 @@ export function useMCP() {
         await api.deleteMCPClient(client.key);
         message.success(t("mcp.deleteSuccess"));
         await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.deleteError"));
       }
     },
-    [t, loadClients],
+    [message, t, loadClients],
   );
 
   return {
