@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access
 """Monkey-patch hooks for tools, prompts, and mission mode."""
 
 import logging
@@ -8,9 +7,7 @@ import shutil
 from pathlib import Path
 
 from .constants import (
-    BUILTIN_EXECUTOR_AGENT_ID,
     BUILTIN_ORCHESTRATION_AGENT_ID,
-    BUILTIN_VERIFIER_AGENT_ID,
     PLUGIN_DIR,
 )
 
@@ -25,13 +22,10 @@ _AK_CONSOLE_URL = "https://ram.console.aliyun.com/manage/ak"
 _IAC_CODE_SETTINGS_PATH = Path.home() / ".iac-code" / "settings.yml"
 
 
-def _check_environment_ready() -> (  # pylint: disable=too-many-branches
-    str | None
-):
+def _check_environment_ready() -> str | None:
     """Check that all required components are configured for CloudPaw.
 
-    Returns a warning/error message string if any check fails, or None if
-    all good.
+    Returns a warning/error message string if any check fails, or None if all good.
     """
     issues: list[str] = []
 
@@ -39,7 +33,7 @@ def _check_environment_ready() -> (  # pylint: disable=too-many-branches
     if not shutil.which("iac-code"):
         issues.append(
             "❌ iac-code 未安装\n"
-            "   安装命令: pip install --ignore-requires-python -U iac-code",
+            "   安装命令: pip install --ignore-requires-python -U iac-code"
         )
 
     # 2. Alibaba Cloud AK-SK configured?
@@ -52,14 +46,13 @@ def _check_environment_ready() -> (  # pylint: disable=too-many-branches
             "   配置命令:\n"
             "     qwenpaw env set ALIBABA_CLOUD_ACCESS_KEY_ID <your-ak>\n"
             "     qwenpaw env set ALIBABA_CLOUD_ACCESS_KEY_SECRET <your-sk>\n"
-            "     qwenpaw env set ALIBABA_CLOUD_REGION_ID cn-hangzhou",
+            "     qwenpaw env set ALIBABA_CLOUD_REGION_ID cn-hangzhou"
         )
 
     # 3. QwenPaw model configured?
     qwenpaw_model_ok = False
     try:
         from qwenpaw.providers.provider_manager import ProviderManager
-
         pm = ProviderManager()
         active_slot = pm.get_active_model()
         if active_slot and active_slot.provider_id and active_slot.model:
@@ -68,7 +61,8 @@ def _check_environment_ready() -> (  # pylint: disable=too-many-branches
         pass
     if not qwenpaw_model_ok:
         issues.append(
-            "❌ QwenPaw 模型未配置\n" + "   配置命令: qwenpaw models config",
+            "❌ QwenPaw 模型未配置\n"
+            "   配置命令: qwenpaw models config"
         )
 
     # 4. iac-code model configured?
@@ -96,21 +90,23 @@ def _check_environment_ready() -> (  # pylint: disable=too-many-branches
             "❌ iac-code 模型未配置\n"
             "   配置方式:\n"
             "     1. 运行 'iac-code' 首次启动会自动引导配置\n"
-            "     2. 编辑 ~/.iac-code/settings.yml "
-            "设置 activeProvider 和 model\n"
-            "     3. 设置环境变量 IAC_CODE_PROVIDER / IAC_CODE_MODEL / "
-            "IAC_CODE_API_KEY",
+            "     2. 编辑 ~/.iac-code/settings.yml 设置 activeProvider 和 model\n"
+            "     3. 设置环境变量 IAC_CODE_PROVIDER / IAC_CODE_MODEL / IAC_CODE_API_KEY"
         )
 
     if not issues:
         return None
 
-    header = "⚠️ 【CloudPaw 环境未就绪】以下配置缺失，请先完成配置后再使用：\n\n"
+    header = (
+        "⚠️ 【CloudPaw 环境未就绪】以下配置缺失，请先完成配置后再使用：\n\n"
+    )
     footer = (
         "\n\n请将以上未配置项的详细信息和配置方法告知用户，并建议用户完成配置后再使用 CloudPaw 功能。"
         "在配置完成前，请勿尝试执行任何阿里云资源操作。"
     )
     return header + "\n\n".join(issues) + footer
+
+
 
 
 def _load_prompt_file(filename: str) -> str:
@@ -153,11 +149,9 @@ manage_prd(
 
 If prd.json exists but has wrong structure, delete it and recreate:
 ```
-manage_prd(loop_dir="{loop_dir}", operation="delete", \
-story_ids=[<all existing IDs>])
+manage_prd(loop_dir="{loop_dir}", operation="delete", story_ids=[<all existing IDs>])
 ```
-Then use `manage_prd(operation="create", ...)` to recreate with the \
-correct format.
+Then use `manage_prd(operation="create", ...)` to recreate with the correct format.
 
 **Rules:**
 - The `manage_prd` tool automatically creates `userStories` with correct schema
@@ -169,6 +163,7 @@ correct format.
 Fix prd.json NOW using `manage_prd`. Keep the same task decomposition \
 but use the tool instead of writing the file directly.
 """
+
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +195,6 @@ def _pick_allow_option(options: list) -> object | None:
     whose id/name contains 'allow'/'proceed'); falls back to the first option
     otherwise.
     """
-
     def _opt_attr(opt: object, *keys: str) -> str:
         for key in keys:
             value = None
@@ -226,18 +220,10 @@ def _pick_allow_option(options: list) -> object | None:
 
     for preferred in _ALLOW_OPTION_PREFERENCE:
         for opt, option_id, kind, name in indexed:
-            if (
-                preferred in option_id.lower()
-                or preferred == kind
-                or preferred in name
-            ):
+            if preferred in option_id.lower() or preferred == kind or preferred in name:
                 return opt
     for opt, option_id, kind, name in indexed:
-        if (
-            "allow" in option_id.lower()
-            or "allow" in kind
-            or "proceed" in kind
-        ):
+        if "allow" in option_id.lower() or "allow" in kind or "proceed" in kind:
             return opt
     return indexed[0][0]
 
@@ -261,8 +247,7 @@ def setup_acp_auto_approve() -> None:
         from qwenpaw.agents.acp.client import ACPHostedClient
     except ImportError as exc:
         logger.error(
-            "Cannot import ACPHostedClient; "
-            "ACP auto-approve patch skipped: %s",
+            "Cannot import ACPHostedClient; ACP auto-approve patch skipped: %s",
             exc,
         )
         return
@@ -357,9 +342,7 @@ def setup_acp_auto_approve() -> None:
     )
 
 
-def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
-    None
-):
+def setup_tool_and_prompt_hooks() -> None:
     """Monkey-patch QwenPawAgent to add cloudpaw tools and prompt sections."""
     # IaC operations are delegated to iac-code via the built-in async
     # `delegate_external_agent` tool (qwenpaw >= v1.1.7b1).  No CloudPaw-side
@@ -368,20 +351,14 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
     try:
         from qwenpaw.agents.react_agent import QwenPawAgent
     except ImportError as exc:
-        logger.error(
-            "Cannot import QwenPawAgent; tool/prompt hooks skipped: %s",
-            exc,
-        )
+        logger.error("Cannot import QwenPawAgent; tool/prompt hooks skipped: %s", exc)
         return
 
     _original_create_toolkit = QwenPawAgent._create_toolkit
     _original_build_sys_prompt = QwenPawAgent._build_sys_prompt
 
     def _patched_create_toolkit(self, namesake_strategy="skip"):
-        toolkit = _original_create_toolkit(
-            self,
-            namesake_strategy=namesake_strategy,
-        )
+        toolkit = _original_create_toolkit(self, namesake_strategy=namesake_strategy)
 
         agent_id = (
             self._request_context.get("agent_id")
@@ -417,11 +394,7 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
                     logger.debug("manage_prd registration skipped: %s", e)
 
         except Exception as e:
-            logger.warning(
-                "Failed to register plugin tools: %s",
-                e,
-                exc_info=True,
-            )
+            logger.warning("Failed to register plugin tools: %s", e, exc_info=True)
 
         # A2A tools: register for orchestration agent
         if agent_id == BUILTIN_ORCHESTRATION_AGENT_ID:
@@ -448,11 +421,7 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
                     logger.debug("a2a_call registration skipped: %s", e)
 
             except Exception as e:
-                logger.warning(
-                    "Failed to register A2A tools: %s",
-                    e,
-                    exc_info=True,
-                )
+                logger.warning("Failed to register A2A tools: %s", e, exc_info=True)
 
         return toolkit
 
@@ -480,7 +449,7 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
     _original_interrupt = QwenPawAgent.interrupt
 
     async def _patched_interrupt(self, msg=None):
-        """Cancel async tasks on stop (e.g. delegate_external_agent)."""
+        """Cancel background async tasks (e.g. delegate_external_agent) on stop."""
         toolkit = getattr(self, "toolkit", None)
         if toolkit is not None:
             async_tasks = getattr(toolkit, "_async_tasks", {})
@@ -497,10 +466,7 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
     QwenPawAgent._create_toolkit = _patched_create_toolkit
     QwenPawAgent._build_sys_prompt = _patched_build_sys_prompt
     QwenPawAgent.interrupt = _patched_interrupt
-    logger.info(
-        "Patched QwenPawAgent with cloudpaw tools, prompt hooks, "
-        "and interrupt",
-    )
+    logger.info("Patched QwenPawAgent with cloudpaw tools, prompt hooks, and interrupt")
 
 
 def setup_mission_hooks() -> None:
@@ -529,31 +495,26 @@ def _patch_stream_task_timeout() -> None:
         agent_app.stream_task_timeout = _CLOUDPAW_STREAM_TASK_TIMEOUT
         logger.info(
             "[CloudPaw] Patched stream_task_timeout: %s -> %s",
-            old,
-            _CLOUDPAW_STREAM_TASK_TIMEOUT,
+            old, _CLOUDPAW_STREAM_TASK_TIMEOUT,
         )
     except (ImportError, AttributeError) as exc:
         logger.warning(
-            "Failed to patch stream_task_timeout: %s",
-            exc,
+            "Failed to patch stream_task_timeout: %s", exc,
         )
 
 
 def _patch_mission_master_prompt() -> None:
-    """Conditionally replace build_master_prompt for CloudPaw agents.
+    """Replace QwenPaw's build_master_prompt with CloudPaw's version.
 
-    When the agent_id belongs to a CloudPaw agent (cloud-orchestrator,
-    cloud-executor, cloud-verifier), uses a custom master prompt template
-    that integrates manage_prd tool usage and CloudPaw-specific deployment
-    instructions.  For all other agents, the original upstream prompt
-    builder is called unchanged.
+    Uses a custom master prompt template that integrates manage_prd tool
+    usage and CloudPaw-specific deployment instructions, while reusing
+    the upstream worker/verifier prompt templates and git section builder.
     """
     try:
         from qwenpaw.agents.mission import prompts as mission_prompts
         from qwenpaw.agents.mission.prompts import (
             WORKER_PROMPT_TEMPLATE,
             _build_git_sections,
-            build_master_prompt as _original_build_master_prompt,
             build_verifier_prompt,
         )
     except ImportError:
@@ -563,14 +524,6 @@ def _patch_mission_master_prompt() -> None:
         return
 
     from .prompts.master_prompt import CLOUDPAW_MASTER_PROMPT
-
-    _CLOUDPAW_AGENT_IDS = frozenset(
-        {
-            BUILTIN_ORCHESTRATION_AGENT_ID,
-            BUILTIN_EXECUTOR_AGENT_ID,
-            BUILTIN_VERIFIER_AGENT_ID,
-        },
-    )
 
     def _patched_build_master_prompt(
         *,
@@ -583,28 +536,10 @@ def _patch_mission_master_prompt() -> None:
         git_context: dict | None = None,
         workspace_dir: str = "",
     ) -> str:
-        if agent_id not in _CLOUDPAW_AGENT_IDS:
-            logger.debug(
-                "[CloudPaw] agent_id=%s is not a CloudPaw agent, "
-                "using original build_master_prompt",
-                agent_id,
-            )
-            return _original_build_master_prompt(
-                loop_dir=loop_dir,
-                agent_id=agent_id,
-                max_iterations=max_iterations,
-                verify_commands=verify_commands,
-                prd_path=prd_path,
-                progress_path=progress_path,
-                git_context=git_context,
-                workspace_dir=workspace_dir,
-            )
-
         logger.info(
             "[CloudPaw] _patched_build_master_prompt called: "
             "loop_dir=%s, agent_id=%s",
-            loop_dir,
-            agent_id,
+            loop_dir, agent_id,
         )
         if not prd_path:
             prd_path = f"{loop_dir}/prd.json"
@@ -646,7 +581,6 @@ def _patch_mission_master_prompt() -> None:
 
     try:
         from qwenpaw.agents.mission import handler as mission_handler
-
         mission_handler.build_master_prompt = _patched_build_master_prompt
     except (ImportError, AttributeError):
         pass
@@ -656,13 +590,9 @@ def _patch_mission_master_prompt() -> None:
     # instead of write_file.
     try:
         from qwenpaw.agents.mission import mission_runner
-
         mission_runner._PRD_FIX_PROMPT = _CLOUDPAW_PRD_FIX_PROMPT
         logger.info("[CloudPaw] Patched _PRD_FIX_PROMPT to use manage_prd")
     except (ImportError, AttributeError) as exc:
         logger.warning("Failed to patch _PRD_FIX_PROMPT: %s", exc)
 
-    logger.info(
-        "[CloudPaw] Replaced build_master_prompt with CloudPaw version "
-        "(CloudPaw agents only)",
-    )
+    logger.info("[CloudPaw] Replaced build_master_prompt with CloudPaw version")

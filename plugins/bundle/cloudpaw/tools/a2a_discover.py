@@ -58,9 +58,7 @@ async def a2a_discover(
 
         result = json.dumps(info, ensure_ascii=False, indent=2)
         logger.info(
-            "a2a_discover success: %s (%s)",
-            info.get("name"),
-            agent_url,
+            "a2a_discover success: %s (%s)", info.get("name"), agent_url
         )
 
     except Exception as e:

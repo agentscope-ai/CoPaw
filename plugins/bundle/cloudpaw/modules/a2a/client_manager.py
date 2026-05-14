@@ -20,6 +20,7 @@ import httpx_sse
 
 from .auth_interceptor import get_auth_headers
 from .gateway_adapter import (
+    GATEWAY_A2A_VERSION,
     normalize_gateway_card,
     patch_card_url,
 )
@@ -35,7 +36,6 @@ _A2A_VERSION = "1.0.0"
 @dataclass
 class _AgentEntry:
     """Internal state for a connected agent."""
-
     url: str
     auth_type: str
     auth_token: str = ""
@@ -53,10 +53,7 @@ class A2AClientManager:
 
         manager = A2AClientManager()
         info = await manager.connect("https://agent.example.com")
-        async for event in manager.send_message(
-            "https://agent.example.com",
-            "hello",
-        ):
+        async for event in manager.send_message("https://agent.example.com", "hello"):
             print(event)
         await manager.close()
     """
@@ -150,9 +147,7 @@ class A2AClientManager:
         payload = self._build_jsonrpc(method, {"message": msg_obj})
 
         auth_headers = await get_auth_headers(
-            entry.auth_type,
-            entry.auth_token,
-            entry.token_provider,
+            entry.auth_type, entry.auth_token, entry.token_provider,
         )
         headers = {
             "Content-Type": "application/json",
@@ -164,10 +159,7 @@ class A2AClientManager:
 
         if streaming:
             async for event_data in self._stream_sse(
-                http,
-                entry.rpc_url,
-                payload,
-                headers,
+                http, entry.rpc_url, payload, headers,
             ):
                 yield self._classify_event(event_data)
         else:
@@ -181,7 +173,7 @@ class A2AClientManager:
             if "error" in body:
                 raise RuntimeError(
                     f"A2A error {body['error'].get('code')}: "
-                    f"{body['error'].get('message')}",
+                    f"{body['error'].get('message')}"
                 )
             result = body.get("result", {})
             yield self._classify_event(result)
@@ -228,9 +220,7 @@ class A2AClientManager:
         return entry
 
     async def _fetch_agent_card(
-        self,
-        agent_url: str,
-        auth_type: str,
+        self, agent_url: str, auth_type: str,
     ) -> dict:
         """Fetch and parse Agent Card JSON from remote endpoint."""
         is_gateway = auth_type == "gateway"
@@ -238,8 +228,7 @@ class A2AClientManager:
 
         card_url = f"{agent_url.rstrip('/')}/.well-known/agent-card.json"
         async with httpx.AsyncClient(
-            verify=verify_ssl,
-            timeout=30.0,
+            verify=verify_ssl, timeout=30.0,
         ) as http:
             resp = await http.get(
                 card_url,
@@ -254,11 +243,7 @@ class A2AClientManager:
         if not card.get("url"):
             card["url"] = agent_url
 
-        logger.info(
-            "Agent Card fetched for %s: %s",
-            agent_url,
-            card.get("name"),
-        )
+        logger.info("Agent Card fetched for %s: %s", agent_url, card.get("name"))
         return card
 
     def _get_http(self, entry: _AgentEntry) -> httpx.AsyncClient:
@@ -266,8 +251,7 @@ class A2AClientManager:
         if self._http is None or self._http.is_closed:
             verify = entry.auth_type != "gateway"
             self._http = httpx.AsyncClient(
-                verify=verify,
-                timeout=_DEFAULT_TIMEOUT,
+                verify=verify, timeout=_DEFAULT_TIMEOUT,
             )
         return self._http
 
@@ -302,8 +286,7 @@ class A2AClientManager:
                                 err = data["error"]
                                 logger.warning(
                                     "SSE error: %s - %s",
-                                    err.get("code"),
-                                    err.get("message"),
+                                    err.get("code"), err.get("message"),
                                 )
                             result = data.get("result", data)
                             yield result
@@ -318,7 +301,7 @@ class A2AClientManager:
                 if "error" in data:
                     err = data["error"]
                     raise RuntimeError(
-                        f"A2A error {err.get('code')}: {err.get('message')}",
+                        f"A2A error {err.get('code')}: {err.get('message')}"
                     )
                 result = data.get("result", data)
                 yield result
@@ -367,13 +350,11 @@ class A2AClientManager:
 
         interfaces = []
         for iface in card.get("additionalInterfaces", []):
-            interfaces.append(
-                {
-                    "url": iface.get("url", ""),
-                    "protocol_binding": iface.get("preferredTransport", ""),
-                    "protocol_version": iface.get("protocolVersion", ""),
-                },
-            )
+            interfaces.append({
+                "url": iface.get("url", ""),
+                "protocol_binding": iface.get("preferredTransport", ""),
+                "protocol_version": iface.get("protocolVersion", ""),
+            })
 
         caps = card.get("capabilities", {})
         return {
@@ -387,10 +368,7 @@ class A2AClientManager:
             "interfaces": interfaces,
             "capabilities": {
                 "streaming": caps.get("streaming", False),
-                "push_notifications": bool(
-                    caps.get("pushNotifications")
-                    or caps.get("pushNotificationConfig"),
-                ),
+                "push_notifications": bool(caps.get("pushNotifications") or caps.get("pushNotificationConfig")),
             },
         }
 

@@ -3,8 +3,12 @@
 
 import logging
 import sys
+from pathlib import Path
+
+from .constants import PLUGIN_DIR
 
 logger = logging.getLogger(__name__)
+
 
 
 def inject_interaction_module() -> None:
@@ -21,7 +25,6 @@ def inject_interaction_module() -> None:
 
     class _PendingInteraction:
         __slots__ = ("event", "result")
-
         def __init__(self):
             self.event = asyncio.Event()
             self.result = None
@@ -52,7 +55,6 @@ def inject_interaction_module() -> None:
             cls._pending.pop(session_id, None)
 
     mod.InteractionManager = InteractionManager
-    # pylint: disable-next=protected-access
     mod._PendingInteraction = _PendingInteraction
     sys.modules[module_name] = mod
     logger.info("Injected synthetic module: %s", module_name)

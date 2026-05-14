@@ -19,7 +19,6 @@ from typing import Any, List, Optional, Union
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
-# pylint: disable=no-name-in-module
 from qwenpaw.app.interaction import InteractionManager
 from qwenpaw.app.agent_context import get_current_session_id
 
@@ -76,21 +75,15 @@ def _is_header_row(row: List[Any]) -> bool:
 
 
 def _is_summary_row(row: List[Any]) -> bool:
-    """Detect summary/total rows (first cell matches 合计/总计/total)."""
+    """Detect if a row is a summary/total row (first cell matches 合计/总计/total)."""
     if not _is_row(row):
         return False
     first = str(row[0]).strip() if row[0] else ""
-    return bool(first) and bool(
-        re.match(r"^(合计|总计|total)", first, re.IGNORECASE),
-    )
+    return bool(first) and bool(re.match(r"^(合计|总计|total)", first, re.IGNORECASE))
 
 
-def _split_flat_rows_into_proposals(
-    rows: List[List[Any]],
-) -> List[List[List[Any]]]:
-    """Split a flat 2D array into proposals.
-
-    Uses summary rows as delimiters.
+def _split_flat_rows_into_proposals(rows: List[List[Any]]) -> List[List[List[Any]]]:
+    """Split a flat 2D array into multiple proposals using summary rows as delimiters.
 
     When the LLM puts two proposals' rows into a single 2D array, we can
     recover the intended structure by splitting on "合计" rows: each "合计"
@@ -111,15 +104,13 @@ def _split_flat_rows_into_proposals(
     return proposals if proposals else [rows]
 
 
-def _normalize_proposals(  # pylint: disable=too-many-return-statements
-    data: Any,
-    expected_count: int = 0,
+def _normalize_proposals(
+    data: Any, expected_count: int = 0,
 ) -> Union[List[List[List[Any]]], str]:
     """Normalize proposals data to 3D array format.
 
     Accepts multiple formats and auto-corrects common LLM mistakes:
-    - 2D array (single proposal): [[row1], [row2], ...].
-      Each row has 10 columns.
+    - 2D array (single proposal): [[row1], [row2], ...] where each row has 10 columns
     - 3D array (multiple proposals): [[[row1], [row2]], [[row3]]]
     - 2D array with mixed proposals: auto-splits on "合计" rows
 
@@ -128,9 +119,8 @@ def _normalize_proposals(  # pylint: disable=too-many-return-statements
 
     Args:
         data: Parsed JSON data
-        expected_count: Expected number of proposals (from strategy_names).
-            Length used as a hint to split flat arrays when summary rows
-            are missing.
+        expected_count: Expected number of proposals (from strategy_names length).
+            Used as a hint to split flat arrays when summary rows are missing.
     """
     if not isinstance(data, list) or len(data) == 0:
         return "Error: data must be a non-empty JSON array."
@@ -139,20 +129,14 @@ def _normalize_proposals(  # pylint: disable=too-many-return-statements
     if all(_is_row(item) for item in data):
         cleaned = [r for r in data if not _is_header_row(r)]
         if not cleaned:
-            return (
-                "Error: data contains only header rows, "
-                "no actual resource data."
-            )
+            return "Error: data contains only header rows, no actual resource data."
         summary_count = sum(1 for r in cleaned if _is_summary_row(r))
         if summary_count >= 2:
             return _split_flat_rows_into_proposals(cleaned)
         if expected_count >= 2 and len(cleaned) >= expected_count * 2:
             import math
-
             chunk = math.ceil(len(cleaned) / expected_count)
-            return [
-                cleaned[i : i + chunk] for i in range(0, len(cleaned), chunk)
-            ]
+            return [cleaned[i : i + chunk] for i in range(0, len(cleaned), chunk)]
         return [cleaned]
 
     # Check if it's a 3D array (multiple proposals)
@@ -161,13 +145,10 @@ def _normalize_proposals(  # pylint: disable=too-many-return-statements
         for i, proposal in enumerate(data):
             if not isinstance(proposal, list) or len(proposal) == 0:
                 return (
-                    f"Error: proposal {i + 1} must be a non-empty array "
-                    f"of rows. Each row should have 10 columns: "
-                    f"{', '.join(_TABLE_HEADERS)}"
+                    f"Error: proposal {i + 1} must be a non-empty array of rows. "
+                    f"Each row should have 10 columns: {', '.join(_TABLE_HEADERS)}"
                 )
-            cleaned = [
-                r for r in proposal if _is_row(r) and not _is_header_row(r)
-            ]
+            cleaned = [r for r in proposal if _is_row(r) and not _is_header_row(r)]
             if not cleaned:
                 return (
                     f"Error: proposal {i + 1} has no valid data rows after "
@@ -207,8 +188,7 @@ def _validate_proposals(proposals: List[List[List[Any]]]) -> Union[str, None]:
                     return (
                         f"Error: cell at proposal {i + 1}, row {j + 1}, "
                         f"column '{_TABLE_HEADERS[k]}' is invalid. "
-                        f"Cell must be a string or an object with "
-                        f"'text' field."
+                        f"Cell must be a string or an object with 'text' field."
                     )
 
     return None
@@ -233,17 +213,14 @@ async def proposal_choice(
             Example (single proposal):
             ```json
             [
-              ["ECS", "Web服务器", "2核4G", "华东1", "1", "包年包月", "1年",
-               "¥1200", "8折", "¥960"],
-              ["OSS", "存储", "标准", "华东1", "1", "按量付费", "-",
-               "¥100", "-", "¥100"],
+              ["ECS", "Web服务器", "2核4G", "华东1", "1", "包年包月", "1年", "¥1200", "8折", "¥960"],
+              ["OSS", "存储", "标准", "华东1", "1", "按量付费", "-", "¥100", "-", "¥100"],
               ["合计", "", "", "", "", "", "", "", "", "≈¥1060/月"]
             ]
             ```
 
-            The last row of each proposal should be a summary row with
-            "合计" as the first column and the total cost in the last
-            column. The frontend
+            The last row of each proposal should be a summary row with "合计" as
+            the first column and the total cost in the last column. The frontend
             renders this row separately and does NOT compute totals itself.
 
             Cell value format:
@@ -252,8 +229,7 @@ async def proposal_choice(
 
         strategy_names (`str`, optional):
             JSON-encoded list of strategy display names for each proposal.
-            If provided, these names replace the default proposal names
-            ("方案一/方案二/方案三").
+            If provided, these names are shown instead of default "方案一/方案二/方案三".
             Example: '["最低价方案", "中等配置", "高性能方案"]'
 
     Returns:
@@ -270,12 +246,9 @@ async def proposal_choice(
             content=[
                 TextBlock(
                     type="text",
-                    text=(
-                        "Error: 'data' parameter must be a valid JSON "
-                        "string. Expected a 2D array (single proposal) "
-                        "or 3D array (multiple proposals). Each row "
-                        "must have 10 columns."
-                    ),
+                    text="Error: 'data' parameter must be a valid JSON string. "
+                    "Expected a 2D array (single proposal) or 3D array (multiple proposals). "
+                    "Each row must have 10 columns.",
                 ),
             ],
         )
@@ -335,10 +308,7 @@ async def proposal_choice(
             content=[TextBlock(type="text", text=payload)],
         )
 
-    logger.info(
-        "[proposal_choice] Creating interaction for session: %s",
-        session_id,
-    )
+    logger.info("[proposal_choice] Creating interaction for session: %s", session_id)
     interaction = InteractionManager.create(session_id)
     try:
         await asyncio.wait_for(

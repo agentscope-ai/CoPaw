@@ -11,8 +11,9 @@ arrive from the remote A2A agent, enabling real-time frontend updates.
 
 import json
 import logging
-import time
 from collections.abc import AsyncGenerator
+import time
+import json
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
@@ -20,7 +21,7 @@ from agentscope.tool import ToolResponse
 logger = logging.getLogger(__name__)
 
 
-async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
+async def a2a_call(
     message: str,
     agent_alias: str = "",
     agent_url: str = "",
@@ -59,23 +60,14 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
         reg = resolve_agent_by_alias(agent_alias)
         if not reg:
             yield ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "error": (
-                                    f"未找到别名为 '{agent_alias}' "
-                                    f"的已注册 A2A Agent。"
-                                    f"请先通过 a2a_list "
-                                    f"查看可用的 Agent。"
-                                ),
-                                "task_state": "error",
-                            },
-                            ensure_ascii=False,
-                        ),
-                    ),
-                ],
+                content=[TextBlock(
+                    type="text",
+                    text=json.dumps({
+                        "error": f"未找到别名为 '{agent_alias}' 的已注册 A2A Agent。"
+                                 f"请先通过 a2a_list 查看可用的 Agent。",
+                        "task_state": "error",
+                    }, ensure_ascii=False),
+                )],
                 is_last=True,
             )
             return
@@ -95,39 +87,26 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
                 )
             except Exception as e:
                 yield ToolResponse(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text=json.dumps(
-                                {
-                                    "error": (
-                                        f"连接 '{agent_alias}' "
-                                        f"({resolved_url}) 失败: {e}"
-                                    ),
-                                    "task_state": "error",
-                                },
-                                ensure_ascii=False,
-                            ),
-                        ),
-                    ],
+                    content=[TextBlock(
+                        type="text",
+                        text=json.dumps({
+                            "error": f"连接 '{agent_alias}' ({resolved_url}) 失败: {e}",
+                            "task_state": "error",
+                        }, ensure_ascii=False),
+                    )],
                     is_last=True,
                 )
                 return
 
     if not resolved_url:
         yield ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "error": "必须提供 agent_alias 或 agent_url 之一。",
-                            "task_state": "error",
-                        },
-                        ensure_ascii=False,
-                    ),
-                ),
-            ],
+            content=[TextBlock(
+                type="text",
+                text=json.dumps({
+                    "error": "必须提供 agent_alias 或 agent_url 之一。",
+                    "task_state": "error",
+                }, ensure_ascii=False),
+            )],
             is_last=True,
         )
         return
@@ -179,36 +158,25 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
             text_len_delta = len(accumulated_text) - len(prev_text)
             should_yield = (
                 text_len_delta >= 20
-                or (
-                    text_len_delta > 0
-                    and now - last_yield_time >= MIN_YIELD_INTERVAL
-                )
+                or (text_len_delta > 0 and now - last_yield_time >= MIN_YIELD_INTERVAL)
                 or final_state in ("completed", "failed", "canceled")
             )
             if should_yield:
                 logger.debug(
                     "a2a_call yield #%d: text_len=%d, delta=%d, state=%s",
-                    events_count,
-                    len(accumulated_text),
-                    text_len_delta,
-                    final_state or "working",
+                    events_count, len(accumulated_text), text_len_delta, final_state or "working",
                 )
                 yield ToolResponse(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text=json.dumps(
-                                {
-                                    "response_text": accumulated_text,
-                                    "task_id": final_task_id,
-                                    "context_id": final_context_id,
-                                    "task_state": final_state or "working",
-                                    "event_count": events_count,
-                                },
-                                ensure_ascii=False,
-                            ),
-                        ),
-                    ],
+                    content=[TextBlock(
+                        type="text",
+                        text=json.dumps({
+                            "response_text": accumulated_text,
+                            "task_id": final_task_id,
+                            "context_id": final_context_id,
+                            "task_state": final_state or "working",
+                            "event_count": events_count,
+                        }, ensure_ascii=False),
+                    )],
                     is_last=False,
                 )
                 last_yield_time = now
@@ -225,49 +193,34 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
     except Exception as e:
         logger.error("a2a_call failed for %s: %s", resolved_url, e)
         yield ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "response_text": accumulated_text,
-                            "error": str(e),
-                            "task_id": final_task_id,
-                            "context_id": final_context_id,
-                            "task_state": "error",
-                            "event_count": events_count,
-                        },
-                        ensure_ascii=False,
-                    ),
-                ),
-            ],
+            content=[TextBlock(
+                type="text",
+                text=json.dumps({
+                    "response_text": accumulated_text,
+                    "error": str(e),
+                    "task_id": final_task_id,
+                    "context_id": final_context_id,
+                    "task_state": "error",
+                    "event_count": events_count,
+                }, ensure_ascii=False),
+            )],
             is_last=True,
         )
         return
 
     # 最终结果
-    logger.debug(
-        "a2a_call FINAL: events=%d, text_len=%d, state=%s",
-        events_count,
-        len(accumulated_text),
-        final_state or "completed",
-    )
+    logger.debug("a2a_call FINAL: events=%d, text_len=%d, state=%s", events_count, len(accumulated_text), final_state or "completed")
     yield ToolResponse(
-        content=[
-            TextBlock(
-                type="text",
-                text=json.dumps(
-                    {
-                        "response_text": accumulated_text,
-                        "task_id": final_task_id,
-                        "context_id": final_context_id,
-                        "task_state": final_state or "completed",
-                        "event_count": events_count,
-                    },
-                    ensure_ascii=False,
-                ),
-            ),
-        ],
+        content=[TextBlock(
+            type="text",
+            text=json.dumps({
+                "response_text": accumulated_text,
+                "task_id": final_task_id,
+                "context_id": final_context_id,
+                "task_state": final_state or "completed",
+                "event_count": events_count,
+            }, ensure_ascii=False),
+        )],
         is_last=True,
     )
 

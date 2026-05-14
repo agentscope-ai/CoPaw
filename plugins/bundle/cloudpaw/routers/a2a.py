@@ -34,18 +34,9 @@ router = APIRouter(prefix="/a2a", tags=["a2a"])
 class RegisterRequest(BaseModel):
     url: str = Field(..., description="Remote A2A Agent base URL")
     alias: Optional[str] = Field(None, description="Human-readable alias")
-    auth_type: Optional[str] = Field(
-        "",
-        description="bearer | api_key | gateway | ''",
-    )
-    auth_token: Optional[str] = Field(
-        "",
-        description="Token/key value (not needed for gateway)",
-    )
-    gateway_config: Optional[dict] = Field(
-        None,
-        description="Gateway-specific config overrides",
-    )
+    auth_type: Optional[str] = Field("", description="bearer | api_key | gateway | ''")
+    auth_token: Optional[str] = Field("", description="Token/key value (not needed for gateway)")
+    gateway_config: Optional[dict] = Field(None, description="Gateway-specific config overrides")
 
 
 class AgentEntryResponse(BaseModel):
@@ -114,7 +105,6 @@ def _save_config(workspace_dir: Path, agents: dict[str, dict]) -> None:
 
 def _get_manager():
     from modules.a2a.client_manager import get_a2a_manager
-
     return get_a2a_manager()
 
 
@@ -123,7 +113,6 @@ def _make_alias(url: str, alias: str | None) -> str:
     if alias:
         return alias.strip()
     from urllib.parse import urlparse
-
     parsed = urlparse(url)
     return parsed.hostname or url
 
@@ -160,15 +149,8 @@ def _build_entry_response(
 # ------------------------------------------------------------------
 
 
-@router.get(
-    "/agents",
-    response_model=AgentsListResponse,
-    summary="List A2A agents",
-)
-async def list_agents(
-    request: Request,
-    active: bool = False,
-) -> AgentsListResponse:
+@router.get("/agents", response_model=AgentsListResponse, summary="List A2A agents")
+async def list_agents(request: Request, active: bool = False) -> AgentsListResponse:
     ws_dir = await _get_workspace_dir(request)
     agents_cfg = _load_config(ws_dir)
     manager = _get_manager()
@@ -193,15 +175,8 @@ async def list_agents(
     return AgentsListResponse(agents=result)
 
 
-@router.post(
-    "/agents",
-    response_model=AgentEntryResponse,
-    summary="Register A2A agent",
-)
-async def register_agent(
-    request: Request,
-    body: RegisterRequest,
-) -> AgentEntryResponse:
+@router.post("/agents", response_model=AgentEntryResponse, summary="Register A2A agent")
+async def register_agent(request: Request, body: RegisterRequest) -> AgentEntryResponse:
     ws_dir = await _get_workspace_dir(request)
     agents_cfg = _load_config(ws_dir)
     manager = _get_manager()
@@ -249,10 +224,7 @@ async def delete_agent(request: Request, alias: str) -> dict:
 
     reg = agents_cfg.pop(alias, None)
     if not reg:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Agent '{alias}' not found",
-        )
+        raise HTTPException(status_code=404, detail=f"Agent '{alias}' not found")
 
     _save_config(ws_dir, agents_cfg)
 
@@ -276,10 +248,7 @@ async def refresh_agent(request: Request, alias: str) -> AgentEntryResponse:
 
     reg = agents_cfg.get(alias)
     if not reg:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Agent '{alias}' not found",
-        )
+        raise HTTPException(status_code=404, detail=f"Agent '{alias}' not found")
     reg["alias"] = alias
 
     manager = _get_manager()
