@@ -412,7 +412,7 @@ class Provider(ProviderInfo, ABC):
             and not self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
-            auth_type=auth_info.type,
+            auth_type=self.auth_type,
             auth=auth_info,
             generate_kwargs=self.generate_kwargs,
             meta=self.meta or {},
