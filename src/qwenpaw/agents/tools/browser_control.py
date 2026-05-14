@@ -411,6 +411,16 @@ def _ensure_playwright_sync():
         ) from exc
 
 
+async def _stop_playwright_instance(pw: Any) -> None:
+    """Best-effort stop for a locally-started Playwright driver."""
+    if pw is None:
+        return
+    try:
+        await pw.stop()
+    except Exception:
+        pass
+
+
 def _sync_browser_launch(
     state: dict,
     cdp_port: int = 0,
@@ -604,11 +614,7 @@ async def _start_managed_cdp_browser(
                 _register_page(state, page, page_id)
                 state["current_page_id"] = page_id
     except Exception:
-        if pw is not None:
-            try:
-                await pw.stop()
-            except Exception:
-                pass
+        await _stop_playwright_instance(pw)
         try:
             if proc.poll() is None:
                 proc.kill()
@@ -3959,11 +3965,7 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
             ),
         )
     except asyncio.TimeoutError:
-        if pw is not None:
-            try:
-                await pw.stop()
-            except Exception:
-                pass
+        await _stop_playwright_instance(pw)
         return _tool_response(
             json.dumps(
                 {
@@ -3978,11 +3980,7 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
             ),
         )
     except Exception as e:
-        if pw is not None:
-            try:
-                await pw.stop()
-            except Exception:
-                pass
+        await _stop_playwright_instance(pw)
         return _tool_response(
             json.dumps(
                 {"ok": False, "error": f"CDP connect failed: {e!s}"},
