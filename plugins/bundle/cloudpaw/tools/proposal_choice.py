@@ -111,7 +111,7 @@ def _split_flat_rows_into_proposals(
     return proposals if proposals else [rows]
 
 
-def _normalize_proposals(
+def _normalize_proposals(  # pylint: disable=too-many-return-statements
     data: Any,
     expected_count: int = 0,
 ) -> Union[List[List[List[Any]]], str]:

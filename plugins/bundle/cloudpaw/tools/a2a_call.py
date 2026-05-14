@@ -20,7 +20,7 @@ from agentscope.tool import ToolResponse
 logger = logging.getLogger(__name__)
 
 
-async def a2a_call(
+async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
     message: str,
     agent_alias: str = "",
     agent_url: str = "",

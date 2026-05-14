@@ -144,8 +144,8 @@ def _ok_response(message: str, data: dict = None) -> ToolResponse:
     )
 
 
-async def _handle_create(
-    loop_path: Path,
+async def _handle_create(  # pylint: disable=too-many-return-statements
+    _loop_path: Path,
     prd_path: Path,
     project: str = None,
     description: str = None,
@@ -155,7 +155,7 @@ async def _handle_create(
     """处理 create 操作：创建新的 PRD。
 
     Args:
-        loop_path: Mission 目录路径
+        _loop_path: Mission 目录路径（保留供将来使用）
         prd_path: prd.json 路径
         project: 项目名称（必填）
         description: 项目描述（必填）
@@ -246,7 +246,7 @@ async def _handle_create(
     )
 
 
-async def manage_prd(
+async def manage_prd(  # noqa: E501 # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
     loop_dir: str,
     operation: str,
     story: dict | str = None,
