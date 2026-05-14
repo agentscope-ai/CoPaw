@@ -2039,6 +2039,8 @@
     "selectAllCurrentPage": "このページを全選択",
     "selectedItems": "{{count}} 件選択中",
     "batchDeleteButton": "一括削除",
+    "batchOperation": "一括操作",
+    "exitBatch": "一括終了",
     "batchDeleteConfirm": "選択した {{count}} 件の通知を削除しますか？",
     "batchDeleteSuccess": "{{count}} 件の通知を削除しました",
     "pushCronHeader": "定期実行：{{name}}",

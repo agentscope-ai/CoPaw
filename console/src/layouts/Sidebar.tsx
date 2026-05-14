@@ -40,6 +40,7 @@ import {
   SparkBarChartLine,
   SparkDebugLine,
   SparkSaveLine,
+  SparkEmailLine,
 } from "@agentscope-ai/icons";
 import { Package } from "lucide-react";
 import { clearAuthToken } from "../api/config";
@@ -143,11 +144,6 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const inboxIcon = (size: number) => (
-    <Badge dot={hasInboxUnread} color="rgba(255, 157, 77, 1)" offset={[2, 0]}>
-      <SparkOtherLine size={size} />
-    </Badge>
-  );
   const inboxLabel = collapsed ? null : (
     <Badge dot={hasInboxUnread} color="rgba(255, 157, 77, 1)" offset={[5, 7]}>
       <span>{t("nav.inbox")}</span>
@@ -219,7 +215,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     },
     {
       key: "inbox",
-      icon: inboxIcon(18),
+      icon: <SparkEmailLine size={18} />,
       path: "/inbox",
       label: t("nav.inbox"),
     },
@@ -364,7 +360,7 @@ export default function Sidebar({ selectedKey }: SidebarProps) {
     {
       key: "inbox",
       label: inboxLabel,
-      icon: <SparkOtherLine size={16} />,
+      icon: <SparkEmailLine size={16} />,
     },
     {
       key: "control-group",

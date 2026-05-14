@@ -107,6 +107,8 @@
     "selectAllCurrentPage": "全选当前页",
     "selectedItems": "已选 {{count}} 项",
     "batchDeleteButton": "批量删除",
+    "batchOperation": "批量操作",
+    "exitBatch": "退出批量",
     "batchDeleteConfirm": "确定删除选中的 {{count}} 条推送消息吗？",
     "batchDeleteSuccess": "已删除 {{count}} 条推送消息",
     "pushCronHeader": "定时任务：{{name}}",
