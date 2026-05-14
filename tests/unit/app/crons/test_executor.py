@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # pylint: disable=too-few-public-methods
 
+from types import SimpleNamespace
 from typing import Any, AsyncGenerator
 
 import pytest
@@ -16,8 +17,9 @@ from qwenpaw.app.crons.models import CronJobSpec
 class DummyRunner:
     """Runner stub that records requests passed to stream_query."""
 
-    def __init__(self) -> None:
+    def __init__(self, chat_manager: Any | None = None) -> None:
         self.requests: list[dict[str, Any]] = []
+        self._chat_manager = chat_manager
 
     async def stream_query(
         self,
@@ -37,6 +39,24 @@ class DummyChannelManager:
     async def send_event(self, **kwargs: Any) -> None:
         """Record an outbound event."""
         self.events.append(kwargs)
+
+
+class DummyChatManager:
+    """Chat manager stub that returns active chat specs."""
+
+    def __init__(self, session_ids: list[str]) -> None:
+        self.session_ids = session_ids
+
+    async def list_chats(
+        self,
+        user_id: str | None = None,  # pylint: disable=unused-argument
+        channel: str | None = None,  # pylint: disable=unused-argument
+    ) -> list[Any]:
+        """Return active chat records."""
+        return [
+            SimpleNamespace(session_id=session_id)
+            for session_id in self.session_ids
+        ]
 
 
 def _build_agent_job(*, share_session: bool) -> CronJobSpec:
@@ -116,6 +136,36 @@ async def test_share_session_uses_target_session() -> None:
     await executor.execute(_build_agent_job(share_session=True))
 
     assert runner.requests[0]["session_id"] == "session-1"
+
+
+@pytest.mark.asyncio
+async def test_share_session_reuses_existing_target_session() -> None:
+    """Shared cron jobs reuse target sessions still present in chats."""
+    runner = DummyRunner(chat_manager=DummyChatManager(["session-1"]))
+    executor = CronExecutor(
+        runner=runner,
+        channel_manager=DummyChannelManager(),
+    )
+
+    await executor.execute(_build_agent_job(share_session=True))
+
+    assert runner.requests[0]["session_id"] == "session-1"
+
+
+@pytest.mark.asyncio
+async def test_share_session_uses_fresh_run_when_target_deleted() -> None:
+    """Deleted target sessions are not resurrected by shared cron jobs."""
+    runner = DummyRunner(chat_manager=DummyChatManager([]))
+    executor = CronExecutor(
+        runner=runner,
+        channel_manager=DummyChannelManager(),
+    )
+
+    await executor.execute(_build_agent_job(share_session=True))
+
+    session_id = runner.requests[0]["session_id"]
+    assert session_id != "session-1"
+    assert session_id.startswith("session-1:cron:job-1:run:")
 
 
 @pytest.mark.asyncio
