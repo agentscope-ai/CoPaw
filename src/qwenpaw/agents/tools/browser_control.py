@@ -756,13 +756,14 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
                 "resourceType": getattr(req, "resource_type", None),
             },
         )
+
     def on_crash(_p):
         logger.error("Browser page crashed: %s", page_id)
 
     page.on("crash", on_crash)
 
-    requests_list = state["network_requests"].setdefault(page_id, [])
-    
+    requests_list = state["network_requests"].setdefault(page_id, []))
+
     def on_response(res):
         for r in requests_list:
             if r.get("url") == res.url and "status" not in r:
@@ -4249,8 +4250,8 @@ async def browser_use(  # pylint: disable=R0911,R0912
     _ws_id = _cwd.name if _cwd else "default"
     _ws_dir = str(_cwd) if _cwd else ""
     state = _get_workspace_state(_ws_id, _ws_dir)
-    _touch_activity(state)
-    
+    _touch_activity(state))
+
     action = (action or "").strip().lower()
     if not action:
         return _tool_response(
