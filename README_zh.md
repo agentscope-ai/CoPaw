@@ -70,14 +70,7 @@
 
 - [2026-05-09] 我们发布了 **v1.1.6**！完整更新说明见 [v1.1.6 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
-  - **[v1.1.6] 新增**：LLM 自动生成会话标题；Token 用量趋势图；Mermaid 图表渲染；飞书/企业微信交互式审批卡片；火山引擎与阿里云 Token Plan 服务商；技能安装/卸载/测试 CLI；Agent 状态 API；定时任务会话隔离；GPT Image 2 插件。
-  - **[v1.1.6] 性能**：控制台渲染优化；聊天历史导航优化；二维码轮询清理。
-  - **[v1.1.6] 修复**：MCP 执行超时与生命周期泄漏；Agent 配置热重载与保存修复。
-  - **[v1.1.6] 感谢新贡献者**：@karls0r、@Jailtonfonseca、@hllqkb、@yutai78786、@tqjason、@JingHou1215、@wjt0321、@1105623876、@Keillion、@q1023884985。
-
 - [2026-04-29] 我们发布了 **v1.1.5**！完整更新说明见 [v1.1.5 发布说明](https://qwenpaw.agentscope.io/release-notes)。
-
-- [2026-04-24] 我们发布了 **v1.1.4**！完整更新说明见 [v1.1.4 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
 - [2026-04-12] **CoPaw 正式更名为 QwenPaw**：这是一次品牌名称焕新，也是我们迈向下一阶段开源的重要一步。
 

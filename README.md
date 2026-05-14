@@ -70,14 +70,7 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 - [2026-05-09] We've released **v1.1.6**! See the full [v1.1.6 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-  - **[v1.1.6] Added**: LLM-generated session titles; token usage trends; Mermaid diagram rendering; Feishu/WeCom interactive approval cards; Volcano Engine & Aliyun Token Plan providers; skill install/uninstall/test CLI; agent status API; cron session isolation; GPT Image 2 plugin.
-  - **[v1.1.6] Performance**: Console rendering optimization; chat history navigation optimization; QR polling cleanup.
-  - **[v1.1.6] Fixed**: MCP execution timeout & lifecycle leak; agent config reload & persistence fix.
-  - **[v1.1.6] New Contributors**: @karls0r, @Jailtonfonseca, @hllqkb, @yutai78786, @tqjason, @JingHou1215, @wjt0321, @1105623876, @Keillion, @q1023884985.
-
 - [2026-04-29] We've released **v1.1.5**! See the full [v1.1.5 Release Notes](https://qwenpaw.agentscope.io/release-notes).
-
-- [2026-04-24] We've released **v1.1.4**! See the full [v1.1.4 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
 - [2026-04-12] **CoPaw is Officially Rebranding to QwenPaw**: This rebranding marks an important step forward into our next phase of open-source development.
 
