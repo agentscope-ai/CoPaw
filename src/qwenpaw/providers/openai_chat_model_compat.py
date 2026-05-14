@@ -13,7 +13,10 @@ from agentscope.model._model_response import ChatResponse
 from pydantic import BaseModel
 
 from qwenpaw.local_models.tag_parser import (
+    THINK_END,
+    THINK_START,
     parse_tool_calls_from_text,
+    text_contains_think_tag,
     text_contains_tool_call_tag,
 )
 
@@ -133,6 +136,72 @@ def _sanitize_stream_item(item: Any) -> Any:
         return _clone_with_overrides(item, chunk=sanitized_chunk)
 
     return _sanitize_chunk(item)
+
+
+def _split_thinking_tagged_text(text: str) -> list[dict[str, str]] | None:
+    """Convert raw ``<think>`` tagged text into ordered content blocks."""
+    if not text_contains_think_tag(text):
+        return None
+
+    blocks: list[dict[str, str]] = []
+    cursor = 0
+
+    while cursor < len(text):
+        start = text.find(THINK_START, cursor)
+        if start == -1:
+            remaining = text[cursor:].strip()
+            if remaining:
+                blocks.append({"type": "text", "text": remaining})
+            break
+
+        before = text[cursor:start].strip()
+        if before:
+            blocks.append({"type": "text", "text": before})
+
+        thinking_start = start + len(THINK_START)
+        end = text.find(THINK_END, thinking_start)
+        if end == -1:
+            thinking = text[thinking_start:].strip()
+            blocks.append({"type": "thinking", "thinking": thinking})
+            break
+
+        thinking = text[thinking_start:end].strip()
+        blocks.append({"type": "thinking", "thinking": thinking})
+        cursor = end + len(THINK_END)
+
+    return blocks
+
+
+def _extract_thinking_tagged_blocks(
+    content: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Split text blocks containing ``<think>`` into structured blocks."""
+    normalized: list[dict[str, Any]] = []
+    changed = False
+
+    for block in content:
+        if block.get("type") != "text":
+            normalized.append(block)
+            continue
+
+        text = block.get("text")
+        if not isinstance(text, str):
+            normalized.append(block)
+            continue
+
+        split_blocks = _split_thinking_tagged_text(text)
+        if split_blocks is None:
+            normalized.append(block)
+            continue
+
+        changed = True
+        for split_block in split_blocks:
+            if split_block["type"] == "text":
+                normalized.append({**block, "text": split_block["text"]})
+            else:
+                normalized.append(split_block)
+
+    return normalized if changed else content
 
 
 class _SanitizedStream:
@@ -333,6 +402,8 @@ class OpenAIChatModelCompat(OpenAIChatModel):
                     ec = sanitized_response.extra_contents.get(tool_id)
                     if ec:
                         block["extra_content"] = ec
+
+            parsed.content = _extract_thinking_tagged_blocks(parsed.content)
 
             # Check whether the response already carries structured tool_use
             # blocks (either from the model or from extra_content above).

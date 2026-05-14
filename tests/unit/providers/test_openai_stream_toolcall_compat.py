@@ -60,6 +60,16 @@ def _make_chunk(tool_calls: list[Any]) -> Any:
     return SimpleNamespace(usage=None, choices=[choice])
 
 
+def _make_text_chunk(content: str) -> Any:
+    delta = SimpleNamespace(
+        reasoning_content=None,
+        content=content,
+        tool_calls=None,
+    )
+    choice = SimpleNamespace(delta=delta)
+    return SimpleNamespace(usage=None, choices=[choice])
+
+
 async def test_stream_parser_skips_tool_call_without_function() -> None:
     model = CompatHarnessOpenAIChatModel(
         "dummy",
@@ -106,6 +116,37 @@ async def test_stream_parser_skips_tool_call_without_function() -> None:
     assert tool_blocks
     assert tool_blocks[-1]["name"] == "ping"
     assert tool_blocks[-1]["input"] == {"x": 1}
+
+
+async def test_stream_parser_splits_raw_think_tags() -> None:
+    model = CompatHarnessOpenAIChatModel(
+        "dummy",
+        api_key="sk-test",
+        stream=True,
+    )
+
+    stream = FakeAsyncStream(
+        [
+            _make_text_chunk(
+                "<think>\nI should answer briefly.\n</think>\nFinal answer.",
+            ),
+        ],
+    )
+
+    responses = await model.parse_stream_for_test(
+        datetime.now(),
+        stream,
+    )
+
+    assert responses
+    content = responses[-1].content
+    assert {
+        "type": "thinking",
+        "thinking": "I should answer briefly.",
+    } in content
+    assert {"type": "text", "text": "Final answer."} in content
+    assert "<think>" not in str(content)
+    assert "</think>" not in str(content)
 
 
 def test_sanitize_tool_call_normalizes_non_string_arguments() -> None:
