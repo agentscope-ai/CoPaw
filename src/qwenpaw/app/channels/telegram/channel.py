@@ -1079,8 +1079,6 @@ class TelegramChannel(BaseChannel):
         state = self._get_stream_state(send_meta)
         msg_id = state["message_ids"].pop(stream_type, None)
         state["last_edit_ts"].pop(stream_type, None)
-        if not msg_id:
-            return
         chat_id = send_meta.get("chat_id") or to_handle
         if not chat_id:
             return
@@ -1088,6 +1086,12 @@ class TelegramChannel(BaseChannel):
         final_text = (
             f"{prefix}{accumulated_text}" if prefix else accumulated_text
         )
+
+        # If placeholder was never sent (e.g. API error), fall back to
+        # normal send so the reply is not silently lost.
+        if not msg_id:
+            await self.send(to_handle, final_text, send_meta)
+            return
 
         # If text fits in a single message, edit in place
         if len(final_text) <= TELEGRAM_SEND_CHUNK_SIZE:
