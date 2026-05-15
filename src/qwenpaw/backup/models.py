@@ -128,6 +128,10 @@ class RestoreBackupRequest(BaseModel):
         default=False,
         description="Explicitly trust and sign an unsigned legacy backup.",
     )
+    trust_foreign: bool = Field(
+        default=False,
+        description="Explicitly trust and sign a foreign signed backup.",
+    )
 
 
 class DeleteBackupsRequest(BaseModel):

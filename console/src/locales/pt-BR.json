@@ -258,7 +258,7 @@
     "trustForeignTitle": "Confiar neste backup?",
     "trustLegacyTitle": "Confiar no backup legado?",
     "unknownBackupName": "Arquivo de backup",
-    "trustForeignDesc": "Este backup não foi assinado por esta instância. Importe apenas se confiar na origem; as configurações locais de segurança e MCP serão preservadas por padrão ao restaurar.",
+    "trustForeignDesc": "Este backup não foi assinado por esta instância. Continue apenas se confiar na origem; as configurações locais de segurança e MCP serão preservadas por padrão ao restaurar.",
     "trustLegacyDesc": "Este backup antigo não tem assinatura local. Continue apenas se confiar na origem; esta instância o assinará antes da restauração.",
     "deleteSuccess": "Backup(s) deleted successfully",
     "deleteFailed": "Falhou to Excluir backup(s)",

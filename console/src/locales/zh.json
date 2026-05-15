@@ -2130,7 +2130,7 @@
     "trustForeignTitle": "信任此备份？",
     "trustLegacyTitle": "信任历史备份？",
     "unknownBackupName": "备份归档",
-    "trustForeignDesc": "此备份不是由当前实例签名。仅在信任来源时导入；恢复时默认保留本地安全和 MCP 配置。",
+    "trustForeignDesc": "此备份不是由当前实例签名。仅在信任来源时继续；恢复时默认保留本地安全和 MCP 配置。",
     "trustLegacyDesc": "此旧版备份没有本地签名。仅在信任来源时继续；确认后会使用当前实例签名再恢复。",
     "deleteSuccess": "备份删除成功",
     "deleteFailed": "备份删除失败",

@@ -530,7 +530,7 @@
     "trustForeignTitle": "Percayai cadangan ini?",
     "trustLegacyTitle": "Percayai cadangan lama?",
     "unknownBackupName": "Arsip cadangan",
-    "trustForeignDesc": "Cadangan ini tidak ditandatangani oleh instance ini. Impor hanya jika Anda memercayai sumbernya; pengaturan keamanan lokal dan MCP akan dipertahankan secara default saat dipulihkan.",
+    "trustForeignDesc": "Cadangan ini tidak ditandatangani oleh instance ini. Lanjutkan hanya jika Anda memercayai sumbernya; pengaturan keamanan lokal dan MCP akan dipertahankan secara default saat dipulihkan.",
     "trustLegacyDesc": "Cadangan lama ini tidak memiliki tanda tangan lokal. Lanjutkan hanya jika Anda memercayai asalnya; instance ini akan menandatanganinya sebelum dipulihkan."
   },
   "mcp": {

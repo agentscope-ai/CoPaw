@@ -11,7 +11,15 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from ...backup.models import BackupMeta, BackupValidationError
+from ...backup._ops.restore_helpers import (
+    LOCAL_PROTECTED_CONFIG_KEYS,
+    resolve_preserve_flag,
+)
+from ...backup.models import (
+    BackupMeta,
+    BackupValidationError,
+    RestoreBackupRequest,
+)
 from ...constant import BACKUP_DIR
 
 TMP_UPLOAD_SUFFIX = ".upload_tmp"
@@ -62,3 +70,23 @@ def strip_signature(meta: BackupMeta) -> BackupMeta:
 def validation_detail(exc: BackupValidationError) -> dict[str, object]:
     """Convert stable backup validation failures to FastAPI detail payloads."""
     return {"code": exc.code, "message": exc.message, **exc.details}
+
+
+def restored_local_keys(
+    req: RestoreBackupRequest,
+    meta: BackupMeta,
+) -> list[str]:
+    """Return protected local keys that were actually preserved.
+
+    The restore response is only a UI hint. Report preserved keys only when
+    config restore was requested and the archive claims to contain config;
+    agent-only restores do not touch config, so returning keys there would be
+    misleading.
+    """
+    if not req.include_global_config:
+        return []
+    if not meta.scope.include_global_config:
+        return []
+    if not resolve_preserve_flag(req, meta):
+        return []
+    return list(LOCAL_PROTECTED_CONFIG_KEYS)

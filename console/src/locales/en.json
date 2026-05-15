@@ -324,7 +324,7 @@
     "trustForeignTitle": "Trust this backup?",
     "trustLegacyTitle": "Trust legacy backup?",
     "unknownBackupName": "Backup archive",
-    "trustForeignDesc": "This backup was not signed by this instance. Only import it if you trust the source; local security and MCP settings will be preserved by default when restored.",
+    "trustForeignDesc": "This backup was not signed by this instance. Only continue if you trust the source; local security and MCP settings will be preserved by default when restored.",
     "trustLegacyDesc": "This older backup has no local signature. Only continue if you trust where it came from; this instance will sign it before restore.",
     "deleteSuccess": "Backup(s) deleted successfully",
     "deleteFailed": "Failed to delete backup(s)",

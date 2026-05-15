@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import Request
 from starlette.responses import Response
 
-from ..constant import CONFIG_FILE, WORKING_DIR
+from ..constant import CONFIG_FILE, CORS_ORIGINS, WORKING_DIR
 
 _ALLOW_HOSTS_ENDPOINT = "/api/config/security/allow-no-auth-hosts"
 _BACKUP_PATH = "/api/backups"
@@ -40,7 +40,7 @@ def apply(request: Request, *, skip_auth: bool) -> Response | bool:
     if not _matches_protected(request) or request.method == "OPTIONS":
         return skip_auth
 
-    if not _is_same_origin(request):
+    if not _is_trusted_browser_origin(request):
         return _json_response(
             403,
             "sec_fetch_site_rejected",
@@ -51,6 +51,8 @@ def apply(request: Request, *, skip_auth: bool) -> Response | bool:
 
     auth_active = is_auth_enabled() and has_registered_users()
     if auth_active:
+        if _is_desktop_export_bypass(request):
+            return True
         return False
 
     rejected = _check_unauth_remote(request)
@@ -73,13 +75,15 @@ def _json_response(status_code: int, code: str, message: str) -> Response:
     )
 
 
-def _is_same_origin(request: Request) -> bool:
+def _is_trusted_browser_origin(request: Request) -> bool:
     """Reject browser cross-site backup calls before they reach handlers."""
     sec_fetch_site = request.headers.get("sec-fetch-site", "").lower()
     if sec_fetch_site in {"same-origin", "none"}:
         return True
-    if sec_fetch_site in {"cross-site", "same-site"}:
+    if sec_fetch_site == "cross-site":
         return False
+    if sec_fetch_site == "same-site":
+        return _origin_is_trusted(request)
 
     origin = request.headers.get("origin")
     if not origin:
@@ -87,8 +91,56 @@ def _is_same_origin(request: Request) -> bool:
     if origin == "null":
         return False
 
+    return _origin_matches_target(origin, request)
+
+
+def _origin_is_trusted(request: Request) -> bool:
+    """Return True when Origin is same-origin or in the CORS allow list."""
+    origin = request.headers.get("origin")
+    if not origin or origin == "null":
+        return False
+    if _origin_matches_target(origin, request):
+        return True
+    allowed = {
+        item.strip().rstrip("/").lower()
+        for item in CORS_ORIGINS.split(",")
+        if item.strip() and item.strip() != "*"
+    }
+    return origin.rstrip("/").lower() in allowed
+
+
+def _origin_matches_target(origin: str, request: Request) -> bool:
     target = f"{request.url.scheme}://{request.url.netloc}"
     return origin.rstrip("/").lower() == target.lower()
+
+
+def _is_desktop_export_bypass(request: Request) -> bool:
+    """Allow pywebview desktop downloads that cannot attach auth headers."""
+    if request.method != "GET" or not _is_export_route(request.url.path):
+        return False
+    return _is_loopback_client(request)
+
+
+def _is_export_route(path: str) -> bool:
+    if not path.startswith(f"{_BACKUP_PATH}/"):
+        return False
+    suffix = path[len(_BACKUP_PATH) + 1 :]
+    parts = suffix.split("/")
+    return len(parts) == 2 and parts[0] and parts[1] == "export"
+
+
+def _is_loopback_client(request: Request) -> bool:
+    client_host = request.client.host if request.client else ""
+    host = client_host.strip().strip("[]")
+    if host == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback
 
 
 def _check_unauth_remote(request: Request) -> Response | None:

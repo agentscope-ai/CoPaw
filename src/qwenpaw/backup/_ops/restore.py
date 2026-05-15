@@ -33,14 +33,14 @@ from ...config.utils import load_config, save_config
 from ...constant import CONFIG_FILE, SECRET_DIR, WORKING_DIR
 from ...security.secret_store import reload_master_key_from_disk
 from .restore_helpers import (
-    assert_signature_or_legacy,
     collect_workspace_agents_from_zip,
     handle_master_key_conflict,
     overlay_local_keys,
+    resolve_signature_action,
     resolve_preserve_flag,
     resolve_workspace_dst,
     rewrite_agent_workspace_dir,
-    sign_trusted_legacy_unsigned,
+    sign_trusted_backup,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,11 +76,12 @@ def preflight_restore(backup_id: str, req: RestoreBackupRequest) -> BackupMeta:
 
     with zipfile.ZipFile(zp, "r") as zf:
         meta = _read_meta_or_missing(zf, backup_id)
-        assert_signature_or_legacy(
+        resolve_signature_action(
             zf,
             meta,
             backup_id,
             trust_legacy=req.trust_legacy,
+            trust_foreign=req.trust_foreign,
         )
         _validate_version(meta)
         return meta
@@ -494,29 +495,31 @@ def _restore_sync_locked(
 
     with zipfile.ZipFile(zp, "r") as zf:
         meta = _read_meta_or_missing(zf, backup_id)
-        if not meta.signature:
-            # Legacy backups predate local signatures. They are usable only
-            # after explicit user trust, then signed before any file writes.
-            assert_signature_or_legacy(
-                zf,
-                meta,
-                backup_id,
-                trust_legacy=req.trust_legacy,
-            )
-            _validate_version(meta)
+        # Legacy/foreign backups are usable only after explicit user trust.
+        # If trust is accepted, sign the archive locally before any file
+        # writes so the restore below verifies the same bytes it will apply.
+        signature_action = resolve_signature_action(
+            zf,
+            meta,
+            backup_id,
+            trust_legacy=req.trust_legacy,
+            trust_foreign=req.trust_foreign,
+        )
+        _validate_version(meta)
 
-    if not meta.signature:
-        meta = sign_trusted_legacy_unsigned(zp, meta)
+    if signature_action == "sign_trusted":
+        meta = sign_trusted_backup(zp, meta)
 
     with zipfile.ZipFile(zp, "r") as zf:
         meta = _read_meta_or_missing(zf, backup_id)
-        # Re-open after legacy signing and verify the archive that will
+        # Re-open after trust signing and verify the archive that will
         # actually be restored, including its newly written meta.json.
-        assert_signature_or_legacy(
+        resolve_signature_action(
             zf,
             meta,
             backup_id,
             trust_legacy=False,
+            trust_foreign=False,
         )
         _validate_version(meta)
 

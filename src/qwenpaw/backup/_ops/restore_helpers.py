@@ -15,6 +15,7 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from .._utils.constants import PREFIX_SECRETS, PREFIX_WORKSPACES
 from .._utils.signing import (
@@ -28,28 +29,36 @@ from ...constant import BACKUP_DIR, SECRET_DIR, WORKING_DIR
 logger = logging.getLogger(__name__)
 
 _MASTER_KEY = ".master_key"
+SignatureAction = Literal["none", "sign_trusted"]
 # Foreign and legacy backups may contain config from another installation.
 # Preserve local auth/allow-list policy and MCP wiring by default so trusting
 # an archive does not silently replace the controls needed to manage it.
 LOCAL_PROTECTED_CONFIG_KEYS: tuple[str, ...] = ("security", "mcp")
 
 
-def assert_signature_or_legacy(
+def resolve_signature_action(
     zf: zipfile.ZipFile,
     meta: BackupMeta,
     backup_id: str,
     *,
     trust_legacy: bool,
-) -> None:
-    """Verify local backup signature or require explicit legacy trust.
+    trust_foreign: bool,
+) -> SignatureAction:
+    """Verify local signature or return the trust action required.
 
-    Unsigned backups can only proceed when the request carries explicit
-    legacy trust. That keeps old backups usable without treating every
-    unsigned archive as safe by default.
+    ``"none"`` means the archive already verifies with the local signing key.
+    ``"sign_trusted"`` means the user explicitly trusted a legacy or foreign
+    archive and the caller should re-sign it locally before restoring bytes.
     """
     if meta.signature:
         if verify_signature(zf, meta):
-            return
+            return "none"
+        if trust_foreign:
+            logger.warning(
+                "Restoring foreign signed backup after explicit trust: %s",
+                backup_id,
+            )
+            return "sign_trusted"
         raise signature_error(meta)
 
     if not trust_legacy:
@@ -59,20 +68,18 @@ def assert_signature_or_legacy(
         "Restoring legacy unsigned backup after explicit trust: %s",
         backup_id,
     )
+    return "sign_trusted"
 
 
-def sign_trusted_legacy_unsigned(zp: Path, meta: BackupMeta) -> BackupMeta:
-    """Sign a legacy unsigned backup in place using this instance's key.
+def sign_trusted_backup(zp: Path, meta: BackupMeta) -> BackupMeta:
+    """Sign an explicitly trusted backup using this instance's key.
 
-    Once the user has approved a legacy restore, re-signing the archive makes
-    later restores follow the normal local-signature path instead of asking
-    for trust on every attempt.
+    Once the user has approved a legacy or foreign restore, re-signing the
+    archive makes later restores follow the normal local-signature path
+    instead of asking for trust on every attempt.
     """
-    if meta.signature:
-        return meta
-
     logger.warning(
-        "Signing trusted legacy unsigned backup with local signature: %s",
+        "Signing trusted backup with local signature: %s",
         zp,
     )
     signed = meta.model_copy(

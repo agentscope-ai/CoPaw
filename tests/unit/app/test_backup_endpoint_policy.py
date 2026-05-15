@@ -94,6 +94,56 @@ def test_cross_site_backup_request_is_rejected(monkeypatch):
     assert decision.status_code == 403
 
 
+def test_same_site_backup_request_requires_configured_origin(monkeypatch):
+    monkeypatch.setattr(auth, "is_auth_enabled", lambda: False)
+    monkeypatch.setattr(auth, "has_registered_users", lambda: False)
+    monkeypatch.setattr(
+        backup_endpoint_policy,
+        "_get_cached_config",
+        lambda: _config(["127.0.0.1"]),
+    )
+    monkeypatch.setattr(
+        backup_endpoint_policy,
+        "CORS_ORIGINS",
+        "http://localhost:5173",
+    )
+
+    decision = backup_endpoint_policy.apply(
+        _request(
+            headers=[
+                (b"sec-fetch-site", b"same-site"),
+                (b"origin", b"http://localhost:5173"),
+            ],
+        ),
+        skip_auth=True,
+    )
+
+    assert decision is True
+
+
+def test_same_site_backup_request_rejects_unconfigured_origin(monkeypatch):
+    monkeypatch.setattr(auth, "is_auth_enabled", lambda: False)
+    monkeypatch.setattr(auth, "has_registered_users", lambda: False)
+    monkeypatch.setattr(
+        backup_endpoint_policy,
+        "CORS_ORIGINS",
+        "http://localhost:5173",
+    )
+
+    decision = backup_endpoint_policy.apply(
+        _request(
+            headers=[
+                (b"sec-fetch-site", b"same-site"),
+                (b"origin", b"http://evil.localhost:5173"),
+            ],
+        ),
+        skip_auth=True,
+    )
+
+    assert isinstance(decision, Response)
+    assert decision.status_code == 403
+
+
 def test_auth_on_backup_endpoint_forces_token_even_from_allow_list(
     monkeypatch,
 ):
@@ -101,6 +151,32 @@ def test_auth_on_backup_endpoint_forces_token_even_from_allow_list(
     monkeypatch.setattr(auth, "has_registered_users", lambda: True)
 
     decision = backup_endpoint_policy.apply(_request(), skip_auth=True)
+
+    assert decision is False
+
+
+def test_auth_on_loopback_export_keeps_desktop_save_file_working(
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "is_auth_enabled", lambda: True)
+    monkeypatch.setattr(auth, "has_registered_users", lambda: True)
+
+    decision = backup_endpoint_policy.apply(
+        _request("/api/backups/backup-1/export"),
+        skip_auth=False,
+    )
+
+    assert decision is True
+
+
+def test_auth_on_non_loopback_export_still_requires_token(monkeypatch):
+    monkeypatch.setattr(auth, "is_auth_enabled", lambda: True)
+    monkeypatch.setattr(auth, "has_registered_users", lambda: True)
+
+    decision = backup_endpoint_policy.apply(
+        _request("/api/backups/backup-1/export", client_host="192.0.2.10"),
+        skip_auth=False,
+    )
 
     assert decision is False
 

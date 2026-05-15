@@ -31,15 +31,12 @@ from ...backup.models import (
     DeleteBackupsResponse,
     RestoreBackupRequest,
 )
-from ...backup._ops.restore_helpers import (
-    LOCAL_PROTECTED_CONFIG_KEYS,
-    resolve_preserve_flag,
-)
 from ...constant import BACKUP_DIR
 from ._backup_helpers import (
     TMP_TRUST_SUFFIX,
     TMP_UPLOAD_SUFFIX,
     parse_pending_token,
+    restored_local_keys,
     strip_signature,
     validation_detail,
 )
@@ -291,11 +288,7 @@ async def restore_backup(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    preserved = (
-        list(LOCAL_PROTECTED_CONFIG_KEYS)
-        if resolve_preserve_flag(req, meta)
-        else []
-    )
+    preserved = restored_local_keys(req, meta)
     return {"ok": True, "preserved_local_keys": preserved}
 
 

@@ -48,6 +48,10 @@ interface Props {
 
 type RestoreMode = "full" | "custom";
 type RestoreStrategy = "preserve" | "restore";
+type TrustPrompt = {
+  mode: "legacy" | "foreign";
+  request: RestoreBackupRequest;
+};
 
 export default function RestoreBackupModal({
   open,
@@ -88,9 +92,8 @@ export default function RestoreBackupModal({
     backup.scope.include_agents,
   );
   const [confirmed, setConfirmed] = useState(false);
-  const [legacyRequest, setLegacyRequest] =
-    useState<RestoreBackupRequest | null>(null);
-  const [legacyLoading, setLegacyLoading] = useState(false);
+  const [trustPrompt, setTrustPrompt] = useState<TrustPrompt | null>(null);
+  const [trustLoading, setTrustLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -119,7 +122,7 @@ export default function RestoreBackupModal({
       backup.imported_via_trust_foreign === false ? "restore" : "preserve",
     );
     setConfirmed(false);
-    setLegacyRequest(null);
+    setTrustPrompt(null);
   }, [open, backup.id, backup.imported_via_trust_foreign, fullBackup]);
 
   const existingAgentMap = useMemo(
@@ -245,7 +248,12 @@ export default function RestoreBackupModal({
     } catch (err: unknown) {
       const detail = parseErrorDetail(err);
       if (detail?.code === "backup_legacy_unsigned") {
-        setLegacyRequest(request);
+        setTrustPrompt({ mode: "legacy", request });
+      } else if (
+        detail?.code === "backup_signature_mismatch" ||
+        detail?.code === "backup_unknown_signature_scheme"
+      ) {
+        setTrustPrompt({ mode: "foreign", request });
       } else {
         showRestoreFailure(detail);
       }
@@ -254,16 +262,20 @@ export default function RestoreBackupModal({
     }
   };
 
-  const handleLegacyConfirm = async () => {
-    if (!legacyRequest) return;
-    setLegacyLoading(true);
+  const handleTrustConfirm = async () => {
+    if (!trustPrompt) return;
+    setTrustLoading(true);
+    const trustFlags =
+      trustPrompt.mode === "legacy"
+        ? { trust_legacy: true }
+        : { trust_foreign: true };
     try {
-      await finishRestore({ ...legacyRequest, trust_legacy: true });
-      setLegacyRequest(null);
+      await finishRestore({ ...trustPrompt.request, ...trustFlags });
+      setTrustPrompt(null);
     } catch (err: unknown) {
       showRestoreFailure(parseErrorDetail(err));
     } finally {
-      setLegacyLoading(false);
+      setTrustLoading(false);
     }
   };
 
@@ -536,12 +548,12 @@ export default function RestoreBackupModal({
         </div>
       </Modal>
       <BackupTrustDialog
-        open={!!legacyRequest}
-        mode="legacy"
+        open={!!trustPrompt}
+        mode={trustPrompt?.mode ?? "legacy"}
         backupName={backup.name}
-        confirmLoading={legacyLoading}
-        onConfirm={handleLegacyConfirm}
-        onCancel={() => setLegacyRequest(null)}
+        confirmLoading={trustLoading}
+        onConfirm={handleTrustConfirm}
+        onCancel={() => setTrustPrompt(null)}
       />
     </>
   );

@@ -40,6 +40,7 @@ export interface RestoreBackupRequest {
   mode?: "full" | "custom";
   preserve_local_protected_config?: boolean | null;
   trust_legacy?: boolean;
+  trust_foreign?: boolean;
 }
 
 export interface RestoreBackupResponse {
