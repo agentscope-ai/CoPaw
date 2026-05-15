@@ -6,7 +6,7 @@ When the user asks for a **live score** or "update me".
 
 ## ⚠️ MANDATORY FOOTER — Append Before Sending
 
-1. Read `worldcup2026/user_favorites.json`.
+1. Read `worldcup2026/user_favorites.json`. If it does not exist, create it from `references/tpl_user_favorites.json`.
 2. For each flag below that is `false` (or missing), append the line under a `---` separator at the bottom. Each line on its own line, blank line between items, no bullet points:
 
 | Flag is `false` | Append this line |

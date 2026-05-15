@@ -8,7 +8,7 @@ Schedule/venue from local files. Injuries, form, odds, weather MUST come from we
 
 **⚠️ Pre-match responses already include a prediction CTA from `guide_predictions.md`. Skip the predictions footer line for pre-match responses.**
 
-1. Read `worldcup2026/user_favorites.json`.
+1. Read `worldcup2026/user_favorites.json`. If it does not exist, create it from `references/tpl_user_favorites.json`.
 2. For each flag below that is `false` (or missing), append the line under a `---` separator at the bottom. Each line on its own line, blank line between items, no bullet points:
 
 | Flag is `false` | Append this line |

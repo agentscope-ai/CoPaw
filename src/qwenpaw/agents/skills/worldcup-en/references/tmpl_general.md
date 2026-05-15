@@ -4,7 +4,7 @@ When the user asks about World Cup topics **without referencing a specific match
 
 ## ⚠️ MANDATORY FOOTER — Append Before Sending
 
-1. Read `worldcup2026/user_favorites.json`.
+1. Read `worldcup2026/user_favorites.json`. If it does not exist, create it from `references/tpl_user_favorites.json`.
 2. For each flag below that is `false` (or missing), append the line under a `---` separator at the bottom of your response. Each line on its own line, blank line between items, no bullet points:
 
 | Flag is `false` | Append this line |
@@ -20,7 +20,7 @@ When the user asks about World Cup topics **without referencing a specific match
 
 1.  **Answer directly.** Give the requested info clearly. Do **NOT** use match templates (no H2H, no venue cards, no prediction CTA).
 2.  **Cite sources.** For injuries or breaking news, note the source.
-3.  **⚠️ Web search required.** Schedule/venue data comes from local files. Injuries, form, squad news, and all other live data MUST come from web search — never from training data or memory.
+3.  **⚠️ Web search required.** All data — schedule, venue, injuries, form, squad news — MUST come from web search, never from training data or memory.
 4.  **Contextual follow-up.** If relevant, mention an upcoming match and offer a breakdown.
     *   *Example:* "Morocco's next match is vs Brazil on June 12. Want a full pre-match breakdown?"
 ## Query Types

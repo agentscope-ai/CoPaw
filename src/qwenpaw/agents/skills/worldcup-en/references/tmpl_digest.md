@@ -6,7 +6,7 @@ Generates a personalized World Cup news digest tailored to the user's favorite t
 
 ## ⚠️ MANDATORY FOOTER — Append Before Sending
 
-1. Read `worldcup2026/user_favorites.json`.
+1. Read `worldcup2026/user_favorites.json`. If it does not exist, create it from `references/tpl_user_favorites.json`.
 2. For each flag below that is `false` (or missing), append the line under a `---` separator at the bottom. Each line on its own line, blank line between items, no bullet points:
 
 | Flag is `false` | Append this line |
@@ -17,6 +17,10 @@ Generates a personalized World Cup news digest tailored to the user's favorite t
 
 3. When a feature is successfully used, update `worldcup2026/user_favorites.json` to set that flag to `true` immediately.
 4. Missing file or missing key = show the footer line for that feature.
+
+## File Setup
+
+If `worldcup2026/user_favorites.json` does not exist, create it using `references/tpl_user_favorites.json` as the blueprint. Write it to `worldcup2026/` under workspace root.
 
 ## Activation
 
@@ -30,7 +34,7 @@ Generates a personalized World Cup news digest tailored to the user's favorite t
    - Favorite players (list)
    - If no preferences stored (empty arrays) → run generic digest (top matches, trending news)
 
-2. **Search for today's matches** (use `worldcup2026/schedule.json` (`worldcup2026/` under workspace root) + web search):
+2. **Search for today's matches** (web search):
    - `FIFA World Cup 2026 matches today`
    - Check if any favorite teams play today
 
@@ -91,4 +95,4 @@ Sources: {list sources}
 
 ## Scheduling Integration
 
-See the "Daily Digest" section in `SKILL.md` for setup instructions.
+To schedule daily digests, use the `cron` skill (`references/cron/SKILL.md`). Create a recurring job that triggers the digest query each morning in the user's timezone.
