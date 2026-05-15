@@ -1496,6 +1496,8 @@
   },
   "chat": {
     "modelSelectTooltip": "モデルを選択",
+    "modelErrorTitle": "モデルリクエストが失敗しました",
+    "modelErrorStatus": "モデルリクエストが失敗しました (HTTP {{status}})。モデル設定を確認して再試行してください。",
     "newChatTooltip": "新しいチャット",
     "searchTooltip": "すべてのチャットを検索",
     "chatHistoryTooltip": "チャット履歴",

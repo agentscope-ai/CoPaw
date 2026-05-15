@@ -1671,6 +1671,8 @@
   },
   "chat": {
     "modelSelectTooltip": "模型选择",
+    "modelErrorTitle": "模型请求失败",
+    "modelErrorStatus": "模型请求失败 (HTTP {{status}})，请检查模型配置后重试。",
     "newChatTooltip": "新建聊天",
     "searchTooltip": "搜索所有聊天",
     "chatHistoryTooltip": "聊天历史",

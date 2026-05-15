@@ -1699,6 +1699,8 @@
   },
   "chat": {
     "modelSelectTooltip": "Selecionar Modelo",
+    "modelErrorTitle": "Falha na solicitação do modelo",
+    "modelErrorStatus": "Falha na solicitação do modelo (HTTP {{status}}). Verifique a configuração do modelo e tente novamente.",
     "newChatTooltip": "Novo Chat",
     "searchTooltip": "Pesquisar Todos chats",
     "chatHistoryTooltip": "Chat history",

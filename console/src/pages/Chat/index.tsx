@@ -4,7 +4,7 @@ import {
   type IAgentScopeRuntimeWebUIRef,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Modal, Result, Tooltip } from "antd";
+import { Alert, Button, Modal, Result, Tooltip } from "antd";
 import { useAppMessage } from "../../hooks/useAppMessage";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { SparkCopyLine, SparkAttachmentLine } from "@agentscope-ai/icons";
@@ -32,6 +32,11 @@ import { ApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
 import { commandsApi } from "../../api/modules/commands";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
 import { planApi } from "../../api/modules/plan";
+import {
+  extractErrorText,
+  payloadHasErrorSignal,
+  readErrorResponse,
+} from "./modelError";
 
 interface ApprovalMessageData {
   requestId: string;
@@ -507,6 +512,7 @@ export default function ChatPage() {
     return match?.[1];
   }, [location.pathname]);
   const [showModelPrompt, setShowModelPrompt] = useState(false);
+  const [modelErrorBanner, setModelErrorBanner] = useState<string | null>(null);
   const { selectedAgent } = useAgentStore();
   const { toolRenderConfig } = usePlugins();
   const [refreshKey, setRefreshKey] = useState(0);
@@ -942,9 +948,21 @@ export default function ChatPage() {
         signal: data.signal,
       });
 
+      if (!response.ok) {
+        const detail = await readErrorResponse(response);
+        setModelErrorBanner(
+          detail ||
+            t("chat.modelErrorStatus", {
+              status: response.status,
+            }),
+        );
+      } else {
+        setModelErrorBanner(null);
+      }
+
       return response;
     },
-    [selectedAgent],
+    [selectedAgent, t],
   );
 
   const handleFileUpload = useCallback(
@@ -1098,6 +1116,12 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          const errorText = payloadHasErrorSignal(payload)
+            ? extractErrorText(payload)
+            : null;
+          if (errorText) {
+            setModelErrorBanner(errorText);
+          }
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;
@@ -1178,6 +1202,22 @@ export default function ChatPage() {
       }}
     >
       <div className={styles.chatMessagesArea}>
+        {modelErrorBanner && (
+          <Alert
+            className={styles.modelErrorBanner}
+            type="error"
+            showIcon
+            closable
+            message={t("chat.modelErrorTitle")}
+            description={modelErrorBanner}
+            onClose={() => setModelErrorBanner(null)}
+            action={
+              <Button size="small" onClick={() => navigate("/models")}>
+                {t("modelConfig.configureButton")}
+              </Button>
+            }
+          />
+        )}
         <AgentScopeRuntimeWebUI
           ref={chatRef}
           key={refreshKey}

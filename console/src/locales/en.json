@@ -1823,6 +1823,8 @@
   },
   "chat": {
     "modelSelectTooltip": "Select model",
+    "modelErrorTitle": "Model request failed",
+    "modelErrorStatus": "Model request failed (HTTP {{status}}). Check the model configuration and try again.",
     "newChatTooltip": "New chat",
     "searchTooltip": "Search all chats",
     "chatHistoryTooltip": "Chat history",

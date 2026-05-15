@@ -1511,6 +1511,8 @@
   },
   "chat": {
     "modelSelectTooltip": "Выбор модели",
+    "modelErrorTitle": "Ошибка запроса модели",
+    "modelErrorStatus": "Ошибка запроса модели (HTTP {{status}}). Проверьте конфигурацию модели и повторите попытку.",
     "newChatTooltip": "Новый чат",
     "searchTooltip": "Поиск во всех чатах",
     "chatHistoryTooltip": "История чатов",
