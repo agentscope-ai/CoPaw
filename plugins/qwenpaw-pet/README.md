@@ -1,0 +1,202 @@
+# QwenPaw Pet (plugin + desktop runtime)
+
+Full-stack QwenPaw plugin: backend hooks, console UI sidebar, **and** the
+desktop pet runtime itself (`qwenpaw_pet_desktop/`). Installing this
+plugin gives you everything: the Qt floating pet window, the local HTTP
+bridge on `127.0.0.1:8765`, and the QwenPaw side hooks that emit
+lifecycle events into it.
+
+```text
+plugins/qwenpaw-pet/
+├── plugin.json            # manifest (id, hooks entry, dependencies)
+├── plugin.py              # backend: startup / shutdown hooks + monkey patches
+├── emitter.py             # fire-and-forget HTTP client + autostart spawn
+├── router.py              # plugin HTTP routes under /api/qwenpaw-pet/...
+├── pet_paths.py           # plugin-local helpers (WORKING_DIR, list pets)
+├── patch_runner.py        # monkey patch AgentRunner.query_handler
+├── patch_approval.py      # monkey patch approval service hooks
+├── frontend/              # Vite + React console UI source
+├── dist/index.js          # built console UI bundle (committed)
+└── qwenpaw_pet_desktop/   # the Qt + FastAPI desktop runtime (embedded)
+    ├── app.py             # Qt main loop + uvicorn in a background thread
+    ├── server.py          # FastAPI app factory (/event, /pet, /bubble, ...)
+    ├── window.py          # PetWindow: frameless translucent always-on-top
+    ├── sprites.py         # 8x9 atlas constants + event→state mapping
+    ├── runtime.py         # paths, PID, token, atomic JSON helpers
+    ├── pet_package.py     # validate / install / hot-switch pet packages
+    ├── cli.py             # `python -m qwenpaw_pet_desktop` subcommands
+    └── assets/default-pet/snowpaw/  # bundled default pet (Snowpaw)
+```
+
+`plugin.py` injects the plugin directory into `sys.path` at import
+time, so `qwenpaw_pet_desktop` is importable from QwenPaw's Python
+process without any `pip install` step. See
+[`qwenpaw_pet_desktop/README.md`](qwenpaw_pet_desktop/README.md) for
+internals of the desktop runtime itself.
+
+## Install
+
+```bash
+qwenpaw plugin install ./plugins/qwenpaw-pet
+```
+
+Restart QwenPaw after install.
+
+### Python dependencies
+
+QwenPaw's interpreter needs these packages on its `sys.path` (declared
+in `plugin.json`'s `dependencies`):
+
+- `httpx>=0.27` — fire-and-forget HTTP client
+- `fastapi>=0.110`, `uvicorn>=0.27` — local HTTP bridge
+- `pillow>=10.0` — spritesheet validation
+- `pyside6>=6.6` — Qt pet window
+
+If your QwenPaw install does not auto-resolve plugin dependencies,
+install them manually into the same environment:
+
+```bash
+pip install "httpx>=0.27" "fastapi>=0.110" "uvicorn>=0.27" "pillow>=10.0" "pyside6>=6.6"
+```
+
+PySide6 wheels exist only for **Python 3.10–3.13**. On 3.14 the pet
+window cannot start; QwenPaw itself will still run, the pet will just
+stay offline and the plugin logs a warning.
+
+## Running the desktop pet
+
+The plugin's startup hook calls `emitter.ensure_desktop_available()`,
+which spawns the desktop process on demand:
+
+```python
+subprocess.Popen(
+    [sys.executable, "-m", "qwenpaw_pet_desktop.app",
+     "--port", "8765"],
+    start_new_session=True,
+)
+```
+
+Manual control (any of these work):
+
+```bash
+# Foreground (logs to terminal)
+python -m qwenpaw_pet_desktop.app --port 8765 --scale 0.58
+
+# CLI subcommands (daemonized: PID file + log redirect)
+python -m qwenpaw_pet_desktop start
+python -m qwenpaw_pet_desktop status
+python -m qwenpaw_pet_desktop stop
+python -m qwenpaw_pet_desktop switch --pet-id snowpaw
+
+# Send a test event once the window is up
+curl -X POST http://127.0.0.1:8765/event \
+  -H 'Content-Type: application/json' \
+  -d '{"event":"query.running","text":"Thinking"}'
+```
+
+Hot-switch the running pet (no restart):
+
+```bash
+curl -X POST http://127.0.0.1:8765/pet \
+  -H 'Content-Type: application/json' \
+  -d '{"pet_id":"snowpaw"}'
+# pet_id may be the pets/ *folder name* or the pet.json "id" when they differ
+```
+
+Autostart can be disabled with `QWENPAW_PET_AUTOSTART=0`.
+
+## Frontend (console sidebar)
+
+Manifest field `"frontend": "dist/index.js"`. After editing
+`frontend/src/`, rebuild:
+
+```bash
+cd frontend && npm install && npm run build
+```
+
+Reinstall the plugin, or copy `dist/index.js` into your
+`~/.copaw/plugins/qwenpaw-pet/dist/index.js` and refresh the console.
+
+The UI adds a sidebar page **Pet** (`/plugin/qwenpaw-pet/pets`): lists
+pets under `<WORKING_DIR>/pets`, **Start desktop pet** (calls `POST
+/api/qwenpaw-pet/desktop/start`), and **Switch** (hot-switch via `POST
+/pet` on the desktop).
+
+## QwenPaw plugin HTTP routes
+
+```text
+GET  /api/qwenpaw-pet/status
+GET  /api/qwenpaw-pet/pets
+GET  /api/qwenpaw-pet/pets/{folder}/spritesheet
+POST /api/qwenpaw-pet/desktop/start
+POST /api/qwenpaw-pet/switch-pet
+POST /api/qwenpaw-pet/emit-test
+```
+
+## Desktop runtime HTTP API (`127.0.0.1:8765`)
+
+```text
+GET  /health    # liveness + process state
+GET  /state     # current state.json snapshot
+GET  /bubble    # current bubble.json snapshot
+GET  /event     # list valid state names
+POST /event     # drive the pet (event + state mapping)
+POST /bubble    # replace bubble text (200 char cap)
+POST /pet       # hot-switch pet (pet_id or pet_dir)
+```
+
+Set `QWENPAW_PET_REQUIRE_TOKEN=1` to require
+`X-QwenPaw-Pet-Token: <runtime/update-token>` on mutating endpoints.
+
+## Pet package contract
+
+A Codex-compatible pet folder needs:
+
+```text
+<pet-dir>/pet.json           # {"id":"...", "spritesheetPath":"spritesheet.webp"}
+<pet-dir>/spritesheet.webp   # exactly 1536 x 1872 (8 cols x 9 rows of 192x208)
+```
+
+Row layout (driven by `qwenpaw_pet_desktop/sprites.py`):
+
+```text
+0 idle           6 frames
+1 running-right  8 frames
+2 running-left   8 frames
+3 waving         4 frames
+4 jumping        5 frames
+5 failed         8 frames
+6 waiting        6 frames
+7 running        6 frames
+8 review         6 frames
+```
+
+Default pet shipped with this plugin: **Snowpaw**
+(`qwenpaw_pet_desktop/assets/default-pet/snowpaw/`).
+
+## Backend hooks
+
+`plugin.py` registers, via the documented `PluginApi`:
+
+- `register_startup_hook` — patches `AgentRunner.query_handler` and the
+  approval service, then emits `qwenpaw.startup`
+- `register_shutdown_hook` — emits `qwenpaw.shutdown` and restores
+  patches
+- `register_http_router` — mounts `router.py` under `/qwenpaw-pet`
+
+The runner patch is also applied **synchronously at import time** so
+events fire even before async startup hooks run.
+
+## Environment variables
+
+| Var | Purpose | Default |
+| --- | --- | --- |
+| `QWENPAW_PET_DESKTOP_URL` | Where the plugin sends events | `http://127.0.0.1:8765` |
+| `QWENPAW_PET_DESKTOP_PORT` | Port used when the plugin spawns the desktop | `8765` |
+| `QWENPAW_PET_DESKTOP_SCALE` | Spawn-time scale (e.g. `0.58`) | unset |
+| `QWENPAW_PET_DESKTOP_PET_DIR` | Spawn-time pet folder override | unset |
+| `QWENPAW_PET_TOKEN_PATH` | Path to the local update token | `~/.qwenpaw-pet/runtime/update-token` |
+| `QWENPAW_PET_REQUIRE_TOKEN` | `1` ⇒ desktop enforces token on mutating endpoints | `0` |
+| `QWENPAW_PET_AUTOSTART` | `0` ⇒ plugin will not spawn the desktop | `1` |
+| `QWENPAW_PET_HOME` | Runtime dir (PID file, log, token) | `~/.qwenpaw-pet/` |
+| `QWENPAW_WORKING_DIR` / `COPAW_WORKING_DIR` | Where `pets/` lives | falls back to `~/.copaw` then `~/.qwenpaw` |

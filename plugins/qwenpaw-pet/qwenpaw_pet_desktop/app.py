@@ -1,0 +1,130 @@
+# -*- coding: utf-8 -*-
+"""Desktop app entry point."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import sys
+import threading
+from copy import deepcopy
+from pathlib import Path
+from queue import Empty, SimpleQueue
+from typing import Any, Callable
+
+import uvicorn
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
+from . import runtime
+from .pet_package import resolve_pet_dir
+from .server import build_app
+from .window import PetWindow
+
+logger = logging.getLogger(__name__)
+
+# Events arrive from uvicorn on a background thread; updating QWidget from
+# there via Qt signals is unreliable on some platforms. Drain this queue
+# on the GUI thread with a QTimer instead.
+_PET_EVENT_QUEUE: SimpleQueue[dict[str, Any]] = SimpleQueue()
+_PET_SWITCH_QUEUE: SimpleQueue[Path] = SimpleQueue()
+
+
+def enqueue_pet_event(payload: dict[str, Any]) -> None:
+    """Thread-safe handoff from HTTP worker to the pet window (main thread)."""
+    try:
+        _PET_EVENT_QUEUE.put_nowait(deepcopy(payload))
+    except Exception:
+        logger.exception("Failed to enqueue pet event")
+
+
+def enqueue_switch_pet(pet_dir: Path) -> None:
+    """Thread-safe: reload sprites on the GUI thread."""
+    try:
+        _PET_SWITCH_QUEUE.put_nowait(pet_dir)
+    except Exception:
+        logger.exception("Failed to enqueue pet switch")
+
+
+def run_http_server(
+    on_event: Callable[[dict[str, Any]], None],
+    on_switch_pet: Callable[[Path], None],
+    host: str,
+    port: int,
+) -> None:
+    app = build_app(on_event, on_switch_pet)
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        log_level=os.environ.get("QWENPAW_PET_LOG_LEVEL", "warning"),
+    )
+    server = uvicorn.Server(config)
+    server.run()
+
+
+def run_desktop(pet_dir: Path, host: str, port: int, scale: float) -> int:
+    runtime.ensure_runtime()
+    runtime.ensure_token()
+    runtime.write_pid(os.getpid())
+    runtime.write_json(runtime.bubble_path(), {"text": "", "counter": 0})
+
+    qt_app = QApplication(sys.argv)
+    window = PetWindow(pet_dir, scale=scale)
+
+    pump = QTimer(window)
+
+    def _drain_pet_events() -> None:
+        try:
+            while True:
+                pet_path = _PET_SWITCH_QUEUE.get_nowait()
+                try:
+                    window.reload_pet(pet_path)
+                except Exception:
+                    logger.exception("Pet reload failed for %s", pet_path)
+        except Empty:
+            pass
+        try:
+            while True:
+                payload = _PET_EVENT_QUEUE.get_nowait()
+                window.apply_event(payload)
+        except Empty:
+            pass
+
+    pump.timeout.connect(_drain_pet_events)
+    pump.start(40)
+
+    server_thread = threading.Thread(
+        target=run_http_server,
+        args=(enqueue_pet_event, enqueue_switch_pet, host, port),
+        daemon=True,
+    )
+    server_thread.start()
+    window.show()
+    return qt_app.exec()
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run QwenPaw Pet Desktop")
+    parser.add_argument("--pet-dir", default=None)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--scale", type=float, default=0.58)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO)
+    args = parse_args(argv)
+    pet_dir = resolve_pet_dir(args.pet_dir)
+    return run_desktop(
+        pet_dir=pet_dir,
+        host=args.host,
+        port=args.port,
+        scale=args.scale,
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
