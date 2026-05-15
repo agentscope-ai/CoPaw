@@ -361,7 +361,7 @@ async def post_console_chat_stop(
         )
         # Format usage_note for frontend chat injection
         if usage_out is not None or ctx_out is not None:
-            from ...token_usage.format import format_usage_chat_note
+            from ...token_usage import format_usage_chat_note
 
             usage_note = format_usage_chat_note(usage_out, ctx_out, language)
     return {

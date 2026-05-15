@@ -796,7 +796,7 @@ class AgentRunner(Runner):
                 from ...token_usage.context import (
                     snapshot_context_usage_for_agent,
                 )
-                from ...token_usage.format import format_usage_chat_note
+                from ...token_usage import format_usage_chat_note
 
                 channel_meta = getattr(request, "channel_meta", None) or {}
                 language = channel_meta.get("language")

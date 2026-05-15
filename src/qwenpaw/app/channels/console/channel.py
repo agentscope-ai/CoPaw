@@ -376,7 +376,7 @@ class ConsoleChannel(BaseChannel):
         ctx: Dict[str, Any],
     ) -> None:
         """Print a one-line terminal summary of turn + context usage."""
-        from ....token_usage.format import fmt_tokens
+        from ....token_usage import fmt_tokens
 
         pt = turn.get("prompt_tokens", 0)
         ct = turn.get("completion_tokens", 0)
@@ -400,7 +400,7 @@ class ConsoleChannel(BaseChannel):
         ctx: Optional[Dict[str, Any]],
         language: Optional[str] = None,
     ) -> Optional[Message]:
-        from ....token_usage.format import format_usage_chat_note
+        from ....token_usage import format_usage_chat_note
 
         body = format_usage_chat_note(turn, ctx, language)
         if not body:

@@ -184,6 +184,33 @@ export function toDisplayUrl(url: string | undefined): string {
   return chatApi.filePreviewUrl(url.startsWith("/") ? url : `/${url}`);
 }
 
+/** Check if a message already contains a usage note in its response cards.
+ *  Used to guard against duplicate cancel calls (the library fires cancel twice).
+ */
+export function messageHasUsageNote(
+  msg: { cards?: Array<{ code?: string; data?: Record<string, unknown> }> },
+  note: string,
+): boolean {
+  return (
+    msg.cards?.some((card) => {
+      if (card?.code !== "AgentScopeRuntimeResponseCard") return false;
+      const output = card?.data?.output;
+      if (!Array.isArray(output)) return false;
+      return output.some((item: Record<string, unknown>) => {
+        const content = item?.content;
+        if (typeof content === "string") return content.includes(note);
+        if (Array.isArray(content)) {
+          return content.some(
+            (c: Record<string, unknown>) =>
+              typeof c?.text === "string" && c.text.includes(note),
+          );
+        }
+        return false;
+      });
+    }) ?? false
+  );
+}
+
 // ---------------------------------------------------------------------------
 // DOM utilities
 // ---------------------------------------------------------------------------

@@ -69,6 +69,7 @@ import {
   extractUserMessageText,
   extractTextFromMessage,
   setTextareaValue,
+  messageHasUsageNote,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
 } from "./utils";
@@ -1233,23 +1234,7 @@ export default function ChatPage() {
             }
 
             // Guard against duplicate cancel calls (the library fires cancel twice)
-            const alreadyHasNote = lastAssistantMsg.cards?.some((card) => {
-              if (card?.code !== "AgentScopeRuntimeResponseCard") return false;
-              const output = card?.data?.output;
-              if (!Array.isArray(output)) return false;
-              return output.some((item: Record<string, unknown>) => {
-                const content = item?.content;
-                if (typeof content === "string") return content.includes(res.usage_note);
-                if (Array.isArray(content)) {
-                  return content.some(
-                    (c: Record<string, unknown>) =>
-                      typeof c?.text === "string" &&
-                      c.text.includes(res.usage_note),
-                  );
-                }
-                return false;
-              });
-            });
+            const alreadyHasNote = messageHasUsageNote(lastAssistantMsg, res.usage_note);
 
             // Deep clone so we don't mutate library state
             const updatedMsg = JSON.parse(
