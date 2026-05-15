@@ -118,24 +118,22 @@ QwenPaw/
 - **Resource Proposal Selection**: Interactive multi-proposal comparison and selection with dedicated frontend rendering (`proposal_choice` tool)
 - **PRD Management Frontend Enhancement**: Custom frontend rendering for QwenPaw Mission Mode's PRD management (`manage_prd` tool)
 - **Multi-Agent Collaboration**: Orchestrate multiple agents for complex deployment tasks via QwenPaw Mission Mode
-- **A2A Remote Agent Invocation**: Connect and call remote agents via A2A protocol with real-time streaming display
+- **Alibaba Cloud Skills Remote Agent Integration**: Connect and call remote agents hosted on Alibaba Cloud Skills Hub via A2A protocol with real-time streaming display
 - **Auto-dependency Setup**: Automatically installs `iac-code` and Alibaba Cloud CLI during plugin startup
 
-## A2A Remote Agent Mode
+## Alibaba Cloud Skills Remote Agent Integration
 
-CloudPaw supports connecting and invoking remote agents via the **A2A (Agent-to-Agent) protocol**, enabling cross-agent collaboration.
+CloudPaw supports connecting and invoking remote agents hosted on **Alibaba Cloud Skills Hub** via the **A2A (Agent-to-Agent) protocol**, enabling cross-agent collaboration.
 
-### What is A2A Mode
-
-A2A mode allows CloudPaw to act as a client, communicating with other remote agents that support the A2A protocol. You can bring remote agent capabilities into your local workflow for extended functionality.
+> **Note**: A2A functionality is currently only supported within the CloudPaw plugin and is limited to agents hosted on Alibaba Cloud Skills Hub. Connecting to other A2A agents may result in incompatibility issues.
 
 ### Usage
 
-CloudPaw provides **two** ways to invoke A2A agents, suited for different scenarios:
+CloudPaw provides **two** ways to invoke remote A2A agents. Both methods are processed by the LLM and executed via the `a2a_call` tool:
 
-#### Method 1: `/a2a` Command Direct Call (Quick Mode)
+#### Method 1: `/a2a` Command Quick Call
 
-Send messages directly to a remote agent using the `/a2a` command in the chat box:
+Send messages to a remote agent using the `/a2a` command in the chat box:
 
 ```
 /a2a <alias> <message>
@@ -147,11 +145,9 @@ Example:
 /a2a my-agent How do I deploy a Node.js app to ECS?
 ```
 
-During the call, the response is **streamed character by character** in the chat interface — no need to wait for the complete result.
+The command is automatically rewritten into an LLM-understandable instruction, which then invokes the `a2a_call` tool.
 
-> **Note**: This mode follows the control command path, bypassing the LLM. Therefore, call records are **not** saved to chat history. The conversation will be lost after page refresh.
-
-#### Method 2: LLM Invokes via `a2a_call` Tool (Smart Mode)
+#### Method 2: Natural Language Call
 
 Simply describe your needs in natural language, and the LLM will automatically determine whether to call a remote agent and execute it via the `a2a_call` tool:
 
@@ -159,25 +155,15 @@ Simply describe your needs in natural language, and the LLM will automatically d
 Ask my-agent how to quickly deploy a Flask app to Alibaba Cloud?
 ```
 
-In this mode:
-- The LLM understands user intent and automatically selects the appropriate remote agent
-- Calls are executed through the tool call path and **are** saved to chat history
-- Responses are also streamed, and history is available after page refresh
-- Suitable for scenarios requiring multi-turn conversations and context
+In this mode, the LLM understands user intent and automatically selects the appropriate remote agent. This is ideal for scenarios requiring multi-turn conversations and context.
 
 #### List Registered Agents
 
-Enter `/a2a` without arguments to list all registered remote agents and their connection status.
-
-### Typical Scenarios
-
-- **Capability Extension**: Connect specialized agents (e.g., database optimization, security audit) to supplement local capabilities
-- **Cross-Environment Collaboration**: Connect agents in different environments (dev / test / prod) for operations
-- **Third-Party Service Integration**: Integrate external AI services via the A2A protocol
+Enter `/a2a` without arguments to list all registered remote A2A agents and their connection status, similar to the `/skills` command for viewing installed skills.
 
 ### Notes
 
-- A2A functionality only supports agents compliant with the A2A protocol, currently primarily compatible with Alibaba Cloud Skills Hub agents
+- A2A functionality is currently only supported within the CloudPaw plugin and is limited to agents hosted on Alibaba Cloud Skills Hub. Connecting to other A2A agents may result in incompatibility issues.
 - When invoking remote agents, message content is sent to remote servers — please consider data security
 - Only one active A2A call is supported at a time
 
