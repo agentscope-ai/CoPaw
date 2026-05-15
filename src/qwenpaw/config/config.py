@@ -948,13 +948,11 @@ class AgentsRunningConfig(BaseModel):
             )
         return self
 
-    max_input_length: Optional[int] = Field(
-        default=None,
+    max_input_length: int = Field(
+        default=128 * 1024,  # 128K = 131072 tokens
+        ge=1000,
         description=(
-            "DEPRECATED: Migrated to ModelInfo.max_input_length. "
-            "Kept for backward compatibility during migration. "
-            "When not None, the value will be migrated to the active "
-            "model and then cleared."
+            "Maximum input length (tokens) for the model context window"
         ),
     )
 
@@ -2129,66 +2127,17 @@ def migrate_legacy_config_to_multi_agent() -> bool:
     return True
 
 
-_DEFAULT_MAX_INPUT_LENGTH: int = 128 * 1024  # 128K = 131072 tokens
+def get_model_max_input_length(
+    agent_config: "AgentProfileConfig",
+) -> int:
+    """Return ``max_input_length`` from the active model's ``ModelInfo``.
 
-
-def resolve_max_input_length(agent_id: str) -> int:
-    """Return the effective ``max_input_length`` for *agent_id*.
-
-    Migration strategy (backward-compatible):
-      1. If ``AgentsRunningConfig.max_input_length`` is still set (not None),
-         copy the value to the current active model's ``ModelInfo`` and clear
-         it from the running config so future calls skip migration.
-      2. Read and return ``ModelInfo.max_input_length`` from the active model.
+    Falls back to 128 * 1024 (131072) if model info is unavailable.
+    Accepts an already-loaded *agent_config* to avoid redundant file I/O
+    on hot paths (pre_reasoning, compact_context, summarize, etc.).
     """
-    import logging
-
     from ..providers import ProviderManager
 
-    _logger = logging.getLogger(__name__)
-
-    agent_config = load_agent_config(agent_id)
-    old_value = agent_config.running.max_input_length
-
-    if old_value is not None:
-        model_slot = agent_config.active_model
-        migrated = False
-        if model_slot and model_slot.provider_id and model_slot.model:
-            try:
-                manager = ProviderManager.get_instance()
-                provider = manager.get_provider(model_slot.provider_id)
-                if provider:
-                    model_info = provider.get_model_info(model_slot.model)
-                    if model_info is not None:
-                        model_info.max_input_length = old_value
-                        manager.save_provider_config(
-                            model_slot.provider_id,
-                            provider=provider,
-                        )
-                        migrated = True
-            except Exception as exc:
-                _logger.warning(
-                    "Failed to migrate max_input_length to model: %s",
-                    exc,
-                )
-
-        if migrated:
-            # Only clear the old config after successful migration
-            agent_config.running.max_input_length = None
-            save_agent_config(agent_id, agent_config)
-            _logger.info(
-                "Migrated max_input_length=%d from running config "
-                "to model %s/%s",
-                old_value,
-                model_slot.provider_id if model_slot else "?",
-                model_slot.model if model_slot else "?",
-            )
-            return old_value
-
-        # Migration failed; return the old value without clearing
-        return old_value
-
-    # Read from the active model
     model_slot = agent_config.active_model
     if model_slot and model_slot.provider_id and model_slot.model:
         try:
@@ -2200,5 +2149,4 @@ def resolve_max_input_length(agent_id: str) -> int:
                     return model_info.max_input_length
         except Exception:
             pass
-
-    return _DEFAULT_MAX_INPUT_LENGTH
+    return 128 * 1024

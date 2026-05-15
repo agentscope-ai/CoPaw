@@ -30,7 +30,7 @@ from ..model_factory import create_model_and_formatter
 from ..tools.utils import truncate_text_output, DEFAULT_MAX_BYTES
 from ..utils import get_token_counter
 from ..utils.estimate_token_counter import EstimatedTokenCounter
-from ...config.config import load_agent_config, resolve_max_input_length
+from ...config.config import load_agent_config, get_model_max_input_length
 from ...constant import TRUNCATION_NOTICE_MARKER
 
 if TYPE_CHECKING:
@@ -620,7 +620,7 @@ class LightContextManager(BaseContextManager):
         agent_config = load_agent_config(self.agent_id)
         running_config = agent_config.running
         ccc = running_config.light_context_config.context_compact_config
-        max_input_length = resolve_max_input_length(self.agent_id)
+        max_input_length = get_model_max_input_length(agent_config)
 
         model, formatter = create_model_and_formatter(self.agent_id)
 
@@ -724,7 +724,7 @@ class LightContextManager(BaseContextManager):
             agent_config = load_agent_config(self.agent_id)
             running_config = agent_config.running
             token_counter = get_token_counter(agent_config)
-            max_input_length = resolve_max_input_length(self.agent_id)
+            max_input_length = get_model_max_input_length(agent_config)
 
             memory = agent.memory
             system_prompt = agent.sys_prompt

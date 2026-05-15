@@ -104,16 +104,20 @@ def run_daemon_status(context: DaemonContext) -> str:
     try:
         cfg = context.load_config_fn()
         parts.append("- Config loaded: yes")
-        # max_input_length has been migrated to ModelInfo; show it
-        # from the resolve helper when an agent_id is available,
-        # otherwise fall back to the legacy running config field.
+        # max_input_length lives on ModelInfo; read it from the active
+        # model when an agent_id is available, otherwise fall back to
+        # the legacy running config field.
         max_in: object = "N/A"
         agent_id = getattr(context, "agent_id", None)
         if agent_id:
             try:
-                from ...config.config import resolve_max_input_length
+                from ...config.config import (
+                    get_model_max_input_length,
+                    load_agent_config,
+                )
 
-                max_in = resolve_max_input_length(agent_id)
+                agent_cfg = load_agent_config(agent_id)
+                max_in = get_model_max_input_length(agent_cfg)
             except Exception:
                 pass
         if max_in == "N/A":
