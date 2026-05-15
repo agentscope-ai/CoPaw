@@ -557,7 +557,9 @@
       "description": "描述",
       "descriptionPlaceholder": "可选描述",
       "env": "环境变量",
-      "envPlaceholder": "KEY=VALUE（每行一个）"
+      "envPlaceholder": "KEY=VALUE（每行一个）",
+      "tlsVerify": "验证 TLS 证书",
+      "caFile": "自定义 CA 文件"
     },
     "oauth": {
       "enableOAuth": "使用 OAuth 授权",

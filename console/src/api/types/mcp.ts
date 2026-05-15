@@ -28,6 +28,10 @@ export interface MCPClientInfo {
   url: string;
   /** HTTP headers for remote transport */
   headers: Record<string, string>;
+  /** Whether TLS certificates are verified for HTTP/SSE transport */
+  tls_verify: boolean;
+  /** Custom CA bundle path for HTTP/SSE transport */
+  ca_file: string;
   /** Command to launch the MCP server */
   command: string;
   /** Command-line arguments */
@@ -83,6 +87,10 @@ export interface MCPClientCreateRequest {
     url?: string;
     /** HTTP headers for remote transport */
     headers?: Record<string, string>;
+    /** Whether TLS certificates are verified for HTTP/SSE transport */
+    tls_verify?: boolean;
+    /** Custom CA bundle path for HTTP/SSE transport */
+    ca_file?: string;
     /** Command to launch the MCP server */
     command?: string;
     /** Command-line arguments */
@@ -116,6 +124,10 @@ export interface MCPClientUpdateRequest {
   url?: string;
   /** HTTP headers for remote transport */
   headers?: Record<string, string>;
+  /** Whether TLS certificates are verified for HTTP/SSE transport */
+  tls_verify?: boolean;
+  /** Custom CA bundle path for HTTP/SSE transport */
+  ca_file?: string;
   /** Command to launch the MCP server */
   command?: string;
   /** Command-line arguments */

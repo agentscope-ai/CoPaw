@@ -1252,6 +1252,8 @@ class MCPClientConfig(BaseModel):
     transport: Literal["stdio", "streamable_http", "sse"] = "stdio"
     url: str = ""
     headers: Dict[str, str] = Field(default_factory=dict)
+    tls_verify: bool = True
+    ca_file: str = ""
     command: str = ""
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
