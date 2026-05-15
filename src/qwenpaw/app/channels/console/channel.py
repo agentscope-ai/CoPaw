@@ -13,6 +13,7 @@ pretty-printed to the terminal.
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import sys
@@ -29,6 +30,8 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 from ....config.config import ConsoleConfig as ConsoleChannelConfig
 from ...console_push_store import append as push_store_append
 from ....constant import DEFAULT_MEDIA_DIR
+from ....agents.context.usage_store import get_context_usage
+from ...agent_context import get_current_agent_id
 from ..base import (
     BaseChannel,
     AudioContent,
@@ -329,6 +332,29 @@ class ConsoleChannel(BaseChannel):
         logger.info("Usage for session %s (cleaned up): %s", session_id, usage)
         return usage
 
+    def _attach_context_usage(
+        self,
+        data: str,
+        session_id: Optional[str],
+    ) -> str:
+        """Attach context usage to response SSE payloads."""
+        usage = get_context_usage(
+            agent_id=get_current_agent_id(),
+            session_id=session_id or "",
+        )
+        if not usage:
+            return data
+
+        try:
+            payload = json.loads(data)
+            if payload.get("object") != "response":
+                return data
+            payload["context_usage"] = usage
+            return json.dumps(payload, ensure_ascii=True, default=str)
+        except Exception:
+            logger.debug("Failed to attach context usage to SSE payload")
+            return data
+
     async def stream_one(self, payload: Any) -> AsyncGenerator[str, None]:
         """Process one payload and yield SSE-formatted events"""
         if isinstance(payload, dict) and "content_parts" in payload:
@@ -401,6 +427,8 @@ class ConsoleChannel(BaseChannel):
                         setattr(event, "usage", usage_data)
 
                 data = self._serialize_event_for_sse(event)
+                if obj == "response":
+                    data = self._attach_context_usage(data, session_id)
                 yield f"data: {data}\n\n"
 
                 if obj == "message" and status == RunStatus.Completed:

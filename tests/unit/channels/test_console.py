@@ -522,6 +522,78 @@ class TestConsoleStreaming:
 
             assert len(events) == 1
 
+    async def test_stream_one_attaches_context_usage(
+        self,
+        stream_channel,
+        monkeypatch,
+    ):
+        """Response SSE events should include latest context usage."""
+        import json
+
+        from qwenpaw.agents.context.usage_store import set_context_usage
+        from qwenpaw.app.channels.console import channel as console_module
+        from agentscope_runtime.engine.schemas.agent_schemas import (
+            ContentType,
+            TextContent,
+        )
+
+        class ResponseEvent:
+            object = "response"
+            status = "completed"
+            type = "response.completed"
+            output = []
+
+            def model_dump_json(self):
+                return json.dumps(
+                    {
+                        "object": self.object,
+                        "status": self.status,
+                        "type": self.type,
+                    },
+                )
+
+        monkeypatch.setattr(
+            console_module,
+            "get_current_agent_id",
+            lambda: "test-agent",
+        )
+        monkeypatch.setattr(
+            stream_channel,
+            "_extract_token_usage",
+            lambda _session_id: None,
+        )
+        set_context_usage(
+            agent_id="test-agent",
+            session_id="console:user123",
+            total_tokens=3200,
+            max_input_length=128000,
+        )
+
+        async def mock_process(_request):
+            yield ResponseEvent()
+
+        stream_channel._process = mock_process
+
+        payload = {
+            "sender_id": "user123",
+            "content_parts": [
+                TextContent(type=ContentType.TEXT, text="Hello"),
+            ],
+            "meta": {},
+        }
+
+        events = []
+        async for event in stream_channel.stream_one(payload):
+            events.append(event)
+            break
+
+        data = json.loads(events[0].removeprefix("data: ").strip())
+        assert data["context_usage"] == {
+            "total_tokens": 3200,
+            "max_input_length": 128000,
+            "pct": 2.5,
+        }
+
     async def test_stream_one_falls_back_on_surrogate_json_error(
         self,
         stream_channel,

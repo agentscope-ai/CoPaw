@@ -113,6 +113,69 @@
   }
 }
 
+.contextUsageIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 168px;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(0, 0, 0, 0.72);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.contextUsageText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contextUsageTrack {
+  position: relative;
+  flex: 0 0 42px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.contextUsageFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  transition: width 160ms ease;
+}
+
+.ok {
+  background: #2da44e;
+}
+
+.warn {
+  background: #d29922;
+}
+
+.danger {
+  background: #cf222e;
+}
+
+:global(.dark-mode) {
+  .contextUsageIndicator {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(31, 31, 31, 0.86);
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .contextUsageTrack {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
 /* Prompt star icon - use theme color */
 :global {
   .chat-anywhere-prompt-icon,
