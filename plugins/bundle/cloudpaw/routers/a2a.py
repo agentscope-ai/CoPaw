@@ -313,7 +313,10 @@ class A2ACallRequest(BaseModel):
     message: str = Field(..., description="Message to send to remote agent")
     agent_alias: str = Field("", description="Alias of registered agent")
     agent_url: str = Field("", description="Direct URL of remote agent")
-    context_id: str = Field("", description="Session context ID for multi-turn")
+    context_id: str = Field(
+        "",
+        description="Session context ID for multi-turn",
+    )
 
 
 @router.post(
@@ -338,6 +341,7 @@ async def direct_call(request: Request, body: A2ACallRequest) -> dict:
     agent_id = request.headers.get("X-Agent-Id")
     if not agent_id:
         from qwenpaw.config.utils import load_config
+
         agent_id = load_config().agents.active_agent or "default"
     set_current_agent_id(agent_id)
 

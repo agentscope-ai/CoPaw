@@ -506,7 +506,7 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
 
 
 def _setup_a2a_query_rewrite() -> None:
-    """Monkey-patch AgentRunner.query_handler to intercept ``/a2a <name> <msg>``.
+    """Intercept ``/a2a <name> <msg>`` via query_handler patch.
 
     When a user types ``/a2a <agent_name> <message>``, the patch rewrites the
     user message into a natural-language instruction that tells the LLM to call
@@ -544,15 +544,20 @@ def _setup_a2a_query_rewrite() -> None:
                 )
 
         async for item in _original_query_handler(
-            self, msgs, request, **kwargs
+            self,
+            msgs,
+            request,
+            **kwargs,
         ):
             yield item
 
     AgentRunner.query_handler = _patched_query_handler
-    logger.info("[CloudPaw] Patched AgentRunner.query_handler for /a2a rewrite")
+    logger.info(
+        "[CloudPaw] Patched AgentRunner.query_handler for /a2a rewrite",
+    )
 
 
-def _try_rewrite_a2a_query(
+def _try_rewrite_a2a_query(  # pylint: disable=too-many-return-statements
     query: str,
     workspace_dir: Path | None,
 ) -> str | None:
@@ -564,7 +569,7 @@ def _try_rewrite_a2a_query(
     """
     import json as _json
 
-    rest = query[len("/a2a"):].strip()
+    rest = query[len("/a2a") :].strip()
     if not rest:
         return None
 
@@ -573,10 +578,7 @@ def _try_rewrite_a2a_query(
         return None
 
     agent_name, message = parts[0].strip(), parts[1].strip()
-    if not message:
-        return None
-
-    if workspace_dir is None:
+    if not message or workspace_dir is None:
         return None
 
     config_path = workspace_dir / "a2a_config.json"
@@ -594,8 +596,8 @@ def _try_rewrite_a2a_query(
 
     return (
         f"请使用 a2a_call 工具调用远程 A2A Agent。\n"
-        f"调用参数：agent_alias=\"{agent_name}\"，"
-        f"message=\"{message}\"\n\n"
+        f'调用参数：agent_alias="{agent_name}"，'
+        f'message="{message}"\n\n'
         f"请直接调用 a2a_call 工具完成此任务，不需要做其他额外操作。"
     )
 

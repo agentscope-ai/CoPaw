@@ -69,7 +69,8 @@ async def read_stream_sse() -> AsyncIterator[str]:
 
     queue = _queue
     if queue is None:
-        yield f"data: {json.dumps({'done': True, 'error': 'no active call'})}\n\n"
+        msg = json.dumps({"done": True, "error": "no active call"})
+        yield f"data: {msg}\n\n"
         return
 
     while True:

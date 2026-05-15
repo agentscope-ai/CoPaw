@@ -1774,6 +1774,7 @@ function buildPlugin() {
 
   function A2ACallRender({ data }: { data: any }) {
     const scrollRef = React.useRef<HTMLDivElement>(null);
+    const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
     const toolArgs = useMemo(() => {
       const argsStr = data?.content?.[0]?.data?.arguments;
@@ -1787,7 +1788,8 @@ function buildPlugin() {
 
     const { toolResult, rawErrorText } = useMemo(() => {
       const content = data?.content;
-      if (!Array.isArray(content)) return { toolResult: null, rawErrorText: "" };
+      if (!Array.isArray(content))
+        return { toolResult: null, rawErrorText: "" };
       for (const item of content) {
         const rawOutput = item?.data?.output;
         if (!rawOutput) continue;
@@ -1800,12 +1802,13 @@ function buildPlugin() {
         } else if (typeof rawOutput === "string") {
           try {
             const parsed = JSON.parse(rawOutput);
-            if (typeof parsed === "object" && parsed?.response_text)
+            if (
+              typeof parsed === "object" &&
+              (parsed?.steps || parsed?.response_text)
+            )
               return { toolResult: parsed, rawErrorText: "" };
             if (Array.isArray(parsed)) {
-              const tb = parsed.find(
-                (b: any) => b?.type === "text" && b?.text,
-              );
+              const tb = parsed.find((b: any) => b?.type === "text" && b?.text);
               if (tb?.text) textContent = tb.text;
             }
           } catch {
@@ -1823,43 +1826,54 @@ function buildPlugin() {
       return { toolResult: null, rawErrorText: "" };
     }, [data?.content]);
 
+    const steps: any[] = toolResult?.steps || [];
+    const taskState = toolResult?.task_state || "";
+    const errorText = toolResult?.error || "";
+    const responseText = toolResult?.response_text || "";
+
     React.useEffect(() => {
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
-    }, [toolResult?.response_text, rawErrorText]);
+    }, [steps.length, responseText, rawErrorText]);
+
+    // Auto-collapse finished thinking and tool_call steps
+    React.useEffect(() => {
+      const newCollapsed: Record<number, boolean> = { ...collapsed };
+      let changed = false;
+      steps.forEach((step: any, idx: number) => {
+        if (collapsed[idx] !== undefined) return;
+        if (step.type === "thinking" && step.done) {
+          newCollapsed[idx] = true;
+          changed = true;
+        } else if (step.type === "tool_call" && step.status !== "running") {
+          newCollapsed[idx] = true;
+          changed = true;
+        }
+      });
+      if (changed) setCollapsed(newCollapsed);
+    }, [steps]);
 
     const agentAlias = toolArgs?.agent_alias || "";
     const agentUrl = toolArgs?.agent_url || "";
     const displayName = agentAlias || agentUrl || "远程 Agent";
 
-    const responseText = toolResult?.response_text || "";
-    const taskState = toolResult?.task_state || "";
-    const errorText = toolResult?.error || "";
-
-    const finishedTaskStates: Record<string, { color: string; text: string }> = {
-      completed: { color: "#52c41a", text: "已完成" },
-      TASK_STATE_COMPLETED: { color: "#52c41a", text: "已完成" },
-      failed: { color: "#ff4d4f", text: "失败" },
-      TASK_STATE_FAILED: { color: "#ff4d4f", text: "失败" },
-      error: { color: "#ff4d4f", text: "出错" },
-      canceled: { color: "#faad14", text: "已取消" },
-      TASK_STATE_CANCELED: { color: "#faad14", text: "已取消" },
-      AWAITING_USER_INPUT: { color: "#1677ff", text: "等待输入" },
-      input_required: { color: "#1677ff", text: "等待输入" },
-    };
-
-    let displayText = "";
-    if (errorText) {
-      displayText = `错误: ${errorText}`;
-    } else if (responseText) {
-      displayText = responseText;
-    } else if (rawErrorText) {
-      displayText = rawErrorText;
-    }
+    const finishedTaskStates: Record<string, { color: string; text: string }> =
+      {
+        completed: { color: "#52c41a", text: "已完成" },
+        TASK_STATE_COMPLETED: { color: "#52c41a", text: "已完成" },
+        failed: { color: "#ff4d4f", text: "失败" },
+        TASK_STATE_FAILED: { color: "#ff4d4f", text: "失败" },
+        error: { color: "#ff4d4f", text: "出错" },
+        canceled: { color: "#faad14", text: "已取消" },
+        TASK_STATE_CANCELED: { color: "#faad14", text: "已取消" },
+        AWAITING_USER_INPUT: { color: "#1677ff", text: "等待输入" },
+        input_required: { color: "#1677ff", text: "等待输入" },
+      };
 
     const hasResult = toolResult !== null || !!rawErrorText;
-    const isWorking = taskState === "working" || taskState === "TASK_STATE_WORKING";
+    const isWorking =
+      taskState === "working" || taskState === "TASK_STATE_WORKING";
     const isFinished = hasResult && !isWorking;
 
     let tagColor = "#1677ff";
@@ -1893,8 +1907,10 @@ function buildPlugin() {
       ),
     );
 
+    const noStepsYet = steps.length === 0 && !rawErrorText && !errorText;
+
     const loadingSpinner =
-      !isFinished && !displayText
+      !isFinished && noStepsYet
         ? React.createElement(
             "div",
             {
@@ -1918,34 +1934,233 @@ function buildPlugin() {
           )
         : null;
 
-    const resultEl = displayText
-      ? React.createElement(
+    function toggleCollapse(idx: number) {
+      setCollapsed((prev: Record<number, boolean>) => ({
+        ...prev,
+        [idx]: !prev[idx],
+      }));
+    }
+
+    function renderStep(step: any, idx: number) {
+      const isCollapsed = !!collapsed[idx];
+
+      if (step.type === "thinking") {
+        const isDone = !!step.done;
+        const icon = isDone ? "💭" : "🧠";
+        const label = isDone ? "思考完成" : "思考中...";
+        const headerRow = React.createElement(
           "div",
           {
-            ref: scrollRef,
+            key: `step-${idx}`,
             style: {
-              background: "#fafafa",
-              border: "1px solid #e8e8e8",
-              borderRadius: 6,
-              padding: "10px 12px",
-              maxHeight: 250,
-              overflowY: "auto" as const,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 0",
+              cursor: isDone ? "pointer" : "default",
+              fontSize: 12,
+              color: "#8c8c8c",
             },
+            onClick: isDone ? () => toggleCollapse(idx) : undefined,
           },
+          isDone &&
+            React.createElement(
+              "span",
+              { style: { fontSize: 10, color: "#bfbfbf" } },
+              isCollapsed ? "▶" : "▼",
+            ),
+          React.createElement("span", null, icon),
+          React.createElement("span", null, label),
+          !isDone &&
+            React.createElement(Spin, {
+              size: "small",
+              style: { marginLeft: 4 },
+            }),
+        );
+        if (isCollapsed) return headerRow;
+        return React.createElement(
+          "div",
+          { key: `step-${idx}` },
+          headerRow,
           React.createElement(
-            Text,
+            "div",
             {
               style: {
+                marginLeft: 20,
+                padding: "4px 8px",
+                background: "#fafafa",
+                borderRadius: 4,
                 fontSize: 12,
+                color: "#595959",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
-                lineHeight: "1.6",
+                maxHeight: 120,
+                overflowY: "auto" as const,
+                lineHeight: "1.5",
               },
             },
-            displayText,
+            step.text || "",
           ),
-        )
-      : null;
+        );
+      }
+
+      if (step.type === "tool_call") {
+        const isRunning = step.status === "running";
+        const isError = step.status === "error";
+        const statusIcon = isRunning ? "⚙️" : isError ? "❌" : "✅";
+        const statusLabel = isRunning
+          ? `正在执行: ${step.name}`
+          : isError
+          ? `执行失败: ${step.name}`
+          : `执行完成: ${step.name}`;
+        const statusColor = isRunning
+          ? "#1677ff"
+          : isError
+          ? "#ff4d4f"
+          : "#52c41a";
+
+        const headerRow = React.createElement(
+          "div",
+          {
+            key: `step-${idx}`,
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 0",
+              cursor: !isRunning ? "pointer" : "default",
+              fontSize: 12,
+              color: statusColor,
+            },
+            onClick: !isRunning ? () => toggleCollapse(idx) : undefined,
+          },
+          !isRunning &&
+            React.createElement(
+              "span",
+              { style: { fontSize: 10, color: "#bfbfbf" } },
+              isCollapsed ? "▶" : "▼",
+            ),
+          React.createElement("span", null, statusIcon),
+          React.createElement("span", null, statusLabel),
+          isRunning &&
+            React.createElement(Spin, {
+              size: "small",
+              style: { marginLeft: 4 },
+            }),
+        );
+
+        if (isCollapsed || (!step.desc && !isRunning)) return headerRow;
+
+        return React.createElement(
+          "div",
+          { key: `step-${idx}` },
+          headerRow,
+          step.desc &&
+            React.createElement(
+              "div",
+              {
+                style: {
+                  marginLeft: 20,
+                  padding: "2px 8px",
+                  fontSize: 11,
+                  color: "#8c8c8c",
+                },
+              },
+              step.desc,
+            ),
+        );
+      }
+
+      if (step.type === "text") {
+        return React.createElement(
+          "div",
+          {
+            key: `step-${idx}`,
+            style: {
+              padding: "4px 0",
+              fontSize: 12,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: "1.6",
+              color: "#262626",
+            },
+          },
+          step.text || "",
+        );
+      }
+
+      return null;
+    }
+
+    const stepsEl =
+      steps.length > 0
+        ? React.createElement(
+            "div",
+            {
+              ref: scrollRef,
+              style: {
+                background: "#fafafa",
+                border: "1px solid #e8e8e8",
+                borderRadius: 6,
+                padding: "6px 10px",
+                maxHeight: 200,
+                overflowY: "auto" as const,
+              },
+            },
+            ...steps.map(renderStep),
+          )
+        : null;
+
+    const errorEl =
+      rawErrorText || errorText
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                background: "#fff2f0",
+                border: "1px solid #ffccc7",
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontSize: 12,
+                color: "#ff4d4f",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              },
+            },
+            errorText ? `错误: ${errorText}` : rawErrorText,
+          )
+        : null;
+
+    // Fallback: if no steps but has response_text (legacy format)
+    const legacyTextEl =
+      !steps.length && responseText && !rawErrorText
+        ? React.createElement(
+            "div",
+            {
+              ref: scrollRef,
+              style: {
+                background: "#fafafa",
+                border: "1px solid #e8e8e8",
+                borderRadius: 6,
+                padding: "10px 12px",
+                maxHeight: 200,
+                overflowY: "auto" as const,
+              },
+            },
+            React.createElement(
+              Text,
+              {
+                style: {
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  lineHeight: "1.6",
+                },
+              },
+              responseText,
+            ),
+          )
+        : null;
 
     return React.createElement(
       "div",
@@ -1956,13 +2171,15 @@ function buildPlugin() {
           border: "1px solid #f0f0f0",
           overflow: "hidden",
           background: "#fff",
-          padding: "10px 14px",
+          padding: "8px 12px",
           margin: "4px 0",
         },
       },
-      React.createElement("div", { style: { marginBottom: 8 } }, headerEl),
+      React.createElement("div", { style: { marginBottom: 6 } }, headerEl),
       loadingSpinner,
-      resultEl,
+      stepsEl,
+      legacyTextEl,
+      errorEl,
     );
   }
 
@@ -1977,7 +2194,9 @@ function buildPlugin() {
 
   function containsMarker(text: string | null): boolean {
     if (!text) return false;
-    return text.includes(A2A_STREAM_MARKER) || text.includes(A2A_STREAM_MARKER_ALT);
+    return (
+      text.includes(A2A_STREAM_MARKER) || text.includes(A2A_STREAM_MARKER_ALT)
+    );
   }
 
   function extractMsgId(el: Element): string | null {
@@ -2005,13 +2224,13 @@ function buildPlugin() {
     );
     while (walker.nextNode()) {
       const n = walker.currentNode;
-      const text = n.nodeType === Node.TEXT_NODE
-        ? n.textContent
-        : (n as Element).innerHTML;
+      const text =
+        n.nodeType === Node.TEXT_NODE
+          ? n.textContent
+          : (n as Element).innerHTML;
       if (containsMarker(text)) {
-        const parent = n.nodeType === Node.TEXT_NODE
-          ? n.parentElement
-          : (n as Element);
+        const parent =
+          n.nodeType === Node.TEXT_NODE ? n.parentElement : (n as Element);
         if (parent) return parent as HTMLElement;
       }
     }
@@ -2062,7 +2281,10 @@ function buildPlugin() {
 
       if (!resp.ok) {
         const errText = await resp.text().catch(() => "");
-        box.textContent = `SSE 连接失败 (${resp.status}): ${errText.slice(0, 100)}`;
+        box.textContent = `SSE 连接失败 (${resp.status}): ${errText.slice(
+          0,
+          100,
+        )}`;
         box.style.borderColor = "#ff4d4f";
         box.style.background = "#fff1f0";
         return;

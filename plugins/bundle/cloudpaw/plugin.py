@@ -523,7 +523,9 @@ class CloudPawPlugin:
         logger.info("[CloudPaw] Checking aliyun CLI availability...")
         await _ensure_aliyun_cli()
 
-        logger.info("[CloudPaw] Patching plugin loader for uninstall cleanup...")
+        logger.info(
+            "[CloudPaw] Patching plugin loader for uninstall cleanup...",
+        )
         _patch_plugin_loader_unload()
 
         logger.info("CloudPaw plugin startup complete")

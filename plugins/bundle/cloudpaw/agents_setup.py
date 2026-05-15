@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from .constants import (
+    BUILTIN_EXECUTOR_AGENT_ID,
     BUILTIN_ORCHESTRATION_AGENT_ID,
+    BUILTIN_VERIFIER_AGENT_ID,
     PLUGIN_DIR,
     _AGENT_SPECS,
 )
@@ -355,12 +357,6 @@ def uninstall_agents() -> None:
 
 def _uninstall_agent_profiles() -> None:
     """Remove CloudPaw agent profiles and their workspaces."""
-    from .constants import (
-        BUILTIN_ORCHESTRATION_AGENT_ID,
-        BUILTIN_EXECUTOR_AGENT_ID,
-        BUILTIN_VERIFIER_AGENT_ID,
-    )
-
     agent_ids = [
         BUILTIN_ORCHESTRATION_AGENT_ID,
         BUILTIN_EXECUTOR_AGENT_ID,
@@ -369,7 +365,6 @@ def _uninstall_agent_profiles() -> None:
 
     try:
         from qwenpaw.config.utils import load_config, save_config
-        from qwenpaw.constant import WORKING_DIR
     except ImportError:
         logger.warning("Cannot import config modules; agent uninstall skipped")
         return
@@ -391,7 +386,9 @@ def _uninstall_agent_profiles() -> None:
                     logger.info("Deleted workspace: %s", ws_dir)
                 except Exception as exc:
                     logger.warning(
-                        "Failed to delete workspace %s: %s", ws_dir, exc
+                        "Failed to delete workspace %s: %s",
+                        ws_dir,
+                        exc,
                     )
         else:
             logger.debug("Agent %s not in profiles, skipping", agent_id)
@@ -438,7 +435,9 @@ def _uninstall_plugin_skills() -> None:
                 logger.info("Deleted skill from pool: %s", skill_name)
             except Exception as exc:
                 logger.warning(
-                    "Failed to delete skill %s: %s", skill_name, exc
+                    "Failed to delete skill %s: %s",
+                    skill_name,
+                    exc,
                 )
 
     if manifest_path.exists():
@@ -464,7 +463,7 @@ def _uninstall_plugin_skills() -> None:
 
 def _uninstall_cloudpaw_env_vars() -> None:
     """Remove CloudPaw-provisioned environment variables from envs.json."""
-    from .constants import _DEFAULT_ENV_KEYS
+    from .plugin import _DEFAULT_ENV_KEYS
 
     try:
         from qwenpaw.envs import load_envs, save_envs

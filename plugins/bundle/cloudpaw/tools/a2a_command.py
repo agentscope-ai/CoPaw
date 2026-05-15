@@ -84,8 +84,7 @@ class A2AListCommandHandler(BaseControlCommandHandler):
             lines.append(line)
 
         lines.append(
-            "\n---\n使用 `/a2a <agent_name> <message>` "
-            "向远程 Agent 发送消息，例如："
+            "\n---\n使用 `/a2a <agent_name> <message>` " + "向远程 Agent 发送消息，例如：",
         )
         for alias in agents_cfg:
             lines.append(f"  `/a2a {alias} 如何部署 ECS？`")
@@ -112,15 +111,10 @@ class A2AListCommandHandler(BaseControlCommandHandler):
         agent_name = parts[0].strip()
 
         if agent_name not in agents_cfg:
-            available = (
-                ", ".join(agents_cfg.keys()) if agents_cfg else "无"
-            )
+            available = ", ".join(agents_cfg.keys()) if agents_cfg else "无"
             return (
                 f"未找到别名为 '{agent_name}' 的已注册 A2A Agent。\n\n"
                 f"可用别名：{available}"
             )
 
-        return (
-            f"正在将请求转发给 Agent '{agent_name}' 处理，"
-            f"请稍候..."
-        )
+        return f"正在将请求转发给 Agent '{agent_name}' 处理，" f"请稍候..."

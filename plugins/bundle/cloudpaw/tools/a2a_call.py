@@ -21,17 +21,8 @@ from agentscope.tool import ToolResponse
 
 logger = logging.getLogger(__name__)
 
-_DEBUG_FILE = "/tmp/a2a_call_debug.log"
 
-
-def _debug_log(msg: str) -> None:
-    import datetime
-
-    with open(_DEBUG_FILE, "a") as f:
-        f.write(f"[{datetime.datetime.now()}] {msg}\n")
-
-
-async def a2a_call(
+async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
     message: str,
     agent_alias: str = "",
     agent_url: str = "",
@@ -64,6 +55,7 @@ async def a2a_call(
             get_stream,
             start_stream,
         )
+
         stream_queue = get_stream()
         if stream_queue is None:
             stream_queue = start_stream()
@@ -134,14 +126,15 @@ async def a2a_call(
 
     events: list[dict] = []
     try:
-        accumulated_text = ""
-
         logger.info(
             "A2A call started: alias=%s, url=%s, message=%s",
             agent_alias or "(direct)",
             resolved_url,
             message[:100],
         )
+
+        tracker = _StepTracker()
+        last_snapshot = ""
 
         async for event in manager.send_message(
             agent_url=resolved_url,
@@ -150,35 +143,25 @@ async def a2a_call(
             streaming=True,
         ):
             events.append(event)
-            _debug_log(
-                f"Event #{len(events)}: type={event.get('type', '')} "
-                f"keys={list(event.keys())}",
+            tracker.process(event)
+            snapshot = json.dumps(
+                tracker.snapshot(),
+                ensure_ascii=False,
             )
-            new_text = _build_incremental_text(events)
-            _debug_log(
-                f"new_text changed={new_text != accumulated_text} "
-                f"len={len(new_text)}",
-            )
-            if new_text != accumulated_text:
-                accumulated_text = new_text
+            if snapshot != last_snapshot:
+                last_snapshot = snapshot
+                payload = {
+                    "steps": tracker.snapshot(),
+                    "task_state": "working",
+                    "event_count": len(events),
+                }
                 if stream_queue is not None:
-                    _push(stream_queue, {
-                        "response_text": accumulated_text,
-                        "task_state": "working",
-                        "event_count": len(events),
-                    })
+                    _push(stream_queue, payload)
                 yield ToolResponse(
                     content=[
                         TextBlock(
                             type="text",
-                            text=json.dumps(
-                                {
-                                    "response_text": accumulated_text,
-                                    "task_state": "working",
-                                    "event_count": len(events),
-                                },
-                                ensure_ascii=False,
-                            ),
+                            text=json.dumps(payload, ensure_ascii=False),
                         ),
                     ],
                     stream=True,
@@ -186,6 +169,7 @@ async def a2a_call(
                 )
 
         result = _build_result(events, context_id)
+        result["steps"] = tracker.snapshot()
         logger.info(
             "A2A call completed: events=%d, state=%s, text_len=%d",
             len(events),
@@ -233,66 +217,141 @@ def _push(queue, data: dict) -> None:
         pass
 
 
-def _build_incremental_text(events: list[dict]) -> str:
-    """Build cumulative display text from all events so far.
+class _StepTracker:
+    """Accumulates A2A SSE events into a structured list of UI steps.
 
-    Artifact/message text is shown as the main response.
-    Status updates are appended as a compact progress line.
+    Step types:
+    - thinking: LLM thinking tokens, accumulated into a single text block.
+                Finalized (done=True) once a non-thinking event arrives.
+    - tool_call: Remote agent tool invocation.
+                 status cycles: running → done / error.
+    - text: Agent response text (artifact / message).
     """
-    artifact_texts: list[str] = []
-    status_texts: list[str] = []
-    seen: set[str] = set()
 
-    for ev in events:
-        ev_type = ev.get("type", "")
+    def __init__(self) -> None:
+        self._steps: list[dict] = []
+        self._thinking_buf: list[str] = []
+        self._active_tools: dict[str, int] = {}
 
-        if ev_type == "task":
-            task_data = ev.get("task", {})
-            msg = task_data.get("status", {}).get("message", {})
-            text = _extract_text_from_parts(msg.get("parts", []))
-            if text and text not in seen:
-                seen.add(text)
-                status_texts.append(text)
-            for artifact in task_data.get("artifacts", []):
-                text = _extract_text_from_parts(artifact.get("parts", []))
-                if text and text not in seen:
-                    seen.add(text)
-                    artifact_texts.append(text)
+    def process(  # pylint: disable=too-many-branches
+        self,
+        event: dict,
+    ) -> None:
+        ev_type = event.get("type", "")
 
-        elif ev_type == "status_update":
-            su = ev.get("statusUpdate", {})
-            msg = su.get("status", {}).get("message", {})
-            text = _extract_text_from_parts(msg.get("parts", []))
-            if text and text not in seen:
-                seen.add(text)
-                status_texts.append(text)
+        if ev_type == "status_update":
+            su = event.get("statusUpdate", {})
+            meta = su.get("metadata", {})
+            msg_type = meta.get("message_type", "")
+
+            if msg_type == "thinking":
+                self._thinking_buf.append(meta.get("thinking", ""))
+                self._ensure_thinking_step()
+                return
+
+            self._finalize_thinking()
+
+            if msg_type == "tool_use":
+                tool_id = meta.get("tool_use_id", "")
+                name = meta.get("tool_name", "?")
+                desc = (meta.get("tool_input") or {}).get("description", "")
+                step = {
+                    "type": "tool_call",
+                    "name": name,
+                    "status": "running",
+                    "desc": desc,
+                }
+                self._steps.append(step)
+                if tool_id:
+                    self._active_tools[tool_id] = len(self._steps) - 1
+
+            elif msg_type == "tool_result":
+                tool_id = meta.get("tool_use_id", "")
+                is_error = meta.get("is_error", False)
+                idx = self._active_tools.pop(tool_id, None)
+                if idx is not None and idx < len(self._steps):
+                    self._steps[idx]["status"] = (
+                        "error" if is_error else "done"
+                    )
+                else:
+                    name = meta.get("tool_name", "?")
+                    self._steps.append(
+                        {
+                            "type": "tool_call",
+                            "name": name,
+                            "status": "error" if is_error else "done",
+                        },
+                    )
+
+            else:
+                text = _extract_text_from_parts(
+                    su.get("status", {}).get("message", {}).get("parts", []),
+                )
+                if text:
+                    self._append_text(text)
 
         elif ev_type == "artifact_update":
-            artifact = ev.get("artifactUpdate", {}).get("artifact", {})
+            self._finalize_thinking()
+            artifact = event.get("artifactUpdate", {}).get("artifact", {})
             text = _extract_text_from_parts(artifact.get("parts", []))
-            if text and text not in seen:
-                seen.add(text)
-                artifact_texts.append(text)
+            if text:
+                self._append_text(text)
+
+        elif ev_type == "task":
+            self._finalize_thinking()
+            task_data = event.get("task", {})
+            for artifact in task_data.get("artifacts", []):
+                text = _extract_text_from_parts(artifact.get("parts", []))
+                if text:
+                    self._append_text(text)
 
         elif ev_type == "message":
+            self._finalize_thinking()
             text = _extract_text_from_parts(
-                ev.get("message", {}).get("parts", []),
+                event.get("message", {}).get("parts", []),
             )
-            if text and text not in seen:
-                seen.add(text)
-                artifact_texts.append(text)
+            if text:
+                self._append_text(text)
 
-    result = "".join(artifact_texts)
-    if status_texts:
-        progress = " → ".join(status_texts)
-        if result:
-            result = f"[进度] {progress}\n\n{result}"
+    def snapshot(self) -> list[dict]:
+        steps = [s.copy() for s in self._steps]
+        if self._thinking_buf:
+            for s in steps:
+                if s.get("type") == "thinking" and not s.get("done"):
+                    s["text"] = "".join(self._thinking_buf)
+                    break
+        return steps
+
+    def _ensure_thinking_step(self) -> None:
+        if (
+            not self._steps
+            or self._steps[-1].get("type") != "thinking"
+            or self._steps[-1].get("done")
+        ):
+            self._steps.append({"type": "thinking", "text": "", "done": False})
+
+    def _finalize_thinking(self) -> None:
+        if not self._thinking_buf:
+            return
+        text = "".join(self._thinking_buf)
+        self._thinking_buf.clear()
+        for s in reversed(self._steps):
+            if s.get("type") == "thinking" and not s.get("done"):
+                s["text"] = text
+                s["done"] = True
+                return
+
+    def _append_text(self, text: str) -> None:
+        if self._steps and self._steps[-1].get("type") == "text":
+            self._steps[-1]["text"] += text
         else:
-            result = f"[进度] {progress}"
-    return result
+            self._steps.append({"type": "text", "text": text})
 
 
-def _build_result(events: list[dict], initial_context_id: str) -> dict:
+def _build_result(  # pylint: disable=too-many-branches,too-many-statements
+    events: list[dict],
+    initial_context_id: str,
+) -> dict:
     """Build final result dict from all collected events."""
     artifact_texts: list[str] = []
     status_texts: list[str] = []
