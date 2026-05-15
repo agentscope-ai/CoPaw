@@ -31,6 +31,13 @@ SNOWPAW_SPRITESHEET_URL = os.environ.get(
     ),
 )
 _DOWNLOAD_TIMEOUT_S = 60.0
+# Alicdn (and other CDN edges) reject the default ``Python-urllib/*``
+# User-Agent with HTTP 420, so we send a generic browser-style UA and
+# leave a small identifier in parentheses so CDN operators can still
+# attribute the traffic if they ever care to.
+_DOWNLOAD_UA = (
+    "Mozilla/5.0 (compatible; qwenpaw-pet/desktop; +https://qwenpaw.dev)"
+)
 
 
 def validate_pet_package(pet_dir: Path) -> tuple[dict[str, Any], Path]:
@@ -114,10 +121,14 @@ def _atomic_download(
         dir=str(dest.parent),
     )
     tmp_path = Path(tmp_name)
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": _DOWNLOAD_UA, "Accept": "*/*"},
+    )
     try:
         with os.fdopen(tmp_fd, "wb") as out:
             try:
-                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
                     shutil.copyfileobj(resp, out, length=64 * 1024)
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 raise RuntimeError(
@@ -175,6 +186,12 @@ def install_default_pet() -> Path:
     cached under ``runtime.home_dir() / "cache"``) when it is not
     already available locally, then copied alongside ``pet.json`` into
     the user's pets directory.
+
+    Ordering matters: we resolve the spritesheet (which may raise on a
+    failed download) **before** touching the target directory, so a
+    transient CDN error never leaves a half-written pet folder behind
+    that would later fool :func:`resolve_pet_dir` into skipping the
+    install.
     """
     source = bundled_default_pet_dir()
     manifest_path = source / "pet.json"
@@ -188,12 +205,12 @@ def install_default_pet() -> Path:
     if not isinstance(sprite_name, str) or not sprite_name:
         raise ValueError("default pet.json must contain spritesheetPath")
 
+    sprite_src = _ensure_snowpaw_spritesheet()
+
     runtime.ensure_runtime()
     target = runtime.pets_dir() / pet_id
     target.mkdir(parents=True, exist_ok=True)
-
     shutil.copy2(manifest_path, target / "pet.json")
-    sprite_src = _ensure_snowpaw_spritesheet()
     shutil.copy2(sprite_src, target / sprite_name)
 
     validate_pet_package(target)
@@ -211,8 +228,20 @@ def resolve_pet_dir(pet_dir: str | None = None) -> Path:
     )
     if not installed:
         return install_default_pet()
-    validate_pet_package(installed[0])
-    return installed[0]
+    first = installed[0]
+    try:
+        validate_pet_package(first)
+        return first
+    except ValueError:
+        # Self-heal: an earlier run may have left snowpaw with a
+        # manifest but no spritesheet (e.g. a CDN download failed
+        # mid-install). Wipe the broken folder and re-run the default
+        # install so the network/cache fallback chain gets another
+        # chance. User-managed pets are left untouched.
+        if first.name == SNOWPAW_PET_ID:
+            shutil.rmtree(first, ignore_errors=True)
+            return install_default_pet()
+        raise
 
 
 def resolve_switch_pet_path(
