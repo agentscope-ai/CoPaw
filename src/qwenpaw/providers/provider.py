@@ -10,6 +10,11 @@ from pydantic import ConfigDict
 
 from agentscope.model import ChatModelBase
 from qwenpaw.exceptions import ProviderError
+from qwenpaw.providers.auth.models import (
+    ProviderAuthInfo,
+    ProviderAuthStatus,
+    ProviderAuthType,
+)
 
 if TYPE_CHECKING:
     from .multimodal_prober import ProbeResult
@@ -114,6 +119,14 @@ class ProviderInfo(BaseModel):
     require_api_key: bool = Field(
         default=True,
         description="Whether this provider requires an API key",
+    )
+    auth_type: ProviderAuthType = Field(
+        default=ProviderAuthType.API_KEY,
+        description="Authentication mechanism used by this provider",
+    )
+    auth: ProviderAuthInfo | None = Field(
+        default=None,
+        description="Safe provider authentication status metadata",
     )
     is_custom: bool = Field(
         default=False,
@@ -236,6 +249,30 @@ class Provider(ProviderInfo, ABC):
                 for model in config["extra_models"]
             ]
 
+    def _build_default_auth_info(self) -> ProviderAuthInfo:
+        """Build safe default auth metadata without consulting token stores."""
+        if self.auth_type == ProviderAuthType.NONE:
+            return ProviderAuthInfo(
+                type=ProviderAuthType.NONE,
+                status=ProviderAuthStatus.NOT_REQUIRED,
+                supports_logout=False,
+            )
+        if self.auth_type == ProviderAuthType.API_KEY:
+            return ProviderAuthInfo(
+                type=ProviderAuthType.API_KEY,
+                status=(
+                    ProviderAuthStatus.AUTHENTICATED
+                    if bool(self.api_key)
+                    else ProviderAuthStatus.NOT_CONFIGURED
+                ),
+                supports_logout=bool(self.api_key),
+            )
+        return ProviderAuthInfo(
+            type=self.auth_type,
+            status=ProviderAuthStatus.NOT_CONFIGURED,
+            supports_logout=True,
+        )
+
     def get_chat_model_cls(self) -> Type[ChatModelBase]:
         """Return the chat model class associated with this provider."""
         import agentscope.model
@@ -351,6 +388,7 @@ class Provider(ProviderInfo, ABC):
         # the class in its own module scope.  This avoids pydantic
         # class-identity mismatches when the same module is loaded
         # via two different import paths (e.g. PYTHONPATH + pip install).
+        auth_info = self._build_default_auth_info()
         return ProviderInfo(
             id=self.id,
             name=self.name,
@@ -368,6 +406,8 @@ class Provider(ProviderInfo, ABC):
             and not self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
+            auth_type=self.auth_type,
+            auth=auth_info,
             generate_kwargs=self.generate_kwargs,
             meta=self.meta or {},
         )

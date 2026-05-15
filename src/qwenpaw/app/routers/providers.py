@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Literal, Optional
 from copy import deepcopy
+from typing import List, Literal, Optional
+from urllib.parse import urlsplit
 
 from fastapi import (
     APIRouter,
@@ -26,6 +27,13 @@ from ..agent_context import get_agent_for_request
 from ..utils import schedule_agent_reload
 from ...config.config import load_agent_config, save_agent_config
 from ...providers.provider import ProviderInfo, ModelInfo
+from ...providers.auth import (
+    AuthStartRequest,
+    AuthStartResult,
+    AuthStatusResult,
+    ProviderAuthError,
+    ProviderAuthManager,
+)
 from ...config.config import ActiveModelsInfo
 from ...providers.provider_manager import ProviderManager
 from ...providers.openrouter_provider import OpenRouterProvider
@@ -55,6 +63,58 @@ async def get_provider_manager(request: Request) -> ProviderManager:
         request: FastAPI request object
     """
     return request.app.state.provider_manager
+
+
+def get_provider_auth_manager(
+    request: Request,
+    manager: ProviderManager = Depends(get_provider_manager),
+) -> ProviderAuthManager:
+    """Get the shared auth manager for provider auth endpoints."""
+    auth_manager = getattr(
+        request.app.state,
+        "provider_auth_manager",
+        None,
+    )
+    if auth_manager is None:
+        auth_manager = ProviderAuthManager(manager)
+        request.app.state.provider_auth_manager = auth_manager
+    return auth_manager
+
+
+def _validate_auth_redirect_uri(
+    request: Request,
+    provider_id: str,
+    body: AuthStartRequest,
+) -> None:
+    """Ensure redirect_uri cannot target an attacker-controlled origin."""
+    if body.redirect_uri is None:
+        return
+
+    redirect_uri = urlsplit(body.redirect_uri)
+    callback_uri = urlsplit(
+        str(
+            request.url_for(
+                "provider_auth_callback",
+                provider_id=provider_id,
+            ),
+        ),
+    )
+    if (
+        redirect_uri.scheme.lower(),
+        redirect_uri.netloc.lower(),
+        redirect_uri.path,
+    ) != (
+        callback_uri.scheme.lower(),
+        callback_uri.netloc.lower(),
+        callback_uri.path,
+    ) or redirect_uri.fragment:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "redirect_uri must target this provider's auth callback "
+                "endpoint"
+            ),
+        )
 
 
 class ProviderConfigRequest(BaseModel):
@@ -171,6 +231,84 @@ async def list_all_providers(
     manager: ProviderManager = Depends(get_provider_manager),
 ) -> List[ProviderInfo]:
     return await manager.list_provider_info()
+
+
+@router.post(
+    "/{provider_id}/auth/start",
+    response_model=AuthStartResult,
+    summary="Start provider authentication",
+)
+async def start_provider_auth(
+    request: Request,
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
+    provider_id: str = Path(...),
+    body: AuthStartRequest = Body(default_factory=AuthStartRequest),
+) -> AuthStartResult:
+    _validate_auth_redirect_uri(request, provider_id, body)
+    try:
+        return await auth_manager.start(provider_id, body)
+    except ProviderAuthError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
+        ) from exc
+
+
+@router.get(
+    "/{provider_id}/auth/status",
+    response_model=AuthStatusResult,
+    summary="Get provider authentication status",
+)
+async def get_provider_auth_status(
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
+    provider_id: str = Path(...),
+    flow_id: str | None = Query(default=None),
+) -> AuthStatusResult:
+    try:
+        return await auth_manager.get_status(provider_id, flow_id=flow_id)
+    except ProviderAuthError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
+        ) from exc
+
+
+@router.post(
+    "/{provider_id}/auth/logout",
+    response_model=AuthStatusResult,
+    summary="Log out provider authentication",
+)
+async def logout_provider_auth(
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
+    provider_id: str = Path(...),
+) -> AuthStatusResult:
+    try:
+        return await auth_manager.logout(provider_id)
+    except ProviderAuthError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
+        ) from exc
+
+
+@router.get(
+    "/{provider_id}/auth/callback",
+    response_model=AuthStatusResult,
+    summary="Handle provider authentication callback",
+)
+async def provider_auth_callback(
+    auth_manager: ProviderAuthManager = Depends(get_provider_auth_manager),
+    provider_id: str = Path(...),
+    state: str = Query(...),
+    code: str = Query(...),
+) -> AuthStatusResult:
+    try:
+        return await auth_manager.handle_callback(provider_id, state, code)
+    except ProviderAuthError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
+        ) from exc
 
 
 @router.put(
