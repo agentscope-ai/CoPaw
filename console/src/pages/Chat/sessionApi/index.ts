@@ -360,7 +360,6 @@ function clearPendingUserMessage(sessionId: string): void {
 function savePendingStopUsageNote(sessionId: string, markdown: string): void {
   try {
     const key = `${STOP_USAGE_NOTE_PREFIX}${sessionId}`;
-    console.log("[Debug] savePendingStopUsageNote key=%s", key);
     sessionStorage.setItem(key, markdown);
   } catch {
     /* quota exceeded – ignore */
@@ -370,9 +369,7 @@ function savePendingStopUsageNote(sessionId: string, markdown: string): void {
 function loadPendingStopUsageNote(sessionId: string): string {
   try {
     const key = `${STOP_USAGE_NOTE_PREFIX}${sessionId}`;
-    const val = sessionStorage.getItem(key) || "";
-    console.log("[Debug] loadPendingStopUsageNote key=%s found=%s", key, !!val);
-    return val;
+    return sessionStorage.getItem(key) || "";
   } catch {
     return "";
   }
@@ -487,14 +484,6 @@ function saveInterruptedTurnMessage(
   persistInterruptedTurnsMap(sessionId, map);
 }
 
-function clearInterruptedTurnMessage(sessionId: string): void {
-  try {
-    sessionStorage.removeItem(`${INTERRUPTED_TURN_PREFIX}${sessionId}`);
-  } catch {
-    /* ignore */
-  }
-}
-
 // ---------------------------------------------------------------------------
 // SessionApi
 // ---------------------------------------------------------------------------
@@ -576,15 +565,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   }
 
   /**
-   * Clear the saved interrupted turn for a session, e.g. when a new turn
-   * completes normally and is persisted by the backend.
-   */
-  clearInterruptedTurn(sessionId: string): void {
-    if (!sessionId) return;
-    clearInterruptedTurnMessage(sessionId);
-  }
-
-  /**
    * Deduplicates concurrent getSessionList calls so that two parallel
    * invocations share one network request and write sessionList only once,
    * preserving any realId mappings that were already resolved.
@@ -640,9 +620,8 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     generating: boolean,
     backendSessionId: string,
   ): void {
-    console.log("[Debug] patchLastUserMessage backendSessionId=%s generating=%s msgCount=%d", backendSessionId, generating, messages.length);
     const cachedText = loadPendingUserMessage(backendSessionId);
-    if (!cachedText) { console.log("[Debug] patchLastUserMessage no cached text, skip"); return; }
+    if (!cachedText) return;
 
     const hasCachedUserInHistory = messages.some((msg) => {
       if (msg?.role !== ROLE_USER) return false;
@@ -653,12 +632,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     });
 
     if (hasCachedUserInHistory) {
-      console.log("[Debug] patchLastUserMessage cached user text found in history, clearing=%s", !generating);
       if (!generating) clearPendingUserMessage(backendSessionId);
       return;
     }
-
-    console.log("[Debug] patchLastUserMessage pushing cached user message");
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === ROLE_USER) {
       const text = extractTextFromContent(
@@ -684,9 +660,8 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     messages: IAgentScopeRuntimeWebUIMessage[],
     backendSessionId: string,
   ): void {
-    console.log("[Debug] patchLastStopUsageNote backendSessionId=%s msgCount=%d", backendSessionId, messages.length);
     const cachedNote = loadPendingStopUsageNote(backendSessionId).trim();
-    if (!cachedNote) { console.log("[Debug] patchLastStopUsageNote no cached note, skip"); return; }
+    if (!cachedNote) return;
 
     const hasNoteInHistory = messages.some((msg) => {
       if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) return false;
@@ -714,7 +689,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     });
 
     if (hasNoteInHistory) {
-      console.log("[Debug] patchLastStopUsageNote note found in history, clearing");
       clearPendingStopUsageNote(backendSessionId);
       return;
     }
@@ -730,7 +704,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       ) as Record<string, unknown> | undefined;
 
       if (responseCard?.data) {
-        console.log("[Debug] patchLastStopUsageNote appending note inline to assistant msg idx=%d", i);
         const data = responseCard.data as Record<string, unknown>;
         if (!Array.isArray(data.output)) data.output = [];
         (data.output as Array<Record<string, unknown>>).push({
@@ -745,10 +718,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
         return;
       }
     }
-
-    // Fallback: if no assistant message with a response card exists, create one.
-    console.log("[Debug] patchLastStopUsageNote fallback: creating standalone message");
-    messages.push(buildAssistantMarkdownMessage(cachedNote));
   }
 
   private patchInterruptedTurn(
@@ -807,7 +776,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     generating: boolean,
     backendSessionId: string,
   ): void {
-    console.log("[Debug] patchInterruptedTurnFallbacks backendSessionId=%s generating=%s msgCount=%d", backendSessionId, generating, messages.length);
     try {
       this.patchLastUserMessage(messages, generating, backendSessionId);
       this.patchInterruptedTurn(messages, backendSessionId);
@@ -919,7 +887,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
   async getSession(sessionId: string) {
     const existingRequest = this.sessionRequests.get(sessionId);
-    console.log("[Debug] getSession sessionId=%s cached=%s", sessionId, !!existingRequest);
     if (existingRequest) return existingRequest;
 
     const requestPromise = this._doGetSession(sessionId);
@@ -943,23 +910,18 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   private async _doGetSession(
     sessionId: string,
   ): Promise<IAgentScopeRuntimeWebUISession> {
-    console.log("[Debug] _doGetSession entry sessionId=%s isTimestamp=%s", sessionId, isLocalTimestamp(sessionId));
     // --- Local timestamp ID (New Chat before first reply) ---
     if (isLocalTimestamp(sessionId)) {
-      console.log("[Debug] _doGetSession path: local timestamp");
       const fromList = this.sessionList.find((s) => s.id === sessionId) as
         | ExtendedSession
         | undefined;
 
       // If realId is already resolved, use it directly to fetch history.
       if (fromList?.realId) {
-        console.log("[Debug] _doGetSession timestamp with realId=%s", fromList.realId);
         const chatHistory = await api.getChat(fromList.realId);
         const generating = isGenerating(chatHistory);
         const messages = convertMessages(chatHistory.messages || []);
-        console.log("[Debug] _doGetSession patchInterruptedTurnFallbacks with backendSessionId=%s", fromList.realId);
         this.patchInterruptedTurnFallbacks(messages, generating, fromList.realId);
-        console.log("[Debug] _doGetSession final msgCount=%d", messages.length);
         const session: ExtendedSession = {
           id: sessionId,
           name: fromList.name || DEFAULT_SESSION_NAME,
@@ -977,20 +939,16 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
       // Pure local session (not yet sent to backend): wait until updateSession
       // resolves the realId, then fetch history with the real UUID.
-      console.log("[Debug] _doGetSession waiting for realId");
       await this.waitForRealId(sessionId);
 
       const refreshed = this.sessionList.find((s) => s.id === sessionId) as
         | ExtendedSession
         | undefined;
       if (refreshed?.realId) {
-        console.log("[Debug] _doGetSession resolved realId=%s", refreshed.realId);
         const chatHistory = await api.getChat(refreshed.realId);
         const generating = isGenerating(chatHistory);
         const messages = convertMessages(chatHistory.messages || []);
-        console.log("[Debug] _doGetSession patchInterruptedTurnFallbacks with backendSessionId=%s", refreshed.realId);
         this.patchInterruptedTurnFallbacks(messages, generating, refreshed.realId);
-        console.log("[Debug] _doGetSession final msgCount=%d", messages.length);
         const session: ExtendedSession = {
           id: sessionId,
           name: refreshed.name || DEFAULT_SESSION_NAME,
@@ -1015,7 +973,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     }
 
     // --- Regular backend UUID ---
-    console.log("[Debug] _doGetSession path: regular UUID");
     const fromList = this.sessionList.find((s) => s.id === sessionId) as
       | ExtendedSession
       | undefined;
@@ -1023,9 +980,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const chatHistory = await api.getChat(sessionId);
     const generating = isGenerating(chatHistory);
     const messages = convertMessages(chatHistory.messages || []);
-    console.log("[Debug] _doGetSession patchInterruptedTurnFallbacks with backendSessionId=%s", sessionId);
     this.patchInterruptedTurnFallbacks(messages, generating, sessionId);
-    console.log("[Debug] _doGetSession final msgCount=%d", messages.length);
     const session: ExtendedSession = {
       id: sessionId,
       name: fromList?.name || sessionId,

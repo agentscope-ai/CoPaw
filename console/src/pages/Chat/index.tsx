@@ -1222,7 +1222,6 @@ export default function ChatPage() {
                         : "";
                   if (text) {
                     interruptedTurnUserText = text.trim();
-                    console.log("[Debug] handleStopChat setLastUserMessage chatId=%s sessionId=%s", chatId, sessionId);
                     sessionApi.setLastUserMessage(chatId, text);
                     if (sessionId && sessionId !== chatId) {
                       sessionApi.setLastUserMessage(sessionId, text);
@@ -1258,7 +1257,6 @@ export default function ChatPage() {
             ) as IAgentScopeRuntimeWebUIMessage;
 
             if (alreadyHasNote) {
-              console.log("[Stop] Usage note already present, skipping duplicate append");
               sessionApi.saveInterruptedTurn(
                 chatId,
                 updatedMsg,
@@ -1303,14 +1301,12 @@ export default function ChatPage() {
               });
 
               // Save per user-turn so round 2+ interrupts do not overwrite round 1.
-              console.log("[Debug] handleStopChat saveInterruptedTurn chatId=%s sessionId=%s msg.id=%s", chatId, sessionId, updatedMsg.id);
               sessionApi.saveInterruptedTurn(
                 chatId,
                 updatedMsg,
                 interruptedTurnUserText,
               );
               if (sessionId && sessionId !== chatId) {
-                console.log("[Debug] handleStopChat saveInterruptedTurn also as sessionId=%s", sessionId);
                 sessionApi.saveInterruptedTurn(
                   sessionId,
                   updatedMsg,
@@ -1324,7 +1320,6 @@ export default function ChatPage() {
           if (sessionId && sessionId !== chatId) {
             sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
           }
-          console.log("[Debug] handleStopChat setLastStopUsageNote chatId=%s sessionId=%s", chatId, sessionId);
           console.log("[Stop] stopChat API succeeded");
         })
         .catch((err) => {
