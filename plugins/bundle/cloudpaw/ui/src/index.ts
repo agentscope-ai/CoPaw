@@ -1117,16 +1117,106 @@ function buildPlugin() {
     );
   }
 
-  // ── a2a_call renderer with streaming progress ──────────────────────────
+  // ── a2a_call renderer with SSE streaming progress ──────────────────────
 
   function A2ACallRender({ data }: { data: any }) {
     const status = data?.status || "";
     const isLoading = status === "in_progress" || status === "created";
     const isCompleted =
       status === "completed" || status === "canceled" || status === "failed";
-    const toolResultRef = React.useRef<any>(null);
 
-    const toolArgs = useMemo(() => {
+    const [streamText, setStreamText] = React.useState("");
+    const [streamEventCount, setStreamEventCount] = React.useState(0);
+    const streamTextRef = React.useRef("");
+
+    React.useEffect(() => {
+      if (!isLoading) return;
+      console.log("[a2a] SSE effect triggered, isLoading=true");
+      setStreamText("");
+      setStreamEventCount(0);
+      streamTextRef.current = "";
+
+      const QP = (window as any).QwenPaw;
+      const { getApiUrl, getApiToken } = QP.host;
+      const url = getApiUrl("/a2a/call/stream");
+      const token = getApiToken();
+      console.log("[a2a] SSE URL:", url);
+
+      let agentId = "";
+      try {
+        const raw =
+          sessionStorage.getItem("qwenpaw-agent-storage") ||
+          localStorage.getItem("qwenpaw-agent-storage");
+        agentId = JSON.parse(raw || "{}")?.state?.selectedAgent || "";
+      } catch {}
+
+      const headers: Record<string, string> = { Accept: "text/event-stream" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (agentId) headers["X-Agent-Id"] = agentId;
+
+      const controller = new AbortController();
+      let stopped = false;
+
+      (async () => {
+        try {
+          console.log("[a2a] Starting SSE fetch...");
+          const resp = await fetch(url, { headers, signal: controller.signal });
+          console.log("[a2a] SSE response status:", resp.status);
+          if (!resp.body) {
+            console.error("[a2a] No response body");
+            return;
+          }
+
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+
+          while (!stopped) {
+            const { done, value } = await reader.read();
+            if (done) {
+              console.log("[a2a] SSE stream ended");
+              break;
+            }
+
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() ?? "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              try {
+                const evt = JSON.parse(line.slice(6));
+                if (evt.done) {
+                  console.log("[a2a] SSE done signal received");
+                  stopped = true;
+                  break;
+                }
+                if (typeof evt.response_text === "string") {
+                  streamTextRef.current = evt.response_text;
+                  setStreamText(evt.response_text);
+                  setStreamEventCount(evt.event_count ?? 0);
+                  console.log(
+                    "[a2a] SSE update: text_len=" + evt.response_text.length,
+                  );
+                }
+              } catch (e) {
+                console.warn("[a2a] SSE parse error:", e);
+              }
+            }
+          }
+        } catch (err: any) {
+          if (err?.name !== "AbortError")
+            console.error("[a2a stream]", err);
+        }
+      })();
+
+      return () => {
+        stopped = true;
+        controller.abort();
+      };
+    }, [isLoading]);
+
+    const toolArgs = React.useMemo(() => {
       const argsStr = data?.content?.[0]?.data?.arguments;
       if (!argsStr) return null;
       try {
@@ -1136,8 +1226,12 @@ function buildPlugin() {
       }
     }, [data?.content?.[0]?.data?.arguments]);
 
-    const toolResult = useMemo(() => {
-      if (isCompleted && toolResultRef.current) return toolResultRef.current;
+    const agentAlias = toolArgs?.agent_alias || "";
+    const agentUrl = toolArgs?.agent_url || "";
+    const displayName = agentAlias || agentUrl || "远程 Agent";
+
+    const finalResult = React.useMemo(() => {
+      if (!isCompleted) return null;
       const content = data?.content;
       if (!Array.isArray(content)) return null;
       for (const item of content) {
@@ -1145,45 +1239,36 @@ function buildPlugin() {
         if (!rawOutput) continue;
         let textContent = "";
         if (Array.isArray(rawOutput)) {
-          const textBlock = rawOutput.find(
+          const tb = rawOutput.find(
             (b: any) => b?.type === "text" && b?.text,
           );
-          textContent = textBlock?.text || "";
+          textContent = tb?.text || "";
         } else if (typeof rawOutput === "string") {
           try {
-            const parsed = JSON.parse(rawOutput);
-            if (typeof parsed === "object" && parsed?.response_text)
-              return parsed;
-            if (Array.isArray(parsed)) {
-              const tb = parsed.find((b: any) => b?.type === "text" && b?.text);
-              if (tb?.text) {
-                textContent = tb.text;
-              }
-            }
+            const p = JSON.parse(rawOutput);
+            if (typeof p === "object" && p?.response_text) return p;
           } catch {
             textContent = rawOutput;
           }
         }
-        if (!textContent) continue;
-        try {
-          const result = JSON.parse(textContent);
-          if (isCompleted) toolResultRef.current = result;
-          return result;
-        } catch {
-          return null;
+        if (textContent) {
+          try {
+            return JSON.parse(textContent);
+          } catch {
+            return { response_text: textContent, task_state: "completed" };
+          }
         }
       }
       return null;
     }, [data?.content, isCompleted]);
 
-    const agentAlias = toolArgs?.agent_alias || "";
-    const agentUrl = toolArgs?.agent_url || "";
-    const displayName = agentAlias || agentUrl || "远程 Agent";
-
-    const responseText = toolResult?.response_text || "";
-    const taskState = toolResult?.task_state || "";
-    const errorText = toolResult?.error || "";
-    const eventCount = toolResult?.event_count || 0;
+    const displayText =
+      (finalResult?.response_text || streamTextRef.current || "").trim() ||
+      "等待响应...";
+    const errorText = finalResult?.error || "";
+    const taskState =
+      finalResult?.task_state ||
+      (isLoading ? "working" : "completed");
 
     const stateColor: Record<string, string> = {
       completed: "#52c41a",
@@ -1200,14 +1285,8 @@ function buildPlugin() {
       working: "执行中",
     };
 
-    const color = isLoading ? "#1677ff" : stateColor[taskState] || "#d9d9d9";
-    const label = isLoading
-      ? "执行中..."
-      : stateLabelText[taskState] || taskState || "完成";
-
-    const displayText = errorText
-      ? `错误: ${errorText}`
-      : responseText || "等待响应...";
+    const color = stateColor[taskState] || "#d9d9d9";
+    const label = stateLabelText[taskState] || taskState || "完成";
 
     const headerEl = React.createElement(
       Space,
@@ -1221,74 +1300,80 @@ function buildPlugin() {
       React.createElement(Tag, { color: color }, label),
     );
 
-    const loadingSpinner =
-      isLoading && !responseText
+    const streamBox =
+      isLoading && streamText
         ? React.createElement(
             "div",
             {
               style: {
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 12px",
-                marginBottom: 12,
                 background: "#f6ffed",
                 border: "1px solid #b7eb8f",
                 borderRadius: 6,
+                padding: "10px 14px",
+                marginBottom: 8,
               },
             },
-            React.createElement(Spin, { size: "small" }),
             React.createElement(
               Text,
-              { style: { fontSize: 12, color: "#52c41a" } },
-              `正在连接 ${displayName}...`,
+              {
+                style: {
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  color: "#262626",
+                },
+              },
+              displayText,
             ),
           )
         : null;
 
-    const streamingIndicator =
-      isLoading && responseText
+    const resultBox =
+      !isLoading && displayText
         ? React.createElement(
             "div",
             {
               style: {
-                background: "#e6f4ff",
-                border: "1px solid #91caff",
+                background: "#fafafa",
+                border: "1px solid #d9d9d9",
                 borderRadius: 6,
-                padding: "8px 12px",
-                marginBottom: 12,
+                padding: "12px 16px",
               },
             },
             React.createElement(
               Text,
-              { style: { fontSize: 12, color: "#1677ff" } },
-              `实时进度 (已接收 ${eventCount} 个事件):`,
+              {
+                style: {
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                },
+              },
+              errorText ? `错误: ${errorText}` : displayText,
             ),
           )
         : null;
 
-    const resultEl = React.createElement(
-      "div",
-      {
-        style: {
-          background: "#fafafa",
-          border: "1px solid #d9d9d9",
-          borderRadius: 6,
-          padding: "12px 16px",
-        },
-      },
-      React.createElement(
-        Text,
-        {
-          style: {
-            fontSize: 12,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          },
-        },
-        displayText,
-      ),
-    );
+    const metaInfo =
+      finalResult || (!isLoading && streamTextRef.current)
+        ? React.createElement(
+            "div",
+            {
+              style: {
+                fontSize: 11,
+                color: "#8c8c8c",
+                marginTop: 6,
+              },
+            },
+            `事件数: ${finalResult?.event_count ?? streamEventCount}`,
+            finalResult?.task_id
+              ? ` | 任务ID: ${finalResult.task_id.slice(0, 12)}...`
+              : "",
+            finalResult?.context_id
+              ? ` | 会话: ${finalResult.context_id.slice(0, 12)}...`
+              : "",
+          )
+        : null;
 
     return React.createElement(
       "div",
@@ -1303,23 +1388,10 @@ function buildPlugin() {
           margin: "4px 0",
         },
       },
-      React.createElement("div", { style: { marginBottom: 12 } }, headerEl),
-      loadingSpinner,
-      streamingIndicator,
-      resultEl,
-      React.createElement(
-        "div",
-        {
-          style: { fontSize: 11, color: "#8c8c8c", marginTop: 8 },
-        },
-        `事件数: ${eventCount}`,
-        toolResult?.task_id
-          ? ` | 任务ID: ${toolResult.task_id.slice(0, 12)}...`
-          : "",
-        toolResult?.context_id
-          ? ` | 会话: ${toolResult.context_id.slice(0, 12)}...`
-          : "",
-      ),
+      React.createElement("div", { style: { marginBottom: 8 } }, headerEl),
+      streamBox,
+      resultBox,
+      metaInfo,
     );
   }
 
@@ -1976,6 +2048,245 @@ function buildPlugin() {
     );
   }
 
+  // ── A2A command stream interceptor (control-command path) ──────────────
+  // Detects messages containing the __A2A_STREAM_START__ marker and
+  // replaces them with an SSE-powered streaming display.
+
+  const A2A_STREAM_MARKER = "__A2A_STREAM_START__";
+  // Markdown may transform __TEXT__ into <strong>TEXT</strong>
+  const A2A_STREAM_MARKER_ALT = "A2A_STREAM_START";
+  const processedMsgIds = new Set<string>();
+
+  function containsMarker(text: string | null): boolean {
+    if (!text) return false;
+    return text.includes(A2A_STREAM_MARKER) || text.includes(A2A_STREAM_MARKER_ALT);
+  }
+
+  function extractMsgId(el: Element): string | null {
+    return (
+      el.getAttribute("data-msg-id") ||
+      el.getAttribute("data-message-id") ||
+      el.closest("[data-msg-id]")?.getAttribute("data-msg-id") ||
+      el.closest("[data-message-id]")?.getAttribute("data-message-id") ||
+      null
+    );
+  }
+
+  function findMarkerContainer(node: Element): HTMLElement | null {
+    // Check innerHTML first (handles cases where text is inside React components)
+    if (containsMarker(node.innerHTML)) {
+      return node as HTMLElement;
+    }
+    if (containsMarker(node.textContent)) {
+      return node as HTMLElement;
+    }
+    // Search descendants
+    const walker = document.createTreeWalker(
+      node,
+      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    );
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      const text = n.nodeType === Node.TEXT_NODE
+        ? n.textContent
+        : (n as Element).innerHTML;
+      if (containsMarker(text)) {
+        const parent = n.nodeType === Node.TEXT_NODE
+          ? n.parentElement
+          : (n as Element);
+        if (parent) return parent as HTMLElement;
+      }
+    }
+    return null;
+  }
+
+  async function subscribeSSE(container: HTMLElement) {
+    const QP = (window as any).QwenPaw;
+    if (!QP?.host) {
+      console.warn("[a2a] QwenPaw.host not available");
+      return;
+    }
+    const { getApiUrl, getApiToken } = QP.host;
+    const url = getApiUrl("/a2a/call/stream");
+    const token = getApiToken();
+
+    console.log("[a2a] Subscribing to SSE stream:", url);
+
+    const box = document.createElement("div");
+    box.style.cssText =
+      "background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px;" +
+      "padding:12px 16px;margin:4px 0;font-size:13px;white-space:pre-wrap;" +
+      "word-break:break-word;color:#262626;min-height:24px;";
+    box.textContent = "正在连接远程 Agent...";
+
+    container.textContent = "";
+    container.appendChild(box);
+
+    const controller = new AbortController();
+
+    try {
+      const headers: Record<string, string> = {
+        Accept: "text/event-stream",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        const raw =
+          sessionStorage.getItem("qwenpaw-agent-storage") ||
+          localStorage.getItem("qwenpaw-agent-storage");
+        const agentId = JSON.parse(raw || "{}")?.state?.selectedAgent;
+        if (agentId) headers["X-Agent-Id"] = agentId;
+      } catch {}
+
+      console.log("[a2a] Fetching SSE with headers:", headers);
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      console.log("[a2a] SSE response status:", resp.status);
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "");
+        box.textContent = `SSE 连接失败 (${resp.status}): ${errText.slice(0, 100)}`;
+        box.style.borderColor = "#ff4d4f";
+        box.style.background = "#fff1f0";
+        return;
+      }
+
+      if (!resp.body) {
+        box.textContent = "SSE 连接失败：无响应体";
+        box.style.borderColor = "#ff4d4f";
+        box.style.background = "#fff1f0";
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log("[a2a] SSE stream ended (done)");
+          break;
+        }
+
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            console.log("[a2a] SSE event:", evt);
+            if (evt.done) {
+              if (evt.error) {
+                box.textContent = `错误: ${evt.error}`;
+                box.style.borderColor = "#ff4d4f";
+                box.style.background = "#fff1f0";
+              }
+              console.log("[a2a] SSE done signal received");
+              return;
+            }
+            if (typeof evt.response_text === "string" && evt.response_text) {
+              box.textContent = evt.response_text;
+            }
+          } catch (e) {
+            console.warn("[a2a] SSE parse error:", e, "line:", line);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.error("[a2a] SSE subscription error:", err);
+        box.textContent = `连接出错: ${err?.message || err}`;
+        box.style.borderColor = "#ff4d4f";
+        box.style.background = "#fff1f0";
+      }
+    }
+  }
+
+  function initA2AStreamInterceptor() {
+    console.log("[a2a] Initializing stream interceptor");
+
+    function tryProcessNode(node: Node) {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node as Element;
+
+      const msgId = extractMsgId(el);
+      if (msgId && processedMsgIds.has(msgId)) return;
+
+      const container = findMarkerContainer(el);
+      if (!container) return;
+
+      console.log("[a2a] Marker detected in DOM, msgId:", msgId);
+      if (msgId) processedMsgIds.add(msgId);
+      subscribeSSE(container);
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        // Check added nodes
+        for (const node of mutation.addedNodes) {
+          tryProcessNode(node);
+        }
+        // Also check the target node itself (for attribute/characterData changes)
+        if (mutation.target.nodeType === Node.ELEMENT_NODE) {
+          tryProcessNode(mutation.target);
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      characterDataOldValue: true,
+    });
+
+    // Periodic scan as fallback (handles cases where MutationObserver misses)
+    const scanInterval = setInterval(() => {
+      const allTextNodes = document.evaluate(
+        "//text()[contains(., 'A2A_STREAM_START')]",
+        document.body,
+        null,
+        XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+        null,
+      );
+      for (let i = 0; i < allTextNodes.snapshotLength; i++) {
+        const textNode = allTextNodes.snapshotItem(i) as Text;
+        const parent = textNode.parentElement;
+        if (parent) {
+          const msgId = extractMsgId(parent);
+          if (msgId && processedMsgIds.has(msgId)) continue;
+          console.log("[a2a] Marker found in periodic scan, msgId:", msgId);
+          if (msgId) processedMsgIds.add(msgId);
+          subscribeSSE(parent);
+        }
+      }
+    }, 500);
+
+    // Clean up interval on page unload
+    window.addEventListener("beforeunload", () => clearInterval(scanInterval));
+
+    // Scan existing DOM on init
+    const allTextNodes = document.evaluate(
+      "//text()[contains(., 'A2A_STREAM_START')]",
+      document.body,
+      null,
+      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+      null,
+    );
+    for (let i = 0; i < allTextNodes.snapshotLength; i++) {
+      const textNode = allTextNodes.snapshotItem(i) as Text;
+      const parent = textNode.parentElement;
+      if (parent) {
+        const msgId = extractMsgId(parent);
+        if (msgId) processedMsgIds.add(msgId);
+        console.log("[a2a] Marker found in existing DOM, msgId:", msgId);
+        subscribeSSE(parent);
+      }
+    }
+  }
+
   // ── Register plugin ──────────────────────────────────────────────────
 
   (window as any).QwenPaw.registerToolRender?.("cloudpaw", {
@@ -2001,86 +2312,10 @@ function buildPlugin() {
   // ── Patchable module overrides (QwenPaw ≥ 1.1.4b1) ─────────────────
 
   patchWelcomeAndTheme();
-  patchA2aSlashCommand();
-}
 
-// ── / A2A slash command: fetch intercept for a2a_call routing ────────
+  // ── Activate A2A command stream interceptor ────────────────────────
 
-function patchA2aSlashCommand() {
-  const QP = (window as any).QwenPaw;
-  const { getApiUrl } = QP.host;
-
-  const A2A_HINT_TEMPLATE = (alias: string, userMsg: string) =>
-    `[A2A_DIRECT_CALL] 用户通过 /${alias} 指定了远程 A2A Agent。请立即使用 a2a_call 工具将以下问题原样转发给 agent 别名 "${alias}"，不要自己回答、不要修改内容、不要添加额外解释。用户原始问题如下：\n---\n${userMsg}\n---\n请仅使用 a2a_call(agent_alias="${alias}", message="上述用户原始问题") 来转发，然后将远程 agent 的回复结果返回给用户。`;
-
-  function extractA2aSlash(
-    text: string,
-  ): { alias: string; cleanMsg: string } | null {
-    const match = text.match(/^\/([\w.-]+)\s+(.+)$/s);
-    if (match) return { alias: match[1], cleanMsg: match[2] };
-    return null;
-  }
-
-  function processContent(content: any): any {
-    if (typeof content === "string") {
-      const info = extractA2aSlash(content.trim());
-      if (info && info.cleanMsg) {
-        return A2A_HINT_TEMPLATE(info.alias, info.cleanMsg);
-      }
-      return content;
-    }
-    if (Array.isArray(content)) {
-      return content.map((item: any) => {
-        if (item.type === "text" && typeof item.text === "string") {
-          const info = extractA2aSlash(item.text.trim());
-          if (info && info.cleanMsg) {
-            return {
-              ...item,
-              text: A2A_HINT_TEMPLATE(info.alias, info.cleanMsg),
-            };
-          }
-        }
-        return item;
-      });
-    }
-    return content;
-  }
-
-  const chatUrl = getApiUrl("/console/chat");
-  const originalFetch = window.fetch.bind(window);
-
-  window.fetch = async function (
-    input: any,
-    init?: RequestInit,
-  ): Promise<Response> {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof Request
-        ? input.url
-        : String(input);
-
-    if (url === chatUrl && init?.body) {
-      try {
-        const body = JSON.parse(init.body as string);
-        if (body.input && Array.isArray(body.input)) {
-          body.input = body.input.map((msg: any) => {
-            if (msg.role === "user" && msg.content) {
-              return { ...msg, content: processContent(msg.content) };
-            }
-            return msg;
-          });
-          init = { ...init, body: JSON.stringify(body) };
-        }
-      } catch {}
-    }
-
-    return originalFetch(input, init);
-  };
-
-  console.info(
-    "[cloudpaw] / A2A slash command system-hint injection initialized",
-  );
+  initA2AStreamInterceptor();
 }
 
 // ── First-install default agent selection ────────────────────────────

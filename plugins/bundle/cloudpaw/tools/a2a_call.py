@@ -5,14 +5,14 @@ Supports resolution by alias (reading from per-agent a2a_config.json)
 or by direct URL.  When using alias, auth config is automatically
 applied from the stored registration.
 
-Streaming mode: yields ToolResponse chunks progressively as events
-arrive from the remote A2A agent, enabling real-time frontend updates.
+Streaming display: while the call runs, incremental text is pushed to
+modules.a2a.call_stream so the frontend SSE endpoint can relay it to
+the browser in real time.  The tool itself returns a single final
+ToolResponse (no async-generator), keeping the LLM result path simple.
 """
 
 import json
 import logging
-import time
-from collections.abc import AsyncGenerator
 
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
@@ -20,19 +20,16 @@ from agentscope.tool import ToolResponse
 logger = logging.getLogger(__name__)
 
 
-async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
+async def a2a_call(
     message: str,
     agent_alias: str = "",
     agent_url: str = "",
     context_id: str = "",
-) -> AsyncGenerator[ToolResponse, None]:
-    """向远程 A2A Agent 发送消息并流式获取响应。
+) -> ToolResponse:
+    """向远程 A2A Agent 发送消息并获取响应。
 
     通过 ``agent_alias``（已注册的别名）或 ``agent_url``（URL）指定目标 Agent。
     使用别名时自动应用已注册的认证配置。
-
-    每次收到远程 Agent 的流式事件时，yield 一个累积的 ToolResponse，
-    使前端能够实时显示进度。
 
     Args:
         message:     发送给远程 Agent 的文本消息
@@ -40,13 +37,23 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
         agent_url:   远程 A2A Agent 的基础 URL（alias 为空时使用）
         context_id:  可选，会话上下文 ID（多轮对话时传入上次返回的 contextId）
 
-    Yields:
-        ToolResponse: 渐进式的响应，包含：
-        - response_text: 累积的文本内容
-        - task_state: 当前状态（working/completed/error）
-        - event_count: 已接收的事件数
+    Returns:
+        ToolResponse: 远程 Agent 的响应，包含：
+        - response_text: Agent 回复的文本内容
+        - task_id: 任务 ID（如有）
+        - context_id: 会话上下文 ID（用于多轮对话）
+        - task_state: 任务最终状态
+        - event_count: 收到的事件总数
     """
+    from modules.a2a.call_stream import finish_stream, get_stream, start_stream
     from modules.a2a.client_manager import get_a2a_manager
+
+    # Reuse existing queue if one was pre-created (e.g. by /a2a command
+    # handler) to avoid the race where the SSE endpoint reads from a
+    # stale queue that gets overwritten here.
+    stream_queue = get_stream()
+    if stream_queue is None:
+        stream_queue = start_stream()
 
     manager = get_a2a_manager()
     resolved_url = agent_url
@@ -58,7 +65,8 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
 
         reg = resolve_agent_by_alias(agent_alias)
         if not reg:
-            yield ToolResponse(
+            finish_stream()
+            return ToolResponse(
                 content=[
                     TextBlock(
                         type="text",
@@ -76,9 +84,7 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
                         ),
                     ),
                 ],
-                is_last=True,
             )
-            return
         resolved_url = reg["url"]
         auth_type = reg.get("auth_type", "")
         auth_token = reg.get("auth_token", "")
@@ -94,7 +100,8 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
                     gateway_config=gateway_config,
                 )
             except Exception as e:
-                yield ToolResponse(
+                finish_stream()
+                return ToolResponse(
                     content=[
                         TextBlock(
                             type="text",
@@ -110,12 +117,11 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
                             ),
                         ),
                     ],
-                    is_last=True,
                 )
-                return
 
     if not resolved_url:
-        yield ToolResponse(
+        finish_stream()
+        return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
@@ -128,178 +134,216 @@ async def a2a_call(  # pylint: disable=too-many-branches,too-many-statements
                     ),
                 ),
             ],
-            is_last=True,
         )
-        return
-
-    accumulated_text = ""
-    events_count = 0
-    final_task_id = ""
-    final_context_id = context_id
-    final_state = ""
-    last_yield_time = 0.0
-    MIN_YIELD_INTERVAL = 0.15
-    prev_text = ""
 
     try:
+        events: list[dict] = []
+        accumulated_text = ""
+
+        print(f"[A2A] >>> 开始调用远程 Agent: alias={agent_alias or '(direct)'}, url={resolved_url}", flush=True)
+        print(f"[A2A] >>> 发送消息: {message[:100]}", flush=True)
+
         async for event in manager.send_message(
             agent_url=resolved_url,
             message=message,
             context_id=context_id,
             streaming=True,
         ):
-            events_count += 1
-            event_text = _extract_text_from_event(event)
-            if event_text:
-                accumulated_text += event_text
-
-            # 更新元数据
-            ev_type = event.get("type", "")
-            if ev_type == "task":
-                task_data = event.get("task", {})
-                if "id" in task_data:
-                    final_task_id = task_data["id"]
-                if "contextId" in task_data:
-                    final_context_id = task_data["contextId"]
-                status = task_data.get("status", {})
-                if "state" in status:
-                    final_state = status["state"]
-            elif ev_type == "status_update":
-                su = event.get("statusUpdate", {})
-                if "taskId" in su:
-                    final_task_id = su["taskId"]
-                if "contextId" in su:
-                    final_context_id = su["contextId"]
-                status = su.get("status", {})
-                if "state" in status:
-                    final_state = status["state"]
-
-            # Yield 累积文本（非最终）— 节流：仅在文本有实质增长或间隔足够时 yield
-            now = time.time()
-            text_len_delta = len(accumulated_text) - len(prev_text)
-            should_yield = (
-                text_len_delta >= 20
-                or (
-                    text_len_delta > 0
-                    and now - last_yield_time >= MIN_YIELD_INTERVAL
+            events.append(event)
+            ev_type = event.get("type", "unknown")
+            new_text = _build_incremental_text(events)
+            if new_text != accumulated_text:
+                accumulated_text = new_text
+                print(
+                    f"[A2A] ◉ Event #{len(events)} type={ev_type} | "
+                    f"text_len={len(accumulated_text)} | state=working",
+                    flush=True,
                 )
-                or final_state in ("completed", "failed", "canceled")
-            )
-            if should_yield:
-                logger.debug(
-                    "a2a_call yield #%d: text_len=%d, delta=%d, state=%s",
-                    events_count,
-                    len(accumulated_text),
-                    text_len_delta,
-                    final_state or "working",
+                _push(stream_queue, {
+                    "response_text": accumulated_text,
+                    "task_state": "working",
+                    "event_count": len(events),
+                })
+            else:
+                print(
+                    f"[A2A] ◉ Event #{len(events)} type={ev_type} | no new text",
+                    flush=True,
                 )
-                yield ToolResponse(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text=json.dumps(
-                                {
-                                    "response_text": accumulated_text,
-                                    "task_id": final_task_id,
-                                    "context_id": final_context_id,
-                                    "task_state": final_state or "working",
-                                    "event_count": events_count,
-                                },
-                                ensure_ascii=False,
-                            ),
-                        ),
-                    ],
-                    is_last=False,
-                )
-                last_yield_time = now
-                prev_text = accumulated_text
 
-        logger.info(
-            "a2a_call success: %s (%s), events=%d, state=%s",
-            agent_alias or resolved_url,
-            resolved_url,
-            events_count,
-            final_state,
+        result = _build_result(events, context_id)
+        print(
+            f"[A2A] ✓ 调用完成: events={len(events)}, state={result.get('task_state')}, "
+            f"text_len={len(result.get('response_text', ''))}",
+            flush=True,
         )
+        if result.get("response_text"):
+            print(f"[A2A] 响应预览: {result['response_text'][:100]}", flush=True)
+
+        _push(stream_queue, {**result, "final": True})
 
     except Exception as e:
-        logger.error("a2a_call failed for %s: %s", resolved_url, e)
-        yield ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "response_text": accumulated_text,
-                            "error": str(e),
-                            "task_id": final_task_id,
-                            "context_id": final_context_id,
-                            "task_state": "error",
-                            "event_count": events_count,
-                        },
-                        ensure_ascii=False,
-                    ),
-                ),
-            ],
-            is_last=True,
-        )
-        return
+        import traceback
+        print(f"[A2A] ✗ 调用失败: {resolved_url} — {e}", flush=True)
+        traceback.print_exc()
+        result = {
+            "response_text": "",
+            "error": str(e),
+            "task_id": "",
+            "context_id": context_id,
+            "task_state": "error",
+            "event_count": len(events) if "events" in dir() else 0,
+        }
+        _push(stream_queue, {**result, "final": True})
 
-    # 最终结果
-    logger.debug(
-        "a2a_call FINAL: events=%d, text_len=%d, state=%s",
-        events_count,
-        len(accumulated_text),
-        final_state or "completed",
-    )
-    yield ToolResponse(
+    finally:
+        finish_stream()
+
+    return ToolResponse(
         content=[
             TextBlock(
                 type="text",
-                text=json.dumps(
-                    {
-                        "response_text": accumulated_text,
-                        "task_id": final_task_id,
-                        "context_id": final_context_id,
-                        "task_state": final_state or "completed",
-                        "event_count": events_count,
-                    },
-                    ensure_ascii=False,
-                ),
+                text=json.dumps(result, ensure_ascii=False),
             ),
         ],
-        is_last=True,
     )
 
 
-def _extract_text_from_event(event: dict) -> str:
-    """Extract text content from an A2A event dict."""
+def _push(queue, data: dict) -> None:
+    """Push data to the stream queue (non-blocking)."""
+    try:
+        queue.put_nowait(data)
+    except Exception:
+        pass
+
+
+def _build_incremental_text(events: list[dict]) -> str:
+    """Build cumulative display text from all events so far.
+
+    Prioritises artifact text (the actual answer), falls back to
+    status_update text (progress messages).
+    """
+    artifact_texts: list[str] = []
+    status_texts: list[str] = []
+
+    for ev in events:
+        ev_type = ev.get("type", "")
+
+        if ev_type == "task":
+            task_data = ev.get("task", {})
+            msg = task_data.get("status", {}).get("message", {})
+            text = _extract_text_from_parts(msg.get("parts", []))
+            if text:
+                status_texts.append(text)
+            for artifact in task_data.get("artifacts", []):
+                text = _extract_text_from_parts(artifact.get("parts", []))
+                if text:
+                    artifact_texts.append(text)
+
+        elif ev_type == "status_update":
+            su = ev.get("statusUpdate", {})
+            msg = su.get("status", {}).get("message", {})
+            text = _extract_text_from_parts(msg.get("parts", []))
+            if text:
+                status_texts.append(text)
+
+        elif ev_type == "artifact_update":
+            artifact = ev.get("artifactUpdate", {}).get("artifact", {})
+            text = _extract_text_from_parts(artifact.get("parts", []))
+            if text:
+                artifact_texts.append(text)
+
+        elif ev_type == "message":
+            text = _extract_text_from_parts(
+                ev.get("message", {}).get("parts", []),
+            )
+            if text:
+                artifact_texts.append(text)
+
+    result = "".join(artifact_texts)
+    if not result and status_texts:
+        result = "\n".join(status_texts)
+    return result
+
+
+def _build_result(events: list[dict], initial_context_id: str) -> dict:
+    """Build final result dict from all collected events."""
+    artifact_texts: list[str] = []
+    status_texts: list[str] = []
+    final_task_id = ""
+    final_context_id = initial_context_id
+    final_state = ""
+
+    for ev in events:
+        ev_type = ev.get("type", "")
+
+        if ev_type == "task":
+            task_data = ev.get("task", {})
+            if "id" in task_data:
+                final_task_id = task_data["id"]
+            if "contextId" in task_data:
+                final_context_id = task_data["contextId"]
+            status = task_data.get("status", {})
+            if "state" in status:
+                final_state = status["state"]
+            msg = status.get("message", {})
+            text = _extract_text_from_parts(msg.get("parts", []))
+            if text:
+                status_texts.append(text)
+            for artifact in task_data.get("artifacts", []):
+                text = _extract_text_from_parts(artifact.get("parts", []))
+                if text:
+                    artifact_texts.append(text)
+
+        elif ev_type == "status_update":
+            su = ev.get("statusUpdate", {})
+            if "taskId" in su:
+                final_task_id = su["taskId"]
+            if "contextId" in su:
+                final_context_id = su["contextId"]
+            status = su.get("status", {})
+            if "state" in status:
+                final_state = status["state"]
+            msg = status.get("message", {})
+            text = _extract_text_from_parts(msg.get("parts", []))
+            if text:
+                status_texts.append(text)
+
+        elif ev_type == "artifact_update":
+            au = ev.get("artifactUpdate", {})
+            if "taskId" in au:
+                final_task_id = au["taskId"]
+            if "contextId" in au:
+                final_context_id = au["contextId"]
+            artifact = au.get("artifact", {})
+            text = _extract_text_from_parts(artifact.get("parts", []))
+            if text:
+                artifact_texts.append(text)
+
+        elif ev_type == "message":
+            msg = ev.get("message", {})
+            text = _extract_text_from_parts(msg.get("parts", []))
+            if text:
+                artifact_texts.append(text)
+
+    response_text = "".join(artifact_texts)
+    if not response_text and status_texts:
+        response_text = "\n".join(status_texts)
+    if not response_text and final_state:
+        response_text = f"[任务状态: {final_state}]"
+
+    return {
+        "response_text": response_text,
+        "task_id": final_task_id,
+        "context_id": final_context_id,
+        "task_state": final_state,
+        "event_count": len(events),
+    }
+
+
+def _extract_text_from_parts(parts: list) -> str:
+    """Extract concatenated text from a list of A2A message parts."""
     texts = []
-    ev_type = event.get("type", "")
-
-    def extract_parts(parts: list) -> None:
-        for part in parts or []:
-            if isinstance(part, dict) and "text" in part:
-                texts.append(part["text"])
-
-    if ev_type == "task":
-        task_data = event.get("task", {})
-        status = task_data.get("status", {})
-        msg = status.get("message", {})
-        extract_parts(msg.get("parts", []))
-        for artifact in task_data.get("artifacts", []):
-            extract_parts(artifact.get("parts", []))
-    elif ev_type == "status_update":
-        su = event.get("statusUpdate", {})
-        status = su.get("status", {})
-        msg = status.get("message", {})
-        extract_parts(msg.get("parts", []))
-    elif ev_type == "artifact_update":
-        au = event.get("artifactUpdate", {})
-        artifact = au.get("artifact", {})
-        extract_parts(artifact.get("parts", []))
-    elif ev_type == "message":
-        msg = event.get("message", {})
-        extract_parts(msg.get("parts", []))
-
+    for part in parts or []:
+        if isinstance(part, dict) and "text" in part:
+            texts.append(part["text"])
     return "".join(texts)

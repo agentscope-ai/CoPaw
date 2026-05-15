@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -11,6 +12,8 @@ from qwenpaw.app.runner.control_commands.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+A2A_STREAM_MARKER = "__A2A_STREAM_START__"
 
 _A2A_CONFIG_FILENAME = "a2a_config.json"
 
@@ -38,11 +41,9 @@ class A2AListCommandHandler(BaseControlCommandHandler):
         agents_cfg = _load_a2a_agents(workspace_dir)
         raw_args = context.args.get("_raw_args", "").strip()
 
-        # /a2a <agent_name> <message> — delegate to a2a_call tool
         if raw_args:
             return await self._handle_direct_call(agents_cfg, raw_args)
 
-        # /a2a — list agents
         return await self._handle_list(agents_cfg)
 
     async def _handle_list(self, agents_cfg: dict[str, dict]) -> str:
@@ -90,53 +91,45 @@ class A2AListCommandHandler(BaseControlCommandHandler):
         self, agents_cfg: dict[str, dict], raw_args: str
     ) -> str:
         from .a2a_call import a2a_call
+        from modules.a2a.call_stream import start_stream
 
         parts = raw_args.split(None, 1)
         if len(parts) < 2:
-            return f"用法：`/a2a <agent_name> <message>`\n\n使用 `/a2a` 查看可用的 agent 列表。"
+            return "用法：`/a2a <agent_name> <message>`\n\n使用 `/a2a` 查看可用的 agent 列表。"
 
         agent_name, message = parts[0].strip(), parts[1].strip()
         if not message:
-            return f"用法：`/a2a <agent_name> <message>`\n\n消息内容不能为空。"
+            return "用法：`/a2a <agent_name> <message>`\n\n消息内容不能为空。"
 
         if agent_name not in agents_cfg:
             available = ", ".join(agents_cfg.keys()) if agents_cfg else "无"
             return f"未找到别名为 '{agent_name}' 的已注册 A2A Agent。\n\n可用别名：{available}"
 
-        accumulated_text = ""
-        last_error = ""
+        # Create the stream queue BEFORE returning the marker so the SSE
+        # endpoint can find it immediately when the frontend subscribes.
+        start_stream()
+        logger.info("A2A stream queue created for direct call to %s", agent_name)
+
+        asyncio.create_task(
+            self._run_a2a_call_in_background(a2a_call, message, agent_name)
+        )
+
+        return A2A_STREAM_MARKER
+
+    @staticmethod
+    async def _run_a2a_call_in_background(
+        a2a_call_fn, message: str, agent_name: str
+    ) -> None:
+        """Run the actual A2A call in the background.
+
+        ``a2a_call`` internally manages ``start_stream()`` /
+        ``finish_stream()`` and pushes incremental progress to the
+        queue.  We only swallow the final ToolResponse — the frontend
+        receives all progress via the SSE endpoint.
+        """
         try:
-            async for tool_resp in a2a_call(
-                message=message,
-                agent_alias=agent_name,
-            ):
-                for block in tool_resp.content:
-                    if block.get("type") == "text":
-                        try:
-                            payload = json.loads(block["text"])
-                            accumulated_text = payload.get("response_text", "")
-                            if payload.get("error"):
-                                last_error = payload["error"]
-                            if payload.get("task_state") in (
-                                "completed",
-                                "failed",
-                                "error",
-                                "canceled",
-                            ):
-                                break
-                        except json.JSONDecodeError:
-                            accumulated_text = block["text"]
+            await a2a_call_fn(message=message, agent_alias=agent_name)
         except Exception as e:
-            logger.error("A2A direct call failed for %s: %s", agent_name, e)
-            last_error = str(e)
-
-        if last_error and not accumulated_text:
-            return f"[远程 Agent '{agent_name}' 调用失败] 错误：{last_error}"
-
-        if last_error and accumulated_text:
-            return f"{accumulated_text}\n\n[调用完成，但有错误: {last_error}]"
-
-        if not accumulated_text:
-            return f"[远程 Agent '{agent_name}' 返回空响应]"
-
-        return accumulated_text
+            logger.error(
+                "A2A direct call failed for %s: %s", agent_name, e
+            )

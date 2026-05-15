@@ -285,6 +285,51 @@ async def _ensure_aliyun_cli() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Plugin loader monkeypatch for uninstall cleanup
+# ---------------------------------------------------------------------------
+
+
+def _patch_plugin_loader_unload() -> None:
+    """Monkeypatch PluginLoader.unload_plugin to clean up CloudPaw agents
+    when the plugin is uninstalled.
+    """
+    try:
+        from qwenpaw.plugins.loader import PluginLoader
+    except ImportError:
+        logger.warning(
+            "Cannot import PluginLoader; uninstall patch skipped",
+        )
+        return
+
+    _original_unload_plugin = PluginLoader.unload_plugin
+
+    async def _patched_unload_plugin(
+        self,
+        plugin_id: str,
+        delete_files: bool = False,
+    ) -> None:
+        if plugin_id == "cloudpaw":
+            logger.info(
+                "[CloudPaw] Uninstall detected, cleaning up agents...",
+            )
+            try:
+                from .agents_setup import uninstall_agents
+
+                uninstall_agents()
+                logger.info("[CloudPaw] Agent cleanup completed")
+            except Exception as exc:
+                logger.warning(
+                    "[CloudPaw] Agent cleanup failed: %s",
+                    exc,
+                )
+
+        return await _original_unload_plugin(self, plugin_id, delete_files)
+
+    PluginLoader.unload_plugin = _patched_unload_plugin
+    logger.info("[CloudPaw] Patched PluginLoader.unload_plugin")
+
+
+# ---------------------------------------------------------------------------
 # Plugin class
 # ---------------------------------------------------------------------------
 
@@ -351,6 +396,9 @@ class CloudPawPlugin:
 
         logger.info("[CloudPaw] Checking aliyun CLI availability...")
         await _ensure_aliyun_cli()
+
+        logger.info("[CloudPaw] Patching plugin loader for uninstall cleanup...")
+        _patch_plugin_loader_unload()
 
         logger.info("CloudPaw plugin startup complete")
 
