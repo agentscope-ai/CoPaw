@@ -273,11 +273,12 @@ metadata:
 修改或取消。确认后，Agent 基于会话内容写出 skill 并保存到当前
 workspace，**默认启用**。
 
-如果已存在同名 skill，命令会立即返回错误。换一个 focus 或者先删掉
-旧 skill 再试。
+`<focus>` 会作为 skill 名，内部空格折叠为 `-`（例如
+`view image debug` → `view-image-debug`），其它字符（中文、大小写、
+数字）保留原样。
 
-完整语法与说明见命令参考中的
-[`/make-skill`](./commands#skill-创建命令-beta) 章节。
+`/make-skill` 本身是一个内建 skill，调用前请先在 `/skills` 中确认
+它已启用。
 
 ---
 

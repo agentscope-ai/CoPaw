@@ -296,11 +296,12 @@ outline. Approve, refine, or cancel in natural language. After approval
 the agent writes the skill based on the conversation and saves it to
 your workspace, **enabled by default**.
 
-If a skill with that name already exists, you get an immediate error.
-Pick a different focus, or delete the old skill first.
+`<focus>` becomes the skill name; internal spaces collapse to `-`
+(e.g. `view image debug` → `view-image-debug`). Other characters
+(Chinese, case, digits) are kept as-is.
 
-For full syntax and tips, see
-[`/make-skill`](./commands#skill-creation-command-beta).
+`/make-skill` is itself a built-in skill — make sure it's enabled in
+your workspace via `/skills` before invoking.
 
 ---
 

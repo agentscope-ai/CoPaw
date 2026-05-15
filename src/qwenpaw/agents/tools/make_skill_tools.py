@@ -10,12 +10,12 @@ from agentscope.tool import ToolResponse
 from ...config.context import get_current_workspace_dir
 from ...exceptions import SkillsError
 from ...security.skill_scanner import SkillScanError
-from ..skill_system.make_skill.service import (
-    materialize_workspace_skill,
-    name_conflict,
+from ..skill_system.store import (
+    normalize_skill_dir_name,
     render_skill_md,
+    workspace_skill_name_conflict,
 )
-from ..skill_system.store import normalize_skill_dir_name
+from ..skill_system.workspace_service import SkillService
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ async def materialize_skill(
             "try again.",
         )
 
-    conflict = name_conflict(workspace_dir, normalized_name)
+    conflict = workspace_skill_name_conflict(workspace_dir, normalized_name)
     if conflict:
         conflict_name, suggested = conflict
         return _tool_text_response(
@@ -93,11 +93,18 @@ async def materialize_skill(
     )
 
     try:
-        skill_name = materialize_workspace_skill(
-            workspace_dir,
-            proposed_name=normalized_name,
-            skill_md=content,
+        service = SkillService(workspace_dir)
+        skill_name = service.create_skill(
+            name=normalized_name,
+            content=content,
+            enable=True,
+            source="agent",
         )
+        if not skill_name:
+            raise RuntimeError(
+                f"Skill '{normalized_name}' was created concurrently. "
+                "Try a different focus.",
+            )
     except Exception as e:  # pylint: disable=broad-except
         if isinstance(e, SkillsError):
             text = (
