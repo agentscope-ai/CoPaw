@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/agentscope-ai/CloudPaw/main/docs/cloudpaw.png" alt="CloudPaw" width="360" />
+  <img src="https://raw.githubusercontent.com/agentscope-ai/QwenPaw/main/plugins/bundle/cloudpaw/docs/cloudpaw.png" alt="CloudPaw" width="360" />
 </p>
 
 <p align="center">
-  <strong>AI-Powered Alibaba Cloud Assistant Plugin for QwenPaw</strong>
+  <strong>Cloud Capability Enhancement Plugin for QwenPaw</strong>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 
 ---
 
-CloudPaw is an Alibaba Cloud AI assistant plugin for QwenPaw, combining **QwenPaw + Aliyun CLI** with deep **ROS (Resource Orchestration Service)** integration. It's not just a chatbot — it's an intelligent assistant with a cloud-native execution engine.
+CloudPaw is a cloud capability enhancement plugin for QwenPaw, combining **QwenPaw + Aliyun CLI** with deep **IaC** integration. It's not just a chatbot — it's an intelligent assistant with a cloud-native execution engine.
 
 Simply describe your needs in natural language, and CloudPaw will automate the entire process from resource creation to application deployment. For example:
 
@@ -47,8 +47,8 @@ CloudPaw is pre-bundled with QwenPaw v1.1.7+ at `plugins/bundle/cloudpaw/`.
 **Via Console (recommended):**
 
 1. Launch QwenPaw (`qwenpaw app`), open http://127.0.0.1:8088/
-2. Click **"Plugin Manager"** in the left sidebar (under Settings) → **"Install Plugin"**
-3. Enter the path to the `cloudpaw/` folder, or drag it into the dialog
+2. Click "Plugin Manager" in the left sidebar (under Settings), then click "Install Plugin"
+3. Drag the `cloudpaw/` folder into the install dialog, or select a ZIP file
 4. Wait for installation to complete
 
 **Via CLI:**
@@ -65,11 +65,11 @@ After installing CloudPaw, complete these configurations:
 
 #### ① QwenPaw Model
 
-Configure an LLM provider and API Key in console **Settings → Models**. See [QwenPaw Models docs](https://qwenpaw.agentscope.io/docs/models).
+Configure an LLM provider and API Key in console Settings → Models. See [QwenPaw Models docs](https://qwenpaw.agentscope.io/docs/models).
 
 #### ② Alibaba Cloud Credentials
 
-Configure in console **"Environment Variables"** (CloudPaw auto-creates placeholder entries):
+Configure in console "Environment Variables" (CloudPaw auto-creates placeholder entries):
 
 - `ALIBABA_CLOUD_ACCESS_KEY_ID` — your Access Key ID
 - `ALIBABA_CLOUD_ACCESS_KEY_SECRET` — your Access Key Secret
@@ -77,13 +77,13 @@ Configure in console **"Environment Variables"** (CloudPaw auto-creates placehol
 
 You can also configure via system environment variables or CLI. For instructions on obtaining Access Keys, refer to the [Alibaba Cloud documentation](https://help.aliyun.com/document_detail/116401.html). We recommend using a primary account Access Key with full permissions.
 
-#### ③ iac-code Model
+#### ③ iac-code Model Configuration
 
-CloudPaw relies on [iac-code](https://github.com/aliyun/iac-code) for IaC template generation. Run `iac-code` in your terminal for first-time guided setup, or manually edit `~/.iac-code/settings.yml`.
+CloudPaw relies on [iac-code](https://github.com/aliyun/iac-code) for IaC template generation. For model configuration, see the [iac-code documentation](https://aliyun.github.io/iac-code/docs/configuration/llm-providers).
 
 ### 3. Start Using
 
-Select **"CloudPaw-Master"** from the agent dropdown in the chat page to start.
+Select "CloudPaw-Master" from the agent dropdown in the chat page to start.
 
 > **⚠️ Risk Warning: Please Read Before Use**
 >
@@ -94,7 +94,7 @@ Select **"CloudPaw-Master"** from the agent dropdown in the chat page to start.
 
 ## Architecture
 
-CloudPaw integrates via the QwenPaw native plugin system without modifying QwenPaw's core code.
+CloudPaw integrates via the QwenPaw native plugin system.
 
 ```
 QwenPaw/
@@ -114,7 +114,7 @@ QwenPaw/
 
 ## Features
 
-- **ROS Deployment Orchestration**: Automate Alibaba Cloud resource deployment via [iac-code](https://github.com/aliyun/iac-code) engine for ROS/Terraform template generation
+- **IaC Deployment Orchestration**: Automate Alibaba Cloud resource deployment via [iac-code](https://github.com/aliyun/iac-code) engine for ROS/Terraform template generation
 - **Resource Proposal Selection**: Interactive multi-proposal comparison and selection with dedicated frontend rendering (`proposal_choice` tool)
 - **PRD Management Frontend Enhancement**: Custom frontend rendering for QwenPaw Mission Mode's PRD management (`manage_prd` tool)
 - **Multi-Agent Collaboration**: Orchestrate multiple agents for complex deployment tasks via QwenPaw Mission Mode
@@ -140,3 +140,7 @@ CloudPaw implements multi-agent collaboration via QwenPaw's **Mission Mode**. Us
 **Quickly publish an API service to the cloud**
 
 > Help me quickly deploy an API service to the cloud. I want it to provide /health and /hello endpoints by default, and give me a callable URL with example requests. Keep the configuration as simple and clean as possible.
+
+## Acknowledgements
+
+- [iac-code](https://github.com/aliyun/iac-code) — AI-powered Infrastructure as Code assistant for Alibaba Cloud
