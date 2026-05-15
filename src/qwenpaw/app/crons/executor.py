@@ -91,15 +91,16 @@ class CronExecutor:
 
         # Determine session_id based on share_session
         share_session = job.runtime.share_session
+        run_id = str(uuid.uuid4())
         if share_session:
             req["session_id"] = target_session_id or f"cron:{job.id}"
         else:
             req["session_id"] = (
-                f"{target_session_id}:cron:{job.id}"
+                f"{target_session_id}:cron:{run_id}"
                 if target_session_id
-                else f"cron:{job.id}"
+                else f"cron:{run_id}"
             )
-        run_id = str(uuid.uuid4())
+
         delivery_error: str | None = None
         baseline_messages = await read_session_messages(
             runner=self._runner,
