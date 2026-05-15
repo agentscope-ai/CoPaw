@@ -259,8 +259,9 @@ class TaskTracker:
             state = self._runs.get(run_key)
             if state is not None and not state.task.done():
                 q: asyncio.Queue = asyncio.Queue()
-                for sse in state.buffer:
-                    q.put_nowait(sse)
+                # Same-turn duplicate submissions should only receive live
+                # events. Explicit reconnects use attach(), which replays the
+                # buffered events before subscribing.
                 state.queues.append(q)
                 return q, False
 
