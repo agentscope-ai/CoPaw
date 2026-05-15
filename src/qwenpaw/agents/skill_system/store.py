@@ -48,26 +48,9 @@ _MAX_ZIP_BYTES = 200 * 1024 * 1024
 _REQUIREMENTS_METADATA_NAMESPACES = ("openclaw", "qwenpaw", "clawdbot")
 
 
-def _read_frontmatter_safe_from_path(
-    skill_md_path: Path,
-    skill_name: str = "",
-) -> dict[str, Any]:
-    if not skill_name:
-        skill_name = skill_md_path.parent.name
-
-    try:
-        return frontmatter.loads(
-            read_text_file_with_encoding_fallback(skill_md_path),
-        )
-    except Exception as e:
-        logger.warning(
-            "Failed to read SKILL frontmatter for '%s' at %s: %s. "
-            "Using fallback values.",
-            skill_name,
-            skill_md_path,
-            e,
-        )
-        return {"name": skill_name, "description": ""}
+# ---------------------------------------------------------------------------
+# Path getters
+# ---------------------------------------------------------------------------
 
 
 def get_skill_pool_dir() -> Path:
@@ -117,7 +100,63 @@ def get_pool_skill_manifest_path() -> Path:
     return get_skill_pool_dir() / "skill.json"
 
 
-def _get_skill_mtime(skill_dir: Path) -> str:
+# ---------------------------------------------------------------------------
+# Frontmatter + directory introspection
+# ---------------------------------------------------------------------------
+
+
+def read_frontmatter_safe_from_path(
+    skill_md_path: Path,
+    skill_name: str = "",
+) -> dict[str, Any]:
+    """Read SKILL.md frontmatter by path with a graceful fallback."""
+    if not skill_name:
+        skill_name = skill_md_path.parent.name
+
+    try:
+        return frontmatter.loads(
+            read_text_file_with_encoding_fallback(skill_md_path),
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to read SKILL frontmatter for '%s' at %s: %s. "
+            "Using fallback values.",
+            skill_name,
+            skill_md_path,
+            e,
+        )
+        return {"name": skill_name, "description": ""}
+
+
+def _read_frontmatter(skill_dir: Path) -> Any:
+    """Read and parse SKILL.md frontmatter from a skill directory."""
+    return frontmatter.loads(
+        read_text_file_with_encoding_fallback(skill_dir / "SKILL.md"),
+    )
+
+
+def _read_frontmatter_safe(
+    skill_dir: Path,
+    skill_name: str = "",
+) -> dict[str, Any]:
+    """Read SKILL.md frontmatter with a fallback on any read/parse error."""
+    if not skill_name:
+        skill_name = skill_dir.name
+
+    try:
+        return _read_frontmatter(skill_dir)
+    except Exception as e:
+        logger.warning(
+            "Failed to read SKILL.md frontmatter for '%s' at %s: %s. "
+            "Using fallback values.",
+            skill_name,
+            skill_dir,
+            e,
+        )
+        return {"name": skill_name, "description": ""}
+
+
+def get_skill_mtime(skill_dir: Path) -> str:
     """Return the latest mtime across the skill directory as ISO string.
 
     Scans SKILL.md and the directory itself.  Returns an empty string
@@ -152,49 +191,7 @@ def _directory_tree(directory: Path) -> dict[str, Any]:
     return tree
 
 
-def _read_frontmatter(skill_dir: Path) -> Any:
-    """Read and parse SKILL.md frontmatter.
-
-    Args:
-        skill_dir: Path to skill directory containing SKILL.md
-
-    Returns:
-        Parsed frontmatter as dict-like object
-    """
-    return frontmatter.loads(
-        read_text_file_with_encoding_fallback(skill_dir / "SKILL.md"),
-    )
-
-
-def _read_frontmatter_safe(
-    skill_dir: Path,
-    skill_name: str = "",
-) -> dict[str, Any]:
-    """Safely read SKILL.md frontmatter with fallback on errors.
-
-    Args:
-        skill_dir: Path to skill directory containing SKILL.md
-        skill_name: Optional skill name for logging (defaults to dir name)
-
-    Returns:
-        Parsed frontmatter dict, or fallback dict with name/description
-        on any error (file not found, YAML syntax error, etc.)
-    """
-    if not skill_name:
-        skill_name = skill_dir.name
-
-    try:
-        return _read_frontmatter(skill_dir)
-    except Exception as e:
-        logger.warning(
-            f"Failed to read SKILL.md frontmatter for '{skill_name}' "
-            f"at {skill_dir}: {e}. Using fallback values.",
-        )
-        # Return minimal valid frontmatter
-        return {"name": skill_name, "description": ""}
-
-
-def _extract_version(post: Any) -> str:
+def extract_version(post: Any) -> str:
     metadata = post.get("metadata") or {}
     for value in (
         post.get("version"),
@@ -206,6 +203,11 @@ def _extract_version(post: Any) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Skill directory copy
+# ---------------------------------------------------------------------------
+
+
 _IGNORED_SKILL_ARTIFACTS = {
     "__pycache__",
     "__MACOSX",
@@ -215,7 +217,7 @@ _IGNORED_SKILL_ARTIFACTS = {
 }
 
 
-def _copy_skill_dir(source: Path, target: Path) -> None:
+def copy_skill_dir(source: Path, target: Path) -> None:
     """Replace *target* with a copy of *source*.
 
     We intentionally filter only well-known OS/cache artifacts so skill
@@ -233,6 +235,11 @@ def _copy_skill_dir(source: Path, target: Path) -> None:
         target,
         ignore=_ignore,
     )
+
+
+# ---------------------------------------------------------------------------
+# Cross-process JSON locking + atomic I/O
+# ---------------------------------------------------------------------------
 
 
 def _lock_path_for(json_path: Path) -> Path:
@@ -269,12 +276,12 @@ def _read_json_unlocked(path: Path, default: dict[str, Any]) -> dict[str, Any]:
         return json.loads(json.dumps(default))
 
 
-def _read_json(path: Path, default: dict[str, Any]) -> dict[str, Any]:
+def read_json(path: Path, default: dict[str, Any]) -> dict[str, Any]:
     with _file_write_lock(_lock_path_for(path)):
         return _read_json_unlocked(path, default)
 
 
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     temp_path: Path | None = None
     payload = dict(payload)
     payload["version"] = max(
@@ -299,7 +306,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
             temp_path.unlink(missing_ok=True)
 
 
-def _mutate_json(
+def mutate_json(
     path: Path,
     default: dict[str, Any],
     mutator: Callable[[dict[str, Any]], _RegistryResult],
@@ -308,11 +315,16 @@ def _mutate_json(
         payload = _read_json_unlocked(path, default)
         result = mutator(payload)
         if result is not False:
-            _write_json_atomic(path, payload)
+            write_json_atomic(path, payload)
         return result
 
 
-def _default_workspace_manifest() -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Manifest defaults + entry normalization
+# ---------------------------------------------------------------------------
+
+
+def default_workspace_manifest() -> dict[str, Any]:
     return {
         "schema_version": "workspace-skill-manifest.v1",
         "version": 0,
@@ -320,7 +332,7 @@ def _default_workspace_manifest() -> dict[str, Any]:
     }
 
 
-def _default_pool_manifest() -> dict[str, Any]:
+def default_pool_manifest() -> dict[str, Any]:
     return {
         "schema_version": "skill-pool-manifest.v1",
         "version": 0,
@@ -329,7 +341,7 @@ def _default_pool_manifest() -> dict[str, Any]:
     }
 
 
-def _normalize_skill_manifest_entry(entry: Any) -> dict[str, Any]:
+def normalize_skill_manifest_entry(entry: Any) -> dict[str, Any]:
     """Return a manifest entry as a dict, or an empty dict for legacy junk."""
     return entry if isinstance(entry, dict) else {}
 
@@ -339,16 +351,16 @@ def _is_builtin_skill(skill_name: str, builtin_names: list[str]) -> bool:
     return skill_name in builtin_names
 
 
-def _is_pool_builtin_entry(entry: dict[str, Any] | None) -> bool:
+def is_pool_builtin_entry(entry: dict[str, Any] | None) -> bool:
     """Return whether one pool manifest entry represents a builtin slot."""
-    normalized = _normalize_skill_manifest_entry(entry)
+    normalized = normalize_skill_manifest_entry(entry)
     return (
         bool(normalized)
         and str(normalized.get("source", "") or "") == "builtin"
     )
 
 
-def _classify_pool_skill_source(
+def classify_pool_skill_source(
     skill_name: str,
     skill_dir: Path,
     existing: dict[str, Any],
@@ -360,7 +372,7 @@ def _classify_pool_skill_source(
     already exists. This lets an outdated builtin remain a builtin slot,
     while same-name customized copies stay customized.
     """
-    if existing and _is_pool_builtin_entry(existing):
+    if existing and is_pool_builtin_entry(existing):
         return "builtin", False
 
     if not _is_builtin_skill(skill_name, builtin_names):
@@ -369,12 +381,17 @@ def _classify_pool_skill_source(
     if existing:
         return "customized", False
 
-    pool_version = _extract_version(
+    pool_version = extract_version(
         _read_frontmatter_safe(skill_dir, skill_name),
     )
     if pool_version:
         return "builtin", False
     return "customized", False
+
+
+# ---------------------------------------------------------------------------
+# Zip handling + path-safety helpers
+# ---------------------------------------------------------------------------
 
 
 def _is_hidden(name: str) -> bool:
@@ -425,7 +442,7 @@ def _safe_child_path(base_dir: Path, relative_name: str) -> Path:
     return path
 
 
-def _normalize_skill_dir_name(name: str) -> str:
+def normalize_skill_dir_name(name: str) -> str:
     """Normalize and validate a skill directory name."""
     normalized = str(name or "").strip()
     if not normalized:
@@ -441,6 +458,23 @@ def _normalize_skill_dir_name(name: str) -> str:
     return normalized
 
 
+def safe_skill_dir(base_dir: Path, name: str) -> Path:
+    """Normalize a skill name and resolve it inside ``base_dir``.
+
+    Layered defense: ``normalize_skill_dir_name`` already rejects empty,
+    NUL, ``.``, ``..``, ``/`` and ``\\``; the resolve + ``is_relative_to``
+    check guards against future relaxations and platform-specific quirks.
+    """
+    normalized = normalize_skill_dir_name(name)
+    candidate = (base_dir / normalized).resolve()
+    base_resolved = base_dir.resolve()
+    if not candidate.is_relative_to(base_resolved):
+        raise SkillsError(
+            message=f"Unsafe skill path outside root: {name}",
+        )
+    return candidate
+
+
 def _create_files_from_tree(base_dir: Path, tree: dict[str, Any]) -> None:
     for name, value in (tree or {}).items():
         path = _safe_child_path(base_dir, name)
@@ -454,6 +488,11 @@ def _create_files_from_tree(base_dir: Path, tree: dict[str, Any]) -> None:
             raise SkillsError(
                 message=f"Invalid tree value for {name}: {type(value)}",
             )
+
+
+# ---------------------------------------------------------------------------
+# Skill metadata building
+# ---------------------------------------------------------------------------
 
 
 def _resolve_skill_name(skill_dir: Path) -> str:
@@ -513,7 +552,7 @@ def _extract_requirements(post: dict[str, Any]) -> SkillRequirements:
         return SkillRequirements()
 
 
-def _build_skill_metadata(
+def build_skill_metadata(
     skill_name: str,
     skill_dir: Path,
     *,
@@ -531,13 +570,18 @@ def _build_skill_metadata(
     return {
         "name": skill_name,
         "description": str(post.get("description", "") or ""),
-        "version_text": _extract_version(post),
+        "version_text": extract_version(post),
         "commit_text": "",
         "source": source,
         "protected": protected,
         "requirements": requirements.model_dump(),
-        "updated_at": _get_skill_mtime(skill_dir),
+        "updated_at": get_skill_mtime(skill_dir),
     }
+
+
+# ---------------------------------------------------------------------------
+# Conflict-name suggestion
+# ---------------------------------------------------------------------------
 
 
 _TIMESTAMP_SUFFIX_RE = re.compile(r"(-\d{14})+$")
@@ -566,7 +610,7 @@ def suggest_conflict_name(
     return f"{base}-{suffix}"
 
 
-def _build_import_conflict(
+def build_import_conflict(
     skill_name: str,
     existing_names: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -578,6 +622,11 @@ def _build_import_conflict(
             existing_names,
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Manifest readers
+# ---------------------------------------------------------------------------
 
 
 @lru_cache(maxsize=256)
@@ -612,13 +661,18 @@ def read_skill_manifest(
 ) -> dict[str, Any]:
     """Return the workspace skill manifest, cached by file mtime."""
     path = get_workspace_skill_manifest_path(workspace_dir)
-    return _read_json_mtime_cached(path, _default_workspace_manifest())
+    return _read_json_mtime_cached(path, default_workspace_manifest())
 
 
 def read_skill_pool_manifest() -> dict[str, Any]:
     """Return the pool skill manifest, cached by file mtime."""
     path = get_pool_skill_manifest_path()
-    return _read_json_mtime_cached(path, _default_pool_manifest())
+    return _read_json_mtime_cached(path, default_pool_manifest())
+
+
+# ---------------------------------------------------------------------------
+# Skill content reading, validation, and import
+# ---------------------------------------------------------------------------
 
 
 def _extract_emoji_from_metadata(metadata: Any) -> str:
@@ -631,7 +685,7 @@ def _extract_emoji_from_metadata(metadata: Any) -> str:
     return ""
 
 
-def _read_skill_from_dir(skill_dir: Path, source: str) -> SkillInfo | None:
+def read_skill_from_dir(skill_dir: Path, source: str) -> SkillInfo | None:
     if not skill_dir.is_dir():
         return None
 
@@ -665,7 +719,7 @@ def _read_skill_from_dir(skill_dir: Path, source: str) -> SkillInfo | None:
         return SkillInfo(
             name=skill_dir.name,
             description=description,
-            version_text=_extract_version(post),
+            version_text=extract_version(post),
             content=content,
             source=source,
             references=references,
@@ -677,7 +731,7 @@ def _read_skill_from_dir(skill_dir: Path, source: str) -> SkillInfo | None:
         return None
 
 
-def _validate_skill_content(content: str) -> tuple[str, str]:
+def validate_skill_content(content: str) -> tuple[str, str]:
     post = frontmatter.loads(content)
     skill_name = str(post.get("name") or "").strip()
     skill_description = str(post.get("description") or "").strip()
@@ -691,7 +745,7 @@ def _validate_skill_content(content: str) -> tuple[str, str]:
     return skill_name, skill_description
 
 
-def _import_skill_dir(
+def import_skill_dir(
     src_dir: Path,
     target_root: Path,
     skill_name: str,
@@ -712,11 +766,11 @@ def _import_skill_dir(
     target_dir = target_root / skill_name
     if target_dir.exists():
         return False
-    _copy_skill_dir(src_dir, target_dir)
+    copy_skill_dir(src_dir, target_dir)
     return True
 
 
-def _write_skill_to_dir(
+def write_skill_to_dir(
     skill_dir: Path,
     content: str,
     references: dict[str, Any] | None = None,
@@ -737,7 +791,7 @@ def _write_skill_to_dir(
         _create_files_from_tree(script_dir, scripts)
 
 
-def _extract_zip_skills(data: bytes) -> tuple[Path, list[tuple[Path, str]]]:
+def extract_zip_skills(data: bytes) -> tuple[Path, list[tuple[Path, str]]]:
     """Extract and validate a skill zip.
 
     Returns ``(tmp_dir, found_skills)``.
@@ -780,12 +834,12 @@ def _extract_zip_skills(data: bytes) -> tuple[Path, list[tuple[Path, str]]]:
     return tmp_dir, found
 
 
-def _scan_skill_dir_or_raise(skill_dir: Path, skill_name: str) -> None:
+def scan_skill_dir_or_raise(skill_dir: Path, skill_name: str) -> None:
     scan_skill_directory(skill_dir, skill_name=skill_name)
 
 
 @contextmanager
-def _staged_skill_dir(skill_name: str) -> Iterator[Path]:
+def staged_skill_dir(skill_name: str) -> Iterator[Path]:
     """Create a temporary skill directory used for staged writes."""
     temp_root = Path(
         tempfile.mkdtemp(prefix=f"qwenpaw_skill_stage_{skill_name}_"),

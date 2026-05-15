@@ -11,6 +11,7 @@ import { useAppMessage } from "../../../../hooks/useAppMessage";
 import { Alert, ConfigProvider } from "antd";
 import { LinkOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 import type { FormInstance } from "antd";
 import { getChannelLabel, type ChannelKey } from "./constants";
 import { QrcodeAuthBlock } from "./QrcodeAuthBlock";
@@ -118,6 +119,18 @@ export function ChannelDrawer({
   const currentLang = i18n.language?.startsWith("zh") ? "zh" : "en";
   const label = activeKey ? getChannelLabel(activeKey, t) : activeLabel;
   const { message } = useAppMessage();
+  const matrixAuthMethod = Form.useWatch("auth_method", form);
+  const isMatrixPasswordAuth = matrixAuthMethod === "password";
+
+  // Parent calls form.setFieldsValue() before the Form mounts, which wins over
+  // initialValues. Re-apply auth_method after open so the dropdown is correct.
+  useEffect(() => {
+    if (!open || activeKey !== "matrix") return;
+    const pw = initialValues?.password;
+    if (typeof pw === "string" && pw.trim().length > 0) {
+      form.setFieldsValue({ auth_method: "password" });
+    }
+  }, [open, activeKey, initialValues, form]);
 
   // ── Access control fields (shared across multiple channels) ──────────────
 
@@ -189,16 +202,64 @@ export function ChannelDrawer({
             <Form.Item
               name="user_id"
               label="User ID"
-              rules={[{ required: true }]}
+              tooltip="Accepts a full MXID (e.g. @bot:matrix.org) or just the localpart (e.g. bot)."
+              rules={[{ required: true, message: "Please enter User ID" }]}
             >
               <Input placeholder="@bot:matrix.org" />
             </Form.Item>
             <Form.Item
+              name="auth_method"
+              label="Auth Method"
+              initialValue="token"
+            >
+              <Select
+                options={[
+                  { value: "token", label: "Token" },
+                  { value: "password", label: "Password" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
               name="access_token"
               label="Access Token"
-              rules={[{ required: true }]}
+              rules={[
+                {
+                  required: !isMatrixPasswordAuth,
+                  message: "Please enter access token",
+                },
+              ]}
+              hidden={isMatrixPasswordAuth}
             >
               <Input.Password placeholder="syt_..." />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[
+                {
+                  required: isMatrixPasswordAuth,
+                  message: "Please enter password",
+                },
+              ]}
+              hidden={!isMatrixPasswordAuth}
+            >
+              <Input.Password placeholder="Account password for login" />
+            </Form.Item>
+            <Form.Item
+              name="encryption"
+              label="Enable End-to-End Encryption"
+              tooltip="After enabling, you must verify the device in a Matrix client (e.g. Element). E2EE requires manually installing matrix-nio[e2e] (pip install matrix-nio[e2e])."
+              valuePropName="checked"
+              hidden={!isMatrixPasswordAuth}
+            >
+              <Switch />
+            </Form.Item>
+            <Form.Item
+              name="device_name"
+              label="Device Name"
+              tooltip="A stable device identity for the Matrix client. Defaults to 'qwenpaw-worker' if left empty."
+            >
+              <Input placeholder="qwenpaw-worker" />
             </Form.Item>
           </>
         );
@@ -1240,7 +1301,18 @@ export function ChannelDrawer({
           form={form}
           layout="vertical"
           initialValues={initialValues}
-          onFinish={onSubmit}
+          onFinish={(values: Record<string, unknown>) => {
+            if (activeKey !== "matrix") {
+              onSubmit(values);
+              return;
+            }
+            const { auth_method, ...rest } = values;
+            if (auth_method === "password") {
+              onSubmit({ ...rest, access_token: "" });
+            } else {
+              onSubmit({ ...rest, password: "", encryption: false });
+            }
+          }}
         >
           <Form.Item
             name="enabled"
@@ -1277,11 +1349,18 @@ export function ChannelDrawer({
             </>
           )}
 
-          {activeKey === "wecom" && (
+          {(activeKey === "wecom" ||
+            activeKey === "telegram" ||
+            activeKey === "dingtalk") && (
             <Form.Item
               name="streaming_enabled"
               label={t("channels.streamingEnabled")}
               valuePropName="checked"
+              tooltip={
+                activeKey === "dingtalk"
+                  ? t("channels.streamingEnabledDingtalkHint")
+                  : undefined
+              }
             >
               <Switch />
             </Form.Item>

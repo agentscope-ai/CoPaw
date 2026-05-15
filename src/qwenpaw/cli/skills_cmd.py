@@ -17,7 +17,7 @@ from ..agents.skill_system import (
     reconcile_workspace_manifest,
 )
 from ..agents.skill_system.registry import list_workspaces
-from ..agents.skill_system.store import _validate_skill_content
+from ..agents.skill_system.store import validate_skill_content
 from ..agents.skill_system.hub import (
     import_pool_skill_from_hub,
     install_skill_from_hub,
@@ -115,7 +115,7 @@ def _validate_skill_frontmatter(skill_dir: Path) -> None:
 
     content = read_text_file_with_encoding_fallback(skill_md)
     try:
-        _validate_skill_content(content)
+        validate_skill_content(content)
     except SkillsError as exc:
         raise click.ClickException(str(exc))
     except Exception as exc:

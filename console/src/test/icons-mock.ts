@@ -24,6 +24,8 @@ export const SparkMarkLine = makeIcon("SparkMarkLine");
 export const SparkMarkFill = makeIcon("SparkMarkFill");
 export const SparkSearchLine = makeIcon("SparkSearchLine");
 export const SparkPlusLine = makeIcon("SparkPlusLine");
+export const SparkLockLine = makeIcon("SparkLockLine");
+export const SparkLockFill = makeIcon("SparkLockFill");
 // Language switcher icons
 export const SparkChinese02Line = makeIcon("SparkChinese02Line");
 export const SparkEnglish02Line = makeIcon("SparkEnglish02Line");

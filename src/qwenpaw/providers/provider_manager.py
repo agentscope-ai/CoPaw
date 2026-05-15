@@ -874,7 +874,7 @@ PROVIDER_ANTHROPIC = AnthropicProvider(
     api_key_prefix="sk-ant-",
     models=ANTHROPIC_MODELS,
     chat_model="AnthropicChatModel",
-    freeze_url=True,
+    freeze_url=False,
 )
 
 PROVIDER_GEMINI = GeminiProvider(
@@ -1763,6 +1763,10 @@ class ProviderManager:  # pylint: disable=too-many-public-methods
                 if not builtin.freeze_url:
                     builtin.base_url = provider.base_url
                 builtin.api_key = provider.api_key
+                if provider.auth_mode != "api_key":
+                    builtin.auth_mode = provider.auth_mode
+                if provider.custom_headers:
+                    builtin.custom_headers = provider.custom_headers
                 builtin_model_ids = {m.id for m in builtin.models}
                 builtin.extra_models = [
                     m

@@ -544,6 +544,13 @@ class AgentRunner(Runner):
                         nb,
                         plan,
                     ):
+                        if getattr(nb, "_loading_from_state", False):
+                            nb._qp_had_plan = plan is not None
+                            nb._qp_prev_plan_id = (
+                                plan.id if plan is not None else None
+                            )
+                            return
+
                         had_plan = getattr(nb, "_qp_had_plan", False)
                         prev_id = getattr(nb, "_qp_prev_plan_id", None)
 
@@ -555,6 +562,7 @@ class AgentRunner(Runner):
                         else:
                             if had_plan:
                                 nb._plan_recently_finished = True
+                                nb._plan_awaiting_user_confirm = False
                             nb._qp_prev_plan_id = None
                         nb._qp_had_plan = plan is not None
 
@@ -676,6 +684,12 @@ class AgentRunner(Runner):
                         exc_info=True,
                     )
 
+            if plan_notebook is not None:
+                setattr(
+                    plan_notebook,
+                    "_loading_from_state",
+                    True,  # pylint: disable=protected-access
+                )
             try:
                 await self.session.load_session_state(
                     session_id=session_id,
@@ -689,7 +703,19 @@ class AgentRunner(Runner):
                     "will save fresh state on completion to recover file",
                     e,
                 )
+            finally:
+                if plan_notebook is not None:
+                    setattr(
+                        plan_notebook,
+                        "_loading_from_state",
+                        False,  # pylint: disable=protected-access
+                    )
             session_state_loaded = True
+
+            if plan_notebook is not None:
+                from ...plan.hints import clear_plan_awaiting_user_confirm
+
+                clear_plan_awaiting_user_confirm(plan_notebook)
 
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved

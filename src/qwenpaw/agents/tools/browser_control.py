@@ -11,6 +11,7 @@ wait_for, pdf, close. Uses refs from snapshot for ref-based actions.
 
 import asyncio
 import atexit
+from collections.abc import Iterable
 from concurrent import futures
 import json
 import logging
@@ -42,6 +43,7 @@ from .browser_snapshot import build_role_snapshot_from_aria
 logger = logging.getLogger(__name__)
 
 _MAX_DIRECT_URL_DOWNLOAD_BYTES = 10 * 1024 * 1024
+_CDP_CONNECT_TIMEOUT_SECONDS = 30.0
 
 
 # Keywords used to validate executable_path — the binary filename must
@@ -410,6 +412,16 @@ def _ensure_playwright_sync():
         ) from exc
 
 
+async def _stop_playwright_instance(pw: Any) -> None:
+    """Best-effort stop for a locally-started Playwright driver."""
+    if pw is None:
+        return
+    try:
+        await pw.stop()
+    except Exception:
+        pass
+
+
 def _sync_browser_launch(
     state: dict,
     cdp_port: int = 0,
@@ -565,6 +577,7 @@ async def _start_managed_cdp_browser(
         cdp_port=chosen_cdp_port,
         browser_args=browser_args,
     )
+    pw = None
     try:
         await _wait_for_cdp_ready(chosen_cdp_port)
         async_playwright = _ensure_playwright_async()
@@ -602,6 +615,7 @@ async def _start_managed_cdp_browser(
                 _register_page(state, page, page_id)
                 state["current_page_id"] = page_id
     except Exception:
+        await _stop_playwright_instance(pw)
         try:
             if proc.poll() is None:
                 proc.kill()
@@ -746,7 +760,6 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
         logs.append({"level": msg.type, "text": msg.text})
 
     page.on("console", on_console)
-    requests_list = state["network_requests"].setdefault(page_id, [])
 
     def on_request(req):
         requests_list.append(
@@ -756,6 +769,13 @@ def _attach_page_listeners(state: dict, page, page_id: str) -> None:
                 "resourceType": getattr(req, "resource_type", None),
             },
         )
+
+    def on_crash(_p):
+        logger.error("Browser page crashed: %s", page_id)
+
+    page.on("crash", on_crash)
+
+    requests_list = state["network_requests"].setdefault(page_id, [])
 
     def on_response(res):
         for r in requests_list:
@@ -829,21 +849,47 @@ async def _ensure_browser(
             f"CDP connection lost (was: {cdp_url}). "
             "Reconnect with action='connect_cdp'."
         )
+        _reset_browser_state(state)
         return False
 
     # Check browser state based on mode
     if _USE_SYNC_PLAYWRIGHT:
-        if state["_sync_context"] is not None and (
-            state["_sync_browser"] is not None or state["user_data_dir"]
-        ):
-            _touch_activity(state)
-            return True
+        if state["_sync_context"] is not None:
+            # Check if sync browser is still connected
+            browser = state.get("_sync_browser")
+            is_connected = True
+            if browser:
+                try:
+                    is_connected = browser.is_connected()
+                except Exception:
+                    is_connected = False
+
+            if is_connected:
+                _touch_activity(state)
+                return True
+            else:
+                logger.warning(
+                    "Sync browser process disconnected, resetting state",
+                )
+                _reset_browser_state(state)
     else:
         # Accept both regular context (browser+context) and persistent context
         # (context only, no separate browser object)
         if state["context"] is not None:
-            _touch_activity(state)
-            return True
+            # Check if async browser is still connected
+            browser = state.get("browser")
+            is_connected = True
+            if browser:
+                is_connected = browser.is_connected()
+
+            if is_connected:
+                _touch_activity(state)
+                return True
+            else:
+                logger.warning(
+                    "Async browser process disconnected, resetting state",
+                )
+                _reset_browser_state(state)
 
     try:
         if _USE_SYNC_PLAYWRIGHT:
@@ -3903,10 +3949,14 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
             ),
         )
 
+    pw = None
     try:
         async_playwright = _ensure_playwright_async()
         pw = await async_playwright().start()
-        browser = await pw.chromium.connect_over_cdp(cdp_url)
+        browser = await asyncio.wait_for(
+            pw.chromium.connect_over_cdp(cdp_url),
+            timeout=_CDP_CONNECT_TIMEOUT_SECONDS,
+        )
         contexts = browser.contexts
         if contexts:
             context = contexts[0]
@@ -3947,7 +3997,23 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
                 indent=2,
             ),
         )
+    except asyncio.TimeoutError:
+        await _stop_playwright_instance(pw)
+        return _tool_response(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": (
+                        "CDP connect timed out after "
+                        f"{_CDP_CONNECT_TIMEOUT_SECONDS:g}s: {cdp_url}"
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
     except Exception as e:
+        await _stop_playwright_instance(pw)
         return _tool_response(
             json.dumps(
                 {"ok": False, "error": f"CDP connect failed: {e!s}"},
@@ -3955,6 +4021,82 @@ async def _action_connect_cdp(state: dict, cdp_url: str) -> ToolResponse:
                 indent=2,
             ),
         )
+
+
+async def stop_all_browsers() -> None:
+    """Gracefully stop all active browser instances across all workspaces.
+
+    This should be called during application shutdown to ensure no zombie
+    browser processes are left behind.
+    """
+    if not _workspace_states:
+        return
+
+    logger.info("Stopping all browser instances...")
+    # Use list() to avoid mutation during iteration if stop resets state
+    for state in list(_workspace_states.values()):
+        if _is_browser_running(state):
+            try:
+                await _action_stop(state)
+            except Exception as e:
+                logger.error(
+                    "Failed to stop browser for workspace %s: %s",
+                    state.get("workspace_id", "unknown"),
+                    e,
+                )
+
+
+async def stop_browsers_for_workspace_dirs(
+    workspace_dirs: Iterable[str | Path],
+) -> None:
+    """Stop managed browsers whose profile lives under *workspace_dirs*.
+
+    Backup restore uses this narrower cleanup before replacing workspace
+    directories. It releases QwenPaw-owned Playwright/Chromium handles without
+    disrupting browser sessions for unrelated workspaces.
+    """
+    targets = _resolved_workspace_dir_keys(workspace_dirs)
+    if not targets:
+        return
+
+    for state in list(_workspace_states.values()):
+        workspace_dir = state.get("workspace_dir") or ""
+        if not workspace_dir:
+            continue
+        if _workspace_dir_key(workspace_dir) not in targets:
+            continue
+        if _is_browser_running(state):
+            try:
+                await _action_stop(state)
+            except Exception as e:
+                logger.error(
+                    "Failed to stop browser for workspace %s before "
+                    "restore: %s",
+                    state.get("workspace_id", "unknown"),
+                    e,
+                )
+
+
+def _resolved_workspace_dir_keys(
+    workspace_dirs: Iterable[str | Path],
+) -> set[str]:
+    """Normalize workspace paths for matching browser state entries."""
+    return {
+        key
+        for workspace_dir in workspace_dirs
+        if (key := _workspace_dir_key(workspace_dir))
+    }
+
+
+def _workspace_dir_key(workspace_dir: str | Path) -> str:
+    """Return a stable absolute path key, tolerating missing directories."""
+    if not workspace_dir:
+        return ""
+    path = Path(workspace_dir).expanduser()
+    try:
+        return str(path.resolve())
+    except OSError:
+        return str(path.absolute())
 
 
 async def browser_use(  # pylint: disable=R0911,R0912
@@ -4194,6 +4336,7 @@ async def browser_use(  # pylint: disable=R0911,R0912
     _ws_id = _cwd.name if _cwd else "default"
     _ws_dir = str(_cwd) if _cwd else ""
     state = _get_workspace_state(_ws_id, _ws_dir)
+    _touch_activity(state)
 
     action = (action or "").strip().lower()
     if not action:

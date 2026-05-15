@@ -229,6 +229,7 @@ class DingTalkConfig(BaseChannelConfig):
     media_dir: Optional[str] = None
     card_auto_layout: bool = False
     at_sender_on_reply: bool = False
+    streaming_enabled: bool = False
 
 
 class FeishuConfig(BaseChannelConfig):
@@ -267,6 +268,7 @@ class TelegramConfig(BaseChannelConfig):
     http_proxy: str = ""
     http_proxy_auth: str = ""
     show_typing: Optional[bool] = None
+    streaming_enabled: bool = False
 
 
 class MQTTConfig(BaseChannelConfig):
@@ -336,7 +338,6 @@ class MatrixConfig(BaseChannelConfig):
     # When False, images are surfaced as text placeholders (no vision URL).
     vision_enabled: bool = True
     history_limit: int = 50
-    username: str = ""
     password: str = ""
     device_name: str = "qwenpaw-worker"
     # matrix-nio sync long-poll timeout (ms); typical 30s

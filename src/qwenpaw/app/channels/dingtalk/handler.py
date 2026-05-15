@@ -15,7 +15,6 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 
 from ..base import ContentType
 
-from .constants import SENT_VIA_AI_CARD, SENT_VIA_WEBHOOK
 from .content_utils import (
     conversation_id_from_chatbot_message,
     conversation_type_from_chatbot_message,
@@ -38,7 +37,7 @@ DEFAULT_FILENAME_HINT = "file.bin"
 
 class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
     """Internal handler: convert DingTalk message to native dict, enqueue via
-    manager (thread-safe), await reply_future, then reply."""
+    manager (thread-safe), ACK immediately."""
 
     def __init__(
         self,
@@ -48,6 +47,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
         download_url_fetcher,
         try_accept_message: Optional[Callable[[str], bool]] = None,
         check_allowlist: Optional[Callable[[str, bool], tuple]] = None,
+        require_mention: bool = False,
     ):
         super().__init__()
         self._main_loop = main_loop
@@ -56,6 +56,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
         self._download_url_fetcher = download_url_fetcher
         self._try_accept_message = try_accept_message
         self._check_allowlist = check_allowlist
+        self._require_mention = require_mention
 
     def _emit_native_threadsafe(self, native: dict) -> None:
         if self._enqueue_callback:
@@ -489,12 +490,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
 
             is_bot_mentioned = bool(raw_data.get("isInAtList"))
 
-            loop = asyncio.get_running_loop()
-            reply_future: asyncio.Future[str] = loop.create_future()
             meta: Dict[str, Any] = {
-                "incoming_message": incoming_message,
-                "reply_future": reply_future,
-                "reply_loop": loop,
                 "conversation_type": conversation_type,
                 "is_group": is_group,
                 "sender_staff_id": getattr(
@@ -560,6 +556,15 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                     "dingtalk recv: no sessionWebhook on incoming_message",
                 )
 
+            # Group mention check: skip if require_mention but not mentioned
+            if is_group and self._require_mention and not is_bot_mentioned:
+                logger.info(
+                    "dingtalk group mention skip: sender=%s",
+                    sender,
+                )
+                self.reply_text(" ", incoming_message)
+                return dingtalk_stream.AckMessage.STATUS_OK, "ok"
+
             # Dedup by message_id only.
             if self._try_accept_message and not self._try_accept_message(
                 raw_msg_id,
@@ -594,23 +599,11 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
             logger.info("recv from=%s text=%s", sender, text[:100])
             self._emit_native_threadsafe(native)
 
-            response_text = await reply_future
-            if response_text == SENT_VIA_AI_CARD:
-                logger.info("sent to=%s via ai card", sender)
-                self.reply_text(" ", incoming_message)
-            elif response_text == SENT_VIA_WEBHOOK:
-                logger.info(
-                    "sent to=%s via sessionWebhook (multi-message)",
-                    sender,
-                )
-                # Stream connection still expects a reply frame;
-                # send minimal ack so the connection completes and next
-                # messages work.
-                self.reply_text(" ", incoming_message)
-            else:
-                out = self._bot_prefix + response_text
-                self.reply_text(out, incoming_message)
-                logger.info("sent to=%s text=%r", sender, out[:100])
+            # ACK immediately: all replies go through sessionWebhook or
+            # AI Card, so we never need reply_text to carry real content.
+            # This prevents DingTalk retry storms during long LLM runs.
+            self.reply_text(" ", incoming_message)
+            logger.info("dingtalk handler: ACK sent for sender=%s", sender)
             return dingtalk_stream.AckMessage.STATUS_OK, "ok"
 
         except Exception:
