@@ -24,7 +24,10 @@ import type { ProviderInfo, ModelInfo } from "../../api/types";
 import ModelSelector from "./ModelSelector";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
-import { useChatAnywhereInput, useChatAnywhereSessionsState } from "@agentscope-ai/chat";
+import {
+  useChatAnywhereInput,
+  useChatAnywhereSessionsState,
+} from "@agentscope-ai/chat";
 import styles from "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
 import ChatActionGroup from "./components/ChatActionGroup";
@@ -554,7 +557,7 @@ export default function ChatPage() {
   const [planEnabled, setPlanEnabled] = useState(false);
   const [tokenSnapshot, setTokenSnapshot] =
     useState<TokenUsageBadgeSnapshot | null>(null);
-    const tokenSnapshotRef = useRef<TokenUsageBadgeSnapshot | null>(null);
+  const tokenSnapshotRef = useRef<TokenUsageBadgeSnapshot | null>(null);
   tokenSnapshotRef.current = tokenSnapshot;
   const collectTokenBadgeAliases = useCallback(
     (rawSessionId: string): string[] => {
@@ -618,7 +621,8 @@ export default function ChatPage() {
       setTokenSnapshot((prev: TokenUsageBadgeSnapshot | null) => {
         const next: TokenUsageBadgeSnapshot = {
           usage: base.usage ?? (fallbackToPrev ? prev?.usage ?? null : null),
-          context: base.context ?? (fallbackToPrev ? prev?.context ?? null : null),
+          context:
+            base.context ?? (fallbackToPrev ? prev?.context ?? null : null),
           receivedAt: Date.now(),
         };
         const id =
@@ -1161,9 +1165,12 @@ export default function ChatPage() {
 
   const handleStopChat = useCallback(
     (sessionId: string) => {
-      const chatId =
-        sessionApi.getRealIdForSession(sessionId) ?? sessionId;
-      console.log("[Stop] session_id=%s resolved chat_id=%s", sessionId, chatId);
+      const chatId = sessionApi.getRealIdForSession(sessionId) ?? sessionId;
+      console.log(
+        "[Stop] session_id=%s resolved chat_id=%s",
+        sessionId,
+        chatId,
+      );
       if (!chatId) {
         console.warn("[Stop] No chat_id found, cannot stop");
         return;
@@ -1180,7 +1187,9 @@ export default function ChatPage() {
           if (res?.usage_note) {
             const messagesApi = chatRef.current?.messages;
             if (!messagesApi) {
-              console.warn("[Stop] messagesApi not available, saving note for next load");
+              console.warn(
+                "[Stop] messagesApi not available, saving note for next load",
+              );
               sessionApi.setLastStopUsageNote(chatId, res.usage_note);
               if (sessionId && sessionId !== chatId) {
                 sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
@@ -1199,7 +1208,9 @@ export default function ChatPage() {
             }
 
             if (!lastAssistantMsg) {
-              console.warn("[Stop] No assistant message found, saving note for next load");
+              console.warn(
+                "[Stop] No assistant message found, saving note for next load",
+              );
               sessionApi.setLastStopUsageNote(chatId, res.usage_note);
               if (sessionId && sessionId !== chatId) {
                 sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
@@ -1219,13 +1230,13 @@ export default function ChatPage() {
                     typeof content === "string"
                       ? content
                       : Array.isArray(content)
-                        ? content
-                            .filter(
-                              (c: Record<string, unknown>) => c.type === "text",
-                            )
-                            .map((c: Record<string, unknown>) => c.text || "")
-                            .join("")
-                        : "";
+                      ? content
+                          .filter(
+                            (c: Record<string, unknown>) => c.type === "text",
+                          )
+                          .map((c: Record<string, unknown>) => c.text || "")
+                          .join("")
+                      : "";
                   if (text) {
                     interruptedTurnUserText = text.trim();
                     sessionApi.setLastUserMessage(chatId, text);
@@ -1239,7 +1250,10 @@ export default function ChatPage() {
             }
 
             // Guard against duplicate cancel calls (the library fires cancel twice)
-            const alreadyHasNote = messageHasUsageNote(lastAssistantMsg, res.usage_note);
+            const alreadyHasNote = messageHasUsageNote(
+              lastAssistantMsg,
+              res.usage_note,
+            );
 
             // Deep clone so we don't mutate library state
             const updatedMsg = JSON.parse(
@@ -1266,15 +1280,15 @@ export default function ChatPage() {
                 code?: string;
                 data?: { output?: Array<Record<string, unknown>> };
               }>
-            )?.find(
-              (card) => card?.code === "AgentScopeRuntimeResponseCard",
-            );
+            )?.find((card) => card?.code === "AgentScopeRuntimeResponseCard");
             if (responseCard?.data) {
               if (!Array.isArray(responseCard.data.output)) {
                 responseCard.data.output = [];
               }
               responseCard.data.output.push({
-                id: `stop-usage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                id: `stop-usage-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .substr(2, 9)}`,
                 type: "message",
                 role: "assistant",
                 content: [
@@ -1527,7 +1541,7 @@ export default function ChatPage() {
           options={options}
         />
         <TokenUsageBadge snapshot={tokenSnapshot} />
-              </div>
+      </div>
 
       {/* Render approval cards as overlays */}
       {Array.from(approvalRequests.values()).map((request) => (

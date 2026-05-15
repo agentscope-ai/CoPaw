@@ -99,10 +99,7 @@ export const chatApi = {
       },
     ),
 
-  stopChat: (
-    chatId: string,
-    language?: string,
-  ) => {
+  stopChat: (chatId: string, language?: string) => {
     const params = new URLSearchParams({ chat_id: chatId });
     if (language) params.set("language", language);
     return request<ConsoleChatStopResponse>(

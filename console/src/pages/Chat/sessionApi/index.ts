@@ -394,23 +394,16 @@ function clearPendingStopUsageNote(sessionId: string): void {
   }
 }
 
-type InterruptedTurnsMap = Record<
-  string,
-  IAgentScopeRuntimeWebUIMessage
->;
+type InterruptedTurnsMap = Record<string, IAgentScopeRuntimeWebUIMessage>;
 
 function normalizeTurnKey(userText: string): string {
   return userText.trim();
 }
 
-function extractUserMessageText(
-  msg: IAgentScopeRuntimeWebUIMessage,
-): string {
+function extractUserMessageText(msg: IAgentScopeRuntimeWebUIMessage): string {
   if (msg?.role !== ROLE_USER) return "";
   return (
-    extractTextFromContent(
-      msg?.cards?.[0]?.data?.input?.[0]?.content,
-    ) || ""
+    extractTextFromContent(msg?.cards?.[0]?.data?.input?.[0]?.content) || ""
   ).trim();
 }
 
@@ -675,14 +668,15 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     if (!cachedNote) return;
 
     const hasNoteInHistory = messages.some((msg) => {
-      if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) return false;
+      if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards))
+        return false;
 
       return msg.cards.some((card) => {
         const cardData =
           card && typeof card === "object"
-            ? (((card as unknown as Record<string, unknown>).data as
+            ? ((card as unknown as Record<string, unknown>).data as
                 | Record<string, unknown>
-                | undefined))
+                | undefined)
             : undefined;
         if (!cardData) return false;
 
@@ -710,20 +704,22 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       const msg = messages[i];
       if (msg.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) continue;
 
-      const responseCard = (msg.cards as unknown as Array<Record<string, unknown>>).find(
-        (card) => card?.code === CARD_RESPONSE,
-      ) as Record<string, unknown> | undefined;
+      const responseCard = (
+        msg.cards as unknown as Array<Record<string, unknown>>
+      ).find((card) => card?.code === CARD_RESPONSE) as
+        | Record<string, unknown>
+        | undefined;
 
       if (responseCard?.data) {
         const data = responseCard.data as Record<string, unknown>;
         if (!Array.isArray(data.output)) data.output = [];
         (data.output as Array<Record<string, unknown>>).push({
-          id: `stop-usage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `stop-usage-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`,
           type: "message",
           role: ROLE_ASSISTANT,
-          content: [
-            { type: "text", text: cachedNote, status: "completed" },
-          ],
+          content: [{ type: "text", text: cachedNote, status: "completed" }],
           status: "completed",
         });
         return;

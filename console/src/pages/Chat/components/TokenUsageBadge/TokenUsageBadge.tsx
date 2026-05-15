@@ -50,17 +50,12 @@ const TokenUsageBadge: React.FC<Props> = ({ snapshot }) => {
 
   const { usage, context } = snapshot;
   const ratio = context
-    ? Math.max(
-        0,
-        Math.min(Number(context.context_usage_ratio) || 0, 100),
-      )
+    ? Math.max(0, Math.min(Number(context.context_usage_ratio) || 0, 100))
     : 0;
   const color = ringColor(ratio);
   const dashOffset = CIRC * (1 - ratio / 100);
   const pctLabel =
-    ratio > 0 && ratio < 1
-      ? `${ratio.toFixed(1)}%`
-      : `${Math.round(ratio)}%`;
+    ratio > 0 && ratio < 1 ? `${ratio.toFixed(1)}%` : `${Math.round(ratio)}%`;
 
   return (
     <div
