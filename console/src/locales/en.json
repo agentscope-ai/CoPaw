@@ -970,6 +970,7 @@
     "filterThinking": "Show Thinking",
     "filterThinkingTooltip": "Show model thinking/reasoning content to users (turn off to hide)",
     "streamingEnabled": "Streaming Output",
+    "streamingEnabledDingtalkHint": "Only effective when message type is Card",
     "ackMessage": "Acknowledgment Message",
     "ackMessageTooltip": "Send an instant reply when a message is received, before agent processing begins. Leave empty to disable.",
     "ackMessagePlaceholder": "⏳ Processing...",

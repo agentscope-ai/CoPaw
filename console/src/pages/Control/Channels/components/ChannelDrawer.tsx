@@ -1277,11 +1277,18 @@ export function ChannelDrawer({
             </>
           )}
 
-          {(activeKey === "wecom" || activeKey === "telegram") && (
+          {(activeKey === "wecom" ||
+            activeKey === "telegram" ||
+            activeKey === "dingtalk") && (
             <Form.Item
               name="streaming_enabled"
               label={t("channels.streamingEnabled")}
               valuePropName="checked"
+              tooltip={
+                activeKey === "dingtalk"
+                  ? t("channels.streamingEnabledDingtalkHint")
+                  : undefined
+              }
             >
               <Switch />
             </Form.Item>
