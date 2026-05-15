@@ -107,6 +107,8 @@
     "selectAllCurrentPage": "Select current page",
     "selectedItems": "{{count}} selected",
     "batchDeleteButton": "Batch Delete",
+    "batchOperation": "Batch",
+    "exitBatch": "Exit Batch",
     "batchDeleteConfirm": "Delete {{count}} selected push messages?",
     "batchDeleteSuccess": "Deleted {{count}} push messages",
     "pushCronHeader": "Cron Job: {{name}}",

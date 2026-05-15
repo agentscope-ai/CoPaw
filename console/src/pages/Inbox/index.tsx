@@ -76,6 +76,7 @@ export default function InboxPage() {
   >(undefined);
   const [messagesPage, setMessagesPage] = useState(1);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
   const agents = useAgentStore((state) => state.agents);
   const { approvals: pendingApprovals, setApprovals } = useApprovalContext();
   const {
@@ -272,12 +273,125 @@ export default function InboxPage() {
 
   const tabItems = [
     {
+      key: "messages",
+      label: (
+        <span className={styles.tabLabel}>
+          <Bell size={16} />
+          {t("inbox.tabPushMessages")}
+          {summary.pushMessages.unread > 0 && (
+            <Badge count={summary.pushMessages.unread} color="#ff7f16" />
+          )}
+        </span>
+      ),
+      children: (
+        <div className={styles.tabContent}>
+          <div className={styles.messagesToolbar}>
+            <div className={styles.messagesSelectionTools}>
+              <Select
+                size="middle"
+                value={selectedAgentFilter}
+                onChange={(value) => setSelectedAgentFilter(value)}
+                allowClear
+                options={pushMessageAgentOptions}
+                style={{ width: 180 }}
+                placeholder={t("inbox.filterByAgent")}
+              />
+            </div>
+            <div className={styles.messagesSelectionTools}>
+              {batchMode ? (
+                <>
+                  <Checkbox
+                    checked={allCurrentPageSelected}
+                    onChange={(event) =>
+                      handleToggleSelectCurrentPage(event.target.checked)
+                    }
+                    disabled={currentPageMessageIds.length <= 0}
+                  >
+                    {t("inbox.selectAllCurrentPage")}
+                  </Checkbox>
+                  <span className={styles.selectedCountText}>
+                    {t("inbox.selectedItems", {
+                      count: selectedMessageIds.length,
+                    })}
+                  </span>
+                  <Popconfirm
+                    title={t("inbox.batchDeleteConfirm", {
+                      count: selectedMessageIds.length,
+                    })}
+                    onConfirm={() => void handleBatchDeleteMessages()}
+                    okText={t("common.confirm")}
+                    cancelText={t("common.cancel")}
+                    disabled={selectedMessageIds.length <= 0}
+                  >
+                    <Button danger disabled={selectedMessageIds.length <= 0}>
+                      {t("inbox.batchDeleteButton")}
+                    </Button>
+                  </Popconfirm>
+                  <Button
+                    onClick={() => {
+                      setBatchMode(false);
+                      setSelectedMessageIds([]);
+                    }}
+                  >
+                    {t("inbox.exitBatch")}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => setBatchMode(true)}>
+                    {t("inbox.batchOperation")}
+                  </Button>
+                  <Button
+                    onClick={() => void handleMarkAllRead()}
+                    loading={markAllReading}
+                    disabled={summary.pushMessages.unread <= 0}
+                  >
+                    {t("inbox.markAllRead")}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          {filteredPushMessages.length > 0 ? (
+            <div className={styles.cardList}>
+              {pagedPushMessages.map((item) => (
+                <PushMessageCard
+                  key={item.id}
+                  message={item}
+                  onMarkAsRead={markMessageAsRead}
+                  onDelete={deleteMessage}
+                  onView={handleViewMessage}
+                  selected={selectedMessageIds.includes(item.id)}
+                  onSelectChange={
+                    batchMode ? handleToggleMessageSelection : undefined
+                  }
+                />
+              ))}
+              <div className={styles.paginationWrap}>
+                <Pagination
+                  current={messagesPage}
+                  total={filteredPushMessages.length}
+                  pageSize={PUSH_MESSAGES_PAGE_SIZE}
+                  onChange={setMessagesPage}
+                  showSizeChanger={false}
+                />
+              </div>
+            </div>
+          ) : (
+            <Empty description={t("inbox.emptyPush")} />
+          )}
+        </div>
+      ),
+    },
+    {
       key: "approvals",
       label: (
         <span className={styles.tabLabel}>
           <PackageOpen size={16} />
           {t("inbox.tabApprovals")}
-          {urgentApprovalCount > 0 && <Badge count={urgentApprovalCount} />}
+          {urgentApprovalCount > 0 && (
+            <Badge count={urgentApprovalCount} color="#ff7f16" />
+          )}
         </span>
       ),
       children: (
@@ -334,96 +448,6 @@ export default function InboxPage() {
             </div>
           ) : (
             <Empty description={t("inbox.emptyApprovals")} />
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "messages",
-      label: (
-        <span className={styles.tabLabel}>
-          <Bell size={16} />
-          {t("inbox.tabPushMessages")}
-          {summary.pushMessages.unread > 0 && (
-            <Badge count={summary.pushMessages.unread} />
-          )}
-        </span>
-      ),
-      children: (
-        <div className={styles.tabContent}>
-          <div className={styles.messagesToolbar}>
-            <div className={styles.messagesSelectionTools}>
-              <Checkbox
-                checked={allCurrentPageSelected}
-                onChange={(event) =>
-                  handleToggleSelectCurrentPage(event.target.checked)
-                }
-                disabled={currentPageMessageIds.length <= 0}
-              >
-                {t("inbox.selectAllCurrentPage")}
-              </Checkbox>
-              <span className={styles.selectedCountText}>
-                {t("inbox.selectedItems", { count: selectedMessageIds.length })}
-              </span>
-              <Popconfirm
-                title={t("inbox.batchDeleteConfirm", {
-                  count: selectedMessageIds.length,
-                })}
-                onConfirm={() => void handleBatchDeleteMessages()}
-                okText={t("common.confirm")}
-                cancelText={t("common.cancel")}
-                disabled={selectedMessageIds.length <= 0}
-              >
-                <Button danger disabled={selectedMessageIds.length <= 0}>
-                  {t("inbox.batchDeleteButton")}
-                </Button>
-              </Popconfirm>
-            </div>
-            <div className={styles.messagesSelectionTools}>
-              <Select
-                size="small"
-                value={selectedAgentFilter}
-                onChange={(value) => setSelectedAgentFilter(value)}
-                allowClear
-                options={pushMessageAgentOptions}
-                style={{ width: 180 }}
-                placeholder={t("inbox.filterByAgent")}
-              />
-              <Button
-                size="small"
-                onClick={() => void handleMarkAllRead()}
-                loading={markAllReading}
-                disabled={summary.pushMessages.unread <= 0}
-              >
-                {t("inbox.markAllRead")}
-              </Button>
-            </div>
-          </div>
-          {filteredPushMessages.length > 0 ? (
-            <div className={styles.cardList}>
-              {pagedPushMessages.map((item) => (
-                <PushMessageCard
-                  key={item.id}
-                  message={item}
-                  onMarkAsRead={markMessageAsRead}
-                  onDelete={deleteMessage}
-                  onView={handleViewMessage}
-                  selected={selectedMessageIds.includes(item.id)}
-                  onSelectChange={handleToggleMessageSelection}
-                />
-              ))}
-              <div className={styles.paginationWrap}>
-                <Pagination
-                  current={messagesPage}
-                  total={filteredPushMessages.length}
-                  pageSize={PUSH_MESSAGES_PAGE_SIZE}
-                  onChange={setMessagesPage}
-                  showSizeChanger={false}
-                />
-              </div>
-            </div>
-          ) : (
-            <Empty description={t("inbox.emptyPush")} />
           )}
         </div>
       ),

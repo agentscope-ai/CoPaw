@@ -44,14 +44,8 @@ const normalizeCronTaskName = (title: string): string =>
     .replace(/^(定时任务结果|心跳结果)\s*[:：]\s*/i, "")
     .trim();
 
-export function PushMessageCard({
-  message,
-  onMarkAsRead,
-  onView,
-  onDelete,
-  selected = false,
-  onSelectChange,
-}: PushMessageCardProps) {
+export function PushMessageCard(props: PushMessageCardProps) {
+  const { message, onView, onDelete, selected = false, onSelectChange } = props;
   const { t } = useTranslation();
   const IconComponent = CHANNEL_ICONS[message.channelType];
   const channelColor = CHANNEL_COLORS[message.channelType];
@@ -104,26 +98,6 @@ export function PushMessageCard({
               {message.metadata.priority.toUpperCase()}
             </Tag>
           ) : null}
-        </div>
-      </div>
-      <div className={styles.cardBody}>
-        <h4 className={styles.messageTitle}>{displayTitle}</h4>
-        <p className={styles.messageContent}>{message.content}</p>
-      </div>
-      <div className={styles.cardFooter}>
-        <div className={styles.actions}>
-          {!message.read ? (
-            <Button
-              size="small"
-              type="primary"
-              onClick={(event) => {
-                event.stopPropagation();
-                onMarkAsRead(message.id);
-              }}
-            >
-              {t("inbox.markRead")}
-            </Button>
-          ) : null}
           <Popconfirm
             title={t("inbox.deleteMessageConfirm")}
             onConfirm={(event) => {
@@ -138,14 +112,17 @@ export function PushMessageCard({
           >
             <Button
               size="small"
+              type="text"
               danger
               icon={<Trash2 size={14} />}
               onClick={(event) => event.stopPropagation()}
-            >
-              {t("common.delete")}
-            </Button>
+            />
           </Popconfirm>
         </div>
+      </div>
+      <div className={styles.cardBody}>
+        <h4 className={styles.messageTitle}>{displayTitle}</h4>
+        <p className={styles.messageContent}>{message.content}</p>
       </div>
     </Card>
   );

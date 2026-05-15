@@ -2074,6 +2074,8 @@
     "selectAllCurrentPage": "Selecionar página atual",
     "selectedItems": "{{count}} selecionado(s)",
     "batchDeleteButton": "Exclusão em lote",
+    "batchOperation": "Operação em lote",
+    "exitBatch": "Sair do lote",
     "batchDeleteConfirm": "Excluir {{count}} mensagens push selecionadas?",
     "batchDeleteSuccess": "{{count}} mensagens push excluídas",
     "pushCronHeader": "Tarefa Cron: {{name}}",

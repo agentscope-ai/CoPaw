@@ -2054,6 +2054,8 @@
     "selectAllCurrentPage": "Выбрать текущую страницу",
     "selectedItems": "Выбрано: {{count}}",
     "batchDeleteButton": "Удалить выбранные",
+    "batchOperation": "Массовые действия",
+    "exitBatch": "Выйти",
     "batchDeleteConfirm": "Удалить {{count}} выбранных push-сообщений?",
     "batchDeleteSuccess": "Удалено push-сообщений: {{count}}",
     "pushCronHeader": "Cron-задача: {{name}}",
