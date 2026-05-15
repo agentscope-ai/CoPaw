@@ -19,6 +19,14 @@ from ...config.context import (
 )
 from ...constant import WORKING_DIR, TRUNCATION_NOTICE_MARKER
 
+_SPREADSHEET_WORKBOOK_SUFFIXES = {
+    ".ods",
+    ".xls",
+    ".xlsb",
+    ".xlsm",
+    ".xlsx",
+}
+
 
 def _resolve_file_path(file_path: str) -> str:
     """Resolve file path: use absolute path as-is,
@@ -61,6 +69,22 @@ def _get_encoding_for_file(file_path: str) -> str:
     # Default: UTF-8 without BOM (safe for all other files)
     # This includes: .sh, .yaml, .json, .py, .js, .md, etc.
     return "utf-8"
+
+
+def _spreadsheet_raw_read_error(file_path: str) -> str | None:
+    """Return a safety message when read_file targets a workbook binary."""
+    suffix = Path(file_path).suffix.lower()
+    if suffix not in _SPREADSHEET_WORKBOOK_SUFFIXES:
+        return None
+
+    return (
+        f"Error: The file {file_path} is a spreadsheet workbook ({suffix}). "
+        "Reading it as raw text can exhaust memory or return unreadable "
+        "ZIP/XML bytes. Inspect only the needed rows with a bounded "
+        "spreadsheet reader, for example a short Python script using "
+        "openpyxl/pandas in read-only mode, or export the relevant sheet "
+        "to CSV and then call read_file on that CSV."
+    )
 
 
 async def read_file(  # pylint: disable=too-many-return-statements
@@ -132,6 +156,17 @@ async def read_file(  # pylint: disable=too-many-return-statements
         )
 
     try:
+        spreadsheet_error = _spreadsheet_raw_read_error(file_path)
+        if spreadsheet_error:
+            return ToolResponse(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=spreadsheet_error,
+                    ),
+                ],
+            )
+
         content = await read_file_safe(file_path)
         all_lines = content.split("\n")
         total = len(all_lines)
