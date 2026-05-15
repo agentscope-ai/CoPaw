@@ -4,7 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +16,21 @@ from PIL import Image
 
 from . import runtime
 from .sprites import ATLAS_HEIGHT, ATLAS_WIDTH
+
+
+# The snowpaw default-pet spritesheet (1.6 MB webp) is fetched lazily so
+# it does not have to ship inside the plugin package itself. On first
+# use it is downloaded into ``runtime.home_dir() / "cache"`` and re-used
+# across runs. Set ``QWENPAW_PET_SNOWPAW_URL`` to point at a mirror.
+SNOWPAW_PET_ID = "snowpaw"
+SNOWPAW_SPRITESHEET_URL = os.environ.get(
+    "QWENPAW_PET_SNOWPAW_URL",
+    (
+        "https://img.alicdn.com/imgextra/i1/"
+        "O1CN01cCPEw11K5LZ95E2Ex_!!6000000001112-49-tps-1536-1872.webp"
+    ),
+)
+_DOWNLOAD_TIMEOUT_S = 60.0
 
 
 def validate_pet_package(pet_dir: Path) -> tuple[dict[str, Any], Path]:
@@ -60,8 +79,125 @@ def bundled_default_pet_dir() -> Path:
     )
 
 
+def _snowpaw_cache_path() -> Path:
+    """Where the on-demand snowpaw spritesheet download lives."""
+    return runtime.home_dir() / "cache" / "snowpaw-spritesheet.webp"
+
+
+def _is_valid_atlas(path: Path) -> bool:
+    """Return True iff *path* is a non-empty image with the expected size."""
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+        with Image.open(path) as image:
+            return image.size == (ATLAS_WIDTH, ATLAS_HEIGHT)
+    except (OSError, ValueError):
+        return False
+
+
+def _atomic_download(
+    url: str,
+    dest: Path,
+    *,
+    timeout: float = _DOWNLOAD_TIMEOUT_S,
+) -> None:
+    """Stream *url* into *dest* via a sibling tempfile + atomic rename.
+
+    Network errors are re-raised as ``RuntimeError`` with the URL in the
+    message. The tempfile is removed on any failure so the cache dir
+    never accumulates ``.part`` leftovers.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        prefix=dest.name + ".",
+        suffix=".part",
+        dir=str(dest.parent),
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(tmp_fd, "wb") as out:
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                    shutil.copyfileobj(resp, out, length=64 * 1024)
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                raise RuntimeError(
+                    f"failed to download {url}: {exc}",
+                ) from exc
+        os.replace(tmp_path, dest)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+
+def _ensure_snowpaw_spritesheet() -> Path:
+    """Resolve a local path to snowpaw's spritesheet, fetching once if needed.
+
+    Resolution order:
+
+    1. ``assets/default-pet/snowpaw/spritesheet.webp`` inside the plugin
+       package — present in offline / dev installs that choose to ship
+       the asset directly.
+    2. cached download under ``runtime.home_dir() / "cache"`` — re-used
+       across runs and process restarts.
+    3. fresh ``GET`` from ``SNOWPAW_SPRITESHEET_URL`` into the cache.
+
+    A bad cached file (e.g. a redirect-HTML page saved as ``.webp``) is
+    detected via :func:`_is_valid_atlas` and re-downloaded on the next
+    call rather than silently re-used.
+    """
+    bundle = bundled_default_pet_dir() / "spritesheet.webp"
+    if _is_valid_atlas(bundle):
+        return bundle
+    cache = _snowpaw_cache_path()
+    if _is_valid_atlas(cache):
+        return cache
+    _atomic_download(SNOWPAW_SPRITESHEET_URL, cache)
+    if not _is_valid_atlas(cache):
+        try:
+            cache.unlink()
+        except OSError:
+            pass
+        raise RuntimeError(
+            "downloaded snowpaw spritesheet at "
+            f"{SNOWPAW_SPRITESHEET_URL} is not a "
+            f"{ATLAS_WIDTH}x{ATLAS_HEIGHT} image",
+        )
+    return cache
+
+
 def install_default_pet() -> Path:
-    return install_pet(bundled_default_pet_dir(), replace=True)
+    """Install the snowpaw default pet into ``<WORKING_DIR>/pets/snowpaw/``.
+
+    The atlas image is fetched from ``SNOWPAW_SPRITESHEET_URL`` (and
+    cached under ``runtime.home_dir() / "cache"``) when it is not
+    already available locally, then copied alongside ``pet.json`` into
+    the user's pets directory.
+    """
+    source = bundled_default_pet_dir()
+    manifest_path = source / "pet.json"
+    if not manifest_path.is_file():
+        raise ValueError(
+            f"bundled default pet manifest missing: {manifest_path}",
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    pet_id = str(manifest.get("id") or source.name)
+    sprite_name = manifest.get("spritesheetPath")
+    if not isinstance(sprite_name, str) or not sprite_name:
+        raise ValueError("default pet.json must contain spritesheetPath")
+
+    runtime.ensure_runtime()
+    target = runtime.pets_dir() / pet_id
+    target.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(manifest_path, target / "pet.json")
+    sprite_src = _ensure_snowpaw_spritesheet()
+    shutil.copy2(sprite_src, target / sprite_name)
+
+    validate_pet_package(target)
+    return target
 
 
 def resolve_pet_dir(pet_dir: str | None = None) -> Path:

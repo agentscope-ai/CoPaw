@@ -25,7 +25,7 @@ plugins/qwenpaw-pet/
     ├── runtime.py         # paths, PID, token, atomic JSON helpers
     ├── pet_package.py     # validate / install / hot-switch pet packages
     ├── cli.py             # `python -m qwenpaw_pet_desktop` subcommands
-    └── assets/default-pet/snowpaw/  # bundled default pet (Snowpaw)
+    └── assets/default-pet/snowpaw/  # default pet manifest (asset fetched on first use)
 ```
 
 `plugin.py` injects the plugin directory into `sys.path` at import
@@ -174,6 +174,16 @@ Row layout (driven by `qwenpaw_pet_desktop/sprites.py`):
 Default pet shipped with this plugin: **Snowpaw**
 (`qwenpaw_pet_desktop/assets/default-pet/snowpaw/`).
 
+Only the tiny `pet.json` manifest is committed; the 1.6 MB
+`spritesheet.webp` is downloaded from a CDN the first time the pet is
+installed and cached under `~/.qwenpaw-pet/cache/snowpaw-spritesheet.webp`
+for subsequent runs. Override the source with `QWENPAW_PET_SNOWPAW_URL`
+(e.g. point at an internal mirror or a `file://` URL for offline
+installs). To ship the atlas inside the plugin instead, drop a valid
+`spritesheet.webp` into
+`qwenpaw_pet_desktop/assets/default-pet/snowpaw/` and the bundled copy
+will take precedence over the cache and the network fetch.
+
 ## Backend hooks
 
 `plugin.py` registers, via the documented `PluginApi`:
@@ -198,5 +208,6 @@ events fire even before async startup hooks run.
 | `QWENPAW_PET_TOKEN_PATH` | Path to the local update token | `~/.qwenpaw-pet/runtime/update-token` |
 | `QWENPAW_PET_REQUIRE_TOKEN` | `1` ⇒ desktop enforces token on mutating endpoints | `0` |
 | `QWENPAW_PET_AUTOSTART` | `0` ⇒ plugin will not spawn the desktop | `1` |
-| `QWENPAW_PET_HOME` | Runtime dir (PID file, log, token) | `~/.qwenpaw-pet/` |
+| `QWENPAW_PET_HOME` | Runtime dir (PID file, log, **cache**, token) | `~/.qwenpaw-pet/` |
+| `QWENPAW_PET_SNOWPAW_URL` | CDN URL for snowpaw's `spritesheet.webp` (downloaded once on first install) | Alicdn-hosted default |
 | `QWENPAW_WORKING_DIR` / `COPAW_WORKING_DIR` | Where `pets/` lives | falls back to `~/.copaw` then `~/.qwenpaw` |
