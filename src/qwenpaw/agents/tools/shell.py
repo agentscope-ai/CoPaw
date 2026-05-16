@@ -501,8 +501,12 @@ async def execute_shell_command(
                             os.killpg(pgid, signal.SIGKILL)
                             await asyncio.wait_for(proc.wait(), timeout=2)
 
-                        stdout_str = smart_decode(_read_file_bytes(stdout_path))
-                        stderr_str = smart_decode(_read_file_bytes(stderr_path))
+                        stdout_str = smart_decode(
+                            _read_file_bytes(stdout_path),
+                        )
+                        stderr_str = smart_decode(
+                            _read_file_bytes(stderr_path),
+                        )
                         if stderr_str:
                             stderr_str += f"\n{stderr_suffix}"
                         else:
