@@ -713,6 +713,47 @@ def _get_page(state: dict, page_id: str):
     return state["pages"].get(page_id)
 
 
+async def _get_tab_info_list(state: dict) -> list[dict[str, str]]:
+    """Return a list of dicts with page_id, url, and title for all pages.
+    Safely handles closed or detached pages without raising exceptions.
+    """
+    pages = state.get("pages", {})
+    tab_list = []
+    for pid, p in list(pages.items()):
+        try:
+            # Basic sanity check: if the page object is gone or explicitly closed
+            if p is None:
+                continue
+
+            # Playwright pages might be closed but still in our dict
+            # We use a try-except block to catch 'Target closed' errors during property access
+            if _USE_SYNC_PLAYWRIGHT:
+                is_closed = await _run_sync(p.is_closed)
+                if is_closed:
+                    continue
+                url = p.url
+                title = await _run_sync(p.title)
+            else:
+                if p.is_closed():
+                    continue
+                url = p.url
+                title = await p.title()
+
+            tab_list.append(
+                {
+                    "page_id": pid,
+                    "url": url or "about:blank",
+                    "title": title or "Untitled",
+                },
+            )
+        except Exception:
+            # If any error occurs (e.g. page detached, browser crashed),
+            # we skip this tab or provide a fallback if we know it exists.
+            logger.debug("Failed to get info for tab %s, skipping", pid)
+            continue
+    return tab_list
+
+
 def _get_context(state: dict):
     """Return the active browser context regardless of sync/async mode."""
     return state["context"] or state.get("_sync_context")
@@ -3299,7 +3340,12 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
     if tab_action == "list":
         return _tool_response(
             json.dumps(
-                {"ok": True, "tabs": page_ids, "count": len(page_ids)},
+                {
+                    "ok": True,
+                    "tabs": page_ids,
+                    "tab_list": await _get_tab_info_list(state),
+                    "count": len(page_ids),
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -3350,6 +3396,7 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
                         "ok": True,
                         "page_id": new_id,
                         "tabs": list(state["pages"].keys()),
+                        "tab_list": await _get_tab_info_list(state),
                     },
                     ensure_ascii=False,
                     indent=2,
