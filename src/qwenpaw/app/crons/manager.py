@@ -709,7 +709,10 @@ class CronManager:
                                     event_type="cron_delivery_failed_fallback",
                                     status="error",
                                     severity="error",
-                                    title=f"Cron result not delivered: {job.name}",
+                                    title=(
+                                        "Cron result not delivered: "
+                                        f"{job.name}"
+                                    ),
                                     body=(
                                         "Task executed successfully, "
                                         "but channel delivery failed."
@@ -719,7 +722,9 @@ class CronManager:
                                         "job_name": job.name,
                                         "task_type": job.task_type,
                                         "trigger": trigger,
-                                        "run_id": execution_result.get("run_id"),
+                                        "run_id": execution_result.get(
+                                            "run_id",
+                                        ),
                                         "delivery_error": execution_result.get(
                                             "delivery_error",
                                         ),
@@ -749,7 +754,9 @@ class CronManager:
                                         "job_name": job.name,
                                         "task_type": job.task_type,
                                         "trigger": trigger,
-                                        "run_id": execution_result.get("run_id"),
+                                        "run_id": execution_result.get(
+                                            "run_id",
+                                        ),
                                         "save_result_to_inbox": (
                                             job.save_result_to_inbox
                                         ),
