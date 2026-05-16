@@ -8,6 +8,7 @@ No network calls — httpx is stubbed at the module level.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -428,6 +429,41 @@ class TestEnsureFreshAndReload:
 
         with pytest.raises(RuntimeError, match="no access_token"):
             await auth.ensure_fresh()
+
+    async def test_concurrent_ensure_fresh_only_refreshes_once(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Single-flight defense: two tasks that both notice the token
+        # is near expiry should NOT both POST a refresh.  xAI rotates
+        # refresh_token per call, so a double-refresh invalidates the
+        # first response's token and leaves auth.json desynced.
+        stale = _make_jwt(60)
+        path = _write_auth_file(tmp_path / "auth.json", access_token=stale)
+        auth = XaiAuth(auth_path=path)
+
+        fresh = _make_jwt(3600)
+        _patch_httpx_client(
+            monkeypatch,
+            _FakeResponse(
+                200,
+                {"access_token": fresh, "refresh_token": "rt-new"},
+            ),
+        )
+
+        # Fire two ensure_fresh() calls simultaneously.
+        results = await asyncio.gather(
+            auth.ensure_fresh(),
+            auth.ensure_fresh(),
+        )
+
+        # Both got the same fresh creds.
+        assert results[0].access_token == fresh
+        assert results[1].access_token == fresh
+        # And the refresh POST fired exactly once.
+        assert len(_FakeAsyncClient.instances) == 1
+        assert len(_FakeAsyncClient.instances[0].posts) == 1
 
 
 # ---------------------------------------------------------------- #

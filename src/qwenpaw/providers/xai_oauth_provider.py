@@ -144,11 +144,26 @@ class XaiOAuthProvider(OpenAIProvider):
 
         Bypasses the parent's header-merging logic (DASHSCOPE-specific)
         — xAI doesn't use any of those service-tagging headers.
+
+        Raises ``ValueError`` (not ``FileNotFoundError``) when the user
+        has not run ``qwenpaw xai login`` yet: ``create_model_and_formatter``
+        call sites catch ``ValueError`` / ``AppBaseException`` but not
+        ``FileNotFoundError``, so leaking the raw OS error would crash
+        the agent runtime instead of surfacing a clean "please log in"
+        message in the UI.
         """
         from .xai_oauth_model import XaiOAuthChatModel
 
+        try:
+            auth = self._get_auth()
+        except FileNotFoundError as e:
+            raise ValueError(
+                f"xAI OAuth credentials not set up: {e} — "
+                "run `qwenpaw xai login` once to populate ~/.xai/auth.json.",
+            ) from e
+
         return XaiOAuthChatModel(
-            auth=self._get_auth(),
+            auth=auth,
             model_name=model_id,
             stream=True,
             stream_tool_parsing=False,

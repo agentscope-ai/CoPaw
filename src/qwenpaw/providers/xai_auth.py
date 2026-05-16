@@ -23,12 +23,14 @@ The file layout::
       "last_refresh":  "2026-05-16T12:00:00Z"
     }
 
-Mirrors :class:`qwenpaw.providers.codex_auth.CodexAuth` so callers can
-swap providers without learning two auth surfaces.
+Exposes the same minimal surface as other OAuth credential managers
+(``ensure_fresh``, ``auth_headers``, ``base_url``) so callers can swap
+providers without learning two auth surfaces.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -122,10 +124,14 @@ class XaiAuth:
     def __init__(self, auth_path: Path | None = None) -> None:
         self._auth_path = auth_path or _resolve_auth_path()
         self._lock = threading.Lock()
+        # Single-flight gate around ensure_fresh's refresh path.  Lazy-
+        # created on first use so XaiAuth can be constructed outside an
+        # event loop (the chat-model construction path is sync).
+        self._refresh_lock: asyncio.Lock | None = None
         self._creds: XaiCredential | None = None
-        # Same out-of-band reload mechanic as CodexAuth — lets a fresh
-        # ``qwenpaw xai login`` complete while CoPaw is running and
-        # the daemon picks up the new tokens without a restart.
+        # Out-of-band reload mechanic — lets a fresh ``qwenpaw xai
+        # login`` complete while CoPaw is running and the daemon picks
+        # up the new tokens without a restart.
         self._loaded_mtime_ns: int = 0
         self._load()
 
@@ -271,8 +277,22 @@ class XaiAuth:
                 )
                 self._load()
         assert self._creds is not None
-        if self._creds.needs_refresh:
-            await self._refresh()
+        if not self._creds.needs_refresh:
+            return self._creds
+        # Single-flight refresh.  Without this gate, two coroutines that
+        # both notice the token is near expiry would both POST a refresh
+        # — xAI's refresh_token rotates per call, so the second response
+        # would invalidate the first, leaving auth.json desynced with
+        # whatever bearer the in-flight requests were issued under.
+        if self._refresh_lock is None:
+            self._refresh_lock = asyncio.Lock()
+        async with self._refresh_lock:
+            # Re-check under the lock: the coroutine that held it before
+            # us may have already rotated the bearer, in which case our
+            # cached creds are now stale and this refresh would be the
+            # second (losing) caller.
+            if self._creds.needs_refresh:
+                await self._refresh()
         return self._creds
 
     def reload(self) -> XaiCredential:

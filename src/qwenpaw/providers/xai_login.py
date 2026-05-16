@@ -177,8 +177,16 @@ def _start_callback_server(
     _Handler.result_holder = result_holder
     _Handler.expected_state = state
 
+    # Set SO_REUSEADDR on the *class* before instantiation: TCPServer's
+    # __init__ binds the socket immediately, so an instance-level
+    # ``server.allow_reuse_address = True`` set afterwards is too late —
+    # the bind has already happened without the flag, and a TIME_WAIT
+    # socket from a previous login attempt would still block this one.
+    class _ReusableServer(socketserver.TCPServer):
+        allow_reuse_address = True
+
     try:
-        server = socketserver.TCPServer(
+        server = _ReusableServer(
             (LOOPBACK_HOST, LOOPBACK_PORT),
             _Handler,
         )
@@ -188,7 +196,6 @@ def _start_callback_server(
             f"({exc}). The xAI OAuth client is registered against this exact "
             f"port — close whatever else is using it and retry.",
         ) from exc
-    server.allow_reuse_address = True
     return server, result_holder
 
 

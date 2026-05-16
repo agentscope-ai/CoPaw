@@ -333,6 +333,24 @@ class TestGetChatModelInstance:
 
         assert isinstance(model, XaiOAuthChatModel)
 
+    def test_raises_value_error_when_auth_file_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # XaiAuth() raises FileNotFoundError when ~/.xai/auth.json is
+        # absent.  get_chat_model_instance must convert that to ValueError
+        # so create_model_and_formatter() call sites (which only catch
+        # ValueError/AppBaseException) surface a clean "please log in"
+        # error in the UI instead of crashing the agent runtime.
+        def _raise(*_a: Any, **_kw: Any) -> Any:
+            raise FileNotFoundError("auth.json missing")
+
+        monkeypatch.setattr("qwenpaw.providers.xai_auth.XaiAuth", _raise)
+
+        provider = _make_provider()
+        with pytest.raises(ValueError, match="qwenpaw xai login"):
+            provider.get_chat_model_instance("grok-4")
+
     def test_passes_through_generate_kwargs(
         self,
         monkeypatch: pytest.MonkeyPatch,
