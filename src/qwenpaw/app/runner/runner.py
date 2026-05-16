@@ -30,6 +30,12 @@ from .mission_dispatch import (
     maybe_handle_mission_command,
     detect_active_mission_phase,
 )
+from ..goal_dispatch import (
+    build_goal_refresher,
+    detect_active_goal,
+    maybe_handle_goal_command,
+    update_goal_from_message,
+)
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
@@ -443,6 +449,7 @@ class AgentRunner(Runner):
             # Mission Mode: /mission
             _ws = self.workspace_dir or WORKING_DIR
             mission_info: dict | None = None
+            goal_info: dict | None = None
 
             mission_result = await maybe_handle_mission_command(
                 query=query,
@@ -498,6 +505,42 @@ class AgentRunner(Runner):
                 self._rewrite_last_message_text(
                     msgs,
                     refresher + original,
+                )
+
+            # Goal Mode: lightweight session objective on the normal path.
+            if mission_info is None:
+                goal_result = await maybe_handle_goal_command(
+                    query=query,
+                    workspace_dir=_ws,
+                    session_id=session_id,
+                    user_id=user_id,
+                    channel=channel,
+                    agent_name=self.agent_name,
+                )
+                if isinstance(goal_result, Msg):
+                    yield goal_result, True
+                    return
+                if isinstance(goal_result, dict):
+                    goal_info = goal_result
+
+            # Active goal: inject a reminder into ordinary follow-ups.
+            if (
+                mission_info is None
+                and goal_info is None
+                and query
+                and not query.strip().startswith("/")
+            ):
+                goal_info = detect_active_goal(
+                    _ws,
+                    session_id=session_id,
+                    user_id=user_id,
+                    channel=channel,
+                )
+
+            if mission_info is None and goal_info is not None:
+                self._rewrite_last_message_text(
+                    msgs,
+                    build_goal_refresher(goal_info, query or ""),
                 )
 
             # --- Plan Mode ------------------------------------------
@@ -755,11 +798,16 @@ class AgentRunner(Runner):
                     ):
                         yield msg, last
             else:
+                final_goal_msg = None
                 async for msg, last in _stream_printing_messages_interruptible(
                     agents=[agent],
                     coroutine_task=agent(msgs),
                 ):
+                    if goal_info is not None and last:
+                        final_goal_msg = msg
                     yield msg, last
+                if goal_info is not None:
+                    update_goal_from_message(goal_info, final_goal_msg)
 
         except asyncio.CancelledError as exc:
             logger.info(f"query_handler: {session_id} cancelled!")
