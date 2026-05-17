@@ -133,7 +133,7 @@ class TestGuardFinding:
             description="d",
             tool_name="shell",
         )
-        assert finding.metadata == {}
+        assert not finding.metadata
 
     def test_to_dict(self):
         """to_dict returns a complete, serialisable dictionary."""
@@ -160,7 +160,7 @@ class TestGuardFinding:
         assert d["snippet"] is None
         assert d["remediation"] is None
         assert d["guardian"] is None
-        assert d["metadata"] == {}
+        assert not d["metadata"]
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +343,7 @@ class TestToolGuardResult:
             f_crit,
         ]
         assert result.get_findings_by_severity(GuardSeverity.LOW) == [f_low]
-        assert result.get_findings_by_severity(GuardSeverity.HIGH) == []
+        assert not result.get_findings_by_severity(GuardSeverity.HIGH)
 
     def test_get_findings_by_category(self):
         """get_findings_by_category filters correctly."""
@@ -376,9 +376,8 @@ class TestToolGuardResult:
         assert result.get_findings_by_category(
             GuardThreatCategory.PATH_TRAVERSAL,
         ) == [f_path]
-        assert (
-            result.get_findings_by_category(GuardThreatCategory.NETWORK_ABUSE)
-            == []
+        assert not result.get_findings_by_category(
+            GuardThreatCategory.NETWORK_ABUSE,
         )
 
     def test_to_dict_serialization(self):

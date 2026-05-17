@@ -220,7 +220,7 @@ class TestBlockedSkillRecord:
             blocked_at="",
             max_severity="LOW",
         )
-        assert r.findings == []
+        assert not r.findings
         assert r.content_hash == ""
         assert r.action == "blocked"
 
@@ -260,7 +260,7 @@ class TestBlockedSkillRecord:
         r = BlockedSkillRecord.from_dict(d)
         assert r.blocked_at == ""
         assert r.max_severity == ""
-        assert r.findings == []
+        assert not r.findings
         assert r.content_hash == ""
         assert r.action == "blocked"
 
@@ -323,7 +323,7 @@ class TestBlockedHistoryPersistence:
             return_value=tmp_path / "nonexistent.json",
         ):
             result = get_blocked_history()
-            assert result == []
+            assert not result
 
     def test_record_and_get_history(self, tmp_path):
         """Should record and retrieve blocked skill history."""

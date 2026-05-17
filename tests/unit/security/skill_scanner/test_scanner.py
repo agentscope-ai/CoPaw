@@ -55,7 +55,7 @@ class TestSkillScannerInit:
     def test_init_with_empty_analyzers(self, default_policy):
         """Scanner with empty analyzers list should have no analyzers."""
         scanner = SkillScanner(analyzers=[], policy=default_policy)
-        assert scanner._analyzers == []
+        assert not scanner._analyzers
 
     def test_init_with_custom_analyzers(self, default_policy, mock_analyzer):
         """Scanner with custom analyzers should use them."""
@@ -107,13 +107,13 @@ class TestSkillScannerScanSkill:
         """Scanning a nonexistent directory should return empty result."""
         result = scanner.scan_skill("/nonexistent/path")
         assert isinstance(result, ScanResult)
-        assert result.findings == []
+        assert not result.findings
         assert result.skill_name == "path"
 
     def test_scan_empty_directory(self, scanner, tmp_path):
         """Scanning an empty directory should return empty findings."""
         result = scanner.scan_skill(str(tmp_path))
-        assert result.findings == []
+        assert not result.findings
         assert result.is_safe is True
 
     def test_scan_with_analyzer_findings(
@@ -153,7 +153,7 @@ class TestSkillScannerScanSkill:
         )
         (tmp_path / "test.py").write_text("x")
         result = scanner.scan_skill(str(tmp_path))
-        assert result.findings == []
+        assert not result.findings
         assert len(result.analyzers_failed) == 1
         assert result.analyzers_failed[0]["analyzer"] == "failing_analyzer"
 

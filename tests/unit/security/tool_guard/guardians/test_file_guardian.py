@@ -100,7 +100,7 @@ class TestExtractPathsFromShellCommand:
             "cat input.txt > output.txt",
         )
         # Neither "input.txt" nor "output.txt" look like paths.
-        assert result == []
+        assert not result
 
     def test_redirect_attached(self):
         result = _extract_paths_from_shell_command(
@@ -136,7 +136,7 @@ class TestExtractPathsFromShellCommand:
     def test_heredoc_not_path(self):
         # << introduces a heredoc; "EOF" is the delimiter, not a path.
         result = _extract_paths_from_shell_command("cat <<EOF")
-        assert result == []
+        assert not result
 
     def test_pipe_tokens_not_paths(self):
         # "grep" and "pattern" are bare words; only /var/log/syslog is a path.
@@ -155,7 +155,7 @@ class TestExtractPathsFromShellCommand:
     def test_quoted_bare_name_not_detected(self):
         # Bare name without path indicator is not detected, even if quoted.
         result = _extract_paths_from_shell_command('cat "my file.txt"')
-        assert result == []
+        assert not result
 
     def test_malformed_quotes_fallback(self):
         # Mismatched quotes cause shlex.split to fail; fallback to split().
@@ -178,10 +178,10 @@ class TestExtractPathsFromShellCommand:
         assert "-la" not in result
 
     def test_empty_command(self):
-        assert _extract_paths_from_shell_command("") == []
+        assert not _extract_paths_from_shell_command("")
 
     def test_only_flags(self):
-        assert _extract_paths_from_shell_command("ls -la") == []
+        assert not _extract_paths_from_shell_command("ls -la")
 
 
 # ---------------------------------------------------------------------------
@@ -476,13 +476,13 @@ class TestGuard:
             "read_file",
             {"file_path": "/etc/passwd"},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_no_sensitive_files_returns_empty(self, guardian, tmp_path):
         # Clear all sensitive entries.
         guardian.set_sensitive_files([])
         findings = guardian.guard("read_file", {"file_path": "/any/file"})
-        assert findings == []
+        assert not findings
 
     def test_guard_read_file_sensitive(self, guardian, tmp_path):
         path = str(tmp_path / "secret.key")
@@ -500,7 +500,7 @@ class TestGuard:
         Path(secret_path).touch()
         guardian.add_sensitive_file(secret_path)
         findings = guardian.guard("read_file", {"file_path": safe_path})
-        assert findings == []
+        assert not findings
 
     def test_guard_write_file_sensitive(self, guardian, tmp_path):
         path = str(tmp_path / "secret.key")
@@ -538,19 +538,19 @@ class TestGuard:
             "execute_shell_command",
             {"command": "cat /tmp/safe.txt"},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_execute_shell_command_empty_command(self, guardian):
         findings = guardian.guard("execute_shell_command", {"command": ""})
-        assert findings == []
+        assert not findings
 
     def test_guard_execute_shell_command_non_string_command(self, guardian):
         findings = guardian.guard("execute_shell_command", {"command": 123})
-        assert findings == []
+        assert not findings
 
     def test_guard_execute_shell_command_missing_command(self, guardian):
         findings = guardian.guard("execute_shell_command", {})
-        assert findings == []
+        assert not findings
 
     def test_guard_unknown_tool_scans_string_params(self, guardian, tmp_path):
         path = str(tmp_path / "secret.key")
@@ -561,7 +561,7 @@ class TestGuard:
 
     def test_guard_unknown_tool_ignores_non_path_params(self, guardian):
         findings = guardian.guard("custom_tool", {"message": "hello"})
-        assert findings == []
+        assert not findings
 
     def test_guard_unknown_tool_ignores_non_string_params(
         self,
@@ -579,11 +579,11 @@ class TestGuard:
 
     def test_guard_known_tool_empty_param_value(self, guardian):
         findings = guardian.guard("read_file", {"file_path": ""})
-        assert findings == []
+        assert not findings
 
     def test_guard_known_tool_missing_param(self, guardian):
         findings = guardian.guard("read_file", {"other_param": "/tmp/a"})
-        assert findings == []
+        assert not findings
 
     def test_guard_view_text_file_both_params(self, guardian, tmp_path):
         path = str(tmp_path / "secret.key")

@@ -232,7 +232,7 @@ class TestFinding:
         assert f.snippet is None
         assert f.remediation is None
         assert f.analyzer is None
-        assert f.metadata == {}
+        assert not f.metadata
 
     def test_to_dict(self):
         """to_dict should serialize all fields."""

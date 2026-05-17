@@ -118,9 +118,9 @@ class TestGuardRuleInit:
         assert r.category == GuardThreatCategory.COMMAND_INJECTION
         assert r.severity == GuardSeverity.HIGH
         assert r.patterns == [r"rm\s+-rf"]
-        assert r.exclude_patterns == []
-        assert r.tools == []
-        assert r.params == []
+        assert not r.exclude_patterns
+        assert not r.tools
+        assert not r.params
         assert r.description == "Dangerous rm -rf command"
         assert r.remediation == "Avoid destructive rm commands"
 
@@ -169,7 +169,7 @@ class TestGuardRuleInit:
             "tool": "",
         }
         r = GuardRule(data)
-        assert r.tools == []
+        assert not r.tools
 
     def test_params_as_string(self):
         """Params can be a single string."""
@@ -364,11 +364,11 @@ class TestExtractRmTargets:
 
     def test_no_rm_command(self):
         """Non-rm command should return empty list."""
-        assert _extract_rm_targets("echo hello") == []
+        assert not _extract_rm_targets("echo hello")
 
     def test_comment_line(self):
         """Comment lines should be skipped."""
-        assert _extract_rm_targets("# rm something") == []
+        assert not _extract_rm_targets("# rm something")
 
     def test_rm_with_pipe(self):
         """rm after pipe separator."""
@@ -402,12 +402,12 @@ class TestExtractRmTargets:
 
     def test_empty_command(self):
         """Empty command should return empty list."""
-        assert _extract_rm_targets("") == []
+        assert not _extract_rm_targets("")
 
     def test_rm_no_targets(self):
         """rm with only flags should return empty list."""
         result = _extract_rm_targets("rm -rf")
-        assert result == []
+        assert not result
 
     def test_del_command(self):
         """Windows del command should be detected."""
@@ -476,7 +476,7 @@ class TestCheckRmTargetsOutsideWorkspace:
             "echo hello",
         )
         assert has_outside is False
-        assert paths == []
+        assert not paths
 
     def test_rm_inside_workspace(self, mock_workspace_root):
         """rm targeting workspace files should return (False, [])."""
@@ -513,14 +513,14 @@ class TestLoadRulesFromYaml:
     def test_missing_file(self, tmp_path):
         """Should return empty list for missing file."""
         rules = load_rules_from_yaml(tmp_path / "nonexistent.yaml")
-        assert rules == []
+        assert not rules
 
     def test_invalid_yaml_content(self, tmp_path):
         """Should return empty list for non-list YAML."""
         bad_file = tmp_path / "bad.yaml"
         bad_file.write_text("not a list")
         rules = load_rules_from_yaml(bad_file)
-        assert rules == []
+        assert not rules
 
     def test_skip_invalid_rules(self, tmp_path):
         """Should skip rules with missing required fields."""
@@ -551,7 +551,7 @@ class TestLoadRulesFromYaml:
         yaml_file = tmp_path / "nondict.yaml"
         yaml_file.write_text("- 42\n- 'string'\n")
         rules = load_rules_from_yaml(yaml_file)
-        assert rules == []
+        assert not rules
 
 
 # ---------------------------------------------------------------------------
@@ -596,7 +596,7 @@ class TestLoadRulesFromDirectory:
     def test_nonexistent_directory(self, tmp_path):
         """Should return empty list for nonexistent directory."""
         rules = load_rules_from_directory(tmp_path / "nonexistent")
-        assert rules == []
+        assert not rules
 
     def test_missing_rule_file_warns(self, tmp_path, sample_rule_data):
         """Should warn and skip missing rule files."""
@@ -730,7 +730,7 @@ class TestRuleBasedToolGuardianGuard:
             "execute_shell_command",
             {"command": "echo hello"},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_tool_filter(
         self,
@@ -754,7 +754,7 @@ class TestRuleBasedToolGuardianGuard:
             "read_file",
             {"content": "password = 'secret123'"},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_skips_none_values(
         self,
@@ -776,7 +776,7 @@ class TestRuleBasedToolGuardianGuard:
             "execute_shell_command",
             {"command": None},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_skips_empty_values(
         self,
@@ -798,7 +798,7 @@ class TestRuleBasedToolGuardianGuard:
             "execute_shell_command",
             {"command": ""},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_unknown_tool_no_rules(
         self,
@@ -822,7 +822,7 @@ class TestRuleBasedToolGuardianGuard:
             "unknown_tool",
             {"data": "rm -rf /"},
         )
-        assert findings == []
+        assert not findings
 
     def test_guard_converts_non_string_values(
         self,
@@ -845,7 +845,7 @@ class TestRuleBasedToolGuardianGuard:
             {"command": 42},
         )
         # str(42) = "42", no match for "rm"
-        assert findings == []
+        assert not findings
 
     def test_guard_finding_has_snippet(
         self,

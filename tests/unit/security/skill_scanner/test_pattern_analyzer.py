@@ -103,8 +103,8 @@ class TestSecurityRuleInit:
         assert r.category == ThreatCategory.COMMAND_INJECTION
         assert r.severity == Severity.HIGH
         assert r.patterns == [r"rm\s+-rf"]
-        assert r.exclude_patterns == []
-        assert r.file_types == []
+        assert not r.exclude_patterns
+        assert not r.file_types
         assert r.remediation == "Avoid destructive rm commands"
 
     def test_full_rule(self, full_rule_data):

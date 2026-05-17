@@ -349,9 +349,9 @@ class TestToolGuardEngineGuard:
         result = engine_with_defaults.guard("tool", {})
 
         assert result.guardians_used == ["alpha", "beta"]
-        assert result.guardians_failed == []
+        assert not result.guardians_failed
         assert result.tool_name == "tool"
-        assert result.params == {}
+        assert not result.params
 
     def test_guard_handles_guardian_exception_gracefully(
         self,

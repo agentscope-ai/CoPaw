@@ -100,7 +100,7 @@ class TestRuleScopingPolicy:
         assert p.skip_in_docs == set()
         assert p.code_only == set()
         assert p.doc_path_indicators == set()
-        assert p.doc_filename_patterns == []
+        assert not p.doc_filename_patterns
         assert p.dedupe_duplicate_findings is True
 
 
@@ -165,7 +165,7 @@ class TestScanPolicyConstruction:
         assert isinstance(p.file_classification, FileClassificationPolicy)
         assert isinstance(p.file_limits, FileLimitsPolicy)
         assert isinstance(p.analysis_thresholds, AnalysisThresholdsPolicy)
-        assert p.severity_overrides == []
+        assert not p.severity_overrides
         assert p.disabled_rules == set()
 
 

@@ -7,7 +7,8 @@ Verifies the BaseToolGuardian contract:
 - Empty params are handled gracefully
 - Finding fields are populated correctly
 """
-# pylint: disable=redefined-outer-name,unused-argument,protected-access
+# pylint: disable=redefined-outer-name,unused-argument
+# pylint: disable=protected-access,abstract-class-instantiated
 from __future__ import annotations
 
 from pathlib import Path
@@ -262,7 +263,7 @@ class TestBaseToolGuardianInterface:
     def test_cannot_instantiate_base(self):
         """BaseToolGuardian is abstract and cannot be instantiated."""
         with pytest.raises(TypeError):
-            BaseToolGuardian("test")
+            BaseToolGuardian("test")  # noqa: E0110
 
     def test_subclass_must_implement_guard(self):
         """Subclass without guard() cannot be instantiated."""
@@ -271,7 +272,7 @@ class TestBaseToolGuardianInterface:
             pass
 
         with pytest.raises(TypeError):
-            IncompleteGuardian("test")
+            IncompleteGuardian("test")  # noqa: E0110
 
     def test_repr(self, file_guardian):
         """__repr__ should include class name and guardian name."""
