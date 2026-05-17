@@ -288,59 +288,45 @@ def fmt_tokens(n: int) -> str:
     return f"{n / 1000:.1f}K" if n >= 1000 else str(n)
 
 
+# (title, turn-template, turn-template-estimated, context-template).
+# Templates use {tt}/{pt}/{ct} for turn tokens, {est}/{mx}/{ratio} for context.
+_USAGE_NOTE_I18N: dict[str, tuple[str, str, str, str]] = {
+    "zh": (
+        "用量统计",
+        "本轮 **{tt}** tok （in {pt} · out {ct}）",
+        "本轮约 **{tt}** tok （in {pt} · out {ct}）",
+        "上下文 **{est}** / **{mx}** （{ratio:.1f}%）",
+    ),
+    "ja": (
+        "使用量統計",
+        "このターン **{tt}** tok （入力 {pt} · 出力 {ct}）",
+        "このターン約 **{tt}** tok （入力 {pt} · 出力 {ct}）",
+        "コンテキスト **{est}** / **{mx}** （{ratio:.1f}%）",
+    ),
+    "ru": (
+        "Статистика использования",
+        "Ход **{tt}** tok (in {pt} · out {ct})",
+        "Ход примерно **{tt}** tok (in {pt} · out {ct})",
+        "Контекст **{est}** / **{mx}** ({ratio:.1f}%)",
+    ),
+    "pt": (
+        "Estatísticas de uso",
+        "Turno **{tt}** tok (in {pt} · out {ct})",
+        "Turno aprox. **{tt}** tok (in {pt} · out {ct})",
+        "Contexto **{est}** / **{mx}** ({ratio:.1f}%)",
+    ),
+    "en": (
+        "Usage statistics",
+        "This turn **{tt}** tok (in {pt} · out {ct})",
+        "~This turn **{tt}** tok (in {pt} · out {ct})",
+        "Context **{est}** / **{mx}** ({ratio:.1f}%)",
+    ),
+}
+
+
 def _lang(language: str | None) -> str:
-    value = (language or "").lower()
-    if value.startswith("zh"):
-        return "zh"
-    if value.startswith("ja"):
-        return "ja"
-    if value.startswith("ru"):
-        return "ru"
-    if value.startswith("pt"):
-        return "pt"
-    return "en"
-
-
-def _turn_usage_line(
-    lang: str,
-    tt: int,
-    pt: int,
-    ct: int,
-    estimated: bool,
-) -> str:
-    pt_s, ct_s, tt_s = fmt_tokens(pt), fmt_tokens(ct), fmt_tokens(tt)
-    if lang == "zh":
-        prefix = "本轮约" if estimated else "本轮"
-        return f"{prefix} **{tt_s}** tok " f"（in {pt_s} · out {ct_s}）"
-    if lang == "ja":
-        prefix = "このターン約" if estimated else "このターン"
-        return f"{prefix} **{tt_s}** tok " f"（入力 {pt_s} · 出力 {ct_s}）"
-    if lang == "ru":
-        prefix = "Ход примерно" if estimated else "Ход"
-        return f"{prefix} **{tt_s}** tok " f"(in {pt_s} · out {ct_s})"
-    if lang == "pt":
-        prefix = "Turno aprox." if estimated else "Turno"
-        return f"{prefix} **{tt_s}** tok " f"(in {pt_s} · out {ct_s})"
-    prefix = "~This turn" if estimated else "This turn"
-    return f"{prefix} **{tt_s}** tok (in {pt_s} · out {ct_s})"
-
-
-def _context_usage_line(
-    lang: str,
-    est: int,
-    mx: int,
-    ratio: float,
-) -> str:
-    est_s, mx_s = fmt_tokens(est), fmt_tokens(mx)
-    if lang == "zh":
-        return f"上下文 **{est_s}** / **{mx_s}** （{ratio:.1f}%）"
-    if lang == "ja":
-        return f"コンテキスト **{est_s}** / **{mx_s}** （{ratio:.1f}%）"
-    if lang == "ru":
-        return f"Контекст **{est_s}** / **{mx_s}** ({ratio:.1f}%)"
-    if lang == "pt":
-        return f"Contexto **{est_s}** / **{mx_s}** ({ratio:.1f}%)"
-    return f"Context **{est_s}** / **{mx_s}** ({ratio:.1f}%)"
+    prefix = (language or "").lower()[:2]
+    return prefix if prefix in _USAGE_NOTE_I18N else "en"
 
 
 def format_usage_chat_note(
@@ -348,26 +334,25 @@ def format_usage_chat_note(
     ctx: dict[str, Any] | None,
     language: str | None = "zh",
 ) -> str:
-    lang = _lang(language)
+    title, turn_tpl, turn_tpl_est, ctx_tpl = _USAGE_NOTE_I18N[_lang(language)]
     lines: list[str] = []
     if turn:
-        tt = int(turn.get("total_tokens", 0) or 0)
-        pt = int(turn.get("prompt_tokens", 0) or 0)
-        ct = int(turn.get("completion_tokens", 0) or 0)
-        estimated = bool(turn.get("estimated"))
-        lines.append(_turn_usage_line(lang, tt, pt, ct, estimated))
+        tpl = turn_tpl_est if turn.get("estimated") else turn_tpl
+        lines.append(
+            tpl.format(
+                tt=fmt_tokens(int(turn.get("total_tokens", 0) or 0)),
+                pt=fmt_tokens(int(turn.get("prompt_tokens", 0) or 0)),
+                ct=fmt_tokens(int(turn.get("completion_tokens", 0) or 0)),
+            ),
+        )
     if ctx:
-        est = int(ctx.get("estimated_tokens", 0) or 0)
-        mx = int(ctx.get("max_input_length", 0) or 0)
-        ratio = float(ctx.get("context_usage_ratio", 0) or 0)
-        lines.append(_context_usage_line(lang, est, mx, ratio))
+        lines.append(
+            ctx_tpl.format(
+                est=fmt_tokens(int(ctx.get("estimated_tokens", 0) or 0)),
+                mx=fmt_tokens(int(ctx.get("max_input_length", 0) or 0)),
+                ratio=float(ctx.get("context_usage_ratio", 0) or 0),
+            ),
+        )
     if not lines:
         return ""
-    titles = {
-        "zh": "用量统计",
-        "ja": "使用量統計",
-        "ru": "Статистика использования",
-        "pt": "Estatísticas de uso",
-        "en": "Usage statistics",
-    }
-    return f"📊 **{titles[lang]}**\n" + "\n".join(lines)
+    return f"📊 **{title}**\n" + "\n".join(lines)

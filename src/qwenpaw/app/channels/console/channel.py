@@ -317,58 +317,45 @@ class ConsoleChannel(BaseChannel):
                 )
         return media_message
 
-    async def _emit_usage(
+    async def _emit_trailing_usage(
         self,
-        event: Optional[Any],
         session_id: str,
-    ) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        """Attach usage for terminal response events.
+        language: Optional[str],
+        last_response: Optional[Any],
+    ) -> AsyncGenerator[str, None]:
+        """Yield SSE events that carry the post-turn usage snapshot.
 
-        Runner ``query_handler`` ``finally`` pops turn usage into
-        ``_pending_usage_for_stream`` (before persisting session state) so this
-        path can read the same stats. Only the runner must ``pop`` session
-        turn usage; this method uses ``peek`` when pending is empty so it never
-        races with that ``pop``. Pending is intentionally not cleared here so
-        ``/console/chat/stop`` can read the same finalized usage snapshot even
-        if stream cancellation races with SSE delivery.
-
-        *event* may be ``None`` when flushing usage after the stream aborts
-        without a terminal response event.
+        Reads ``runner._pending_usage_for_stream``, which the runner's
+        ``finally``/cancel paths populate before this generator runs. Emits
+        (1) a clone of the terminal response event augmented with ``usage``
+        and ``context_usage`` — the frontend ``responseParser`` updates the
+        badge from this — and (2) a markdown chat-note message.
         """
-        from ....token_usage import TokenRecordingModelWrapper
-        from ....token_usage import compute_context_usage
-
-        turn: Optional[Dict[str, Any]] = None
-        ctx: Optional[Dict[str, Any]] = None
-        runner = (
-            getattr(self._workspace, "runner", None)
-            if self._workspace is not None
-            else None
+        runner = getattr(self._workspace, "runner", None)
+        turn, ctx = (
+            getattr(runner, "_pending_usage_for_stream", (None, None))
+            if runner is not None
+            else (None, None)
         )
-        if runner is not None:
-            pt, pc = getattr(
-                runner,
-                "_pending_usage_for_stream",
-                (None, None),
-            )
-            if pt is not None or pc is not None:
-                turn, ctx = pt, pc
-
         if turn is None and ctx is None:
-            turn = TokenRecordingModelWrapper.peek_usage_for_session(
-                session_id,
-            )
-            if self._workspace is not None:
-                ctx = await compute_context_usage(self._workspace)
-
-        if event is not None and turn and hasattr(event, "usage"):
-            event.usage = turn
+            return
 
         if turn:
             logger.info("Usage for session %s: %s", session_id, turn)
             if ctx:
                 self._print_status_line(turn, ctx)
-        return turn, ctx
+
+        if last_response is not None:
+            data = json.loads(self._serialize_event_for_sse(last_response))
+            if turn is not None:
+                data["usage"] = turn
+            if ctx is not None:
+                data["context_usage"] = ctx
+            yield f"data: {json.dumps(data, ensure_ascii=True)}\n\n"
+
+        note = self._usage_stats_chat_message(turn, ctx, language)
+        if note is not None:
+            yield f"data: {note.model_dump_json()}\n\n"
 
     def _print_status_line(
         self,
@@ -408,14 +395,10 @@ class ConsoleChannel(BaseChannel):
         msg = Message(
             type=MessageType.MESSAGE,
             role="assistant",
-            content=[
-                TextContent(type=ContentType.TEXT, text=body),
-            ],
+            content=[TextContent(type=ContentType.TEXT, text=body)],
         )
         completed = getattr(msg, "completed", None)
-        if callable(completed):
-            return completed()
-        return msg
+        return completed() if callable(completed) else msg
 
     async def stream_one(self, payload: Any) -> AsyncGenerator[str, None]:
         """Process one payload and yield SSE-formatted events"""
@@ -484,44 +467,11 @@ class ConsoleChannel(BaseChannel):
                             if media_message:
                                 event.output.append(media_message)
 
-                if obj == "response" and status in (
-                    RunStatus.Completed,
-                    RunStatus.Failed,
-                    RunStatus.Canceled,
-                    "completed",
-                    "failed",
-                    "canceled",
-                ):
-                    turn, ctx = await self._emit_usage(event, session_id)
-                    if turn is not None or ctx is not None:
-                        if hasattr(event, "model_dump_json"):
-                            data = json.loads(event.model_dump_json())
-                        elif hasattr(event, "json"):
-                            data = json.loads(event.json())
-                        else:
-                            data = {"text": str(event)}
-                        if turn is not None:
-                            data["usage"] = turn
-                        if ctx is not None:
-                            data["context_usage"] = ctx
-                        yield f"data: {json.dumps(data)}\n\n"
-                        note = self._usage_stats_chat_message(
-                            turn,
-                            ctx,
-                            language,
-                        )
-                        if note is not None:
-                            yield f"data: {note.model_dump_json()}\n\n"
-                        last_response = event
-                        continue
-
                 data = self._serialize_event_for_sse(event)
                 yield f"data: {data}\n\n"
 
                 if obj == "message" and status == RunStatus.Completed:
-                    media_message = await self._extract_media_message(
-                        event,
-                    )
+                    media_message = await self._extract_media_message(event)
                     if media_message:
                         media_json = self._serialize_event_for_sse(
                             media_message,
@@ -533,6 +483,16 @@ class ConsoleChannel(BaseChannel):
 
                 elif obj == "response":
                     last_response = event
+
+            # Stream completed normally — runner's ``finally`` has populated
+            # ``_pending_usage_for_stream``. Emit usage as a trailing augment
+            # of the last response event so the frontend updates the badge.
+            async for sse in self._emit_trailing_usage(
+                session_id,
+                language,
+                last_response,
+            ):
+                yield sse
 
             logger.info(
                 "console stream done: event_count=%s has_response=%s",

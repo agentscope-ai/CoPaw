@@ -259,7 +259,29 @@ function useMultimodalCapabilities(
     supportsVideo: boolean;
   }>({ supportsMultimodal: false, supportsImage: false, supportsVideo: false });
 
+  const updateCapsIfChanged = useCallback(
+    (next: {
+      supportsMultimodal: boolean;
+      supportsImage: boolean;
+      supportsVideo: boolean;
+    }) => {
+      setMultimodalCaps((prev) =>
+        prev.supportsMultimodal === next.supportsMultimodal &&
+        prev.supportsImage === next.supportsImage &&
+        prev.supportsVideo === next.supportsVideo
+          ? prev
+          : next,
+      );
+    },
+    [],
+  );
+
   const fetchMultimodalCaps = useCallback(async () => {
+    const noCaps = {
+      supportsMultimodal: false,
+      supportsImage: false,
+      supportsVideo: false,
+    };
     try {
       const [providers, activeModels] = await Promise.all([
         providerApi.listProviders(),
@@ -271,22 +293,14 @@ function useMultimodalCapabilities(
       const activeProviderId = activeModels?.active_llm?.provider_id;
       const activeModelId = activeModels?.active_llm?.model;
       if (!activeProviderId || !activeModelId) {
-        setMultimodalCaps({
-          supportsMultimodal: false,
-          supportsImage: false,
-          supportsVideo: false,
-        });
+        updateCapsIfChanged(noCaps);
         return;
       }
       const provider = (providers as ProviderInfo[]).find(
         (p) => p.id === activeProviderId,
       );
       if (!provider) {
-        setMultimodalCaps({
-          supportsMultimodal: false,
-          supportsImage: false,
-          supportsVideo: false,
-        });
+        updateCapsIfChanged(noCaps);
         return;
       }
       const allModels: ModelInfo[] = [
@@ -294,19 +308,15 @@ function useMultimodalCapabilities(
         ...(provider.extra_models ?? []),
       ];
       const model = allModels.find((m) => m.id === activeModelId);
-      setMultimodalCaps({
+      updateCapsIfChanged({
         supportsMultimodal: model?.supports_multimodal ?? false,
         supportsImage: model?.supports_image ?? false,
         supportsVideo: model?.supports_video ?? false,
       });
     } catch {
-      setMultimodalCaps({
-        supportsMultimodal: false,
-        supportsImage: false,
-        supportsVideo: false,
-      });
+      updateCapsIfChanged(noCaps);
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, updateCapsIfChanged]);
 
   // Fetch caps on mount and whenever refreshKey changes
   useEffect(() => {
@@ -559,37 +569,18 @@ export default function ChatPage() {
     useState<TokenUsageBadgeSnapshot | null>(null);
   const tokenSnapshotRef = useRef<TokenUsageBadgeSnapshot | null>(null);
   tokenSnapshotRef.current = tokenSnapshot;
-  const collectTokenBadgeAliases = useCallback(
-    (rawSessionId: string): string[] => {
-      const aliases = new Set<string>();
-      if (rawSessionId) aliases.add(rawSessionId);
-      aliases.add(window.currentSessionId || "");
-      aliases.add(chatIdRef.current || "");
-      for (const id of [...aliases]) {
-        if (!id) continue;
-        const key = resolveTokenBadgeStorageKey(id);
-        if (!key) continue;
-        try {
-          const raw = sessionStorage.getItem(key);
-          if (raw) {
-            const data = JSON.parse(raw);
-            if (data?._relatedKeys && Array.isArray(data._relatedKeys)) {
-              for (const k of data._relatedKeys) aliases.add(k);
-            }
-          }
-        } catch {
-          // ignore parse errors
-        }
-      }
-      return [...aliases];
-    },
-    [],
-  );
+  /** All ids the badge snapshot may be keyed under during ID resolution. */
+  const tokenBadgeAliases = useCallback((rawSessionId: string): string[] => {
+    const aliases = new Set<string>();
+    if (rawSessionId) aliases.add(rawSessionId);
+    if (window.currentSessionId) aliases.add(window.currentSessionId);
+    if (chatIdRef.current) aliases.add(chatIdRef.current);
+    return [...aliases];
+  }, []);
   const readTokenSnapshotForSession = useCallback(
     (rawSessionId: string) => {
-      const aliasList = collectTokenBadgeAliases(rawSessionId);
       let latest: TokenUsageBadgeSnapshot | null = null;
-      for (const id of aliasList) {
+      for (const id of tokenBadgeAliases(rawSessionId)) {
         const loaded = loadTokenBadgeSnapshot(id);
         if (!loaded) continue;
         if (!latest || (loaded.receivedAt || 0) >= (latest.receivedAt || 0)) {
@@ -598,31 +589,27 @@ export default function ChatPage() {
       }
       return latest;
     },
-    [collectTokenBadgeAliases],
+    [tokenBadgeAliases],
   );
   const saveTokenSnapshotForSession = useCallback(
     (rawSessionId: string, snapshot: TokenUsageBadgeSnapshot) => {
-      for (const id of collectTokenBadgeAliases(rawSessionId)) {
+      for (const id of tokenBadgeAliases(rawSessionId)) {
         const key = resolveTokenBadgeStorageKey(id);
         if (key) saveTokenBadgeSnapshot(key, snapshot);
       }
     },
-    [collectTokenBadgeAliases],
+    [tokenBadgeAliases],
   );
   const applyTokenSnapshotUpdate = useCallback(
-    (
-      usage: unknown,
-      ctx: unknown,
-      preferredSessionId?: string,
-      fallbackToPrev = true,
-    ) => {
+    (usage: unknown, ctx: unknown, preferredSessionId?: string) => {
       const base = toSnapshotFromUsagePayload(usage, ctx);
       if (!base) return;
-      setTokenSnapshot((prev: TokenUsageBadgeSnapshot | null) => {
+      // Merge with the previous snapshot so a backend event carrying only
+      // one half (e.g. just usage) doesn't blank out the other half.
+      setTokenSnapshot((prev) => {
         const next: TokenUsageBadgeSnapshot = {
-          usage: base.usage ?? (fallbackToPrev ? prev?.usage ?? null : null),
-          context:
-            base.context ?? (fallbackToPrev ? prev?.context ?? null : null),
+          usage: base.usage ?? prev?.usage ?? null,
+          context: base.context ?? prev?.context ?? null,
           receivedAt: Date.now(),
         };
         const id =
@@ -663,55 +650,38 @@ export default function ChatPage() {
     if (loaded) setTokenSnapshot(loaded);
   }, [chatId, storageIdForTokenBadge, sessions, readTokenSnapshotForSession]);
 
-  // Consume approvals from Context and filter by current session
+  // Consume approvals from Context and filter by current session.
+  // Uses a serialized key to avoid creating a new Map (and triggering
+  // re-renders of the entire Chat tree) when the filtered result is identical.
+  const prevApprovalKeyRef = useRef("");
+
   useEffect(() => {
-    // Get current session ID from multiple sources
-    // During new session creation, chatId may be empty but window.currentSessionId gets set
     const currentSessionId = window.currentSessionId || chatId || "";
 
-    // Filter approvals by root_session_id (includes children sessions)
-    console.debug(
-      "[Approval] Filtering approvals:",
-      "currentSessionId=",
-      currentSessionId,
-      "chatId=",
-      chatId,
-      "window.currentSessionId=",
-      window.currentSessionId,
-      "approvals=",
-      approvals.map((a) => ({
-        tool: a.tool_name,
-        session: a.session_id.slice(0, 8),
-        root: a.root_session_id.slice(0, 8),
-      })),
-    );
-
-    // If no session ID yet, check if we have approvals that could tell us the session
-    // (e.g., first message sent, approval arrives before session ID is set in window)
+    // When no session ID is available yet, use the first approval's
+    // root_session_id as a hint (handles the race where approval arrives
+    // before the session ID is propagated).
     let effectiveSessionId = currentSessionId;
     if (!effectiveSessionId && approvals.length > 0) {
-      // Use the root_session_id from the first approval as a hint
-      // This handles the race condition where approval arrives before session ID is propagated
       effectiveSessionId = approvals[0].root_session_id;
-      console.log(
-        "[Approval] No session ID yet, using first approval's root_session_id:",
-        effectiveSessionId,
-      );
     }
 
     const sessionApprovals = effectiveSessionId
       ? approvals.filter(
           (approval) => approval.root_session_id === effectiveSessionId,
         )
-      : approvals; // Show all if no session ID (fallback)
+      : approvals;
 
-    console.debug(
-      "[Approval] After filtering:",
-      sessionApprovals.length,
-      "approval(s)",
-    );
+    // Build a stable key from the filtered request IDs so we can skip
+    // the Map rebuild when nothing changed (avoids re-render every 2.5s poll).
+    const approvalKey = sessionApprovals
+      .map((a) => a.request_id)
+      .sort()
+      .join(",");
 
-    // Convert to map for display
+    if (approvalKey === prevApprovalKeyRef.current) return;
+    prevApprovalKeyRef.current = approvalKey;
+
     const newMap = new Map<string, ApprovalMessageData>();
     for (const approval of sessionApprovals) {
       newMap.set(approval.request_id, {
@@ -734,27 +704,12 @@ export default function ChatPage() {
 
   const handleApprove = useCallback(
     async (requestId: string) => {
-      console.log("[Approval] handleApprove called:", requestId);
-      console.log(
-        "[Approval] Current requests map size:",
-        approvalRequests.size,
-      );
       const request = approvalRequests.get(requestId);
-      if (!request) {
-        console.error("[Approval] Request not found:", requestId);
-        return;
-      }
+      if (!request) return;
 
-      // Use currentSessionId (root session) instead of request.sessionId (sub-agent session)
       const rootSessionId = window.currentSessionId || chatId || "";
-      console.log("[Approval] Sending approve command:", {
-        requestId,
-        rootSessionId,
-        subAgentSessionId: request.sessionId,
-      });
 
       try {
-        // Add exit animation class
         const cardElement = document.querySelector(
           `[data-approval-id="${requestId}"]`,
         );
@@ -772,18 +727,17 @@ export default function ChatPage() {
         );
         message.success(t("approval.approved"));
 
-        // Delay removal to let animation complete
-        // Backend will remove from pending list, next poll will update UI
+        // Delay removal to let exit animation complete
         setTimeout(() => {
           setApprovalRequests((prev) => {
             const next = new Map(prev);
             next.delete(requestId);
             return next;
           });
-        }, 300); // Match animation duration
+        }, 300);
       } catch (error) {
         message.error(t("approval.approveFailed"));
-        console.error("[Approval] Failed to approve:", error);
+        console.error("Failed to approve:", error);
       }
     },
     [approvalRequests, chatId, t, message, setApprovals],
@@ -1166,168 +1120,68 @@ export default function ChatPage() {
   const handleStopChat = useCallback(
     (sessionId: string) => {
       const chatId = sessionApi.getRealIdForSession(sessionId) ?? sessionId;
-      console.log(
-        "[Stop] session_id=%s resolved chat_id=%s",
-        sessionId,
-        chatId,
-      );
-      if (!chatId) {
-        console.warn("[Stop] No chat_id found, cannot stop");
-        return;
-      }
+      if (!chatId) return;
+
       chatApi
         .stopChat(chatId, i18n.language)
-        .then((res: any) => {
-          applyTokenSnapshotUpdate(
-            res?.usage,
-            res?.context_usage,
-            chatId,
-            false,
-          );
-          if (res?.usage_note) {
-            const messagesApi = chatRef.current?.messages;
-            if (!messagesApi) {
-              console.warn(
-                "[Stop] messagesApi not available, saving note for next load",
-              );
-              sessionApi.setLastStopUsageNote(chatId, res.usage_note);
-              if (sessionId && sessionId !== chatId) {
-                sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
-              }
-              return;
-            }
+        .then((res) => {
+          applyTokenSnapshotUpdate(res?.usage, res?.context_usage, chatId);
 
-            const allMessages = messagesApi.getMessages() || [];
-            // Find the last assistant message
-            let lastAssistantMsg: IAgentScopeRuntimeWebUIMessage | null = null;
-            for (let i = allMessages.length - 1; i >= 0; i--) {
-              if (allMessages[i].role === "assistant") {
-                lastAssistantMsg = allMessages[i];
-                break;
-              }
-            }
+          const note = res?.usage_note;
+          if (!note) return;
 
-            if (!lastAssistantMsg) {
-              console.warn(
-                "[Stop] No assistant message found, saving note for next load",
-              );
-              sessionApi.setLastStopUsageNote(chatId, res.usage_note);
-              if (sessionId && sessionId !== chatId) {
-                sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
-              }
-              return;
-            }
-
-            // Save the preceding user message text so patchLastUserMessage can
-            // reconstruct it on session reload when backend history lags behind.
-            let interruptedTurnUserText = "";
-            for (let i = allMessages.length - 1; i >= 0; i--) {
-              if (allMessages[i].role === "user") {
-                const userInput = allMessages[i].cards?.[0]?.data?.input;
-                if (Array.isArray(userInput) && userInput.length > 0) {
-                  const content = userInput[0].content;
-                  const text =
-                    typeof content === "string"
-                      ? content
-                      : Array.isArray(content)
-                      ? content
-                          .filter(
-                            (c: Record<string, unknown>) => c.type === "text",
-                          )
-                          .map((c: Record<string, unknown>) => c.text || "")
-                          .join("")
-                      : "";
-                  if (text) {
-                    interruptedTurnUserText = text.trim();
-                    sessionApi.setLastUserMessage(chatId, text);
-                    if (sessionId && sessionId !== chatId) {
-                      sessionApi.setLastUserMessage(sessionId, text);
-                    }
-                  }
-                }
-                break;
-              }
-            }
-
-            // Guard against duplicate cancel calls (the library fires cancel twice)
-            const alreadyHasNote = messageHasUsageNote(
-              lastAssistantMsg,
-              res.usage_note,
-            );
-
-            // Deep clone so we don't mutate library state
-            const updatedMsg = JSON.parse(
-              JSON.stringify(lastAssistantMsg),
-            ) as IAgentScopeRuntimeWebUIMessage;
-
-            if (alreadyHasNote) {
-              sessionApi.saveInterruptedTurn(
-                chatId,
-                updatedMsg,
-                interruptedTurnUserText,
-              );
-              if (sessionId && sessionId !== chatId) {
-                sessionApi.saveInterruptedTurn(
-                  sessionId,
-                  updatedMsg,
-                  interruptedTurnUserText,
-                );
-              }
-              return;
-            }
-            const responseCard = (
-              updatedMsg.cards as Array<{
-                code?: string;
-                data?: { output?: Array<Record<string, unknown>> };
-              }>
-            )?.find((card) => card?.code === "AgentScopeRuntimeResponseCard");
-            if (responseCard?.data) {
-              if (!Array.isArray(responseCard.data.output)) {
-                responseCard.data.output = [];
-              }
-              responseCard.data.output.push({
-                id: `stop-usage-${Date.now()}-${Math.random()
-                  .toString(36)
-                  .substr(2, 9)}`,
-                type: "message",
-                role: "assistant",
-                content: [
-                  {
-                    type: "text",
-                    text: res.usage_note,
-                    status: "completed",
-                  },
-                ],
-                status: "completed",
-              });
-              ReactDOM.flushSync(() => {
-                messagesApi.updateMessage(updatedMsg);
-              });
-
-              // Save per user-turn so round 2+ interrupts do not overwrite round 1.
-              sessionApi.saveInterruptedTurn(
-                chatId,
-                updatedMsg,
-                interruptedTurnUserText,
-              );
-              if (sessionId && sessionId !== chatId) {
-                sessionApi.saveInterruptedTurn(
-                  sessionId,
-                  updatedMsg,
-                  interruptedTurnUserText,
-                );
-              }
-            }
+          // Cache for reload fallback under both id aliases, since the URL
+          // may resolve to either id depending on when reload happens.
+          for (const id of sessionId && sessionId !== chatId
+            ? [chatId, sessionId]
+            : [chatId]) {
+            sessionApi.setLastStopUsageNote(id, note);
           }
 
-          sessionApi.setLastStopUsageNote(chatId, res.usage_note);
-          if (sessionId && sessionId !== chatId) {
-            sessionApi.setLastStopUsageNote(sessionId, res.usage_note);
+          // Append the note inline to the last assistant message's response
+          // card so the user sees the breakdown immediately. The runner's
+          // ``finally`` adds the same body to ``agent.memory``, so a session
+          // reload produces the same shape.
+          const messagesApi = chatRef.current?.messages;
+          const allMessages = messagesApi?.getMessages() ?? [];
+          const lastAssistantMsg = [...allMessages]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (
+            !messagesApi ||
+            !lastAssistantMsg ||
+            messageHasUsageNote(lastAssistantMsg, note) // dedupe duplicate cancel
+          ) {
+            return;
           }
-          console.log("[Stop] stopChat API succeeded");
+          const updatedMsg = JSON.parse(
+            JSON.stringify(lastAssistantMsg),
+          ) as IAgentScopeRuntimeWebUIMessage;
+          const responseCard = (
+            updatedMsg.cards as Array<{
+              code?: string;
+              data?: { output?: Array<Record<string, unknown>> };
+            }>
+          )?.find((c) => c?.code === "AgentScopeRuntimeResponseCard");
+          if (!responseCard?.data) return;
+          if (!Array.isArray(responseCard.data.output)) {
+            responseCard.data.output = [];
+          }
+          responseCard.data.output.push({
+            id: `stop-usage-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 11)}`,
+            type: "message",
+            role: "assistant",
+            content: [{ type: "text", text: note, status: "completed" }],
+            status: "completed",
+          });
+          ReactDOM.flushSync(() => {
+            messagesApi.updateMessage(updatedMsg);
+          });
         })
         .catch((err) => {
-          console.error("[Stop] Failed to stop chat:", err);
+          console.error("Failed to stop chat:", err);
         });
     },
     [i18n.language, applyTokenSnapshotUpdate],
@@ -1385,7 +1239,7 @@ export default function ChatPage() {
             <ChatHeaderTitle />
             <span style={{ flex: 1 }} />
             <ModelSelector />
-            <ChatActionGroup />
+            <ChatActionGroup planEnabled={planEnabled} />
           </>
         ),
       },
@@ -1440,24 +1294,17 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          // Some channels wrap the event under `data`; check both shapes.
           const nested =
-            payload &&
+            payload.data &&
             typeof payload.data === "object" &&
-            payload.data !== null &&
             !Array.isArray(payload.data)
               ? (payload.data as Record<string, unknown>)
               : null;
-
-          const usage = (nested?.usage ?? payload.usage) as
-            | TokenUsageBadgeSnapshot["usage"]
-            | undefined;
-          const ctx = (nested?.context_usage ??
-            nested?.contextUsage ??
-            payload.context_usage ??
-            payload.contextUsage) as
-            | TokenUsageBadgeSnapshot["context"]
-            | undefined;
-          applyTokenSnapshotUpdate(usage, ctx);
+          applyTokenSnapshotUpdate(
+            nested?.usage ?? payload.usage,
+            nested?.context_usage ?? payload.context_usage,
+          );
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;

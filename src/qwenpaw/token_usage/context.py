@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compute session context usage from the active agent's memory."""
+"""Context-usage snapshot from an agent's memory."""
 
 import logging
 from typing import Any
@@ -11,11 +11,12 @@ async def snapshot_context_usage_for_agent(
     agent: Any,
     agent_id: str,
 ) -> dict[str, Any] | None:
-    """Build a lightweight context-usage dict from an agent's memory.
+    """Estimate token totals + latest assistant tokens from `agent.memory`.
 
-    Used when emitting terminal SSE events: ``query_handler``'s ``finally``
-    may clear ``_streaming_agent`` before the runtime yields the final
-    ``response`` event, so we also stash a one-shot snapshot on the runner.
+    Returns ``None`` when ``max_input_length`` is unset/zero (no ratio to
+    report). Drops ``messages_detail`` from the result since the callers only
+    need the scalar totals; the latest assistant message tokens are extracted
+    into ``latest_assistant_tokens``.
     """
     try:
         memory = getattr(agent, "memory", None)
@@ -24,19 +25,22 @@ async def snapshot_context_usage_for_agent(
 
         from ..config.config import load_agent_config
 
-        cfg = load_agent_config(agent_id)
-        raw_max = getattr(cfg.running, "max_input_length", 0) or 0
-        max_input_length = int(raw_max)
+        max_input_length = int(
+            getattr(load_agent_config(agent_id).running, "max_input_length", 0)
+            or 0,
+        )
         if max_input_length <= 0:
             return None
 
         stats = await memory.estimate_tokens(max_input_length)
         details = stats.pop("messages_detail", None) or []
-        latest_assistant_tokens = 0
+
+        # Find tokens of the assistant message that closes the latest turn.
         last_user_idx = -1
         for idx, msg_stat in enumerate(details):
             if getattr(msg_stat, "role", "") == "user":
                 last_user_idx = idx
+        latest_assistant_tokens = 0
         for msg_stat in reversed(details[last_user_idx + 1 :]):
             if getattr(msg_stat, "role", "") == "assistant":
                 latest_assistant_tokens = int(
@@ -47,30 +51,4 @@ async def snapshot_context_usage_for_agent(
         return stats
     except Exception:
         logger.debug("Failed to snapshot context usage", exc_info=True)
-        return None
-
-
-async def compute_context_usage(workspace: Any) -> dict[str, Any] | None:
-    """Return estimated context usage for the current session.
-
-    Prefer the live streaming agent; otherwise consume a one-shot snapshot
-    stored on the runner when the query finishes.
-    """
-    try:
-        runner = getattr(workspace, "runner", None)
-        if runner is None:
-            return None
-
-        agent_id = getattr(workspace, "agent_id", None) or "default"
-        agent = getattr(runner, "_streaming_agent", None)
-        if agent is not None:
-            return await snapshot_context_usage_for_agent(agent, agent_id)
-
-        snap = getattr(runner, "_context_usage_snapshot", None)
-        if snap is not None:
-            setattr(runner, "_context_usage_snapshot", None)
-            return snap
-        return None
-    except Exception:
-        logger.debug("Failed to compute context usage", exc_info=True)
         return None

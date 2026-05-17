@@ -221,24 +221,6 @@ const buildResponseCard = (
   };
 };
 
-/** Assistant bubble with a single markdown body (e.g. usage stats from stop API). */
-export function buildAssistantMarkdownMessage(
-  markdown: string,
-): IAgentScopeRuntimeWebUIMessage {
-  const outId = generateId();
-  return buildResponseCard([
-    {
-      id: outId,
-      type: "message",
-      role: ROLE_ASSISTANT,
-      status: "completed",
-      content: [{ type: "text", text: markdown, status: "completed" }],
-      metadata: {},
-      sequence_number: 1,
-    },
-  ]);
-}
-
 /**
  * Convert flat backend messages into the card-based format expected by
  * the @agentscope-ai/chat component.
@@ -337,13 +319,10 @@ const resolveRealId = (
 
 const STORAGE_PREFIX = "qwenpaw_pending_user_msg_";
 const STOP_USAGE_NOTE_PREFIX = "qwenpaw_stop_usage_note_";
-const INTERRUPTED_TURN_PREFIX = "qwenpaw_interrupted_turn_";
 
 function savePendingUserMessage(sessionId: string, text: string): void {
   try {
-    const key = `${STORAGE_PREFIX}${sessionId}`;
-    console.log("[Debug] savePendingUserMessage key=%s", key);
-    sessionStorage.setItem(key, text);
+    sessionStorage.setItem(`${STORAGE_PREFIX}${sessionId}`, text);
   } catch {
     /* quota exceeded – ignore */
   }
@@ -351,10 +330,7 @@ function savePendingUserMessage(sessionId: string, text: string): void {
 
 function loadPendingUserMessage(sessionId: string): string {
   try {
-    const key = `${STORAGE_PREFIX}${sessionId}`;
-    const val = sessionStorage.getItem(key) || "";
-    console.log("[Debug] loadPendingUserMessage key=%s found=%s", key, !!val);
-    return val;
+    return sessionStorage.getItem(`${STORAGE_PREFIX}${sessionId}`) || "";
   } catch {
     return "";
   }
@@ -370,8 +346,7 @@ function clearPendingUserMessage(sessionId: string): void {
 
 function savePendingStopUsageNote(sessionId: string, markdown: string): void {
   try {
-    const key = `${STOP_USAGE_NOTE_PREFIX}${sessionId}`;
-    sessionStorage.setItem(key, markdown);
+    sessionStorage.setItem(`${STOP_USAGE_NOTE_PREFIX}${sessionId}`, markdown);
   } catch {
     /* quota exceeded – ignore */
   }
@@ -379,8 +354,9 @@ function savePendingStopUsageNote(sessionId: string, markdown: string): void {
 
 function loadPendingStopUsageNote(sessionId: string): string {
   try {
-    const key = `${STOP_USAGE_NOTE_PREFIX}${sessionId}`;
-    return sessionStorage.getItem(key) || "";
+    return (
+      sessionStorage.getItem(`${STOP_USAGE_NOTE_PREFIX}${sessionId}`) || ""
+    );
   } catch {
     return "";
   }
@@ -394,98 +370,22 @@ function clearPendingStopUsageNote(sessionId: string): void {
   }
 }
 
-type InterruptedTurnsMap = Record<string, IAgentScopeRuntimeWebUIMessage>;
-
-function normalizeTurnKey(userText: string): string {
-  return userText.trim();
-}
-
-function extractUserMessageText(msg: IAgentScopeRuntimeWebUIMessage): string {
-  if (msg?.role !== ROLE_USER) return "";
-  return (
-    extractTextFromContent(msg?.cards?.[0]?.data?.input?.[0]?.content) || ""
-  ).trim();
-}
-
 function extractAssistantCardOutputText(
   msg: IAgentScopeRuntimeWebUIMessage,
 ): string {
   if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) return "";
   let text = "";
-  for (const card of msg.cards) {
-    const cardRec = card as unknown as Record<string, unknown>;
-    if (cardRec?.code !== CARD_RESPONSE) continue;
-    const data = cardRec.data as Record<string, unknown> | undefined;
-    const output = data?.output;
+  for (const card of msg.cards as unknown as Array<Record<string, unknown>>) {
+    if (card?.code !== CARD_RESPONSE) continue;
+    const output = (card.data as Record<string, unknown> | undefined)?.output;
     if (!Array.isArray(output)) continue;
     for (const item of output) {
-      const content =
-        item && typeof item === "object"
-          ? (item as Record<string, unknown>).content
-          : undefined;
-      text += extractTextFromContent(content);
+      text += extractTextFromContent(
+        (item as Record<string, unknown> | undefined)?.content,
+      );
     }
   }
   return text;
-}
-
-function savedTurnIsRicherThan(
-  saved: IAgentScopeRuntimeWebUIMessage,
-  other: IAgentScopeRuntimeWebUIMessage,
-): boolean {
-  return (
-    extractAssistantCardOutputText(saved).length >
-    extractAssistantCardOutputText(other).length
-  );
-}
-
-function loadInterruptedTurnsMap(sessionId: string): InterruptedTurnsMap {
-  try {
-    const storageKey = `${INTERRUPTED_TURN_PREFIX}${sessionId}`;
-    const raw = sessionStorage.getItem(storageKey);
-    if (!raw) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-
-    // Legacy: single message object before per-turn map.
-    const legacy = parsed as IAgentScopeRuntimeWebUIMessage;
-    if (legacy.role === ROLE_ASSISTANT && Array.isArray(legacy.cards)) {
-      const fallbackKey = normalizeTurnKey(loadPendingUserMessage(sessionId));
-      return fallbackKey ? { [fallbackKey]: legacy } : {};
-    }
-
-    return parsed as InterruptedTurnsMap;
-  } catch {
-    return {};
-  }
-}
-
-function persistInterruptedTurnsMap(
-  sessionId: string,
-  map: InterruptedTurnsMap,
-): void {
-  try {
-    const storageKey = `${INTERRUPTED_TURN_PREFIX}${sessionId}`;
-    if (Object.keys(map).length === 0) {
-      sessionStorage.removeItem(storageKey);
-      return;
-    }
-    sessionStorage.setItem(storageKey, JSON.stringify(map));
-  } catch {
-    /* quota exceeded – ignore */
-  }
-}
-
-function saveInterruptedTurnMessage(
-  sessionId: string,
-  userTurnKey: string,
-  message: IAgentScopeRuntimeWebUIMessage,
-): void {
-  const key = normalizeTurnKey(userTurnKey);
-  if (!key) return;
-  const map = loadInterruptedTurnsMap(sessionId);
-  map[key] = message;
-  persistInterruptedTurnsMap(sessionId, map);
 }
 
 // ---------------------------------------------------------------------------
@@ -549,23 +449,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const note = markdown?.trim();
     if (!sessionId || !note) return;
     savePendingStopUsageNote(sessionId, note);
-  }
-
-  /**
-   * Persist the interrupted assistant bubble (with inline usage note) so it
-   * survives session switches before backend history catches up.
-   * Keyed by the preceding user turn text so multiple interrupted rounds
-   * in one session do not overwrite each other.
-   */
-  saveInterruptedTurn(
-    sessionId: string,
-    message: IAgentScopeRuntimeWebUIMessage,
-    userTurnKey?: string,
-  ): void {
-    const turnKey =
-      userTurnKey?.trim() || loadPendingUserMessage(sessionId).trim();
-    if (!sessionId || !message?.id || !turnKey) return;
-    saveInterruptedTurnMessage(sessionId, turnKey, message);
   }
 
   /**
@@ -667,115 +550,40 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const cachedNote = loadPendingStopUsageNote(backendSessionId).trim();
     if (!cachedNote) return;
 
-    const hasNoteInHistory = messages.some((msg) => {
-      if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards))
-        return false;
-
-      return msg.cards.some((card) => {
-        const cardData =
-          card && typeof card === "object"
-            ? ((card as unknown as Record<string, unknown>).data as
-                | Record<string, unknown>
-                | undefined)
-            : undefined;
-        if (!cardData) return false;
-
-        const output = cardData.output;
-        if (!Array.isArray(output)) return false;
-
-        return output.some((item) => {
-          const content =
-            item && typeof item === "object"
-              ? (item as Record<string, unknown>).content
-              : undefined;
-          return extractTextFromContent(content)?.trim() === cachedNote;
-        });
-      });
-    });
-
-    if (hasNoteInHistory) {
+    // If memory already contains the note, drop the cache and bail.
+    const alreadyPresent = messages.some(
+      (msg) =>
+        msg?.role === ROLE_ASSISTANT &&
+        extractAssistantCardOutputText(msg).includes(cachedNote),
+    );
+    if (alreadyPresent) {
       clearPendingStopUsageNote(backendSessionId);
       return;
     }
 
-    // Append the usage note inline to the last assistant message's response card,
-    // rather than creating a standalone message.
+    // Append inline to the last assistant message's response card.
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) continue;
 
       const responseCard = (
         msg.cards as unknown as Array<Record<string, unknown>>
-      ).find((card) => card?.code === CARD_RESPONSE) as
-        | Record<string, unknown>
-        | undefined;
+      ).find((card) => card?.code === CARD_RESPONSE);
+      const data = responseCard?.data as Record<string, unknown> | undefined;
+      if (!data) continue;
 
-      if (responseCard?.data) {
-        const data = responseCard.data as Record<string, unknown>;
-        if (!Array.isArray(data.output)) data.output = [];
-        (data.output as Array<Record<string, unknown>>).push({
-          id: `stop-usage-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`,
-          type: "message",
-          role: ROLE_ASSISTANT,
-          content: [{ type: "text", text: cachedNote, status: "completed" }],
-          status: "completed",
-        });
-        return;
-      }
+      if (!Array.isArray(data.output)) data.output = [];
+      (data.output as Array<Record<string, unknown>>).push({
+        id: `stop-usage-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 11)}`,
+        type: "message",
+        role: ROLE_ASSISTANT,
+        content: [{ type: "text", text: cachedNote, status: "completed" }],
+        status: "completed",
+      });
+      return;
     }
-  }
-
-  private patchInterruptedTurn(
-    messages: IAgentScopeRuntimeWebUIMessage[],
-    backendSessionId: string,
-  ): void {
-    const turnsMap = loadInterruptedTurnsMap(backendSessionId);
-    const turnKeys = Object.keys(turnsMap);
-    if (turnKeys.length === 0) return;
-
-    const remaining: InterruptedTurnsMap = { ...turnsMap };
-
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i];
-      if (msg.role !== ROLE_USER) continue;
-
-      const turnKey = normalizeTurnKey(extractUserMessageText(msg));
-      const saved = turnKey ? remaining[turnKey] : undefined;
-      if (!saved?.id) continue;
-
-      const savedIdx = messages.findIndex((m) => m.id === saved.id);
-      if (savedIdx >= 0) {
-        messages[savedIdx] = saved;
-        delete remaining[turnKey];
-        continue;
-      }
-
-      let assistantIdx = -1;
-      for (let j = i + 1; j < messages.length; j++) {
-        if (messages[j].role === ROLE_USER) break;
-        if (messages[j].role === ROLE_ASSISTANT) {
-          assistantIdx = j;
-          break;
-        }
-      }
-
-      if (assistantIdx < 0) {
-        messages.push(saved);
-        continue;
-      }
-
-      const backendAssistant = messages[assistantIdx];
-      if (savedTurnIsRicherThan(saved, backendAssistant)) {
-        messages[assistantIdx] = saved;
-        continue;
-      }
-
-      delete remaining[turnKey];
-    }
-
-    persistInterruptedTurnsMap(backendSessionId, remaining);
   }
 
   private createEmptySession(sessionId: string): ExtendedSession {
@@ -931,7 +739,6 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const generating = isGenerating(chatHistory);
     const messages = convertMessages(chatHistory.messages || []);
     this.patchLastUserMessage(messages, generating, backendId);
-    this.patchInterruptedTurn(messages, backendId);
     this.patchLastStopUsageNote(messages, backendId);
 
     const session: ExtendedSession = {

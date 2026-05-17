@@ -70,21 +70,25 @@ class TokenRecordingModelWrapper(ChatModelBase):
         from ..app.agent_context import get_current_session_id
 
         session_id = get_current_session_id()
-        if session_id and usage:
-            prev = self._usage_by_session.get(session_id)
-            if prev:
-                pt0 = int(prev.get("prompt_tokens", 0) or 0)
-                ct0 = int(prev.get("completion_tokens", 0) or 0)
-                self._usage_by_session[session_id] = {
-                    "provider_id": self._provider_id,
-                    "model_name": self.model_name,
-                    "prompt_tokens": pt0 + usage.get("prompt_tokens", 0),
-                    "completion_tokens": ct0
-                    + usage.get("completion_tokens", 0),
-                    "total_tokens": pt0 + ct0 + usage.get("total_tokens", 0),
-                }
-            else:
-                self._usage_by_session[session_id] = usage
+        if not session_id or not usage:
+            return
+        # Accumulate across sub-agent / multi-call turns in the same session.
+        prev = self._usage_by_session.get(session_id) or {}
+        pt = int(prev.get("prompt_tokens", 0) or 0) + usage.get(
+            "prompt_tokens",
+            0,
+        )
+        ct = int(prev.get("completion_tokens", 0) or 0) + usage.get(
+            "completion_tokens",
+            0,
+        )
+        self._usage_by_session[session_id] = {
+            "provider_id": self._provider_id,
+            "model_name": self.model_name,
+            "prompt_tokens": pt,
+            "completion_tokens": ct,
+            "total_tokens": pt + ct,
+        }
 
     async def __call__(
         self,

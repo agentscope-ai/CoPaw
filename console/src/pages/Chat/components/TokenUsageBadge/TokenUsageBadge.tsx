@@ -6,8 +6,6 @@ export interface TurnUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
-  provider_id?: string;
-  model_name?: string;
   estimated?: boolean;
 }
 
@@ -15,9 +13,6 @@ export interface ContextUsage {
   estimated_tokens: number;
   max_input_length: number;
   context_usage_ratio: number;
-  messages_tokens?: number;
-  compressed_summary_tokens?: number;
-  total_messages?: number;
 }
 
 export interface TokenUsageBadgeSnapshot {
@@ -44,6 +39,26 @@ const R = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
 const CX = SIZE / 2;
 
+const wrapperStyle: React.CSSProperties = {
+  position: "fixed",
+  right: 24,
+  bottom: 84,
+  zIndex: 2000,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 12px",
+  borderRadius: 12,
+  background: "rgba(20, 20, 20, 0.78)",
+  color: "#fff",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+  backdropFilter: "blur(6px)",
+  WebkitBackdropFilter: "blur(6px)",
+  fontSize: 12,
+  lineHeight: 1.35,
+  userSelect: "none",
+};
+
 const TokenUsageBadge: React.FC<Props> = ({ snapshot }) => {
   const { t } = useTranslation();
   if (!snapshot || (!snapshot.usage && !snapshot.context)) return null;
@@ -52,35 +67,11 @@ const TokenUsageBadge: React.FC<Props> = ({ snapshot }) => {
   const ratio = context
     ? Math.max(0, Math.min(Number(context.context_usage_ratio) || 0, 100))
     : 0;
-  const color = ringColor(ratio);
-  const dashOffset = CIRC * (1 - ratio / 100);
   const pctLabel =
     ratio > 0 && ratio < 1 ? `${ratio.toFixed(1)}%` : `${Math.round(ratio)}%`;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        right: 24,
-        bottom: 84,
-        zIndex: 2000,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 12px",
-        borderRadius: 12,
-        background: "rgba(20, 20, 20, 0.78)",
-        color: "#fff",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        fontSize: 12,
-        lineHeight: 1.35,
-        pointerEvents: "auto",
-        userSelect: "none",
-      }}
-      aria-label={t("chat.tokenUsageBadge.ariaLabel")}
-    >
+    <div style={wrapperStyle} aria-label={t("chat.tokenUsageBadge.ariaLabel")}>
       {context && (
         <svg width={SIZE} height={SIZE} style={{ flexShrink: 0 }}>
           <circle
@@ -96,10 +87,10 @@ const TokenUsageBadge: React.FC<Props> = ({ snapshot }) => {
             cy={CX}
             r={R}
             fill="none"
-            stroke={color}
+            stroke={ringColor(ratio)}
             strokeWidth={STROKE}
             strokeDasharray={`${CIRC} ${CIRC}`}
-            strokeDashoffset={dashOffset}
+            strokeDashoffset={CIRC * (1 - ratio / 100)}
             strokeLinecap="round"
             transform={`rotate(-90 ${CX} ${CX})`}
             style={{
