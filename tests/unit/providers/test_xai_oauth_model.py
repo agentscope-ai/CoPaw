@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 """Unit tests for :class:`qwenpaw.providers.xai_oauth_model.XaiOAuthChatModel`.
 
 The wrapper's whole job is: (1) install a thin shim around
@@ -12,8 +13,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-
-import pytest
 
 from qwenpaw.providers.xai_oauth_model import XaiOAuthChatModel
 
@@ -59,7 +58,10 @@ class TestConstruction:
     def test_base_url_inherited_from_auth(self) -> None:
         auth = _FakeAuth(base_url="https://mirror.example/v1")
         model = XaiOAuthChatModel(auth=auth, model_name="grok-4")
-        assert str(model.client.base_url).rstrip("/") == "https://mirror.example/v1"
+        assert (
+            str(model.client.base_url).rstrip("/")
+            == "https://mirror.example/v1"
+        )
 
     def test_explicit_client_kwargs_base_url_wins(self) -> None:
         # client_kwargs is the upstream override hook — if a caller
@@ -71,7 +73,10 @@ class TestConstruction:
             model_name="grok-4",
             client_kwargs={"base_url": "https://override.example/v1"},
         )
-        assert str(model.client.base_url).rstrip("/") == "https://override.example/v1"
+        assert (
+            str(model.client.base_url).rstrip("/")
+            == "https://override.example/v1"
+        )
 
     def test_base_url_property_uses_auth(self) -> None:
         auth = _FakeAuth(base_url="https://mirror.example/v1")
@@ -105,7 +110,6 @@ class TestBearerRefresh:
         model = XaiOAuthChatModel(auth=auth, model_name="grok-4")
 
         captured: dict[str, Any] = {}
-        original = model.client.chat.completions.create
 
         async def _spy(*args: Any, **kwargs: Any) -> str:
             # Capture the api_key value at the moment the underlying
@@ -150,9 +154,8 @@ class TestBearerRefresh:
             seen.append(model.client.api_key)
             return "done"
 
-        # The wrapper saved the original create as a closure; we have
-        # to re-install on top of it so the wrapper still runs first.
-        wrapped = model.client.chat.completions.create
+        # The wrapper saved the original create as a closure; we
+        # re-install on top of it so the wrapper still runs first.
 
         async def _outer(*args: Any, **kwargs: Any) -> Any:
             # First run the wrapper (refresh + swap), then our spy.

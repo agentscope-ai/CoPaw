@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for :class:`qwenpaw.providers.xai_oauth_provider.XaiOAuthProvider`.
+# pylint: disable=protected-access
+"""Unit tests for ``qwenpaw.providers.xai_oauth_provider.XaiOAuthProvider``.
 
 Covers the four overridden entry points (``check_connection``,
 ``fetch_models``, ``check_model_connection``,
@@ -179,6 +180,10 @@ class TestFetchModels:
 
         class _FakeModels:
             async def list(self, timeout: float | None = None) -> Any:
+                # ``timeout`` mirrors the real openai-python signature
+                # so the SDK call from XaiOAuthProvider compiles —
+                # the fake just returns canned data.
+                del timeout
                 return SimpleNamespace(data=rows)
 
         fake_client = SimpleNamespace(models=_FakeModels())

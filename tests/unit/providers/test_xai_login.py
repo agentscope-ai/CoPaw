@@ -12,10 +12,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import http.server
 import json
 import os
-import socketserver
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -33,7 +31,6 @@ from qwenpaw.providers.xai_login import (
     _pkce_challenge,
     _pkce_verifier,
     _save_auth,
-    _start_callback_server,
     is_port_free,
 )
 from qwenpaw.providers.xai_auth import (
@@ -41,6 +38,13 @@ from qwenpaw.providers.xai_auth import (
     XAI_OAUTH_CLIENT_ID,
     XAI_OAUTH_ISSUER,
 )
+
+# URL fixtures used across discovery tests — extracted so per-test
+# dicts fit inside the project's 79-char line cap without escaping.
+_AUTH_URL = "https://auth.x.ai/oauth2/authorize"
+_TOKEN_URL = "https://auth.x.ai/oauth2/token"
+_AUTH_URL_HTTP = "http://auth.x.ai/oauth2/authorize"
+_TOKEN_URL_EVIL = "https://evil.example.com/oauth2/token"
 
 
 # ---------------------------------------------------------------- #
@@ -74,7 +78,12 @@ class _FakeResponse:
 class _FakeAsyncClient:
     instances: list["_FakeAsyncClient"] = []
 
-    def __init__(self, *, response: _FakeResponse | dict[str, _FakeResponse], **_: Any) -> None:
+    def __init__(
+        self,
+        *,
+        response: _FakeResponse | dict[str, _FakeResponse],
+        **_: Any,
+    ) -> None:
         # Allow either a single response or a per-URL map (for the
         # mixed discovery + token endpoints case).
         self._response = response
@@ -126,8 +135,7 @@ class TestPkce:
             v = _pkce_verifier()
             assert 43 <= len(v) <= 128
             assert all(
-                c.isalnum() or c in "-_"
-                for c in v
+                c.isalnum() or c in "-_" for c in v
             ), f"non-url-safe char in {v!r}"
 
     def test_verifier_is_unique_per_call(self) -> None:
@@ -161,8 +169,8 @@ class TestDiscover:
             _FakeResponse(
                 200,
                 {
-                    "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
-                    "token_endpoint": "https://auth.x.ai/oauth2/token",
+                    "authorization_endpoint": _AUTH_URL,
+                    "token_endpoint": _TOKEN_URL,
                 },
             ),
         )
@@ -170,12 +178,14 @@ class TestDiscover:
         endpoints = await _discover()
 
         assert endpoints == {
-            "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
-            "token_endpoint": "https://auth.x.ai/oauth2/token",
+            "authorization_endpoint": _AUTH_URL,
+            "token_endpoint": _TOKEN_URL,
         }
         # Asked the well-known URL on the issuer.
         get_url = _FakeAsyncClient.instances[0].gets[0]
-        assert get_url == f"{XAI_OAUTH_ISSUER}/.well-known/openid-configuration"
+        assert (
+            get_url == f"{XAI_OAUTH_ISSUER}/.well-known/openid-configuration"
+        )
 
     async def test_rejects_missing_endpoint(
         self,
@@ -185,7 +195,7 @@ class TestDiscover:
             monkeypatch,
             _FakeResponse(
                 200,
-                {"authorization_endpoint": "https://auth.x.ai/oauth2/authorize"},
+                {"authorization_endpoint": _AUTH_URL},
             ),
         )
 
@@ -204,8 +214,8 @@ class TestDiscover:
             _FakeResponse(
                 200,
                 {
-                    "authorization_endpoint": "http://auth.x.ai/oauth2/authorize",
-                    "token_endpoint": "https://auth.x.ai/oauth2/token",
+                    "authorization_endpoint": _AUTH_URL_HTTP,
+                    "token_endpoint": _TOKEN_URL,
                 },
             ),
         )
@@ -222,8 +232,8 @@ class TestDiscover:
             _FakeResponse(
                 200,
                 {
-                    "authorization_endpoint": "https://auth.x.ai/oauth2/authorize",
-                    "token_endpoint": "https://evil.example.com/oauth2/token",
+                    "authorization_endpoint": _AUTH_URL,
+                    "token_endpoint": _TOKEN_URL_EVIL,
                 },
             ),
         )
@@ -272,7 +282,7 @@ class TestCallbackHandler:
         handler, holder = _make_handler("/random", expected_state="abc")
         handler.do_GET()
         handler.send_response.assert_called_with(404)
-        assert holder == {}
+        assert not holder
 
     def test_error_param_captured(self) -> None:
         handler, holder = _make_handler(
@@ -341,7 +351,11 @@ class TestExchangeCode:
             code_verifier="V" * 64,
         )
 
-        assert body == {"access_token": "at", "refresh_token": "rt", "id_token": "it"}
+        assert body == {
+            "access_token": "at",
+            "refresh_token": "rt",
+            "id_token": "it",
+        }
         post = _FakeAsyncClient.instances[0].posts[0]
         assert post["url"] == "https://auth.x.ai/oauth2/token"
         assert post["data"]["grant_type"] == "authorization_code"
@@ -378,7 +392,10 @@ class TestExchangeCode:
             _FakeResponse(200, {"access_token": "at"}),
         )
 
-        with pytest.raises(RuntimeError, match="no access_token / refresh_token"):
+        with pytest.raises(
+            RuntimeError,
+            match="no access_token / refresh_token",
+        ):
             await _exchange_code(
                 token_endpoint="https://auth.x.ai/oauth2/token",
                 code="AUTH",

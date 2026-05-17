@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 """Unit tests for :mod:`qwenpaw.providers.xai_auth`.
 
 Covers the disk-loading invariants, JWT exp decoding, mtime-tracked
@@ -95,7 +96,11 @@ def _write_auth_file(
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, body: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        body: dict[str, Any] | None = None,
+    ) -> None:
         self.status_code = status_code
         self._body = body or {}
         self.text = json.dumps(self._body)
@@ -107,7 +112,10 @@ class _FakeResponse:
         if self.status_code >= 400:
             raise httpx.HTTPStatusError(
                 f"HTTP {self.status_code}",
-                request=httpx.Request("POST", "https://auth.x.ai/oauth2/token"),
+                request=httpx.Request(
+                    "POST",
+                    "https://auth.x.ai/oauth2/token",
+                ),
                 response=httpx.Response(self.status_code),
             )
 
@@ -192,7 +200,11 @@ class TestResolveAuthPath:
         path = _resolve_auth_path()
         assert path == Path("/tmp/fakehome/.xai/auth.json")
 
-    def test_honors_xai_home_env(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_honors_xai_home_env(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         monkeypatch.setenv("XAI_HOME", str(tmp_path))
         path = _resolve_auth_path()
         assert path == tmp_path / "auth.json"
@@ -297,7 +309,11 @@ class TestXaiAuthLoad:
         assert creds is not None
         # Fallback adds 1h to mtime, so expiry is ~1h from now.
         now_ms = int(time.time() * 1000)
-        assert (now_ms + 3500 * 1000) < creds.expires_at_ms < (now_ms + 3700 * 1000)
+        assert (
+            (now_ms + 3500 * 1000)
+            < creds.expires_at_ms
+            < (now_ms + 3700 * 1000)
+        )
 
 
 # ---------------------------------------------------------------- #
@@ -326,7 +342,11 @@ class TestEnsureFreshAndReload:
         await auth.ensure_fresh()
         # Simulate a fresh `qwenpaw xai login` overwriting on disk.
         new_token = _make_jwt(7200)
-        _write_auth_file(path, access_token=new_token, refresh_token="rt-rotated")
+        _write_auth_file(
+            path,
+            access_token=new_token,
+            refresh_token="rt-rotated",
+        )
         # Advance mtime so the hot-reload check triggers.
         new_mtime = os.stat(path).st_mtime + 5
         os.utime(path, (new_mtime, new_mtime))
@@ -527,8 +547,6 @@ class TestPublicSurface:
             await auth.ensure_fresh()
             mode = os.stat(path).st_mode & 0o777
             assert mode == 0o600
-
-        import asyncio
 
         asyncio.run(_go())
 
