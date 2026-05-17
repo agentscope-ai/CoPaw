@@ -1,0 +1,191 @@
+<!doctype html>
+<!--
+  title.html — opening title card template for the video pipeline.
+
+  Edit the three text spans (eyebrow / title / subtitle / tagline) and
+  optionally swap the <img class="logo"> src. The colours live in the
+  :root custom properties. Everything else is reusable.
+
+  The page must keep the __movieReady / __movieDone contract — the
+  recorder waits for the first and stops on the second. Adjust
+  TITLE_DUR_SEC to match the bg music length minus the outro fade.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Title</title>
+<style>
+  :root {
+    --bg-deep:    #050810;
+    --bg-mid:     #0b1124;
+    --accent:     #a78bfa;
+    --accent-2:   #60a5fa;
+    --accent-3:   #f59e0b;
+    --text:       #e5e7eb;
+    --text-dim:   #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(65% 55% at 30% 30%, rgba(80, 60, 200, 0.18), transparent 60%),
+      radial-gradient(70% 60% at 80% 80%, rgba(167,139,250,0.12), transparent 60%),
+      radial-gradient(45% 35% at 50% 50%, rgba(96,165,250,0.10), transparent 65%),
+      linear-gradient(180deg, var(--bg-mid), var(--bg-deep));
+  }
+  .ring {
+    position: absolute; left: 50%; top: 50%;
+    width: 880px; height: 880px;
+    border-radius: 50%;
+    border: 1px solid rgba(167,139,250,0.12);
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+    animation: ring-in 2.4s cubic-bezier(.16,.7,.2,1) 0.3s forwards,
+               ring-spin 60s linear 2.7s infinite;
+  }
+  .ring::before, .ring::after {
+    content: '';
+    position: absolute; inset: -1px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+  }
+  .ring::before { border-top-color: rgba(167,139,250,0.55); }
+  .ring::after  { border-left-color: rgba(96,165,250,0.45); transform: rotate(120deg); }
+  @keyframes ring-in {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes ring-spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+  .glow {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(167,139,250,0.55), transparent 65%);
+    filter: blur(3px);
+    opacity: 0;
+    animation: glow-drift 7s ease-out 0.5s infinite;
+  }
+  .glow:nth-child(2) { left: 18%; top: 30%; animation-delay: 0.2s;  animation-duration: 8s; }
+  .glow:nth-child(3) { left: 78%; top: 24%; animation-delay: 1.3s;  animation-duration: 9s; }
+  .glow:nth-child(4) { left: 30%; top: 80%; animation-delay: 2.1s;  animation-duration: 7.5s; }
+  .glow:nth-child(5) { left: 70%; top: 78%; animation-delay: 0.8s;  animation-duration: 10s; }
+  .glow:nth-child(6) { left: 50%; top: 18%; animation-delay: 3.0s;  animation-duration: 9s;
+                       background: radial-gradient(circle, rgba(96,165,250,0.45), transparent 65%); }
+  @keyframes glow-drift {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    25%  { opacity: 0.9; }
+    100% { opacity: 0; transform: translate(40px, -50px) scale(1.4); }
+  }
+
+  .card {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 22px;
+    text-align: center;
+    z-index: 5;
+  }
+  .logo {
+    width: 88px; height: 88px; object-fit: contain;
+    filter: drop-shadow(0 0 26px rgba(167,139,250,0.35));
+    opacity: 0; transform: scale(0.86);
+    animation: logo-in 1.2s cubic-bezier(.16,.7,.2,1) 0.1s forwards;
+  }
+  @keyframes logo-in { 100% { opacity: 1; transform: scale(1); } }
+  .eyebrow {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.32em;
+    color: var(--text-dim);
+    opacity: 0;
+    animation: fade-up 1.0s ease-out 0.7s forwards;
+  }
+  .title {
+    font-size: 92px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.0;
+    margin: 0;
+    background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    opacity: 0;
+    animation: title-in 1.2s cubic-bezier(.16,.7,.2,1) 1.0s forwards;
+  }
+  .title .accent {
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  @keyframes title-in {
+    0%   { opacity: 0; transform: translateY(14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .subtitle {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text-dim);
+    margin: 6px 0 0;
+    max-width: 720px;
+    line-height: 1.4;
+    opacity: 0;
+    animation: fade-up 1.0s ease-out 1.8s forwards;
+  }
+  .tagline {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    color: rgba(229,231,235,0.45);
+    margin-top: 18px;
+    opacity: 0;
+    animation: fade-up 1.0s ease-out 2.6s forwards;
+  }
+  @keyframes fade-up {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .card, .ring, .glow { animation-fill-mode: both; }
+  body.outro .card  { animation: card-out 0.9s ease-in 0s forwards; }
+  body.outro .ring  { animation: ring-out 0.9s ease-in 0s forwards; }
+  body.outro .glow  { animation: ring-out 0.7s ease-in 0s forwards; }
+  @keyframes card-out { 100% { opacity: 0; transform: translateY(-10px); } }
+  @keyframes ring-out { 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+  <div class="ring"></div>
+  <div class="glow"></div>
+  <div class="glow"></div>
+  <div class="glow"></div>
+  <div class="glow"></div>
+  <div class="glow"></div>
+  <div class="card">
+    <!-- TODO: swap to your own logo, or remove this <img> entirely. -->
+    <!-- <img class="logo" src="../assets/img/logo.png" alt=""> -->
+    <div class="eyebrow">Eyebrow · subtitle · category</div>
+    <h1 class="title">Product <span class="accent">name</span></h1>
+    <p class="subtitle">A short line of pitch — the one sentence you want on the deck slide.</p>
+    <div class="tagline">A GUIDED TOUR · X MINUTES</div>
+  </div>
+
+<script>
+  // Recorder contract — required.
+  const TITLE_DUR_SEC = 8.0;   // total visible duration
+  const FADE_DUR_SEC  = 0.9;   // outro fade
+  window.__movieReady = true;
+  window.__movieMarks = [];
+  setTimeout(() => document.body.classList.add('outro'), (TITLE_DUR_SEC - FADE_DUR_SEC) * 1000);
+  setTimeout(() => { window.__movieDone = true; }, TITLE_DUR_SEC * 1000);
+</script>
+</body>
+</html>
