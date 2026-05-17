@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from .constants import (
+    BUILTIN_EXECUTOR_AGENT_ID,
     BUILTIN_ORCHESTRATION_AGENT_ID,
+    BUILTIN_VERIFIER_AGENT_ID,
     PLUGIN_DIR,
     _AGENT_SPECS,
 )
@@ -340,6 +342,150 @@ def _seed_persona_md_files(
                     shutil.copy2(src, dst)
     except (ImportError, Exception) as e:
         logger.debug("Generic MD copy skipped: %s", e)
+
+
+def uninstall_agents() -> None:
+    """Uninstall all CloudPaw agents and related resources.
+
+    Removes agent profiles, workspaces, plugin skills from the pool,
+    and environment variables that were provisioned by CloudPaw.
+    """
+    _uninstall_agent_profiles()
+    _uninstall_plugin_skills()
+    _uninstall_cloudpaw_env_vars()
+
+
+def _uninstall_agent_profiles() -> None:
+    """Remove CloudPaw agent profiles and their workspaces."""
+    agent_ids = [
+        BUILTIN_ORCHESTRATION_AGENT_ID,
+        BUILTIN_EXECUTOR_AGENT_ID,
+        BUILTIN_VERIFIER_AGENT_ID,
+    ]
+
+    try:
+        from qwenpaw.config.utils import load_config, save_config
+    except ImportError:
+        logger.warning("Cannot import config modules; agent uninstall skipped")
+        return
+
+    config = load_config()
+    changed = False
+
+    for agent_id in agent_ids:
+        if agent_id in config.agents.profiles:
+            ref = config.agents.profiles[agent_id]
+            ws_dir = Path(ref.workspace_dir).expanduser().resolve()
+            del config.agents.profiles[agent_id]
+            changed = True
+            logger.info("Removed agent profile: %s", agent_id)
+
+            if ws_dir.exists():
+                try:
+                    shutil.rmtree(ws_dir)
+                    logger.info("Deleted workspace: %s", ws_dir)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to delete workspace %s: %s",
+                        ws_dir,
+                        exc,
+                    )
+        else:
+            logger.debug("Agent %s not in profiles, skipping", agent_id)
+
+    if config.agents.active_agent in agent_ids:
+        config.agents.active_agent = "default"
+        changed = True
+        logger.info("Reset active_agent to 'default'")
+
+    if changed:
+        try:
+            save_config(config)
+            logger.info("Saved updated agent config")
+        except Exception as exc:
+            logger.warning("Failed to save config after uninstall: %s", exc)
+
+
+def _uninstall_plugin_skills() -> None:
+    """Remove CloudPaw skills from the shared skill pool."""
+    from .constants import _PLUGIN_SKILLS
+
+    try:
+        from qwenpaw.agents.skill_system import (
+            get_skill_pool_dir,
+            ensure_skill_pool_initialized,
+        )
+    except ImportError:
+        logger.warning("Cannot import skill_system; skill uninstall skipped")
+        return
+
+    try:
+        ensure_skill_pool_initialized()
+    except Exception as exc:
+        logger.warning("Skill pool init failed: %s", exc)
+
+    pool_dir = get_skill_pool_dir()
+    manifest_path = pool_dir / "skill.json"
+
+    for skill_name in _PLUGIN_SKILLS:
+        skill_dir = pool_dir / skill_name
+        if skill_dir.exists():
+            try:
+                shutil.rmtree(skill_dir)
+                logger.info("Deleted skill from pool: %s", skill_name)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete skill %s: %s",
+                    skill_name,
+                    exc,
+                )
+
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            skills = manifest.get("skills", {})
+            changed = False
+            for skill_name in _PLUGIN_SKILLS:
+                if skill_name in skills:
+                    if skills[skill_name].get("source") == "plugin:cloudpaw":
+                        del skills[skill_name]
+                        changed = True
+
+            if changed:
+                manifest_path.write_text(
+                    json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+                logger.info("Updated skill pool manifest")
+        except Exception as exc:
+            logger.warning("Failed to update skill pool manifest: %s", exc)
+
+
+def _uninstall_cloudpaw_env_vars() -> None:
+    """Remove CloudPaw-provisioned environment variables from envs.json."""
+    from .plugin import _DEFAULT_ENV_KEYS
+
+    try:
+        from qwenpaw.envs import load_envs, save_envs
+    except ImportError:
+        logger.warning("Cannot import qwenpaw.envs; env uninstall skipped")
+        return
+
+    envs = load_envs()
+    changed = False
+
+    for key in _DEFAULT_ENV_KEYS:
+        if key in envs:
+            del envs[key]
+            changed = True
+            logger.info("Removed env var: %s", key)
+
+    if changed:
+        try:
+            save_envs(envs)
+            logger.info("Saved updated envs.json")
+        except Exception as exc:
+            logger.warning("Failed to save envs.json after uninstall: %s", exc)
 
 
 def _install_workspace_skills(
