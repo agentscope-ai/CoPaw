@@ -47,7 +47,14 @@ class OpenAIProvider(Provider):
     """Provider implementation for OpenAI API and compatible endpoints."""
 
     def _build_default_headers(self) -> dict:
-        return dict(self.custom_headers) if self.custom_headers else {}
+        headers: dict = {}
+        custom_headers = getattr(self, "custom_headers", None) or {}
+        extra_headers = self.generate_kwargs.get("extra_headers")
+        if custom_headers:
+            headers.update(custom_headers)
+        if extra_headers:
+            headers.update(extra_headers)
+        return headers
 
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         kwargs: dict = {
