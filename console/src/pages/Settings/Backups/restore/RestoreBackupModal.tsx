@@ -279,9 +279,7 @@ export default function RestoreBackupModal({
   };
 
   const trustState =
-    backupDetail?.accepted_via_trust ??
-    backup.accepted_via_trust ??
-    null;
+    backupDetail?.accepted_via_trust ?? backup.accepted_via_trust ?? null;
 
   const summaryText =
     restoreMode === "custom" &&

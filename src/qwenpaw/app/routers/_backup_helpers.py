@@ -80,9 +80,9 @@ def parse_pending_token(
 def strip_signature(meta: BackupMeta) -> BackupMeta:
     """Hide the HMAC while preserving the public trust-state signal.
 
-    Clients only need to know whether the backup is local/foreign/legacy.
-    Returning the raw HMAC would add no UI value and would expose an internal
-    integrity token in API responses.
+    Clients only need the public trust marker, not the raw HMAC. Returning the
+    signature would add no UI value and would expose an internal integrity
+    token in API responses.
     """
     updates: dict[str, object | None] = {"signature": None}
     if meta.signature is None:
