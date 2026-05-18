@@ -806,6 +806,16 @@
     "pleaseSelectRepeatEndType": "Selecione a condição de término",
     "pleaseInputRepeatUntil": "Selecione a data final",
     "pleaseInputRepeatCount": "Informe o número de execuções",
+    "validation": {
+      "cronRequired": "A expressão cron é obrigatória para agendamentos recorrentes.",
+      "runAtRequired": "O horário de execução é obrigatório para agendamentos únicos.",
+      "repeatUntilRequired": "Ao usar \"Encerrar em data\", selecione a data final.",
+      "repeatCountRequired": "Ao usar \"Contagem limitada\", informe o número de execuções.",
+      "repeatUntilAfterRunAt": "A data final deve ser posterior ao horário de execução. Escolha uma data final após o horário de execução.",
+      "textRequired": "O conteúdo da mensagem é obrigatório quando o tipo da tarefa é text.",
+      "requestRequired": "O conteúdo da requisição é obrigatório quando o tipo da tarefa é agent.",
+      "invalidCronExpression": "Expressão cron inválida. Use o formato cron de 5 campos."
+    },
     "runtimeShareSession": "Compartilhar sessão",
     "shareSessionTooltip": "Quando ativado, compartilha a sessão com o usuário de destino. Quando desativado, cada execução cria contexto isolado com ID de execução único. Adequado para tarefas independentes sem memória. Padrão: ativado",
     "listView": "Lista",

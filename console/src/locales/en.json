@@ -847,6 +847,16 @@
     "pleaseSelectRepeatEndType": "Please select end condition",
     "pleaseInputRepeatUntil": "Please select end date",
     "pleaseInputRepeatCount": "Please enter run count",
+    "validation": {
+      "cronRequired": "Cron expression is required for recurring schedules.",
+      "runAtRequired": "Execution time is required for one-time schedules.",
+      "repeatUntilRequired": "Please select an end date when using \"End on date\".",
+      "repeatCountRequired": "Please provide a run count when using \"Limited count\".",
+      "repeatUntilAfterRunAt": "The end date must be later than the execution time. Please choose an end date after the execution time.",
+      "textRequired": "Message content is required when task type is text.",
+      "requestRequired": "Request content is required when task type is agent.",
+      "invalidCronExpression": "Invalid cron expression. Please use a 5-field cron format."
+    },
     "pleaseSelectTaskType": "Please select task type",
     "pleaseInputRequest": "Please input request content",
     "pleaseInputMessageContent": "Please enter message content",

@@ -450,7 +450,17 @@
     "action": "Tindakan",
     "executeNow": "Jalankan Sekarang",
     "totalItems": "Total {{count}} item",
-    "selectTimezone": "Pilih zona waktu"
+    "selectTimezone": "Pilih zona waktu",
+    "validation": {
+      "cronRequired": "Ekspresi cron wajib diisi untuk jadwal berulang.",
+      "runAtRequired": "Waktu eksekusi wajib diisi untuk jadwal sekali jalan.",
+      "repeatUntilRequired": "Saat memilih \"Berakhir pada tanggal\", tanggal akhir wajib diisi.",
+      "repeatCountRequired": "Saat memilih \"Jumlah terbatas\", jumlah eksekusi wajib diisi.",
+      "repeatUntilAfterRunAt": "Tanggal akhir harus lebih lambat daripada waktu eksekusi. Pilih tanggal akhir setelah waktu eksekusi.",
+      "textRequired": "Konten pesan wajib diisi saat jenis tugas adalah text.",
+      "requestRequired": "Konten request wajib diisi saat jenis tugas adalah agent.",
+      "invalidCronExpression": "Ekspresi cron tidak valid. Gunakan format cron 5 kolom."
+    }
   },
   "heartbeat": {
     "title": "Heartbeat",

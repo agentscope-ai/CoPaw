@@ -605,6 +605,16 @@
     "pleaseSelectRepeatEndType": "終了条件を選択してください",
     "pleaseInputRepeatUntil": "終了日時を選択してください",
     "pleaseInputRepeatCount": "実行回数を入力してください",
+    "validation": {
+      "cronRequired": "繰り返しスケジュールには Cron 式が必要です。",
+      "runAtRequired": "単発スケジュールには実行日時が必要です。",
+      "repeatUntilRequired": "「日時で終了」を選択した場合は終了日時が必要です。",
+      "repeatCountRequired": "「回数で終了」を選択した場合は実行回数が必要です。",
+      "repeatUntilAfterRunAt": "終了日時は実行日時より後である必要があります。実行日時より後の日時を指定してください。",
+      "textRequired": "タスクタイプが text の場合、メッセージ内容は必須です。",
+      "requestRequired": "タスクタイプが agent の場合、リクエスト内容は必須です。",
+      "invalidCronExpression": "Cron 式が不正です。5 フィールド形式を使用してください。"
+    },
     "listView": "リスト表示",
     "calendarView": "カレンダー表示",
     "calendarEmptyHint": "Scheduled タスクはまだありません。作成するとカレンダーに表示されます。",

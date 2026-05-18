@@ -686,6 +686,16 @@
     "pleaseSelectRepeatEndType": "请选择结束方式",
     "pleaseInputRepeatUntil": "请选择截止时间",
     "pleaseInputRepeatCount": "请输入执行次数",
+    "validation": {
+      "cronRequired": "循环任务必须填写 Cron 表达式。",
+      "runAtRequired": "日程任务必须填写执行时间。",
+      "repeatUntilRequired": "选择“终止于某天”时，必须填写截止时间。",
+      "repeatCountRequired": "选择“限定次数”时，必须填写执行次数。",
+      "repeatUntilAfterRunAt": "截止时间必须晚于执行时间，请将截止时间设置为执行时间之后。",
+      "textRequired": "任务类型为“消息内容”时，消息内容不能为空。",
+      "requestRequired": "任务类型为“Agent”时，请求内容不能为空。",
+      "invalidCronExpression": "Cron 表达式无效，请使用 5 段 Cron 格式。"
+    },
     "pleaseSelectTaskType": "请选择任务类型",
     "pleaseInputRequest": "请输入请求内容",
     "pleaseInputMessageContent": "请输入消息内容",
