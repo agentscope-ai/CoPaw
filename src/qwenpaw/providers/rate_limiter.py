@@ -169,7 +169,7 @@ class LLMRateLimiter:
     # stalling all LLM calls — including interactive user chats — for minutes.
     # Background tasks (dream, heartbeat) share the global limiter, so without
     # this cap a single dream 429 can cascade into a 5-minute hang.
-    _MAX_PAUSE_SECONDS: float = 60.0
+    MAX_PAUSE_SECONDS: float = 60.0
 
     async def report_rate_limit(
         self,
@@ -187,7 +187,7 @@ class LLMRateLimiter:
         raw_pause = (
             retry_after if retry_after is not None else self._default_pause
         )
-        pause = min(raw_pause, self._MAX_PAUSE_SECONDS)
+        pause = min(raw_pause, self.MAX_PAUSE_SECONDS)
         if pause < raw_pause:
             logger.debug(
                 "LLM rate limiter: capping retry_after %.1fs → %.1fs",

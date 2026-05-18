@@ -305,6 +305,31 @@ class RetryChatModel(ChatModelBase):
         name = self._inner.model_name
         return f"{provider_id}:{name}" if provider_id else name
 
+    @staticmethod
+    async def _handle_rate_limit_exc(
+        exc: Exception,
+        limiter: LLMRateLimiter,
+    ) -> None:
+        """Inspect *exc* and update the rate limiter accordingly.
+
+        - Internal acquire timeout (``_is_acquire_timeout``): re-raise as-is;
+          no report, no retry.
+        - Retryable API 429 with Retry-After > ``MAX_PAUSE_SECONDS``: re-raise
+          immediately — retrying after the capped pause would just get another
+          429 (e.g. Anthropic FreeUsageLimitError with Retry-After: 51496 s).
+        - Normal 429: call ``report_rate_limit()`` to set the per-model pause.
+        """
+        if getattr(exc, "_is_acquire_timeout", False):
+            raise exc
+        if _is_retryable(exc) and _is_rate_limit(exc):
+            retry_after = _extract_retry_after(exc)
+            if (
+                retry_after is not None
+                and retry_after > LLMRateLimiter.MAX_PAUSE_SECONDS
+            ):
+                raise exc
+            await limiter.report_rate_limit(retry_after)
+
     async def _consume_stream_with_slot(
         self,
         stream: AsyncGenerator[ChatResponse, None],
@@ -443,12 +468,7 @@ class RetryChatModel(ChatModelBase):
 
             except Exception as exc:
                 last_exc = exc
-                # Internal acquire timeout: raise immediately without
-                # report_rate_limit() or retry — it is not an API error.
-                if getattr(exc, "_is_acquire_timeout", False):
-                    raise
-                if _is_retryable(exc) and _is_rate_limit(exc):
-                    await limiter.report_rate_limit(_extract_retry_after(exc))
+                await self._handle_rate_limit_exc(exc, limiter)
 
                 if not _is_retryable(exc) or attempt >= attempts:
                     raise
