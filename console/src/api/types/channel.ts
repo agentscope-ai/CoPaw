@@ -40,6 +40,7 @@ export interface FeishuConfig extends BaseChannelConfig {
   verification_token: string;
   media_dir: string;
   domain?: "feishu" | "lark";
+  streaming_enabled?: boolean;
 }
 
 export interface QQConfig extends BaseChannelConfig {

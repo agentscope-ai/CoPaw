@@ -236,6 +236,8 @@ class FeishuConfig(BaseChannelConfig):
     """Feishu/Lark channel: app_id, app_secret; optional encrypt_key,
     verification_token for event handler. media_dir for received media.
     domain: 'feishu' for China, 'lark' for international.
+    streaming_enabled: enable CardKit streaming card updates for real-time
+    typewriter-style text output.
     """
 
     app_id: str = ""
@@ -244,6 +246,7 @@ class FeishuConfig(BaseChannelConfig):
     verification_token: str = ""
     media_dir: Optional[str] = None
     domain: Literal["feishu", "lark"] = "feishu"
+    streaming_enabled: bool = False
 
 
 class QQConfig(BaseChannelConfig):
