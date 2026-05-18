@@ -53,7 +53,7 @@ async def test_import_requires_trust_for_unsigned_backup(
 
 
 @pytest.mark.asyncio
-async def test_import_trusted_foreign_signs_with_local_key(
+async def test_import_trusted_legacy_signs_with_local_key(
     tmp_path,
     monkeypatch,
 ):
@@ -68,6 +68,38 @@ async def test_import_trusted_foreign_signs_with_local_key(
     assert result.imported_via_trust_foreign is True
     assert result.signature
     dest = backup_dir / "foreign.zip"
+    with zipfile.ZipFile(dest, "r") as zf:
+        meta = BackupMeta.model_validate_json(zf.read(META_FILE))
+        assert meta.imported_via_trust_foreign is True
+        assert verify_signature(zf, meta)
+
+
+@pytest.mark.asyncio
+async def test_import_trusted_foreign_signature_signs_with_local_key(
+    tmp_path,
+    monkeypatch,
+):
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    _patch_backup_dir(monkeypatch, backup_dir)
+
+    upload = tmp_path / "foreign.zip"
+    foreign_keys = tmp_path / "foreign-keys"
+    foreign_keys.mkdir()
+    _patch_backup_dir(monkeypatch, foreign_keys)
+    foreign_meta = BackupMeta(
+        id="foreign-signed",
+        name="Foreign signed",
+        imported_via_trust_foreign=False,
+    )
+    _write_backup(upload, foreign_meta)
+    replace_meta_with_local_signature(upload, foreign_meta)
+
+    _patch_backup_dir(monkeypatch, backup_dir)
+    result = await storage.import_backup(upload, trust_foreign=True)
+
+    assert result.imported_via_trust_foreign is True
+    dest = backup_dir / "foreign-signed.zip"
     with zipfile.ZipFile(dest, "r") as zf:
         meta = BackupMeta.model_validate_json(zf.read(META_FILE))
         assert meta.imported_via_trust_foreign is True

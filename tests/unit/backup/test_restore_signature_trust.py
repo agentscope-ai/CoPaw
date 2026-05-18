@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from qwenpaw.backup._ops.restore_helpers import (
+from qwenpaw.backup._utils.signing import (
     resolve_signature_action,
     sign_trusted_backup,
 )
@@ -62,6 +62,7 @@ def test_restore_requires_explicit_trust_for_foreign_signature(
                 "foreign",
                 trust_legacy=False,
                 trust_foreign=False,
+                operation="Restoring",
             )
 
         assert exc_info.value.code == "backup_signature_mismatch"
@@ -72,6 +73,7 @@ def test_restore_requires_explicit_trust_for_foreign_signature(
                 "foreign",
                 trust_legacy=False,
                 trust_foreign=True,
+                operation="Restoring",
             )
             == "sign_trusted"
         )

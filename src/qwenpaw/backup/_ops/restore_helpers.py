@@ -2,7 +2,7 @@
 """Pure-function helpers for restore operations.
 
 These functions are free of ``self`` so they can be unit-tested in isolation.
-They also hold the trust-boundary decisions for restore so the large restore
+They hold restore-specific config and workspace decisions so the large restore
 operation remains mostly file staging and commit orchestration.
 """
 from __future__ import annotations
@@ -15,77 +15,18 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
 from .._utils.constants import PREFIX_SECRETS, PREFIX_WORKSPACES
-from .._utils.signing import (
-    replace_meta_with_local_signature,
-    signature_error,
-    verify_signature,
-)
 from ..models import BackupMeta, RestoreBackupRequest
 from ...constant import BACKUP_DIR, SECRET_DIR, WORKING_DIR
 
 logger = logging.getLogger(__name__)
 
 _MASTER_KEY = ".master_key"
-SignatureAction = Literal["none", "sign_trusted"]
 # Foreign and legacy backups may contain config from another installation.
 # Preserve local auth/allow-list policy and MCP wiring by default so trusting
 # an archive does not silently replace the controls needed to manage it.
 LOCAL_PROTECTED_CONFIG_KEYS: tuple[str, ...] = ("security", "mcp")
-
-
-def resolve_signature_action(
-    zf: zipfile.ZipFile,
-    meta: BackupMeta,
-    backup_id: str,
-    *,
-    trust_legacy: bool,
-    trust_foreign: bool,
-) -> SignatureAction:
-    """Verify local signature or return the trust action required.
-
-    ``"none"`` means the archive already verifies with the local signing key.
-    ``"sign_trusted"`` means the user explicitly trusted a legacy or foreign
-    archive and the caller should re-sign it locally before restoring bytes.
-    """
-    if meta.signature:
-        if verify_signature(zf, meta):
-            return "none"
-        if trust_foreign:
-            logger.warning(
-                "Restoring foreign signed backup after explicit trust: %s",
-                backup_id,
-            )
-            return "sign_trusted"
-        raise signature_error(meta)
-
-    if not trust_legacy:
-        raise signature_error(meta)
-
-    logger.warning(
-        "Restoring legacy unsigned backup after explicit trust: %s",
-        backup_id,
-    )
-    return "sign_trusted"
-
-
-def sign_trusted_backup(zp: Path, meta: BackupMeta) -> BackupMeta:
-    """Sign an explicitly trusted backup using this instance's key.
-
-    Once the user has approved a legacy or foreign restore, re-signing the
-    archive makes later restores follow the normal local-signature path
-    instead of asking for trust on every attempt.
-    """
-    logger.warning(
-        "Signing trusted backup with local signature: %s",
-        zp,
-    )
-    signed = meta.model_copy(
-        update={"imported_via_trust_foreign": True, "signature": None},
-    )
-    return replace_meta_with_local_signature(zp, signed)
 
 
 def resolve_preserve_flag(

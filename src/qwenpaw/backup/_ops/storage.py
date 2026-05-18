@@ -11,9 +11,8 @@ from pathlib import Path
 from .._utils.constants import PREFIX_WORKSPACES, validate_backup_id, zip_path
 from .._utils.meta import read_meta_from_zip
 from .._utils.signing import (
-    replace_meta_with_local_signature,
-    signature_error,
-    verify_signature,
+    resolve_signature_action,
+    sign_trusted_backup,
 )
 from ..models import (
     BackupConflictError,
@@ -238,10 +237,14 @@ def _import_sync(
         if meta_json is None:
             raise ValueError("Zip does not contain a valid meta.json")
         meta = BackupMeta.model_validate_json(meta_json)
-        is_local = bool(meta.signature) and verify_signature(zf, meta)
-
-    if not is_local and not trust_foreign:
-        raise signature_error(meta)
+        signature_action = resolve_signature_action(
+            zf,
+            meta,
+            meta.id,
+            trust_legacy=trust_foreign,
+            trust_foreign=trust_foreign,
+            operation="Importing",
+        )
 
     validate_backup_id(meta.id)
 
@@ -258,18 +261,14 @@ def _import_sync(
         raise BackupConflictError(existing_meta)
 
     dest = zip_path(meta.id)
-    if is_local:
+    if signature_action == "none":
         # tmp_path lives in BACKUP_DIR (via mkstemp(dir=BACKUP_DIR)),
         # so this rename is within the same filesystem and is atomic.
         tmp_path.replace(dest)
     else:
         # The user has explicitly trusted this archive. Bind that decision to
         # the stored copy by replacing meta.json with a local signature.
-        logger.warning("Importing trusted foreign/legacy backup: %s", meta.id)
-        meta = meta.model_copy(
-            update={"imported_via_trust_foreign": True, "signature": None},
-        )
-        meta = replace_meta_with_local_signature(tmp_path, meta, dest_zip=dest)
+        meta = sign_trusted_backup(tmp_path, meta, dest_zip=dest)
     logger.info(
         "Backup imported: id=%s name=%r dest=%s",
         meta.id,

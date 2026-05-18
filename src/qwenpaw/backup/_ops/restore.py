@@ -27,6 +27,7 @@ from .._utils.safe_swap import (
     find_busy_restore_paths,
     restore_process_lock,
 )
+from .._utils.signing import resolve_signature_action, sign_trusted_backup
 from ..models import BackupMeta, BackupValidationError, RestoreBackupRequest
 from ...config.config import AgentProfileRef
 from ...config.utils import load_config, save_config
@@ -36,11 +37,9 @@ from .restore_helpers import (
     collect_workspace_agents_from_zip,
     handle_master_key_conflict,
     overlay_local_keys,
-    resolve_signature_action,
     resolve_preserve_flag,
     resolve_workspace_dst,
     rewrite_agent_workspace_dir,
-    sign_trusted_backup,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,6 +81,7 @@ def preflight_restore(backup_id: str, req: RestoreBackupRequest) -> BackupMeta:
             backup_id,
             trust_legacy=req.trust_legacy,
             trust_foreign=req.trust_foreign,
+            operation="Restoring",
         )
         _validate_version(meta)
         return meta
@@ -504,6 +504,7 @@ def _restore_sync_locked(
             backup_id,
             trust_legacy=req.trust_legacy,
             trust_foreign=req.trust_foreign,
+            operation="Restoring",
         )
         _validate_version(meta)
 
@@ -520,6 +521,7 @@ def _restore_sync_locked(
             backup_id,
             trust_legacy=False,
             trust_foreign=False,
+            operation="Restoring",
         )
         _validate_version(meta)
 
