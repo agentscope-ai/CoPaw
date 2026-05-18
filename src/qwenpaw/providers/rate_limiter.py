@@ -337,21 +337,3 @@ async def get_rate_limiter(
             resolved_jitter,
         )
     return limiter
-
-
-async def reset_rate_limiter(limiter_key: str | None = None) -> None:
-    """Reset rate limiter(s) under the shared initialisation lock.
-
-    Must be awaited from within the asyncio event loop (same loop that
-    runs ``get_rate_limiter``).  Do **not** call from a sync context while
-    other coroutines may be calling ``get_rate_limiter`` concurrently.
-
-    Args:
-        limiter_key: If given, reset only that key's limiter.
-                     If ``None``, reset all limiters.
-    """
-    async with _get_limiters_lock():
-        if limiter_key is not None:
-            _limiters.pop(limiter_key, None)
-        else:
-            _limiters.clear()
