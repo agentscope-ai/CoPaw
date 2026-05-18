@@ -15,7 +15,7 @@ from .._utils.constants import (
     PREFIX_SECRETS,
     PREFIX_SKILL_POOL,
     PREFIX_WORKSPACES,
-    zip_path,
+    find_zip_path,
 )
 from .._utils.meta import read_meta_from_zip
 from .._utils.safe_swap import (
@@ -69,8 +69,8 @@ def preflight_restore(backup_id: str, req: RestoreBackupRequest) -> BackupMeta:
     fails here, so the HTTP orchestration can show the trust prompt without
     stopping and immediately restarting the affected workspaces.
     """
-    zp = zip_path(backup_id)
-    if not zp.is_file():
+    zp = find_zip_path(backup_id)
+    if zp is None:
         raise FileNotFoundError(f"Backup not found: {backup_id}")
 
     with zipfile.ZipFile(zp, "r") as zf:
@@ -488,8 +488,8 @@ def _restore_sync_locked(
     req: RestoreBackupRequest,
 ) -> BackupMeta:
     """Restore after both async and process-level restore locks are held."""
-    zp = zip_path(backup_id)
-    if not zp.is_file():
+    zp = find_zip_path(backup_id)
+    if zp is None:
         raise FileNotFoundError(f"Backup not found: {backup_id}")
 
     with zipfile.ZipFile(zp, "r") as zf:

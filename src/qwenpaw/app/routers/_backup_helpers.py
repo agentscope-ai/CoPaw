@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from ...backup._utils.constants import PREFIX_CONFIG, zip_path
+from ...backup._utils.constants import PREFIX_CONFIG, find_zip_path
 from ...backup._ops.restore_helpers import (
     LOCAL_PROTECTED_CONFIG_KEYS,
     resolve_preserve_flag,
@@ -119,7 +119,10 @@ def restored_local_keys(
 def backup_contains_global_config(backup_id: str) -> bool:
     """Return whether the stored archive has a config payload to restore."""
     try:
-        with zipfile.ZipFile(zip_path(backup_id), "r") as zf:
+        zp = find_zip_path(backup_id)
+        if zp is None:
+            return False
+        with zipfile.ZipFile(zp, "r") as zf:
             return PREFIX_CONFIG in zf.namelist()
     except (FileNotFoundError, zipfile.BadZipFile):
         return False
