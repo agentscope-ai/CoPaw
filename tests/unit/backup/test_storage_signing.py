@@ -61,7 +61,7 @@ async def test_import_trusted_legacy_signs_with_local_key(
     backup_dir.mkdir()
     _patch_backup_dir(monkeypatch, backup_dir)
     upload = tmp_path / "upload.zip"
-    _write_backup(upload, BackupMeta(id="foreign", name="Foreign"))
+    _write_backup(upload, BackupMeta(id="legacy", name="Legacy"))
 
     with pytest.raises(BackupValidationError) as wrong_trust:
         await storage.import_backup(upload, trust_mode="foreign")
@@ -70,12 +70,12 @@ async def test_import_trusted_legacy_signs_with_local_key(
 
     result = await storage.import_backup(upload, trust_mode="legacy")
 
-    assert result.imported_via_trust_foreign is True
+    assert result.accepted_via_trust is True
     assert result.signature
-    dest = backup_dir / "foreign.zip"
+    dest = backup_dir / "legacy.zip"
     with zipfile.ZipFile(dest, "r") as zf:
         meta = BackupMeta.model_validate_json(zf.read(META_FILE))
-        assert meta.imported_via_trust_foreign is True
+        assert meta.accepted_via_trust is True
         assert verify_signature(zf, meta)
 
 
@@ -95,7 +95,7 @@ async def test_import_trusted_foreign_signature_signs_with_local_key(
     foreign_meta = BackupMeta(
         id="foreign-signed",
         name="Foreign signed",
-        imported_via_trust_foreign=False,
+        accepted_via_trust=False,
     )
     _write_backup(upload, foreign_meta)
     replace_meta_with_local_signature(upload, foreign_meta)
@@ -108,11 +108,11 @@ async def test_import_trusted_foreign_signature_signs_with_local_key(
 
     result = await storage.import_backup(upload, trust_mode="foreign")
 
-    assert result.imported_via_trust_foreign is True
+    assert result.accepted_via_trust is True
     dest = backup_dir / "foreign-signed.zip"
     with zipfile.ZipFile(dest, "r") as zf:
         meta = BackupMeta.model_validate_json(zf.read(META_FILE))
-        assert meta.imported_via_trust_foreign is True
+        assert meta.accepted_via_trust is True
         assert verify_signature(zf, meta)
 
 
@@ -126,7 +126,7 @@ async def test_import_conflict_uses_existing_disk_meta(tmp_path, monkeypatch):
     existing_meta = BackupMeta(
         id="same",
         name="Existing",
-        imported_via_trust_foreign=False,
+        accepted_via_trust=False,
     )
     _write_backup(existing_path, existing_meta)
     replace_meta_with_local_signature(existing_path, existing_meta)

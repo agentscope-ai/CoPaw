@@ -41,7 +41,7 @@ def resolve_preserve_flag(
     """
     if req.preserve_local_protected_config is not None:
         return req.preserve_local_protected_config
-    return meta.imported_via_trust_foreign is True
+    return meta.accepted_via_trust is True
 
 
 def overlay_local_keys(backup_cfg: dict, current_cfg: dict) -> dict:

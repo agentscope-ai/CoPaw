@@ -86,7 +86,7 @@ def strip_signature(meta: BackupMeta) -> BackupMeta:
     """
     updates: dict[str, object | None] = {"signature": None}
     if meta.signature is None:
-        updates["imported_via_trust_foreign"] = None
+        updates["accepted_via_trust"] = None
     return meta.model_copy(update=updates)
 
 
@@ -105,7 +105,7 @@ def restored_local_keys(
 
     Match the actual staging condition in ``_stage_global_config``: config
     must be requested, the archive must contain config.json, and preservation
-    must be enabled for this local/foreign trust state.
+    must be enabled for this backup's trust state.
     """
     if not req.include_global_config:
         return []

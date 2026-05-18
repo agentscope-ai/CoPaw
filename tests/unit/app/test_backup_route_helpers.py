@@ -10,7 +10,7 @@ def _meta(*, include_global_config: bool) -> BackupMeta:
     return BackupMeta(
         id="backup-test",
         name="Backup",
-        imported_via_trust_foreign=True,
+        accepted_via_trust=True,
         scope=BackupScope(include_global_config=include_global_config),
     )
 

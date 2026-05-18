@@ -15,7 +15,7 @@ export interface BackupMeta {
   scope: BackupScope;
   agent_count: number;
   signature?: string | null;
-  imported_via_trust_foreign?: boolean | null;
+  accepted_via_trust?: boolean | null;
 }
 
 export interface BackupDetail extends BackupMeta {

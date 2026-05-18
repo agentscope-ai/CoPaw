@@ -75,7 +75,7 @@ def sign_trusted_backup(
         src_zip,
     )
     signed = meta.model_copy(
-        update={"imported_via_trust_foreign": True, "signature": None},
+        update={"accepted_via_trust": True, "signature": None},
     )
     return replace_meta_with_local_signature(
         src_zip,

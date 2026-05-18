@@ -123,11 +123,11 @@ export default function RestoreBackupModal({
     if (!open) return;
     setRestoreMode(fullBackup ? "full" : "custom");
     setRestoreStrategy(
-      backup.imported_via_trust_foreign === false ? "restore" : "preserve",
+      backup.accepted_via_trust === false ? "restore" : "preserve",
     );
     setConfirmed(false);
     setTrustPrompt(null);
-  }, [open, backup.id, backup.imported_via_trust_foreign, fullBackup]);
+  }, [open, backup.id, backup.accepted_via_trust, fullBackup]);
 
   const existingAgentMap = useMemo(
     () => new Map(agents.map((a) => [a.id, a])),
@@ -279,8 +279,8 @@ export default function RestoreBackupModal({
   };
 
   const trustState =
-    backupDetail?.imported_via_trust_foreign ??
-    backup.imported_via_trust_foreign ??
+    backupDetail?.accepted_via_trust ??
+    backup.accepted_via_trust ??
     null;
 
   const summaryText =

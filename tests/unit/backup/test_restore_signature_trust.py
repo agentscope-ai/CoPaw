@@ -43,7 +43,7 @@ def test_restore_requires_explicit_trust_for_foreign_signature(
     meta = BackupMeta(
         id="foreign",
         name="Foreign",
-        imported_via_trust_foreign=False,
+        accepted_via_trust=False,
     )
 
     _reset_key_cache(monkeypatch, tmp_path / "foreign-keys")
@@ -95,7 +95,7 @@ def test_restore_trusted_foreign_backup_gets_local_signature(
     meta = BackupMeta(
         id="foreign",
         name="Foreign",
-        imported_via_trust_foreign=False,
+        accepted_via_trust=False,
     )
 
     _reset_key_cache(monkeypatch, tmp_path / "foreign-keys")
@@ -109,8 +109,8 @@ def test_restore_trusted_foreign_backup_gets_local_signature(
 
     trusted_meta = sign_trusted_backup(backup_path, foreign_meta)
 
-    assert trusted_meta.imported_via_trust_foreign is True
+    assert trusted_meta.accepted_via_trust is True
     with zipfile.ZipFile(backup_path, "r") as zf:
         local_meta = BackupMeta.model_validate_json(zf.read(META_FILE))
-        assert local_meta.imported_via_trust_foreign is True
+        assert local_meta.accepted_via_trust is True
         assert verify_signature(zf, local_meta)
