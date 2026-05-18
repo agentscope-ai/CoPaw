@@ -34,6 +34,7 @@ async def test_goal_loop_continues_until_achieved(tmp_path, monkeypatch):
             return _assistant_msg("unused")
 
     async def fake_stream(*, agents, coroutine_task):
+        _ = agents
         await coroutine_task
         yield _assistant_msg(responses.pop(0)), True
 
@@ -62,6 +63,7 @@ async def test_goal_loop_continues_until_achieved(tmp_path, monkeypatch):
     ]
 
     streamed = []
+    # pylint: disable-next=protected-access
     async for item in runner_mod._stream_goal_auto_continuation(
         agent=agent,
         initial_msgs=initial_msgs,
