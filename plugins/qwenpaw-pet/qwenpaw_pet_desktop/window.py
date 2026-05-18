@@ -119,7 +119,7 @@ class PetWindow(QWidget):
         if isinstance(text, str):
             # Empty ``text`` clears the bubble only for intentional
             # lifecycle events; otherwise a stray "" could erase e.g.
-            # "Approval required!!!!!!" before the user looks at it.
+            # "Approval required" before the user looks at it.
             if text or ev_name in ("idle", "qwenpaw.shutdown"):
                 self.bubble_text = text[:200]
         self.set_state(state)

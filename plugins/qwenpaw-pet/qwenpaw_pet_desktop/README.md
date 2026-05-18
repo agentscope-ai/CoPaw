@@ -67,9 +67,12 @@ Default bind: `127.0.0.1:8765`. All POSTs accept JSON.
 | POST | `/bubble` | Replace bubble text (`text` truncated to 200 chars). |
 | POST | `/pet` | Hot-switch the running pet. Body: `{"pet_id": "..."}` **or** `{"pet_dir": "..."}` (exactly one). |
 
-Token check is **off** by default. Set `QWENPAW_PET_REQUIRE_TOKEN=1` and
-send `X-QwenPaw-Pet-Token: <token from runtime/update-token>` to lock
-mutating endpoints.
+Token check is **on** by default — any process running as the same user
+can otherwise drive the floating pet on `127.0.0.1:8765`. Clients must
+send `X-QwenPaw-Pet-Token: <token from runtime/update-token>` on
+mutating endpoints (the bundled QwenPaw plugin reads the token file
+automatically). To disable the check (e.g. for local development), set
+`QWENPAW_PET_REQUIRE_TOKEN=0`.
 
 ## Event → state mapping
 

@@ -61,7 +61,15 @@ class SwitchPetPayload(BaseModel):
 
 
 def _token_required() -> bool:
-    return os.environ.get("QWENPAW_PET_REQUIRE_TOKEN", "0") == "1"
+    """Whether the local bridge enforces ``X-QwenPaw-Pet-Token``.
+
+    Defaults to **on**: any other process running as the same user on
+    the local machine could otherwise drive the pet or inject arbitrary
+    bubble text without authentication. Operators that explicitly want
+    to disable the check (e.g. for local development) can opt out by
+    setting ``QWENPAW_PET_REQUIRE_TOKEN=0``.
+    """
+    return os.environ.get("QWENPAW_PET_REQUIRE_TOKEN", "1") != "0"
 
 
 def _check_token(header_value: str | None) -> None:

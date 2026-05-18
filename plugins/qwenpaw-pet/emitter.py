@@ -7,6 +7,7 @@ import asyncio
 import functools
 import logging
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -16,6 +17,23 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger("qwenpaw.pet_desktop")
+
+# ``True`` once the plugin has either spawned the pet desktop *or*
+# observed a healthy one during startup (see ``ensure_desktop_available``
+# below). The shutdown hook only kills processes that the plugin has
+# "adopted" this way — that covers both the autostart case and the case
+# where a previous QwenPaw run left the pet behind. A user who never
+# lets QwenPaw see the pet (e.g. ``QWENPAW_PET_AUTOSTART=0`` and the pet
+# is not running at startup) will not have their standalone desktop
+# killed on QwenPaw exit. Hard opt-out: ``QWENPAW_PET_STOP_ON_SHUTDOWN=0``.
+_DESKTOP_OWNED = False
+
+
+def _mark_desktop_owned() -> None:
+    """Mark the desktop as managed by this QwenPaw process."""
+    global _DESKTOP_OWNED
+    _DESKTOP_OWNED = True
+
 
 DESKTOP_URL = os.environ.get(
     "QWENPAW_PET_DESKTOP_URL",
@@ -88,7 +106,7 @@ _MISSING_DEPS_HINT = (
     "Desktop runtime import failed (likely a missing dependency in "
     "QwenPaw's interpreter). Install into the same environment: "
     'pip install "fastapi>=0.110" "uvicorn>=0.27" "pillow>=10.0" '
-    '"pyside6>=6.6" (PySide6 requires Python 3.10-3.13).'
+    '"pyside6-essentials>=6.6" (PySide6 wheels exist for Python 3.10-3.13).'
 )
 
 
@@ -114,14 +132,17 @@ def _spawn_desktop_background() -> tuple[bool, str | None]:
 
     try:
         pet_rt.ensure_runtime()
-        # log_file is held open for the lifetime of the spawned child
-        # so subprocess can write to it; a ``with`` block would close
-        # it before the child writes anything.
-        log_file = (
-            pet_rt.log_path().open(  # pylint: disable=consider-using-with
-                "ab",
+        # Create the bridge token *before* spawning so the very first
+        # event the plugin emits already carries ``X-QwenPaw-Pet-Token``
+        # (the server requires the token by default; without this the
+        # window between spawn and ``ensure_token`` would 401).
+        try:
+            pet_rt.ensure_token()
+        except Exception:
+            logger.warning(
+                "Could not pre-create pet bridge token",
+                exc_info=True,
             )
-        )
         cmd: list[str] = [
             sys.executable,
             "-m",
@@ -148,20 +169,138 @@ def _spawn_desktop_background() -> tuple[bool, str | None]:
             if existing_pp
             else plugin_dir
         )
-        # Fire-and-forget detached process; ``with`` would block on
-        # exit and is not the lifecycle we want here.
-        proc = subprocess.Popen(  # pylint: disable=consider-using-with
-            cmd,
-            stdout=log_file,
-            stderr=log_file,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-            env=env,
-        )
+        # ``Popen`` duplicates the log FD into the child's stdout/stderr,
+        # so the parent's handle is safe to close as soon as the spawn
+        # returns. Using ``with`` here both fixes the FD leak and lets
+        # the detached child keep writing to the same file.
+        with pet_rt.log_path().open("ab") as log_file:
+            proc = subprocess.Popen(  # pylint: disable=consider-using-with
+                cmd,
+                stdout=log_file,
+                stderr=log_file,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                env=env,
+            )
         pet_rt.write_pid(proc.pid)
+        _mark_desktop_owned()
         return True, None
     except OSError as exc:
         return False, f"failed to start desktop: {exc}"
+
+
+def _stop_pid(  # pylint: disable=too-many-branches
+    pid: int,
+    *,
+    grace: float = 2.0,
+) -> bool:
+    """Best-effort terminate ``pid`` and its session.
+
+    Sends ``SIGTERM`` first (to the whole session group when possible —
+    the desktop spawns with ``start_new_session=True``), waits up to
+    ``grace`` seconds for graceful exit, then escalates to ``SIGKILL``.
+    Returns ``True`` if the process is no longer running by the end.
+
+    The branch count is deliberately high: every signal call has to
+    independently distinguish "process already gone" (success) from
+    "permission denied / EPERM" (failure to log) on both the per-PID
+    and per-session-group code paths. Squashing those branches behind
+    a helper would lose either the granular error logging or the
+    process-group fallback, so we silence pylint here instead.
+    """
+    sent_term = False
+    try:
+        pgid = os.getpgid(pid)
+    except OSError:
+        pgid = None
+
+    try:
+        if pgid is not None and pgid != os.getpgid(os.getpid()):
+            os.killpg(pgid, signal.SIGTERM)
+        else:
+            os.kill(pid, signal.SIGTERM)
+        sent_term = True
+    except ProcessLookupError:
+        return True
+    except OSError as exc:
+        logger.warning("SIGTERM to pet desktop pid=%s failed: %s", pid, exc)
+
+    if sent_term:
+        deadline = time.time() + grace
+        while time.time() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return True
+            except OSError:
+                return True
+            time.sleep(0.1)
+
+    try:
+        if pgid is not None and pgid != os.getpgid(os.getpid()):
+            os.killpg(pgid, signal.SIGKILL)
+        else:
+            os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+    except OSError as exc:
+        logger.warning("SIGKILL to pet desktop pid=%s failed: %s", pid, exc)
+        return False
+    return True
+
+
+def stop_desktop(*, force: bool = False) -> dict[str, Any]:
+    """Stop the pet desktop process that this QwenPaw process manages.
+
+    Called from ``_shutdown`` so the floating pet exits together with
+    QwenPaw — the default mental model is that the desktop is a child
+    of QwenPaw, not a long-running independent service. Users who want
+    to keep the pet alive across QwenPaw restarts can opt out with
+    ``QWENPAW_PET_STOP_ON_SHUTDOWN=0``.
+
+    By default this only acts on a desktop that QwenPaw has *adopted*
+    (``_DESKTOP_OWNED``): either we spawned it, or ``/health`` was
+    responding at startup / explicit ``desktop/start`` time. Pass
+    ``force=True`` to stop a desktop that QwenPaw never observed (e.g.
+    started just now by another tool while QwenPaw was already up).
+    """
+    if os.environ.get("QWENPAW_PET_STOP_ON_SHUTDOWN", "1") == "0":
+        return {"ok": True, "stopped": False, "reason": "opted out"}
+    if not _DESKTOP_OWNED and not force:
+        return {"ok": True, "stopped": False, "reason": "not autostarted"}
+
+    try:
+        from qwenpaw_pet_desktop import runtime as pet_rt
+    except ImportError as exc:
+        return {
+            "ok": True,
+            "stopped": False,
+            "reason": f"runtime not importable: {exc}",
+        }
+
+    pid = pet_rt.read_pid()
+    if not pid:
+        return {"ok": True, "stopped": False, "reason": "no pid file"}
+    if not pet_rt.is_pid_running(pid):
+        return {"ok": True, "stopped": False, "reason": "not running"}
+
+    stopped = _stop_pid(pid)
+    return {"ok": True, "stopped": stopped, "pid": pid}
+
+
+def _wait_for_desktop_ready(timeout: float, interval: float = 0.1) -> bool:
+    """Poll ``/health`` until the desktop responds or ``timeout`` elapses.
+
+    Uses ``time.sleep`` so this is safe to run only from threads — call
+    sites that may execute in an asyncio context should dispatch it via
+    ``asyncio.to_thread``.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if desktop_health():
+            return True
+        time.sleep(interval)
+    return False
 
 
 def ensure_desktop_available() -> None:
@@ -169,8 +308,23 @@ def ensure_desktop_available() -> None:
 
     If the executable is not installed or the user prefers manual startup,
     this stays quiet. QwenPaw should never fail because the pet is absent.
+
+    Adoption rule: if a desktop is *already* responding to ``/health`` at
+    startup (e.g. left over from a previous QwenPaw run that crashed
+    before its shutdown hook ran), the plugin claims it via
+    ``_mark_desktop_owned()`` so the shutdown hook will stop it on the
+    way out — otherwise the pet would slowly accumulate orphan
+    processes that the next QwenPaw run merely "skips spawning".
+
+    The plugin startup hook is registered as a regular callable, but the
+    plugin system may invoke us either from an asyncio event loop (during
+    async startup) or from a plain thread. We detect the running loop and
+    drop the blocking ``_wait_for_desktop_ready`` poll into a worker
+    thread so the event loop never stalls for up to two seconds at
+    startup.
     """
     if desktop_health():
+        _mark_desktop_owned()
         return
     if os.environ.get("QWENPAW_PET_AUTOSTART", "1") == "0":
         return
@@ -178,11 +332,30 @@ def ensure_desktop_available() -> None:
     if not ok:
         logger.warning("Could not autostart pet desktop: %s", hint)
         return
-    deadline = time.time() + 2.0
-    while time.time() < deadline:
-        if desktop_health():
-            return
-        time.sleep(0.1)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _wait_for_desktop_ready(2.0)
+        return
+
+    async def _poll() -> None:
+        await asyncio.to_thread(_wait_for_desktop_ready, 2.0)
+
+    task = loop.create_task(_poll())
+
+    def _done(t: asyncio.Task) -> None:
+        try:
+            t.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.warning(
+                "ensure_desktop_available poll task failed",
+                exc_info=True,
+            )
+
+    task.add_done_callback(_done)
 
 
 def start_desktop_interactive() -> dict[str, Any]:
@@ -193,6 +366,11 @@ def start_desktop_interactive() -> dict[str, Any]:
     """
     health = desktop_health()
     if health and health.get("ok"):
+        # User explicitly asked us to start it (via ``POST
+        # /desktop/start`` from the console UI) — even though it was
+        # already up, treat it as adopted so the shutdown hook will
+        # stop it together with QwenPaw.
+        _mark_desktop_owned()
         return {
             "ok": True,
             "alreadyRunning": True,
@@ -212,18 +390,17 @@ def start_desktop_interactive() -> dict[str, Any]:
             "hint": _MISSING_DEPS_HINT,
         }
 
-    deadline = time.time() + 3.0
-    while time.time() < deadline:
-        h = desktop_health()
-        if h and h.get("ok"):
-            return {
-                "ok": True,
-                "alreadyRunning": False,
-                "launchAttempted": True,
-                "desktop": h,
-                "message": "Desktop pet started.",
-            }
-        time.sleep(0.12)
+    # ``start_desktop_interactive`` is wired to ``POST /desktop/start`` as
+    # a sync FastAPI route, so FastAPI dispatches it in a worker thread —
+    # blocking ``time.sleep`` here is fine and does not stall the loop.
+    if _wait_for_desktop_ready(3.0, interval=0.12):
+        return {
+            "ok": True,
+            "alreadyRunning": False,
+            "launchAttempted": True,
+            "desktop": desktop_health(),
+            "message": "Desktop pet started.",
+        }
 
     return {
         "ok": True,

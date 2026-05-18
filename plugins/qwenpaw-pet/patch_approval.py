@@ -42,7 +42,7 @@ def patch_approval_service() -> None:
             schedule_emit_pet_event(
                 "approval.pending",
                 state="waiting",
-                text="Approval required!!!!!!",
+                text="Approval required",
                 session_id=pending.session_id,
                 agent_id=pending.agent_id,
                 channel=pending.channel,
@@ -68,7 +68,7 @@ def patch_approval_service() -> None:
                 schedule_emit_pet_event(
                     "approval.resolved",
                     state="running",
-                    text=f"已批准: {str(resolved.tool_name)[:36]}",
+                    text=f"Approved: {str(resolved.tool_name)[:36]}",
                     duration_ms=1200,
                     session_id=resolved.session_id,
                     agent_id=resolved.agent_id,
@@ -78,7 +78,7 @@ def patch_approval_service() -> None:
                 schedule_emit_pet_event(
                     "approval.resolved",
                     state="idle",
-                    text=f"已拒绝: {str(resolved.tool_name)[:36]}",
+                    text=f"Denied: {str(resolved.tool_name)[:36]}",
                     duration_ms=1200,
                     session_id=resolved.session_id,
                     agent_id=resolved.agent_id,
@@ -88,7 +88,7 @@ def patch_approval_service() -> None:
                 schedule_emit_pet_event(
                     "approval.resolved",
                     state="waiting",
-                    text="审批超时",
+                    text="Approval timed out",
                     duration_ms=1500,
                     session_id=resolved.session_id,
                     agent_id=resolved.agent_id,
@@ -113,7 +113,7 @@ def patch_approval_service() -> None:
                 schedule_emit_pet_event(
                     "approval.bulk_cancel",
                     state="idle",
-                    text="审批已关闭",
+                    text="Approvals cancelled",
                     duration_ms=900,
                     session_id=root_session_id,
                 )

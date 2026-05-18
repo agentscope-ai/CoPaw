@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import sys
 import threading
 from copy import deepcopy
@@ -73,6 +74,26 @@ def run_desktop(pet_dir: Path, host: str, port: int, scale: float) -> int:
     qt_app = QApplication(sys.argv)
     window = PetWindow(pet_dir, scale=scale)
 
+    # SIGTERM is what the QwenPaw plugin sends on shutdown (see
+    # ``emitter.stop_desktop``). Python's default handler would let the
+    # OS kill us without giving Qt a chance to close the window — route
+    # the signal through ``QApplication.quit`` so ``exec()`` returns
+    # cleanly and the PID file is removed below.
+    def _request_shutdown(signum: int, _frame: Any) -> None:
+        logger.info("Pet desktop received signal %s; quitting", signum)
+        # ``QTimer.singleShot(0, ...)`` re-enters the GUI thread; calling
+        # ``qt_app.quit()`` directly from a signal handler is documented
+        # as unsafe on some platforms.
+        QTimer.singleShot(0, qt_app.quit)
+
+    for _sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_sig, _request_shutdown)
+        except (OSError, ValueError):
+            # ``signal.signal`` only works on the main thread; ignore
+            # if we somehow ended up elsewhere (e.g. embedded test).
+            pass
+
     pump = QTimer(window)
 
     def _drain_pet_events() -> None:
@@ -102,7 +123,16 @@ def run_desktop(pet_dir: Path, host: str, port: int, scale: float) -> int:
     )
     server_thread.start()
     window.show()
-    return qt_app.exec()
+    try:
+        return qt_app.exec()
+    finally:
+        # Best-effort PID file cleanup so a follow-up health probe
+        # immediately sees ``running=False`` and the next QwenPaw start
+        # can autostart a fresh desktop without confusion.
+        try:
+            runtime.pid_path().unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Failed to remove pid file at shutdown")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

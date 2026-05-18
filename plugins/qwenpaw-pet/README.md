@@ -16,7 +16,7 @@ plugins/qwenpaw-pet/
 ├── patch_runner.py        # monkey patch AgentRunner.query_handler
 ├── patch_approval.py      # monkey patch approval service hooks
 ├── frontend/              # Vite + React console UI source
-├── dist/index.js          # built console UI bundle (committed)
+├── dist/index.js          # built console UI bundle (build artifact, committed; regenerated via `npm run build`)
 └── qwenpaw_pet_desktop/   # the Qt + FastAPI desktop runtime (embedded)
     ├── app.py             # Qt main loop + uvicorn in a background thread
     ├── server.py          # FastAPI app factory (/event, /pet, /bubble, ...)
@@ -128,15 +128,37 @@ Autostart can be disabled with `QWENPAW_PET_AUTOSTART=0`.
 
 ## Frontend (console sidebar)
 
-Manifest field `"frontend": "dist/index.js"`. After editing
-`frontend/src/`, rebuild:
+Manifest field `"frontend": "dist/index.js"`. The committed
+`dist/index.js` is a **build artifact** generated from
+`frontend/src/index.tsx` — keep it in lockstep with the source by
+rebuilding whenever you edit `frontend/src/`:
 
 ```bash
 cd frontend && npm install && npm run build
 ```
 
+> [!NOTE]
+> `dist/index.js` is committed (not gitignored) so the plugin installs
+> cleanly without an npm toolchain on the target machine. Reviewers
+> can ignore diffs to `dist/index.js` and look at `frontend/src/`
+> instead — the bundle is fully reproducible from the source via the
+> command above. The frontend's `frontend/.npmrc` pins the public
+> `https://registry.npmjs.org/` so anyone can reproduce the lockfile
+> from outside Alibaba's intranet.
+
 Reinstall the plugin, or copy `dist/index.js` into your
 `~/.copaw/plugins/qwenpaw-pet/dist/index.js` and refresh the console.
+
+### Console host API compatibility
+
+The bundle is built with `react` and `react-dom` marked `external` in
+`vite.config.ts` and consumes both — plus `antd` — from the console
+host at runtime (`window.QwenPaw.host.React`, `host.antd`,
+`host.getApiUrl`, `host.getApiToken`). The shape of this contract is
+declared in `frontend/src/qwenpaw-host.d.ts`. If the console host
+bumps `antd` across a major version (e.g. drops `Typography.Text`,
+renames `message`, etc.), the sidebar UI may need to be updated and
+the bundle rebuilt; the Python plugin is unaffected.
 
 The UI adds a sidebar page **Pet** (`/plugin/qwenpaw-pet/pets`): lists
 pets under `<WORKING_DIR>/pets`, **Start desktop pet** (calls `POST
@@ -196,8 +218,11 @@ POST /bubble    # replace bubble text (200 char cap)
 POST /pet       # hot-switch pet (pet_id or pet_dir)
 ```
 
-Set `QWENPAW_PET_REQUIRE_TOKEN=1` to require
-`X-QwenPaw-Pet-Token: <runtime/update-token>` on mutating endpoints.
+Mutating endpoints (`POST /event`, `POST /bubble`, `POST /pet`) require
+`X-QwenPaw-Pet-Token: <runtime/update-token>` by default — the bundled
+QwenPaw plugin reads the token file automatically; standalone clients
+must do the same. Set `QWENPAW_PET_REQUIRE_TOKEN=0` to disable the check
+(only recommended for trusted single-user development setups).
 
 ## Pet package contract
 
@@ -240,13 +265,19 @@ will take precedence over the cache and the network fetch.
 `plugin.py` registers, via the documented `PluginApi`:
 
 - `register_startup_hook` — patches `AgentRunner.query_handler` and the
-  approval service, then emits `qwenpaw.startup`
-- `register_shutdown_hook` — emits `qwenpaw.shutdown` and restores
-  patches
-- `register_http_router` — mounts `router.py` under `/qwenpaw-pet`
-
-The runner patch is also applied **synchronously at import time** so
-events fire even before async startup hooks run.
+  approval service, autostarts the desktop runtime, then emits
+  `qwenpaw.startup`. Patch failures (e.g. an upstream rename of
+  `AgentRunner` / `ApprovalService`) are reported via
+  `logger.exception` so a broken plugin install does not stay silently
+  dead.
+- `register_shutdown_hook` — emits `qwenpaw.shutdown`, terminates the
+  pet desktop process that this QwenPaw process has adopted (either
+  autostarted by the plugin or already healthy on startup /
+  `desktop/start`; controlled by `QWENPAW_PET_STOP_ON_SHUTDOWN`), and
+  restores the patched class methods. So when the user exits QwenPaw
+  the floating pet exits with it, including the case where the pet was
+  a leftover from a previous QwenPaw run.
+- `register_http_router` — mounts `router.py` under `/qwenpaw-pet`.
 
 ## Environment variables
 
@@ -257,8 +288,9 @@ events fire even before async startup hooks run.
 | `QWENPAW_PET_DESKTOP_SCALE` | Spawn-time scale (e.g. `0.58`) | unset |
 | `QWENPAW_PET_DESKTOP_PET_DIR` | Spawn-time pet folder override | unset |
 | `QWENPAW_PET_TOKEN_PATH` | Path to the local update token | `~/.qwenpaw-pet/runtime/update-token` |
-| `QWENPAW_PET_REQUIRE_TOKEN` | `1` ⇒ desktop enforces token on mutating endpoints | `0` |
+| `QWENPAW_PET_REQUIRE_TOKEN` | `0` ⇒ desktop *skips* the token check on mutating endpoints (anything else, including unset, enforces it) | `1` |
 | `QWENPAW_PET_AUTOSTART` | `0` ⇒ plugin will not spawn the desktop | `1` |
+| `QWENPAW_PET_STOP_ON_SHUTDOWN` | `0` ⇒ leave the pet desktop running after QwenPaw exits. Default: terminate any pet desktop QwenPaw has adopted (either by autostarting it or by seeing it healthy at startup / explicit `desktop/start`). | `1` |
 | `QWENPAW_PET_HOME` | Runtime dir (PID file, log, **cache**, token) | `~/.qwenpaw-pet/` |
 | `QWENPAW_PET_SNOWPAW_URL` | CDN URL for snowpaw's `spritesheet.webp` (downloaded once on first install) | Alicdn-hosted default |
 | `QWENPAW_WORKING_DIR` / `COPAW_WORKING_DIR` | Where `pets/` lives | falls back to `~/.copaw` then `~/.qwenpaw` |

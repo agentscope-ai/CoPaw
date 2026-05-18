@@ -47,8 +47,14 @@ def list_installed_pets() -> list[dict[str, Any]]:
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
         except Exception:
             data = {}
-        pid = data.get("id") if isinstance(data.get("id"), str) else None
-        manifest_id = pid.strip() or None
+        if not isinstance(data, dict):
+            data = {}
+        raw_id = data.get("id")
+        manifest_id = (
+            raw_id.strip()
+            if isinstance(raw_id, str) and raw_id.strip()
+            else None
+        )
         folder_name = child.name
         out.append(
             {

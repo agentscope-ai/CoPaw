@@ -16,7 +16,11 @@ if _plugin_dir not in sys.path:
 
 from qwenpaw.plugins.api import PluginApi  # noqa: E402
 
-from emitter import emit_pet_event, ensure_desktop_available  # noqa: E402
+from emitter import (  # noqa: E402
+    emit_pet_event,
+    ensure_desktop_available,
+    stop_desktop,
+)
 from patch_approval import (  # noqa: E402
     patch_approval_service,
     restore_approval_service,
@@ -39,13 +43,11 @@ class QwenPawPetPlugin:
         """Register startup/shutdown hooks and plugin HTTP routes."""
         logger.info("Registering QwenPaw Pet plugin")
 
-        # Patch as early as possible (do not rely only on async startup hooks).
-        try:
-            patch_agent_runner()
-            patch_approval_service()
-        except Exception:
-            logger.exception("QwenPaw Pet: failed to install runtime patches")
-
+        # Runtime patches (``AgentRunner`` / ``ApprovalService``) are
+        # applied exclusively from the startup hook below — applying them
+        # here at import time runs before QwenPaw has finished wiring up
+        # the affected classes and silently swallowing the import error
+        # would leave the plugin in a broken state.
         api.register_startup_hook(
             hook_name="qwenpaw_pet_startup",
             callback=self._startup,
@@ -65,11 +67,31 @@ class QwenPawPetPlugin:
         logger.info("QwenPaw Pet plugin registered")
 
     def _startup(self):
-        """Patch the runner and notify the desktop."""
+        """Patch the runner and notify the desktop.
+
+        Patch failures (e.g. an upstream rename of ``AgentRunner`` /
+        ``ApprovalService``) surface as ``logger.exception`` so the
+        plugin install system can flag them; we still attempt to keep
+        the desktop autostart and ``qwenpaw.startup`` emit going so the
+        UI is never silently dead.
+        """
+        try:
+            patch_agent_runner()
+        except Exception:
+            logger.exception(
+                "QwenPaw Pet: failed to patch AgentRunner; "
+                "lifecycle events will be unavailable",
+            )
+        try:
+            patch_approval_service()
+        except Exception:
+            logger.exception(
+                "QwenPaw Pet: failed to patch ApprovalService; "
+                "approval events will be unavailable",
+            )
+
         try:
             ensure_desktop_available()
-            patch_agent_runner()
-            patch_approval_service()
             emit_pet_event(
                 "qwenpaw.startup",
                 text="QwenPaw started",
@@ -80,14 +102,36 @@ class QwenPawPetPlugin:
             logger.exception("QwenPaw Pet startup hook failed")
 
     def _shutdown(self):
-        """Notify the desktop and restore the runner patch."""
+        """Notify the desktop, terminate it, and restore the runner patch.
+
+        The pet desktop is treated as a child of QwenPaw: when QwenPaw
+        exits, the floating window goes with it. ``stop_desktop`` only
+        kills a process that this plugin instance spawned (so a desktop
+        started independently via ``python -m qwenpaw_pet_desktop start``
+        is left alone), and the whole behaviour can be opted out of via
+        ``QWENPAW_PET_STOP_ON_SHUTDOWN=0``.
+        """
         try:
             emit_pet_event("qwenpaw.shutdown", text="", duration_ms=500)
+        except Exception:
+            logger.warning(
+                "QwenPaw Pet: shutdown event emit failed",
+                exc_info=True,
+            )
+
+        try:
+            result = stop_desktop()
+            logger.info("QwenPaw Pet: stop_desktop result=%s", result)
+        except Exception:
+            logger.exception("QwenPaw Pet: failed to stop desktop process")
+
+        try:
             restore_approval_service()
             restore_agent_runner()
-            logger.info("QwenPaw Pet shutdown hook complete")
         except Exception:
-            logger.exception("QwenPaw Pet shutdown hook failed")
+            logger.exception("QwenPaw Pet: failed to restore class methods")
+
+        logger.info("QwenPaw Pet shutdown hook complete")
 
 
 plugin = QwenPawPetPlugin()

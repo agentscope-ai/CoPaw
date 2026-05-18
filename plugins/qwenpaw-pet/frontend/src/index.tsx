@@ -8,13 +8,17 @@
 // ``export as namespace React`` would expose ``React`` as a global
 // value and clash with the ``const React = host.React`` line below
 // ("Cannot redeclare block-scoped variable 'React'").
+//
+// ``qwenpaw-host.d.ts`` declares the ``window.QwenPaw`` contract so the
+// compiler catches host-API drift (e.g. ``host.antd`` being renamed)
+// instead of every access silently degrading to ``any``.
 import type * as ReactNS from "react";
 
-const host = (window as any).QwenPaw.host;
+const host = window.QwenPaw.host;
 const React: typeof ReactNS = host.React;
 const antd = host.antd;
-const getApiUrl: (path: string) => string = host.getApiUrl;
-const getApiToken: () => string = host.getApiToken;
+const getApiUrl = host.getApiUrl;
+const getApiToken = host.getApiToken;
 
 const { Button, Card, Space, Table, Typography, message, Modal, Checkbox } =
   antd;
@@ -575,7 +579,7 @@ class QwenPawPetPlugin {
   readonly id = "qwenpaw-pet";
 
   setup(): void {
-    (window as any).QwenPaw.registerRoutes?.(this.id, [
+    window.QwenPaw.registerRoutes?.(this.id, [
       {
         path: "/plugin/qwenpaw-pet/pets",
         component: PetControlPage,
