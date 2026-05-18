@@ -1,21 +1,30 @@
-name: Publish plugins to OSS
+# Pack repo plugins (bundle/tool) and publish to the download CDN (OSS).
+# Runs automatically on release publish; also manually via Actions tab.
+
+name: QwenPaw Plugins Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'plugins/**'
-      - 'scripts/pack/generate_plugin_metadata.py'
-      - '.github/workflows/plugins-publish.yml'
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      upload_to_oss:
+        description: "Upload to OSS"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
-  group: plugins-publish
+  group: plugins-release
   cancel-in-progress: false
 
 jobs:
-  publish:
+  upload-oss:
     runs-on: ubuntu-latest
+    # Release (non–pre-release) or manual run with upload_to_oss checked.
+    if: >-
+      (github.event_name == 'release' && github.event.release.prerelease == false)
+      || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_oss == 'true')
     steps:
       - name: Checkout
         uses: actions/checkout@v4

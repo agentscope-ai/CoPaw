@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { usePluginManager } from "./hooks/usePluginManager";
 import { useInstallModal } from "./hooks/useInstallModal";
 import { InstallPluginModal } from "./components/InstallPluginModal";
+import { OfficialPluginList } from "./components/OfficialPluginList";
 import { PluginTypeTag } from "./components/PluginTypeTag";
 import styles from "./index.module.less";
 
@@ -136,12 +137,18 @@ export default function PluginManagerPage() {
       />
 
       <div className={styles.content}>
+        <OfficialPluginList onInstalled={refresh} />
+
+        <Typography.Title level={5} style={{ margin: "24px 0 12px" }}>
+          {t("pluginManager.installed")}
+        </Typography.Title>
+
         <Spin spinning={loading}>
           {!loading && (!plugins || plugins.length === 0) ? (
             <Empty
               image={<Package size={48} strokeWidth={1} />}
               description={t("pluginManager.noPlugins")}
-              style={{ marginTop: 80 }}
+              style={{ marginTop: 24 }}
             />
           ) : (
             <Table

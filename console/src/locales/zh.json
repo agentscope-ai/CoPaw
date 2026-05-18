@@ -2198,6 +2198,17 @@
     "author": "作者",
     "unknown": "未知",
     "loadFailed": "加载插件列表失败",
-    "confirmTitle": "确认卸载"
+    "confirmTitle": "确认卸载",
+    "officialTitle": "官方插件",
+    "officialDesc": "从下载站获取已发布的插件，一键安装到本机。",
+    "catalogRefresh": "刷新",
+    "catalogEmpty": "暂无官方插件（请确认已发布到下载 CDN）",
+    "catalogLoadFailed": "加载官方插件列表失败",
+    "catalogInstall": "安装",
+    "catalogReinstall": "重新安装",
+    "catalogUpgrade": "可升级",
+    "catalogUpgradeBtn": "升级",
+    "catalogInstalled": "已安装",
+    "catalogSha256": "SHA256"
   }
 }

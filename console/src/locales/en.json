@@ -2190,6 +2190,17 @@
     "author": "Author",
     "unknown": "Unknown",
     "loadFailed": "Failed to load plugin list",
-    "confirmTitle": "Confirm Uninstall"
+    "confirmTitle": "Confirm Uninstall",
+    "officialTitle": "Official Plugins",
+    "officialDesc": "Install published plugins from the download CDN.",
+    "catalogRefresh": "Refresh",
+    "catalogEmpty": "No official plugins available (CDN catalog may be empty)",
+    "catalogLoadFailed": "Failed to load official plugin catalog",
+    "catalogInstall": "Install",
+    "catalogReinstall": "Reinstall",
+    "catalogUpgrade": "Upgrade available",
+    "catalogUpgradeBtn": "Upgrade",
+    "catalogInstalled": "Installed",
+    "catalogSha256": "SHA256"
   }
 }

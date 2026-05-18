@@ -37,6 +37,56 @@
   }
 }
 
+/* ── Official catalog ──────────────────────────────────────────────── */
+
+.catalogSection {
+  margin-bottom: 8px;
+}
+
+.catalogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.catalogList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalogRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  background: var(--ant-color-fill-quaternary);
+}
+
+.catalogInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.catalogSha256 {
+  margin-top: 6px;
+}
+
+.catalogSha256Value {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--ant-color-text-secondary);
+}
+
 /* ── Install modal ─────────────────────────────────────────────────── */
 
 .dropZone {

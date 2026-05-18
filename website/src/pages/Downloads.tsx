@@ -382,15 +382,9 @@ export default function Downloads() {
   useEffect(() => {
     async function loadDownloads() {
       try {
-        console.log(
-          "Fetching main index from:",
-          `${CDN_BASE}/metadata/index.json`,
-        );
         const mainIndexResponse = await fetch(
           `${CDN_BASE}/metadata/index.json`,
         );
-
-        console.log("Main index response status:", mainIndexResponse.status);
 
         if (!mainIndexResponse.ok) {
           if (mainIndexResponse.status === 404) {
@@ -403,24 +397,17 @@ export default function Downloads() {
         }
 
         const mainIndex: MainIndex = await mainIndexResponse.json();
-        console.log("Main index data:", mainIndex);
 
         let hasDesktopData = false;
         let hasPluginsData = false;
 
         if (mainIndex.products?.desktop) {
           const desktopIndexUrl = `${CDN_BASE}${mainIndex.products.desktop.index_url}`;
-          console.log("Fetching desktop index from:", desktopIndexUrl);
 
           const desktopIndexResponse = await fetch(desktopIndexUrl);
-          console.log(
-            "Desktop index response status:",
-            desktopIndexResponse.status,
-          );
 
           if (desktopIndexResponse.ok) {
             const desktopData: DesktopIndex = await desktopIndexResponse.json();
-            console.log("Desktop index data:", desktopData);
             setDesktopIndex(desktopData);
             hasDesktopData = true;
           } else {
@@ -435,17 +422,11 @@ export default function Downloads() {
 
         if (mainIndex.products?.plugins) {
           const pluginsIndexUrl = `${CDN_BASE}${mainIndex.products.plugins.index_url}`;
-          console.log("Fetching plugins index from:", pluginsIndexUrl);
 
           const pluginsIndexResponse = await fetch(pluginsIndexUrl);
-          console.log(
-            "Plugins index response status:",
-            pluginsIndexResponse.status,
-          );
 
           if (pluginsIndexResponse.ok) {
             const pluginsData: DesktopIndex = await pluginsIndexResponse.json();
-            console.log("Plugins index data:", pluginsData);
             setPluginsIndex(pluginsData);
             hasPluginsData = Object.keys(pluginsData.files ?? {}).length > 0;
           } else {
