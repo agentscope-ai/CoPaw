@@ -36,11 +36,26 @@ internals of the desktop runtime itself.
 
 ## Install
 
-```bash
-qwenpaw plugin install ./plugins/qwenpaw-pet
-```
+Two equivalent ways:
 
-Restart QwenPaw after install.
+- **From the QwenPaw console** — open the plugin management page and
+  install `qwenpaw-pet` like any other QwenPaw plugin. Three input
+  shapes are accepted:
+  - point it at a local folder,
+  - upload a `.zip`, or
+  - paste a plugin URL (e.g. a GitHub release / raw archive URL) and
+    let the console download and unpack it for you.
+- **From the shell** — run:
+
+  ```bash
+  qwenpaw plugin install ./plugins/qwenpaw-pet
+  ```
+
+> [!IMPORTANT]
+> **Restart QwenPaw after install** — the backend only picks up new
+> plugin code (hooks, HTTP routes) on startup. The browser console
+> usually also needs a hard refresh (`Cmd+Shift+R` / `Ctrl+Shift+R`)
+> to drop the cached `dist/index.js` and pull in the new sidebar UI.
 
 ### Python dependencies
 
