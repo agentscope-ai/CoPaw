@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from ._utils.meta import generate_backup_id
 
+BackupTrustMode = Literal["legacy", "foreign"]
+
 
 class BackupScope(BaseModel):
     include_agents: bool = Field(
@@ -124,13 +126,13 @@ class RestoreBackupRequest(BaseModel):
             "backups and fully restore local signed backups."
         ),
     )
-    trust_legacy: bool = Field(
-        default=False,
-        description="Explicitly trust and sign an unsigned legacy backup.",
-    )
-    trust_foreign: bool = Field(
-        default=False,
-        description="Explicitly trust and sign a foreign signed backup.",
+    trust_mode: Optional[BackupTrustMode] = Field(
+        default=None,
+        description=(
+            "Explicit trust action for backups that are not locally signed: "
+            "'legacy' for unsigned legacy backups, 'foreign' for backups "
+            "signed by another instance."
+        ),
     )
 
 

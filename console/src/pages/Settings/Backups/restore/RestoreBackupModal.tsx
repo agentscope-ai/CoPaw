@@ -265,12 +265,11 @@ export default function RestoreBackupModal({
   const handleTrustConfirm = async () => {
     if (!trustPrompt) return;
     setTrustLoading(true);
-    const trustFlags =
-      trustPrompt.mode === "legacy"
-        ? { trust_legacy: true }
-        : { trust_foreign: true };
     try {
-      await finishRestore({ ...trustPrompt.request, ...trustFlags });
+      await finishRestore({
+        ...trustPrompt.request,
+        trust_mode: trustPrompt.mode,
+      });
       setTrustPrompt(null);
     } catch (err: unknown) {
       showRestoreFailure(parseErrorDetail(err));

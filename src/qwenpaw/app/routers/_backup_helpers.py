@@ -19,17 +19,34 @@ from ...backup._ops.restore_helpers import (
 )
 from ...backup.models import (
     BackupMeta,
+    BackupTrustMode,
     BackupValidationError,
     RestoreBackupRequest,
 )
 from ...constant import BACKUP_DIR
 
 TMP_UPLOAD_SUFFIX = ".upload_tmp"
-TMP_TRUST_SUFFIX = ".upload_tmp.trust"
+TMP_TRUST_LEGACY_SUFFIX = ".upload_tmp.trust_legacy"
+TMP_TRUST_FOREIGN_SUFFIX = ".upload_tmp.trust_foreign"
+_TRUST_SUFFIX_BY_MODE: dict[BackupTrustMode, str] = {
+    "legacy": TMP_TRUST_LEGACY_SUFFIX,
+    "foreign": TMP_TRUST_FOREIGN_SUFFIX,
+}
 
 
-def parse_pending_token(token: str) -> tuple[Path, bool]:
-    """Return ``(tmp_path, trust_foreign)`` for a safe pending token.
+def upload_suffix_for_trust_mode(
+    trust_mode: BackupTrustMode | None,
+) -> str:
+    """Return the temp upload suffix that preserves the trust choice."""
+    if trust_mode is None:
+        return TMP_UPLOAD_SUFFIX
+    return _TRUST_SUFFIX_BY_MODE[trust_mode]
+
+
+def parse_pending_token(
+    token: str,
+) -> tuple[Path, BackupTrustMode | None]:
+    """Return ``(tmp_path, trust_mode)`` for a safe pending token.
 
     Pending import tokens are temp filenames, not arbitrary paths. Resolving
     them under BACKUP_DIR prevents retry-after-conflict from becoming a path
@@ -42,8 +59,12 @@ def parse_pending_token(token: str) -> tuple[Path, bool]:
             status_code=400,
             detail="Invalid or expired pending_token",
         )
-    trust_foreign = token.endswith(TMP_TRUST_SUFFIX)
-    if not (trust_foreign or token.endswith(TMP_UPLOAD_SUFFIX)):
+    trust_mode: BackupTrustMode | None = None
+    for mode, suffix in _TRUST_SUFFIX_BY_MODE.items():
+        if token.endswith(suffix):
+            trust_mode = mode
+            break
+    if trust_mode is None and not token.endswith(TMP_UPLOAD_SUFFIX):
         raise HTTPException(
             status_code=400,
             detail="Invalid or expired pending_token",
@@ -53,7 +74,7 @@ def parse_pending_token(token: str) -> tuple[Path, bool]:
             status_code=400,
             detail="Invalid or expired pending_token",
         )
-    return tmp_path, trust_foreign
+    return tmp_path, trust_mode
 
 
 def strip_signature(meta: BackupMeta) -> BackupMeta:

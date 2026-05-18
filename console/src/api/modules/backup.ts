@@ -3,6 +3,7 @@ import { getApiUrl } from "../config";
 import { buildAuthHeaders } from "../authHeaders";
 import type {
   BackupMeta,
+  BackupTrustMode,
   BackupDetail,
   BackupProgressEvent,
   BackupConflictResponse,
@@ -100,12 +101,12 @@ export const backupApi = {
 
   importBackup: async (
     file: File,
-    options: { trustForeign?: boolean } = {},
+    options: { trustMode?: BackupTrustMode } = {},
   ): Promise<BackupMeta> => {
     const formData = new FormData();
     formData.append("file", file);
-    if (options.trustForeign) {
-      formData.append("trust_foreign", "true");
+    if (options.trustMode) {
+      formData.append("trust_mode", options.trustMode);
     }
     const url = getApiUrl("/backups/import");
     const res = await fetch(url, {

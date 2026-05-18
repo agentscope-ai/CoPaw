@@ -60,19 +60,27 @@ def test_restore_requires_explicit_trust_for_foreign_signature(
                 zf,
                 foreign_meta,
                 "foreign",
-                trust_legacy=False,
-                trust_foreign=False,
+                trust_mode=None,
                 operation="Restoring",
             )
 
         assert exc_info.value.code == "backup_signature_mismatch"
+        with pytest.raises(BackupValidationError) as wrong_trust:
+            resolve_signature_action(
+                zf,
+                foreign_meta,
+                "foreign",
+                trust_mode="legacy",
+                operation="Restoring",
+            )
+
+        assert wrong_trust.value.code == "backup_signature_mismatch"
         assert (
             resolve_signature_action(
                 zf,
                 foreign_meta,
                 "foreign",
-                trust_legacy=False,
-                trust_foreign=True,
+                trust_mode="foreign",
                 operation="Restoring",
             )
             == "sign_trusted"

@@ -63,7 +63,12 @@ async def test_import_trusted_legacy_signs_with_local_key(
     upload = tmp_path / "upload.zip"
     _write_backup(upload, BackupMeta(id="foreign", name="Foreign"))
 
-    result = await storage.import_backup(upload, trust_foreign=True)
+    with pytest.raises(BackupValidationError) as wrong_trust:
+        await storage.import_backup(upload, trust_mode="foreign")
+
+    assert wrong_trust.value.code == "backup_legacy_unsigned"
+
+    result = await storage.import_backup(upload, trust_mode="legacy")
 
     assert result.imported_via_trust_foreign is True
     assert result.signature
@@ -96,7 +101,12 @@ async def test_import_trusted_foreign_signature_signs_with_local_key(
     replace_meta_with_local_signature(upload, foreign_meta)
 
     _patch_backup_dir(monkeypatch, backup_dir)
-    result = await storage.import_backup(upload, trust_foreign=True)
+    with pytest.raises(BackupValidationError) as wrong_trust:
+        await storage.import_backup(upload, trust_mode="legacy")
+
+    assert wrong_trust.value.code == "backup_signature_mismatch"
+
+    result = await storage.import_backup(upload, trust_mode="foreign")
 
     assert result.imported_via_trust_foreign is True
     dest = backup_dir / "foreign-signed.zip"
@@ -125,6 +135,6 @@ async def test_import_conflict_uses_existing_disk_meta(tmp_path, monkeypatch):
     _write_backup(upload, BackupMeta(id="same", name="Uploaded"))
 
     with pytest.raises(BackupConflictError) as exc_info:
-        await storage.import_backup(upload, trust_foreign=True)
+        await storage.import_backup(upload, trust_mode="legacy")
 
     assert exc_info.value.existing_meta.name == "Existing"

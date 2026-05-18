@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 from typing import Literal
 
-from ...models import BackupMeta
+from ...models import BackupMeta, BackupTrustMode
 from .digest import signature_error, verify_signature
 from .resign import replace_meta_with_local_signature
 
@@ -27,8 +27,7 @@ def resolve_signature_action(
     meta: BackupMeta,
     backup_id: str,
     *,
-    trust_legacy: bool,
-    trust_foreign: bool,
+    trust_mode: BackupTrustMode | None,
     operation: str,
 ) -> SignatureAction:
     """Verify local signature or return the trust action required.
@@ -40,7 +39,7 @@ def resolve_signature_action(
     if meta.signature:
         if verify_signature(zf, meta):
             return "none"
-        if trust_foreign:
+        if trust_mode == "foreign":
             logger.warning(
                 "%s foreign signed backup after explicit trust: %s",
                 operation,
@@ -49,7 +48,7 @@ def resolve_signature_action(
             return "sign_trusted"
         raise signature_error(meta)
 
-    if not trust_legacy:
+    if trust_mode != "legacy":
         raise signature_error(meta)
 
     logger.warning(
@@ -78,4 +77,8 @@ def sign_trusted_backup(
     signed = meta.model_copy(
         update={"imported_via_trust_foreign": True, "signature": None},
     )
-    return replace_meta_with_local_signature(src_zip, signed, dest_zip=dest_zip)
+    return replace_meta_with_local_signature(
+        src_zip,
+        signed,
+        dest_zip=dest_zip,
+    )

@@ -1,6 +1,7 @@
+import type { BackupTrustMode } from "@/api/types/backup";
 import { parseErrorDetail } from "@/utils/error";
 
-export type BackupTrustMode = "legacy" | "foreign";
+export type { BackupTrustMode };
 
 export function trustModeFromError(error: unknown): BackupTrustMode | null {
   return trustModeFromErrorCode(parseErrorDetail(error)?.code);

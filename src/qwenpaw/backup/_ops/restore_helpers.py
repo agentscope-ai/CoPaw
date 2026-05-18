@@ -36,8 +36,8 @@ def resolve_preserve_flag(
     """Resolve whether local critical config keys should be preserved.
 
     The UI may send an explicit choice. If it does not, backups imported after
-    trust_foreign default to preservation because their config came from
-    outside this installation.
+    explicit legacy/foreign trust default to preservation because their config
+    came from outside this installation.
     """
     if req.preserve_local_protected_config is not None:
         return req.preserve_local_protected_config

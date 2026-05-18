@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from qwenpaw.app.routers import _backup_helpers as helpers
 from qwenpaw.app.routers._backup_helpers import restored_local_keys
 from qwenpaw.backup.models import BackupMeta, BackupScope, RestoreBackupRequest
 
@@ -54,3 +55,16 @@ def test_preserved_keys_report_actual_config_overlay() -> None:
         "security",
         "mcp",
     ]
+
+
+def test_pending_token_preserves_trust_mode(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(helpers, "BACKUP_DIR", tmp_path)
+
+    for mode in (None, "legacy", "foreign"):
+        path = tmp_path / f"backup{helpers.upload_suffix_for_trust_mode(mode)}"
+        path.write_bytes(b"zip")
+
+        parsed_path, parsed_mode = helpers.parse_pending_token(path.name)
+
+        assert parsed_path == path.resolve()
+        assert parsed_mode == mode

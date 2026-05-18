@@ -18,6 +18,7 @@ from ..models import (
     BackupConflictError,
     BackupDetail,
     BackupMeta,
+    BackupTrustMode,
     DeleteBackupsResponse,
 )
 from ...constant import BACKUP_DIR
@@ -187,7 +188,7 @@ async def import_backup(
     tmp_path: Path,
     *,
     overwrite: bool = False,
-    trust_foreign: bool = False,
+    trust_mode: BackupTrustMode | None = None,
 ) -> BackupMeta:
     """Import a backup from a temporary file on disk.
 
@@ -196,9 +197,10 @@ async def import_backup(
     the conflict to the user.  Pass ``overwrite=True`` to replace the existing
     backup without asking.
 
-    Foreign or legacy archives must pass ``trust_foreign=True`` before they
-    are accepted. Accepted foreign/legacy archives are re-signed locally so
-    future operations can use the same verification path as local backups.
+    Legacy unsigned archives must pass ``trust_mode="legacy"`` before they are
+    accepted. Foreign signed archives must pass ``trust_mode="foreign"``.
+    Accepted foreign/legacy archives are re-signed locally so future operations
+    can use the same verification path as local backups.
 
     The caller is responsible for cleaning up *tmp_path* afterwards.
     """
@@ -206,7 +208,7 @@ async def import_backup(
         _import_sync,
         tmp_path,
         overwrite,
-        trust_foreign,
+        trust_mode,
     )
 
 
@@ -221,7 +223,7 @@ def _read_meta_from_path(path: Path) -> BackupMeta:
 def _import_sync(
     tmp_path: Path,
     overwrite: bool = False,
-    trust_foreign: bool = False,
+    trust_mode: BackupTrustMode | None = None,
 ) -> BackupMeta:
     """Validate and store an uploaded backup zip from *tmp_path*."""
     logger.info(
@@ -241,8 +243,7 @@ def _import_sync(
             zf,
             meta,
             meta.id,
-            trust_legacy=trust_foreign,
-            trust_foreign=trust_foreign,
+            trust_mode=trust_mode,
             operation="Importing",
         )
 

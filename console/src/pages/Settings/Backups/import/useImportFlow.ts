@@ -6,7 +6,8 @@
  *
  * It also owns the foreign/legacy trust prompt. The first failed upload keeps
  * the File in memory; only after explicit confirmation do we retry with
- * trustForeign=true so the server can re-sign the archive locally.
+ * trust_mode matching the prompt so the server can re-sign the archive
+ * locally.
  *
  * Kept separate from useRestoreFlow so each hook has a single responsibility.
  */
@@ -84,7 +85,9 @@ export function useImportFlow({ onSuccess }: UseImportFlowOptions) {
     if (!trustPrompt) return;
     setTrustLoading(true);
     try {
-      await api.importBackup(trustPrompt.file, { trustForeign: true });
+      await api.importBackup(trustPrompt.file, {
+        trustMode: trustPrompt.mode,
+      });
       message.success(t("backup.importSuccess"));
       setTrustPrompt(null);
       onSuccess();

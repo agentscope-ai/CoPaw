@@ -79,8 +79,7 @@ def preflight_restore(backup_id: str, req: RestoreBackupRequest) -> BackupMeta:
             zf,
             meta,
             backup_id,
-            trust_legacy=req.trust_legacy,
-            trust_foreign=req.trust_foreign,
+            trust_mode=req.trust_mode,
             operation="Restoring",
         )
         _validate_version(meta)
@@ -502,8 +501,7 @@ def _restore_sync_locked(
             zf,
             meta,
             backup_id,
-            trust_legacy=req.trust_legacy,
-            trust_foreign=req.trust_foreign,
+            trust_mode=req.trust_mode,
             operation="Restoring",
         )
         _validate_version(meta)
@@ -519,8 +517,7 @@ def _restore_sync_locked(
             zf,
             meta,
             backup_id,
-            trust_legacy=False,
-            trust_foreign=False,
+            trust_mode=None,
             operation="Restoring",
         )
         _validate_version(meta)
