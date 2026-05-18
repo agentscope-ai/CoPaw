@@ -1,16 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Global LLM request rate limiter.
+"""Per-model LLM request rate limiter.
+
+Each unique ``"provider_id:model_name"`` pair gets its own
+``LLMRateLimiter`` instance via ``get_rate_limiter(limiter_key=...)``.
+A 429 on one model therefore cannot stall calls to other models or
+providers — background tasks (dream, heartbeat) that exhaust their
+quota do not affect interactive user chats on a different model.
 
 How it works:
 1. QPM sliding window: tracks request timestamps in a 60-second window.
    Before each call, if the window is full, the caller waits until the
    oldest timestamp slides out — proactively preventing 429s.
 2. asyncio.Semaphore caps the number of concurrent in-flight LLM calls.
-3. A global pause timestamp: when a 429 is received every subsequent
-   acquire() waits until the pause expires, eliminating thundering-herd
-   retries.
+3. Per-model pause timestamp: when a 429 is received, every subsequent
+   acquire() on the *same model* waits until the pause expires.
+   The pause is capped at MAX_PAUSE_SECONDS (default 60 s); a
+   Retry-After that exceeds the cap causes an immediate raise instead
+   of a doomed retry.  on_success() clears stale pauses as soon as any
+   call completes successfully.
 4. Per-waiter jitter: each caller adds a small random offset on top of
-   the remaining pause time, so they spread out when waking up.
+   the remaining pause time, so waiters spread out when waking up.
 
 acquire() execution order:
     wait for 429 cooldown → wait for QPM slot → wait for semaphore slot
@@ -28,7 +37,11 @@ logger = logging.getLogger(__name__)
 
 
 class LLMRateLimiter:
-    """Global LLM request rate limiter.
+    """Per-model LLM request rate limiter.
+
+    One instance is created per ``"provider_id:model_name"`` key by
+    ``get_rate_limiter()``.  All state is local to a single model so that a
+    429 from one provider cannot pause calls to any other.
 
     Coroutine-safe: all mutable state is protected by asyncio primitives and
     is intended for use within a single event loop.
@@ -36,8 +49,10 @@ class LLMRateLimiter:
     Args:
         max_concurrent: Maximum concurrent in-flight LLM calls (semaphore).
         max_qpm: Maximum queries per minute (sliding window). 0 = disabled.
-        default_pause_seconds: Global pause duration on a 429 response.
-        jitter_range: Random jitter (seconds) added on top of the pause.
+        default_pause_seconds: Pause duration (s) applied on a 429 response
+            when the API returns no ``Retry-After`` header.
+        jitter_range: Random jitter (seconds) added on top of the pause so
+            concurrent waiters spread out on wake-up.
     """
 
     # Maximum accepted Retry-After value (seconds).  API responses that ask
@@ -191,14 +206,15 @@ class LLMRateLimiter:
         self,
         retry_after: float | None = None,
     ) -> None:
-        """Record a 429 rate-limit response and set the global pause timestamp.
+        """Record a 429 response and set this model's pause timestamp.
 
         Args:
             retry_after: Seconds from the API's Retry-After header.
                          Falls back to the configured default when None.
-                         Always capped at ``_MAX_PAUSE_SECONDS`` so that a
-                         large Retry-After from a background task cannot
-                         stall interactive user requests for minutes.
+                         Always capped at ``MAX_PAUSE_SECONDS`` so that a
+                         large Retry-After cannot stall this model's callers
+                         for minutes.  Callers that receive a Retry-After
+                         above the cap are raised immediately (no retry).
         """
         raw_pause = (
             retry_after if retry_after is not None else self._default_pause
