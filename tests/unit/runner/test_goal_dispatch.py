@@ -6,12 +6,16 @@ import json
 import pytest
 
 from qwenpaw.app.goal_dispatch import (
+    DEFAULT_GOAL_MAX_TURNS,
     GOAL_STATUS_ACHIEVED,
     GOAL_STATUS_ACTIVE,
+    GOAL_STATUS_PAUSED,
+    build_goal_continuation,
     build_goal_refresher,
     detect_active_goal,
     handle_goal_command,
     maybe_handle_goal_command,
+    should_continue_goal,
     update_goal_from_message,
 )
 
@@ -34,6 +38,7 @@ async def test_goal_command_starts_session_goal(tmp_path):
     assert state_path.exists()
     data = json.loads(state_path.read_text(encoding="utf-8"))
     assert data["objective"] == "Finish the retry patch and run tests"
+    assert data["max_turns"] == DEFAULT_GOAL_MAX_TURNS
 
 
 @pytest.mark.asyncio
@@ -131,6 +136,85 @@ def test_build_goal_refresher_rewrites_initial_command():
     assert "User message:\nShip the goal MVP" in refresher
     assert "normal main-agent tools and approval flow" in refresher
     assert "Mission workers" in refresher
+    assert "Goal status: paused" in refresher
+
+
+@pytest.mark.asyncio
+async def test_goal_in_progress_builds_auto_continuation(tmp_path):
+    goal = await handle_goal_command(
+        "/goal Document the feature",
+        workspace_dir=tmp_path,
+        session_id="s1",
+        user_id="u1",
+        channel="console",
+    )
+    assert isinstance(goal, dict)
+
+    updated = update_goal_from_message(
+        goal,
+        {"content": "I inspected the files and still need to write docs."},
+    )
+
+    assert updated is not None
+    assert updated["status"] == GOAL_STATUS_ACTIVE
+    assert should_continue_goal(updated)
+
+    continuation = build_goal_continuation(updated)
+    assert "[Goal continuation]" in continuation
+    assert "Objective: Document the feature" in continuation
+    assert "Turn budget: 1/5 completed" in continuation
+    assert "Previous response excerpt" in continuation
+
+    state_path = tmp_path / "goals" / "console" / "u1_s1.json"
+    data = json.loads(state_path.read_text(encoding="utf-8"))
+    assert "_goal_path" not in data
+
+
+@pytest.mark.asyncio
+async def test_goal_auto_pauses_when_turn_budget_is_exhausted(tmp_path):
+    goal = await handle_goal_command(
+        "/goal Document the feature",
+        workspace_dir=tmp_path,
+        session_id="s1",
+        user_id="u1",
+        channel="console",
+    )
+    assert isinstance(goal, dict)
+
+    updated = goal
+    for _ in range(DEFAULT_GOAL_MAX_TURNS):
+        updated = update_goal_from_message(
+            updated,
+            {"content": "Still working."},
+        )
+
+    assert updated is not None
+    assert updated["status"] == GOAL_STATUS_PAUSED
+    assert updated["last_result"] == "turn_budget_exhausted"
+    assert not should_continue_goal(updated)
+
+
+@pytest.mark.asyncio
+async def test_goal_can_pause_when_model_needs_user_input(tmp_path):
+    goal = await handle_goal_command(
+        "/goal Choose a deployment target",
+        workspace_dir=tmp_path,
+        session_id="s1",
+        user_id="u1",
+        channel="console",
+    )
+    assert isinstance(goal, dict)
+
+    paused_text = "I need you to pick staging or prod.\nGoal status: paused"
+    updated = update_goal_from_message(
+        goal,
+        {"content": paused_text},
+    )
+
+    assert updated is not None
+    assert updated["status"] == GOAL_STATUS_PAUSED
+    assert updated["last_result"] == "paused"
+    assert not should_continue_goal(updated)
 
 
 @pytest.mark.asyncio

@@ -25,10 +25,14 @@ GOAL_COMMAND = "/goal"
 GOAL_STATUS_ACTIVE = "active"
 GOAL_STATUS_PAUSED = "paused"
 GOAL_STATUS_ACHIEVED = "achieved"
+DEFAULT_GOAL_MAX_TURNS = 5
 
 _GOAL_MIN_LEN = 5
 _GOAL_DONE_RE = re.compile(
     r"(?im)^\s*(goal status:\s*achieved|\[goal:\s*achieved\])\s*$",
+)
+_GOAL_PAUSED_RE = re.compile(
+    r"(?im)^\s*(goal status:\s*paused|\[goal:\s*paused\])\s*$",
 )
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 
@@ -126,18 +130,32 @@ def _format_status(state: dict[str, Any] | None, path: Path) -> str:
             "Use `/goal <objective>` to start one."
         )
 
+    max_turns = _goal_max_turns(state)
     lines = [
         "**Goal Status**",
         f"- Status: `{state.get('status', 'unknown')}`",
         f"- Objective: {state.get('objective', '')}",
-        f"- Attempts: {state.get('attempts', 0)}",
+        f"- Attempts: {state.get('attempts', 0)}/{max_turns}",
         f"- Updated: `{state.get('updated_at', '')}`",
         f"- State file: `{path}`",
     ]
     last_result = state.get("last_result")
     if last_result:
         lines.append(f"- Last result: {last_result}")
+    paused_reason = state.get("paused_reason")
+    if paused_reason:
+        lines.append(f"- Paused reason: {paused_reason}")
     return "\n".join(lines)
+
+
+def _goal_max_turns(state: dict[str, Any] | None) -> int:
+    if not state:
+        return DEFAULT_GOAL_MAX_TURNS
+    try:
+        max_turns = int(state.get("max_turns") or DEFAULT_GOAL_MAX_TURNS)
+    except (TypeError, ValueError):
+        return DEFAULT_GOAL_MAX_TURNS
+    return max(max_turns, 1)
 
 
 def _new_goal_state(
@@ -158,8 +176,10 @@ def _new_goal_state(
         "user_id": user_id,
         "channel": channel,
         "attempts": 0,
+        "max_turns": DEFAULT_GOAL_MAX_TURNS,
         "last_result": "",
         "last_response_excerpt": "",
+        "paused_reason": "",
     }
 
 
@@ -203,6 +223,10 @@ async def handle_goal_command(  # pylint: disable=too-many-return-statements
         state["status"] = (
             GOAL_STATUS_PAUSED if subcommand == "pause" else GOAL_STATUS_ACTIVE
         )
+        if subcommand == "pause":
+            state["paused_reason"] = "user-paused"
+        else:
+            state["paused_reason"] = ""
         state["updated_at"] = _utc_now()
         _write_goal(path, state)
         return _format_status(state, path)
@@ -279,6 +303,8 @@ def build_goal_refresher(
     """Build the prompt prefix injected into the normal agent turn."""
     objective = goal_info.get("objective", "")
     state_path = goal_info.get("_goal_path", "")
+    attempts = int(goal_info.get("attempts", 0) or 0)
+    max_turns = _goal_max_turns(goal_info)
     started = bool(goal_info.get("_goal_started"))
     action = (
         "The user just started this goal. Begin working on it now."
@@ -293,16 +319,54 @@ def build_goal_refresher(
         "[Goal active]\n"
         f"Objective: {objective}\n"
         f"State file: `{state_path}`\n"
+        f"Turn budget: {attempts}/{max_turns} completed\n"
         f"{action}\n\n"
         "Constraints:\n"
         "- Use the normal main-agent tools and approval flow.\n"
         "- Do not create Mission workers, PRD files, or background agents "
         "unless the user explicitly asks.\n"
         "- If the objective is fully achieved in this turn, include a final "
-        "line exactly: `Goal status: achieved`.\n\n"
+        "line exactly: `Goal status: achieved`.\n"
+        "- If you are blocked and need the user to answer or approve a "
+        "choice, include a final line exactly: `Goal status: paused`.\n\n"
         "User message:\n"
         f"{cleaned_user_text}"
     )
+
+
+def build_goal_continuation(goal_info: dict[str, Any]) -> str:
+    """Build the next automatic goal turn prompt."""
+    objective = goal_info.get("objective", "")
+    state_path = goal_info.get("_goal_path", "")
+    attempts = int(goal_info.get("attempts", 0) or 0)
+    max_turns = _goal_max_turns(goal_info)
+    last_result = goal_info.get("last_result", "") or "in_progress"
+    excerpt = (goal_info.get("last_response_excerpt", "") or "").strip()
+    previous = f"Previous response excerpt:\n{excerpt}\n\n" if excerpt else ""
+
+    return (
+        "[Goal continuation]\n"
+        f"Objective: {objective}\n"
+        f"State file: `{state_path}`\n"
+        f"Turn budget: {attempts}/{max_turns} completed\n"
+        f"Last result: {last_result}\n\n"
+        f"{previous}"
+        "Continue working toward this goal. Take the next concrete step "
+        "using the normal main-agent tools and approval flow. Do not create "
+        "Mission workers, PRD files, or background agents unless the user "
+        "explicitly asks.\n\n"
+        "If the objective is fully achieved in this turn, include a final "
+        "line exactly: `Goal status: achieved`.\n"
+        "If you are blocked and need the user to answer or approve a choice, "
+        "include a final line exactly: `Goal status: paused`."
+    )
+
+
+def should_continue_goal(goal_info: dict[str, Any] | None) -> bool:
+    """Return True when another automatic goal turn should be launched."""
+    if not goal_info:
+        return False
+    return goal_info.get("status") == GOAL_STATUS_ACTIVE
 
 
 def _msg_text(msg: Any) -> str:
@@ -332,17 +396,17 @@ def _msg_text(msg: Any) -> str:
 def update_goal_from_message(
     goal_info: dict[str, Any] | None,
     assistant_msg: Any,
-) -> None:
+) -> dict[str, Any] | None:
     """Persist a lightweight progress update from the final assistant msg."""
     if not goal_info:
-        return
+        return None
     path_value = goal_info.get("_goal_path")
     if not path_value:
-        return
+        return None
     path = Path(path_value)
     state = _read_goal(path)
     if not state:
-        return
+        return None
 
     text = _msg_text(assistant_msg).strip()
     state["attempts"] = int(state.get("attempts", 0) or 0) + 1
@@ -351,6 +415,22 @@ def update_goal_from_message(
     if _GOAL_DONE_RE.search(text):
         state["status"] = GOAL_STATUS_ACHIEVED
         state["last_result"] = "achieved"
+        state["paused_reason"] = ""
+    elif _GOAL_PAUSED_RE.search(text):
+        state["status"] = GOAL_STATUS_PAUSED
+        state["last_result"] = "paused"
+        state["paused_reason"] = "model-requested-user-input"
+    elif state["attempts"] >= _goal_max_turns(state):
+        state["status"] = GOAL_STATUS_PAUSED
+        state["last_result"] = "turn_budget_exhausted"
+        state["paused_reason"] = (
+            f"turn budget exhausted ({state['attempts']}/"
+            f"{_goal_max_turns(state)})"
+        )
     else:
         state["last_result"] = "in_progress"
+        state["paused_reason"] = ""
+    state.pop("_goal_path", None)
     _write_goal(path, state)
+    state["_goal_path"] = str(path)
+    return state

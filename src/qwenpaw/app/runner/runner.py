@@ -31,9 +31,11 @@ from .mission_dispatch import (
     detect_active_mission_phase,
 )
 from ..goal_dispatch import (
+    build_goal_continuation,
     build_goal_refresher,
     detect_active_goal,
     maybe_handle_goal_command,
+    should_continue_goal,
     update_goal_from_message,
 )
 from .session import SafeJSONSession
@@ -110,6 +112,58 @@ async def _stream_printing_messages_interruptible(
         raise
     finally:
         await _cancel_streaming_agent_task(task)
+
+
+def _goal_user_msg(text: str) -> Msg:
+    return Msg(
+        name="user",
+        role="user",
+        content=[TextBlock(type="text", text=text)],
+    )
+
+
+async def _stream_goal_auto_continuation(
+    *,
+    agent: Any,
+    initial_msgs: list,
+    goal_info: dict[str, Any] | None,
+) -> AsyncGenerator[tuple[Msg, bool], None]:
+    """Run a bounded goal loop on the standard main-agent path."""
+    current_msgs = initial_msgs
+    active_goal_info = goal_info
+    while True:
+        final_goal_msg = None
+        async for msg, last in _stream_printing_messages_interruptible(
+            agents=[agent],
+            coroutine_task=agent(current_msgs),
+        ):
+            if active_goal_info is not None and last:
+                final_goal_msg = msg
+                continue
+            yield msg, last
+
+        if active_goal_info is None:
+            break
+
+        if final_goal_msg is None:
+            break
+
+        active_goal_info = update_goal_from_message(
+            active_goal_info,
+            final_goal_msg,
+        )
+        continue_goal = should_continue_goal(active_goal_info)
+        yield final_goal_msg, not continue_goal
+
+        if not continue_goal:
+            break
+
+        if active_goal_info is None:
+            break
+
+        current_msgs = [
+            _goal_user_msg(build_goal_continuation(active_goal_info)),
+        ]
 
 
 class AgentRunner(Runner):
@@ -798,16 +852,12 @@ class AgentRunner(Runner):
                     ):
                         yield msg, last
             else:
-                final_goal_msg = None
-                async for msg, last in _stream_printing_messages_interruptible(
-                    agents=[agent],
-                    coroutine_task=agent(msgs),
+                async for msg, last in _stream_goal_auto_continuation(
+                    agent=agent,
+                    initial_msgs=msgs,
+                    goal_info=goal_info,
                 ):
-                    if goal_info is not None and last:
-                        final_goal_msg = msg
                     yield msg, last
-                if goal_info is not None:
-                    update_goal_from_message(goal_info, final_goal_msg)
 
         except asyncio.CancelledError as exc:
             logger.info(f"query_handler: {session_id} cancelled!")
