@@ -51,7 +51,7 @@ def apply(request: Request, *, skip_auth: bool) -> Response | bool:
 
     auth_active = is_auth_enabled() and has_registered_users()
     if auth_active:
-        if _is_desktop_export_bypass(request):
+        if _is_loopback_export_bypass(request):
             return True
         return False
 
@@ -114,8 +114,8 @@ def _origin_matches_target(origin: str, request: Request) -> bool:
     return origin.rstrip("/").lower() == target.lower()
 
 
-def _is_desktop_export_bypass(request: Request) -> bool:
-    """Allow pywebview desktop downloads that cannot attach auth headers."""
+def _is_loopback_export_bypass(request: Request) -> bool:
+    """Allow local export downloads that cannot attach auth headers."""
     if request.method != "GET" or not _is_export_route(request.url.path):
         return False
     return _is_loopback_client(request)

@@ -155,7 +155,7 @@ def test_auth_on_backup_endpoint_forces_token_even_from_allow_list(
     assert decision is False
 
 
-def test_auth_on_loopback_export_keeps_desktop_save_file_working(
+def test_auth_on_loopback_export_bypasses_header_auth(
     monkeypatch,
 ):
     monkeypatch.setattr(auth, "is_auth_enabled", lambda: True)
