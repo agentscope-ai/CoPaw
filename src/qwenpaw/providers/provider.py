@@ -86,6 +86,11 @@ class ProviderInfo(BaseModel):
     name: str = Field(..., description="Human-readable provider name")
     base_url: str = Field(default="", description="API base URL")
     api_key: str = Field(default="", description="API key for authentication")
+    default_headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional headers to send with each request",
+    )
+
     chat_model: str = Field(
         default="OpenAIChatModel",
         description="AgentScope ChatModel name (e.g., 'OpenAIChatModel')",
@@ -218,6 +223,14 @@ class Provider(ProviderInfo, ABC):
             self.chat_model = str(config["chat_model"])
         if "api_key_prefix" in config and config["api_key_prefix"] is not None:
             self.api_key_prefix = str(config["api_key_prefix"])
+
+        if (
+            "default_headers" in config
+            and config["default_headers"] is not None
+            and isinstance(config["default_headers"], dict)
+        ):
+            self.default_headers = config["default_headers"]
+
         if (
             "generate_kwargs" in config
             and config["generate_kwargs"] is not None
@@ -368,5 +381,6 @@ class Provider(ProviderInfo, ABC):
             and not self.is_custom,
             freeze_url=self.freeze_url,
             require_api_key=self.require_api_key,
+            default_headers=self.default_headers,
             generate_kwargs=self.generate_kwargs,
         )

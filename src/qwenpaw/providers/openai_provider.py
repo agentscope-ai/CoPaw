@@ -14,6 +14,7 @@ from agentscope.model import ChatModelBase
 from openai import APIError
 
 from qwenpaw.providers.provider import ModelInfo, Provider
+from requests.utils import default_headers
 
 if TYPE_CHECKING:
     from qwenpaw.providers.multimodal_prober import ProbeResult
@@ -28,6 +29,9 @@ DASHSCOPE_BASE_URLS = (
 CODING_DASHSCOPE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
 TOKEN_PLAN_BASE_URL = (
     "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+)
+OCTOKEN_BASE_URL = (
+    "https://octoken.com.cn/v1"
 )
 
 if os.environ.get("LANGFUSE_SECRET_KEY") and importlib.util.find_spec(
@@ -51,6 +55,7 @@ class OpenAIProvider(Provider):
             base_url=self.base_url,
             api_key=self.api_key,
             timeout=timeout,
+            default_headers=self.default_headers,
         )
 
     @staticmethod
@@ -158,6 +163,9 @@ class OpenAIProvider(Provider):
                     },
                     ensure_ascii=False,
                 ),
+            }
+        elif self.base_url == OCTOKEN_BASE_URL:
+            client_kwargs["default_headers"] = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             }
         elif self.base_url == CODING_DASHSCOPE_BASE_URL:
             client_kwargs["default_headers"] = {
