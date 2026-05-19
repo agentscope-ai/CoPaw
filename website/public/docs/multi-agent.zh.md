@@ -696,6 +696,141 @@ cp -r ~/.qwenpaw/workspaces ~/backups/workspaces-$(date +%Y%m%d)
 
 ---
 
+---
+
+## 第三部分：子 Agent 派发（spawn_subagent）
+
+> 本功能在 **v1.2.0** 中引入。
+
+除了与**不同 workspace 的其他 Agent** 协作（`chat_with_agent`），QwenPaw 还支持在**当前 workspace 内**派发子任务。
+
+### 三种协作模式对比
+
+| 模式 | 工作区 | 历史上下文 | 适用场景 |
+|---|---|---|---|
+| `chat_with_agent` | 目标 Agent 独立 workspace | 无（只传 text） | 调用专长 Agent（QA、代码审查等） |
+| `spawn_subagent(fork=False)` | 与当前 Agent 相同 | 无（空白 session） | 干净独立子任务 |
+| `spawn_subagent(fork=True)` | 当前 workspace 的 git worktree | 继承完整对话历史 | 需要背景的侧任务，且可能改文件 |
+
+### 何时使用 spawn_subagent？
+
+**使用 `spawn_subagent(fork=False)`（推荐，最常用）**：
+- 子任务需要读写**当前项目的文件**
+- 子任务相对独立，**不需要当前对话的背景**
+
+```
+"分析 src/core 下所有 API 端点并生成清单"
+"运行测试套件并汇总失败原因"
+"扫描整个代码库的安全漏洞"
+```
+
+**使用 `spawn_subagent(fork=True)`**：
+- 子任务**需要完整对话背景**（如基于刚才讨论的内容）
+- 子任务**会改动文件**，但不希望影响当前工作区
+
+```
+"基于我们刚才的讨论，为解析器模块补充单元测试"
+"试试另一个实现思路，做成独立分支方便比较"
+```
+
+**使用 `chat_with_agent`（跨 Agent）**：
+- 需要调用有特定专长的其他 Agent（QA Agent、代码审查 Agent 等）
+
+### 调用方式
+
+#### 前台同步（等待结果）
+
+```
+用户：分析 src/core 下的性能瓶颈
+
+Agent 内部执行：
+spawn_subagent(task="分析 src/core 下的性能瓶颈并给出报告")
+→ 返回: [SESSION: sub-ab12]
+         分析结果详情...
+```
+
+#### 后台异步（立即返回，稍后查询）
+
+```
+spawn_subagent(
+    task="扫描整个代码库安全漏洞",
+    background=True,
+)
+→ 返回: [TASK_ID: task-cd34]
+         [SESSION: sub-ef56]
+         任务已提交，用 check_agent_task(task_id="task-cd34") 查询进度
+```
+
+#### 继续与子 Agent 对话
+
+```
+# 第一轮
+spawn_subagent(task="分析性能瓶颈")
+→ [SESSION: sub-ab12] + 分析结果
+
+# 续聊：向自身发送，指定 session_id
+chat_with_agent(
+    to_agent="<当前 agent_id>",
+    session_id="sub-ab12",
+    text="请针对第 2 个瓶颈给出具体优化方案",
+)
+```
+
+#### fork=True — 继承历史，隔离 worktree
+
+```
+# 基于当前对话上下文派发子任务
+spawn_subagent(
+    task="基于我们刚才的讨论，为 parser 模块写单元测试",
+    fork=True,
+)
+→ [SESSION: sub-gh78]
+   测试代码已写入...
+   [FORK_WORKTREE: /proj/.qwenpaw/worktrees/ab12ef34]
+   [FORK_BRANCH: fork/ab12ef34]
+   有文件改动，请手动合并分支。
+
+# 如果子任务完成后没有改动文件 → worktree 自动清理
+```
+
+### .worktreeinclude — 自动复制配置文件
+
+fork 模式会创建一个新的 git worktree，默认不包含 `.env` 等被 `.gitignore` 忽略的文件。
+
+在项目根目录创建 `.worktreeinclude` 文件，列出需要复制到 worktree 的文件：
+
+```
+# .worktreeinclude
+.env
+.env.local
+config/local.json
+```
+
+QwenPaw 在创建 worktree 时会自动将这些文件复制过去，确保子任务能正常运行。
+
+### 常见问题
+
+**Q：spawn_subagent 和 chat_with_agent 可以同时用吗？**
+
+可以。两者互不冲突：
+- `spawn_subagent` 在当前 workspace 内执行文件操作类子任务
+- `chat_with_agent` 调用其他专长 Agent
+
+**Q：fork=True 的 worktree 会自动清理吗？**
+
+- **有文件改动**：保留，返回 `[FORK_WORKTREE]` 和 `[FORK_BRANCH]`，需手动合并后清理
+- **无文件改动**：自动执行 `git worktree remove` 清理
+
+**Q：background=True 时的 worktree 怎么处理？**
+
+后台模式下不自动清理，需手动检查：
+```bash
+git worktree list
+git worktree remove .qwenpaw/worktrees/<id>
+```
+
+---
+
 ## 相关页面
 
 - [CLI 命令](./cli) - 命令行工具详细说明

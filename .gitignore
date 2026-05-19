@@ -114,3 +114,4 @@ src/.hypothesis/
 
 # Worktrees
 .worktrees/
+.qwenpaw/worktrees/

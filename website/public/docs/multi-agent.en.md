@@ -696,6 +696,143 @@ cp -r ~/.qwenpaw/workspaces ~/backups/workspaces-$(date +%Y%m%d)
 
 ---
 
+---
+
+## Part 3: In-Workspace Subagents (spawn_subagent)
+
+> Introduced in **v1.2.0**.
+
+Beyond collaborating with agents in **separate workspaces** (`chat_with_agent`),
+QwenPaw also supports spawning sub-tasks **within the current workspace**.
+
+### Three Collaboration Modes Compared
+
+| Mode | Workspace | History | Best for |
+|---|---|---|---|
+| `chat_with_agent` | Target agent's own workspace | None (text only) | Calling a specialist agent (QA, code review, etc.) |
+| `spawn_subagent(fork=False)` | Same as parent agent | None (blank session) | Clean, independent sub-tasks |
+| `spawn_subagent(fork=True)` | git worktree of current workspace | Full parent history | Context-aware side tasks that may modify files |
+
+### When to Use spawn_subagent?
+
+**Use `spawn_subagent(fork=False)` (default, most common)**:
+- Sub-task needs to read/write **files in the current project**
+- Sub-task is self-contained and **doesn't need conversation context**
+
+```
+"List all API endpoints under src/core"
+"Run the test suite and summarize failures"
+"Scan the codebase for security vulnerabilities"
+```
+
+**Use `spawn_subagent(fork=True)`**:
+- Sub-task **needs the full conversation context** (e.g. based on what we just discussed)
+- Sub-task **modifies files** but shouldn't affect the current working tree
+
+```
+"Based on our discussion, write unit tests for the parser module"
+"Try an alternative implementation in a separate branch for comparison"
+```
+
+**Use `chat_with_agent` (cross-agent)**:
+- You need a specialist agent with its own configuration and tools
+
+### Usage Examples
+
+#### Foreground (waits for result)
+
+```
+User: Analyze performance bottlenecks in src/core
+
+Agent internally calls:
+spawn_subagent(task="Analyze performance bottlenecks in src/core and report findings")
+→ Returns: [SESSION: sub-ab12]
+            Detailed analysis...
+```
+
+#### Background (returns immediately, poll later)
+
+```
+spawn_subagent(
+    task="Scan the entire codebase for security vulnerabilities",
+    background=True,
+)
+→ Returns: [TASK_ID: task-cd34]
+            [SESSION: sub-ef56]
+            Task submitted. Poll with check_agent_task(task_id="task-cd34").
+```
+
+#### Continuing a Subagent Conversation
+
+```
+# First call
+spawn_subagent(task="Analyze performance bottlenecks")
+→ [SESSION: sub-ab12] + analysis results
+
+# Follow-up: chat_with_agent targeting self with the subagent's session_id
+chat_with_agent(
+    to_agent="<current_agent_id>",
+    session_id="sub-ab12",
+    text="Give me a concrete fix plan for bottleneck #2",
+)
+```
+
+#### fork=True — Inherit History, Isolated worktree
+
+```
+spawn_subagent(
+    task="Based on our discussion, write unit tests for the parser module",
+    fork=True,
+)
+→ [SESSION: sub-gh78]
+   Tests written to src/tests/...
+   [FORK_WORKTREE: /proj/.qwenpaw/worktrees/ab12ef34]
+   [FORK_BRANCH: fork/ab12ef34]
+   The forked worktree has uncommitted changes. Review and merge manually.
+
+# If the subagent makes no file changes → worktree is cleaned up automatically
+```
+
+### .worktreeinclude — Auto-copy Config Files into Worktree
+
+A fork worktree doesn't include files ignored by `.gitignore` (like `.env`).
+Create a `.worktreeinclude` file in the project root to specify files that
+should be copied into the worktree automatically:
+
+```
+# .worktreeinclude
+.env
+.env.local
+config/local.json
+```
+
+QwenPaw copies these files into the worktree when it is created, so the
+subagent can run without missing configuration.
+
+### FAQ
+
+**Q: Can I use both spawn_subagent and chat_with_agent together?**
+
+Yes. They are complementary:
+- `spawn_subagent` — in-workspace file tasks
+- `chat_with_agent` — specialist agents in other workspaces
+
+**Q: Is the fork=True worktree cleaned up automatically?**
+
+- **With file changes**: kept. Returns `[FORK_WORKTREE]` and `[FORK_BRANCH]`. Merge manually, then remove with `git worktree remove`.
+- **No file changes**: automatically removed with `git worktree remove`.
+
+**Q: What about cleanup in background=True mode?**
+
+Background mode skips automatic cleanup. Manage manually:
+
+```bash
+git worktree list
+git worktree remove .qwenpaw/worktrees/<id>
+```
+
+---
+
 ## Related Pages
 
 - [CLI Commands](./cli) - Detailed CLI reference
