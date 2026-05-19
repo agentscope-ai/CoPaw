@@ -59,7 +59,7 @@ qwenpaw plugin install /path/to/cloudpaw
 qwenpaw plugin install https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.1.zip
 ```
 
-> ⚠️ After installation, you **must refresh the browser** (`Ctrl+Shift+R` / `Cmd+Shift+R`) to load frontend updates.
+> **⚠️ IMPORTANT: After installation, you MUST hard-refresh the browser** (`Ctrl+Shift+R` / `Cmd+Shift+R`) to load frontend updates. CloudPaw's custom UI components (proposal selection, PRD management, etc.) will not appear until the page is refreshed. If features seem missing after install, try refreshing first.
 
 ### 2. Configure
 
@@ -81,7 +81,11 @@ You can also configure via system environment variables or CLI. For instructions
 
 #### ③ iac-code Model Configuration
 
-CloudPaw relies on [iac-code](https://github.com/aliyun/iac-code) for IaC template generation. For model configuration, see the [iac-code documentation](https://aliyun.github.io/iac-code/docs/configuration/llm-providers).
+CloudPaw relies on [iac-code](https://github.com/aliyun/iac-code) (≥ 0.1.2) for IaC template generation. **No manual model configuration is needed** — CloudPaw automatically syncs QwenPaw's active model to iac-code.
+
+When the CloudPaw plugin starts, it writes `llm_source: qwenpaw` to `~/.iac-code/settings.yml`. This tells iac-code to read model configuration (provider, API key, model name, etc.) directly from QwenPaw's active model. As long as you have configured a working model in QwenPaw (step ①), iac-code will use the same model automatically — no extra setup required.
+
+**Manual override:** If you need iac-code to use a different model from QwenPaw, set the `IAC_CODE_PROVIDER` environment variable (via QwenPaw's Environment Variables page or system env). When this variable is present, CloudPaw skips automatic injection and iac-code uses your manual configuration. For details, see the [iac-code LLM configuration docs](https://aliyun.github.io/iac-code/docs/configuration/llm-providers).
 
 ### 3. Start Using
 

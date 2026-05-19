@@ -59,7 +59,7 @@ qwenpaw plugin install /path/to/cloudpaw
 qwenpaw plugin install https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.1.zip
 ```
 
-> ⚠️ 安装完成后**必须刷新浏览器**（`Ctrl+Shift+R` / `Cmd+Shift+R`）以加载前端更新。
+> **⚠️ 重要提示：安装完成后必须强制刷新浏览器**（`Ctrl+Shift+R` / `Cmd+Shift+R`）以加载前端更新。CloudPaw 的自定义 UI 组件（方案选择、PRD 管理等）在刷新前不会显示。如果安装后发现功能缺失，请先尝试刷新页面。
 
 ### 2. 完成必要配置
 
@@ -83,7 +83,11 @@ Access Key 的获取方式请参考[阿里云官方文档](https://help.aliyun.c
 
 #### ③ iac-code 模型配置
 
-CloudPaw 依赖 [iac-code](https://github.com/aliyun/iac-code) 生成 IaC 模板。模型配置方式请参阅 [iac-code 使用说明](https://aliyun.github.io/iac-code/docs/configuration/llm-providers)。
+CloudPaw 依赖 [iac-code](https://github.com/aliyun/iac-code)（≥ 0.1.2）生成 IaC 模板。**无需手动配置模型** — CloudPaw 会自动将 QwenPaw 的活跃模型同步给 iac-code。
+
+CloudPaw 插件启动时，会自动在 `~/.iac-code/settings.yml` 中写入 `llm_source: qwenpaw`，iac-code 将直接从 QwenPaw 的活跃模型配置中读取提供商、API Key、模型名称等信息。只要您在 QwenPaw 中已配置好可用的模型（步骤 ①），iac-code 就会自动使用相同的模型，无需额外配置。
+
+**手动覆盖：** 如果需要让 iac-code 使用与 QwenPaw 不同的模型，可设置 `IAC_CODE_PROVIDER` 环境变量（通过 QwenPaw 的「环境变量」页面或系统环境变量）。当该变量存在时，CloudPaw 将跳过自动注入，iac-code 使用您的手动配置。详细配置方式请参阅 [iac-code LLM 配置文档](https://aliyun.github.io/iac-code/docs/configuration/llm-providers)。
 
 ### 3. 开始使用
 
