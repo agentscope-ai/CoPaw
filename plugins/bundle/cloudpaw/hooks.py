@@ -25,6 +25,37 @@ _AK_CONSOLE_URL = "https://ram.console.aliyun.com/manage/ak"
 _IAC_CODE_SETTINGS_PATH = Path.home() / ".iac-code" / "settings.yml"
 
 
+def _parse_iac_settings(content: str) -> bool:
+    """Parse iac-code settings and check for activeProvider and model."""
+    has_provider = False
+    has_model = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("activeProvider:"):
+            val = stripped.split(":", 1)[1].strip()
+            if val:
+                has_provider = True
+        if stripped.startswith("model:"):
+            val = stripped.split(":", 1)[1].strip()
+            if val:
+                has_model = True
+    return has_provider and has_model
+
+
+def _check_iac_model_configured() -> bool:
+    """Check if iac-code model is configured."""
+    try:
+        if not _IAC_CODE_SETTINGS_PATH.exists():
+            return False
+        content = _IAC_CODE_SETTINGS_PATH.read_text(encoding="utf-8")
+        # If llm_source is qwenpaw, iac-code uses QwenPaw's model config
+        if "llm_source: qwenpaw" in content:
+            return True
+        return _parse_iac_settings(content)
+    except Exception:
+        return False
+
+
 def _check_environment_ready() -> (  # pylint: disable=too-many-branches
     str | None
 ):
@@ -72,26 +103,7 @@ def _check_environment_ready() -> (  # pylint: disable=too-many-branches
         )
 
     # 4. iac-code model configured?
-    iac_model_ok = False
-    try:
-        if _IAC_CODE_SETTINGS_PATH.exists():
-            content = _IAC_CODE_SETTINGS_PATH.read_text(encoding="utf-8")
-            has_provider = False
-            has_model = False
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("activeProvider:"):
-                    val = stripped.split(":", 1)[1].strip()
-                    if val:
-                        has_provider = True
-                if stripped.startswith("model:"):
-                    val = stripped.split(":", 1)[1].strip()
-                    if val:
-                        has_model = True
-            iac_model_ok = has_provider and has_model
-    except Exception:
-        pass
-    if not iac_model_ok:
+    if not _check_iac_model_configured():
         issues.append(
             "❌ iac-code 模型未配置\n"
             "   配置方式:\n"
@@ -377,10 +389,12 @@ def setup_tool_and_prompt_hooks() -> (  # pylint: disable=too-many-statements
     _original_create_toolkit = QwenPawAgent._create_toolkit
     _original_build_sys_prompt = QwenPawAgent._build_sys_prompt
 
-    def _patched_create_toolkit(self, namesake_strategy="skip"):
+    def _patched_create_toolkit(self, *args, **kwargs):
+        namesake_strategy = kwargs.get("namesake_strategy", "skip")
         toolkit = _original_create_toolkit(
             self,
-            namesake_strategy=namesake_strategy,
+            *args,
+            **kwargs,
         )
 
         agent_id = (
