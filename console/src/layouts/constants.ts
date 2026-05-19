@@ -164,7 +164,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 升级后重启服务 qwenpaw app。`,
@@ -196,7 +196,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,
@@ -228,7 +228,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,
