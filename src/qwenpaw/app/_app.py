@@ -213,7 +213,7 @@ agent_app = AgentApp(
     runner=runner,
     enable_stream_task=True,
     stream_task_queue="stream_query",
-    stream_task_timeout=300,
+    stream_task_timeout=1800,
 )
 
 

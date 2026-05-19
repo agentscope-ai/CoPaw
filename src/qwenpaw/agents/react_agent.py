@@ -51,6 +51,7 @@ from .tools import (
     glob_search,
     grep_search,
     list_agents,
+    materialize_skill,
     read_file,
     send_file_to_user,
     set_user_timezone,
@@ -143,11 +144,27 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         running_config = agent_config.running
         self._language = agent_config.language
 
+        # Resolve effective skills once and share across toolkit /
+        # skill registration.
+        workspace_dir = self._workspace_dir or WORKING_DIR
+        ensure_skills_initialized(workspace_dir)
+        channel_name = self._request_context.get("channel", "console")
+        try:
+            effective_skills = resolve_effective_skills(
+                workspace_dir,
+                channel_name,
+            )
+        except Exception:  # pylint: disable=broad-except
+            effective_skills = []
+
         # Initialize toolkit with built-in tools
-        toolkit = self._create_toolkit(namesake_strategy=namesake_strategy)
+        toolkit = self._create_toolkit(
+            namesake_strategy=namesake_strategy,
+            effective_skills=effective_skills,
+        )
 
         # Load and register skills
-        self._register_skills(toolkit)
+        self._register_skills(toolkit, effective_skills=effective_skills)
 
         # Initialize memory_manager and context_manager for use
         # in _build_sys_prompt
@@ -217,6 +234,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
     def _create_toolkit(
         self,
         namesake_strategy: NamesakeStrategy = "skip",
+        effective_skills: list[str] | None = None,
     ) -> Toolkit:
         """Create and populate toolkit with built-in tools.
 
@@ -224,10 +242,13 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             namesake_strategy: Strategy to handle namesake tool functions.
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
+            effective_skills: Skills enabled for this workspace + channel,
+                used to gate skill-specific tools.
 
         Returns:
             Configured toolkit instance
         """
+        effective_skills = effective_skills or []
         toolkit = Toolkit()
 
         # Check which tools are enabled from agent config
@@ -280,6 +301,12 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             "chat_with_agent": chat_with_agent,
             "submit_to_agent": submit_to_agent,
             "check_agent_task": check_agent_task,
+            # Register only when the `make-skill` skill is enabled.
+            **(
+                {"materialize_skill": materialize_skill}
+                if "make-skill" in effective_skills
+                else {}
+            ),
         }
 
         # Track hardcoded built-in tools for backward compatibility
@@ -370,27 +397,19 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         return toolkit
 
-    def _register_skills(self, toolkit: Toolkit) -> None:
+    def _register_skills(
+        self,
+        toolkit: Toolkit,
+        effective_skills: list[str],
+    ) -> None:
         """Load and register skills from workspace directory.
-
-        Uses the registry-backed skill resolver to determine effective
-        skills for the current channel.
 
         Args:
             toolkit: Toolkit to register skills to
+            effective_skills: Resolved skill names for the current
+                workspace + channel.
         """
         workspace_dir = self._workspace_dir or WORKING_DIR
-
-        ensure_skills_initialized(workspace_dir)
-
-        request_context = getattr(self, "_request_context", {})
-        channel_name = request_context.get("channel", "console")
-
-        effective_skills = resolve_effective_skills(
-            workspace_dir,
-            channel_name,
-        )
-
         working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
 
         for skill_name in effective_skills:

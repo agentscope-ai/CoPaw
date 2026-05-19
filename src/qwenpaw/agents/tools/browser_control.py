@@ -11,6 +11,7 @@ wait_for, pdf, close. Uses refs from snapshot for ref-based actions.
 
 import asyncio
 import atexit
+from collections.abc import Iterable
 from concurrent import futures
 import json
 import logging
@@ -710,6 +711,47 @@ def _parse_json_param(value: str, default: Any = None):
 def _get_page(state: dict, page_id: str):
     """Return page for page_id or None if not found."""
     return state["pages"].get(page_id)
+
+
+async def _get_tab_info_list(state: dict) -> list[dict[str, str]]:
+    """Return a list of dicts with page_id, url, and title for all pages.
+    Safely handles closed or detached pages without raising exceptions.
+    """
+    pages = state.get("pages", {})
+    tab_list = []
+    for pid, p in list(pages.items()):
+        try:
+            # Basic sanity check: if the page object is gone or explicitly closed
+            if p is None:
+                continue
+
+            # Playwright pages might be closed but still in our dict
+            # We use a try-except block to catch 'Target closed' errors during property access
+            if _USE_SYNC_PLAYWRIGHT:
+                is_closed = await _run_sync(p.is_closed)
+                if is_closed:
+                    continue
+                url = p.url
+                title = await _run_sync(p.title)
+            else:
+                if p.is_closed():
+                    continue
+                url = p.url
+                title = await p.title()
+
+            tab_list.append(
+                {
+                    "page_id": pid,
+                    "url": url or "about:blank",
+                    "title": title or "Untitled",
+                },
+            )
+        except Exception:
+            # If any error occurs (e.g. page detached, browser crashed),
+            # we skip this tab or provide a fallback if we know it exists.
+            logger.debug("Failed to get info for tab %s, skipping", pid)
+            continue
+    return tab_list
 
 
 def _get_context(state: dict):
@@ -3298,7 +3340,12 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
     if tab_action == "list":
         return _tool_response(
             json.dumps(
-                {"ok": True, "tabs": page_ids, "count": len(page_ids)},
+                {
+                    "ok": True,
+                    "tabs": page_ids,
+                    "tab_list": await _get_tab_info_list(state),
+                    "count": len(page_ids),
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -3349,6 +3396,7 @@ async def _action_tabs(  # pylint: disable=too-many-return-statements
                         "ok": True,
                         "page_id": new_id,
                         "tabs": list(state["pages"].keys()),
+                        "tab_list": await _get_tab_info_list(state),
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -4043,6 +4091,59 @@ async def stop_all_browsers() -> None:
                     state.get("workspace_id", "unknown"),
                     e,
                 )
+
+
+async def stop_browsers_for_workspace_dirs(
+    workspace_dirs: Iterable[str | Path],
+) -> None:
+    """Stop managed browsers whose profile lives under *workspace_dirs*.
+
+    Backup restore uses this narrower cleanup before replacing workspace
+    directories. It releases QwenPaw-owned Playwright/Chromium handles without
+    disrupting browser sessions for unrelated workspaces.
+    """
+    targets = _resolved_workspace_dir_keys(workspace_dirs)
+    if not targets:
+        return
+
+    for state in list(_workspace_states.values()):
+        workspace_dir = state.get("workspace_dir") or ""
+        if not workspace_dir:
+            continue
+        if _workspace_dir_key(workspace_dir) not in targets:
+            continue
+        if _is_browser_running(state):
+            try:
+                await _action_stop(state)
+            except Exception as e:
+                logger.error(
+                    "Failed to stop browser for workspace %s before "
+                    "restore: %s",
+                    state.get("workspace_id", "unknown"),
+                    e,
+                )
+
+
+def _resolved_workspace_dir_keys(
+    workspace_dirs: Iterable[str | Path],
+) -> set[str]:
+    """Normalize workspace paths for matching browser state entries."""
+    return {
+        key
+        for workspace_dir in workspace_dirs
+        if (key := _workspace_dir_key(workspace_dir))
+    }
+
+
+def _workspace_dir_key(workspace_dir: str | Path) -> str:
+    """Return a stable absolute path key, tolerating missing directories."""
+    if not workspace_dir:
+        return ""
+    path = Path(workspace_dir).expanduser()
+    try:
+        return str(path.resolve())
+    except OSError:
+        return str(path.absolute())
 
 
 async def browser_use(  # pylint: disable=R0911,R0912

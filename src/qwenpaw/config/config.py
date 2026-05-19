@@ -236,6 +236,8 @@ class FeishuConfig(BaseChannelConfig):
     """Feishu/Lark channel: app_id, app_secret; optional encrypt_key,
     verification_token for event handler. media_dir for received media.
     domain: 'feishu' for China, 'lark' for international.
+    streaming_enabled: enable CardKit streaming card updates for real-time
+    typewriter-style text output.
     """
 
     app_id: str = ""
@@ -244,6 +246,7 @@ class FeishuConfig(BaseChannelConfig):
     verification_token: str = ""
     media_dir: Optional[str] = None
     domain: Literal["feishu", "lark"] = "feishu"
+    streaming_enabled: bool = False
 
 
 class QQConfig(BaseChannelConfig):
@@ -338,7 +341,6 @@ class MatrixConfig(BaseChannelConfig):
     # When False, images are surfaced as text placeholders (no vision URL).
     vision_enabled: bool = True
     history_limit: int = 50
-    username: str = ""
     password: str = ""
     device_name: str = "qwenpaw-worker"
     # matrix-nio sync long-poll timeout (ms); typical 30s
@@ -2126,3 +2128,28 @@ def migrate_legacy_config_to_multi_agent() -> bool:
     print(f"  Default agent config: {agent_config_path}")
 
     return True
+
+
+def get_model_max_input_length(
+    agent_config: "AgentProfileConfig",
+) -> int:
+    """Return ``max_input_length`` from the active model's ``ModelInfo``.
+
+    Falls back to 128 * 1024 (131072) if model info is unavailable.
+    Accepts an already-loaded *agent_config* to avoid redundant file I/O
+    on hot paths (pre_reasoning, compact_context, summarize, etc.).
+    """
+    from ..providers import ProviderManager
+
+    model_slot = agent_config.active_model
+    if model_slot and model_slot.provider_id and model_slot.model:
+        try:
+            manager = ProviderManager.get_instance()
+            provider = manager.get_provider(model_slot.provider_id)
+            if provider:
+                model_info = provider.get_model_info(model_slot.model)
+                if model_info is not None:
+                    return model_info.max_input_length
+        except Exception:
+            pass
+    return 128 * 1024

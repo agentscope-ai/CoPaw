@@ -20,6 +20,7 @@ import re
 import sys
 import threading
 import time
+import uuid as _uuid
 from email.utils import parsedate_to_datetime
 import types
 from collections import OrderedDict
@@ -51,6 +52,8 @@ from .constants import (
     FEISHU_NICKNAME_CACHE_MAX,
     FEISHU_PROCESSED_IDS_MAX,
     FEISHU_STALE_MSG_THRESHOLD_MS,
+    FEISHU_STREAM_ELEMENT_ID,
+    FEISHU_STREAM_MIN_INTERVAL_S,
     FEISHU_WS_BACKOFF_FACTOR,
     FEISHU_WS_INITIAL_RETRY_DELAY,
     FEISHU_WS_MAX_RETRY_DELAY,
@@ -203,6 +206,7 @@ class FeishuChannel(BaseChannel):
         deny_message: str = "",
         require_mention: bool = False,
         domain: str = "feishu",
+        streaming_enabled: bool = False,
     ):
         super().__init__(
             process,
@@ -215,6 +219,7 @@ class FeishuChannel(BaseChannel):
             allow_from=allow_from,
             deny_message=deny_message,
             require_mention=require_mention,
+            streaming_enabled=streaming_enabled,
         )
         self.enabled = enabled
         self.app_id = app_id
@@ -294,6 +299,9 @@ class FeishuChannel(BaseChannel):
             deny_message=os.getenv("FEISHU_DENY_MESSAGE", ""),
             require_mention=os.getenv("FEISHU_REQUIRE_MENTION", "0") == "1",
             domain=os.getenv("FEISHU_DOMAIN", "feishu"),
+            streaming_enabled=(
+                os.getenv("FEISHU_STREAMING_ENABLED", "0") == "1"
+            ),
         )
 
     @classmethod
@@ -327,6 +335,9 @@ class FeishuChannel(BaseChannel):
             deny_message=config.deny_message or "",
             require_mention=config.require_mention,
             domain=config.domain or "feishu",
+            streaming_enabled=bool(
+                getattr(config, "streaming_enabled", False),
+            ),
         )
 
     def resolve_session_id(
@@ -1927,6 +1938,398 @@ class FeishuChannel(BaseChannel):
             meta["_last_sent_message_id"] = last_message_id
         return last_message_id
 
+    # ------------------------------------------------------------------
+    # CardKit streaming card helpers
+    # ------------------------------------------------------------------
+
+    def _get_feishu_stream_state(
+        self,
+        send_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Get or create per-request streaming state in send_meta."""
+        state = send_meta.get("_fs_stream")
+        if state is None:
+            state = {"cards": {}}
+            send_meta["_fs_stream"] = state
+        return state
+
+    async def _create_streaming_card(
+        self,
+        receive_id_type: str,
+        receive_id: str,
+        initial_text: str = "...",
+    ) -> Optional[Dict[str, str]]:
+        """Create a CardKit streaming card and send it as a message.
+
+        Returns ``{"card_id": ..., "message_id": ...}`` or ``None``.
+        """
+        if not self._client:
+            return None
+
+        from lark_oapi.api.cardkit.v1 import (
+            CreateCardRequest,
+            CreateCardRequestBody,
+        )
+
+        element_id = FEISHU_STREAM_ELEMENT_ID
+        card_json = {
+            "schema": "2.0",
+            "config": {"streaming_mode": True},
+            "body": {
+                "elements": [
+                    {
+                        "tag": "markdown",
+                        "content": initial_text,
+                        "element_id": element_id,
+                    },
+                ],
+            },
+        }
+
+        try:
+            create_req = (
+                CreateCardRequest.builder()
+                .request_body(
+                    CreateCardRequestBody.builder()
+                    .type("card_json")
+                    .data(json.dumps(card_json, ensure_ascii=False))
+                    .build(),
+                )
+                .build()
+            )
+            create_resp = await self._client.cardkit.v1.card.acreate(
+                create_req,
+            )
+            if not create_resp.success():
+                logger.warning(
+                    "feishu create streaming card failed: code=%s msg=%s",
+                    create_resp.code,
+                    create_resp.msg,
+                )
+                return None
+            card_id = (
+                getattr(create_resp.data, "card_id", None)
+                if create_resp.data
+                else None
+            )
+            if not card_id:
+                logger.warning("feishu create streaming card: no card_id")
+                return None
+        except Exception:
+            logger.exception("feishu create streaming card failed")
+            return None
+
+        # Send the card as an interactive message referencing card_id
+        try:
+            msg_content = json.dumps(
+                {"type": "card", "data": {"card_id": card_id}},
+                ensure_ascii=False,
+            )
+            message_id = await self._send_message(
+                receive_id_type,
+                receive_id,
+                "interactive",
+                msg_content,
+            )
+            if not message_id:
+                logger.warning(
+                    "feishu streaming card: send failed card_id=%s",
+                    card_id[:20],
+                )
+                return None
+            return {"card_id": card_id, "message_id": message_id}
+        except Exception:
+            logger.warning(
+                "feishu streaming card: send exception",
+                exc_info=True,
+            )
+            return None
+
+    async def _update_streaming_text(
+        self,
+        card_id: str,
+        text: str,
+        sequence: Optional[int] = None,
+    ) -> bool:
+        """Stream-update the markdown element via CardKit content API."""
+        if not self._client or not card_id:
+            return False
+
+        from lark_oapi.api.cardkit.v1 import (
+            ContentCardElementRequest,
+            ContentCardElementRequestBody,
+        )
+
+        try:
+            body_builder = (
+                ContentCardElementRequestBody.builder()
+                .content(text)
+                .uuid(str(_uuid.uuid4()))
+            )
+            if sequence is not None:
+                body_builder = body_builder.sequence(sequence)
+
+            req = (
+                ContentCardElementRequest.builder()
+                .card_id(card_id)
+                .element_id(FEISHU_STREAM_ELEMENT_ID)
+                .request_body(body_builder.build())
+                .build()
+            )
+            resp = await self._client.cardkit.v1.card_element.acontent(req)
+            if not resp.success():
+                logger.debug(
+                    "feishu stream update text failed: code=%s msg=%s",
+                    resp.code,
+                    resp.msg,
+                )
+                return False
+            return True
+        except Exception:
+            logger.debug("feishu stream update text exception", exc_info=True)
+            return False
+
+    async def _finalize_streaming_card(
+        self,
+        card_id: str,
+        summary_text: str = "",
+        sequence: int = 0,
+    ) -> bool:
+        """Close streaming mode and set summary via settings API.
+
+        ``SettingsCardRequestBody.settings`` accepts a JSON string.
+        ``sequence`` must exceed the last update sequence.
+        """
+        if not self._client or not card_id:
+            return False
+
+        from lark_oapi.api.cardkit.v1 import (
+            SettingsCardRequest,
+            SettingsCardRequestBody,
+        )
+
+        # Truncate summary for chat list preview
+        preview = (summary_text or "").strip()
+        if len(preview) > 80:
+            preview = preview[:77] + "..."
+        if not preview:
+            preview = "✅"
+
+        settings_json = json.dumps(
+            {
+                "config": {
+                    "streaming_mode": False,
+                    "summary": {"content": preview},
+                },
+            },
+            ensure_ascii=False,
+        )
+
+        try:
+            req = (
+                SettingsCardRequest.builder()
+                .card_id(card_id)
+                .request_body(
+                    SettingsCardRequestBody.builder()
+                    .settings(settings_json)
+                    .sequence(sequence)
+                    .uuid(str(_uuid.uuid4()))
+                    .build(),
+                )
+                .build()
+            )
+            resp = await self._client.cardkit.v1.card.asettings(req)
+            if not resp.success():
+                logger.warning(
+                    "feishu finalize card failed: code=%s msg=%s",
+                    resp.code,
+                    resp.msg,
+                )
+                return False
+            return True
+        except Exception:
+            logger.warning(
+                "feishu finalize streaming card exception",
+                exc_info=True,
+            )
+            return False
+
+    def _is_card_event(self, event: Any) -> bool:
+        """Check if the event matches a registered interactive card kind."""
+        meta = self._card_handler._extract_meta(event)
+        if meta is None:
+            return False
+        message_type = str(meta.get("message_type") or "")
+        return message_type in self._card_handler._by_message_type
+
+    # ------------------------------------------------------------------
+    # Streaming hooks (CardKit card mode)
+    # ------------------------------------------------------------------
+
+    def _build_stream_display_text(
+        self,
+        stream_type: str,
+        text: str,
+        send_meta: Dict[str, Any],
+    ) -> str:
+        """Build display text with bot_prefix for streaming cards."""
+        prefix = send_meta.get("bot_prefix") or self.bot_prefix or ""
+        if stream_type == "reasoning" and text:
+            if prefix:
+                return f"{prefix}  💭 {text}"
+            return f"💭 {text}"
+        if prefix and text:
+            return f"{prefix}  {text}"
+        return text
+
+    async def on_streaming_start(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        """Create a new streaming card for this stream segment."""
+        if not self.streaming_enabled:
+            return
+        recv = await self._get_receive_for_send(to_handle, send_meta)
+        if not recv:
+            return
+
+        receive_id_type, receive_id = recv
+        state = self._get_feishu_stream_state(send_meta)
+
+        # Reuse pre-created card for the first arriving segment.
+        card_info = getattr(request, "_precreated_card", None)
+        if card_info:
+            setattr(request, "_precreated_card", None)
+        else:
+            initial = self._build_stream_display_text(
+                stream_type,
+                "...",
+                send_meta,
+            )
+            card_info = await self._create_streaming_card(
+                receive_id_type,
+                receive_id,
+                initial_text=initial,
+            )
+
+        if card_info:
+            state["cards"][stream_type] = {
+                "card_id": card_info["card_id"],
+                "message_id": card_info["message_id"],
+                "last_update_ts": time.monotonic(),
+                "sequence": 0,
+            }
+
+    async def on_streaming_delta(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        """Stream-update the card with incremental text (throttled)."""
+        state = send_meta.get("_fs_stream")
+        if not state:
+            return
+        card_state = state["cards"].get(stream_type)
+        if not card_state:
+            return
+
+        now = time.monotonic()
+        if now - card_state["last_update_ts"] < FEISHU_STREAM_MIN_INTERVAL_S:
+            return
+
+        display_text = self._build_stream_display_text(
+            stream_type,
+            accumulated_text,
+            send_meta,
+        )
+
+        card_state["sequence"] += 1
+        success = await self._update_streaming_text(
+            card_state["card_id"],
+            display_text,
+            sequence=card_state["sequence"],
+        )
+        if success:
+            card_state["last_update_ts"] = now
+
+    async def on_streaming_end(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        """Finalize the streaming card; fallback to plain text on failure."""
+        state = send_meta.get("_fs_stream")
+        card_state = state["cards"].pop(stream_type, None) if state else None
+
+        final_text = self._build_stream_display_text(
+            stream_type,
+            accumulated_text,
+            send_meta,
+        )
+
+        # Fallback: card creation failed — send as plain text
+        if not card_state:
+            if accumulated_text.strip():
+                await self.send_content_parts(
+                    to_handle,
+                    [TextContent(text=final_text)],
+                    send_meta,
+                )
+            return
+
+        card_id = card_state["card_id"]
+
+        # Apply Feishu markdown normalization for the final render
+        final_text = normalize_feishu_md(final_text)
+
+        # Final text update
+        card_state["sequence"] += 1
+        await self._update_streaming_text(
+            card_id,
+            final_text,
+            sequence=card_state["sequence"],
+        )
+
+        # Close streaming mode and set summary to replace [生成中...]
+        card_state["sequence"] += 1
+        await self._finalize_streaming_card(
+            card_id,
+            summary_text=accumulated_text,
+            sequence=card_state["sequence"],
+        )
+
+        # Track last sent message_id for DONE reaction
+        message_id = card_state.get("message_id")
+        if message_id:
+            send_meta["_last_sent_message_id"] = message_id
+
+        # Card events (e.g. tool_guard) consumed by streaming need a
+        # compact interactive card sent after the streaming card.
+        if stream_type == "message" and self._is_card_event(event):
+            await self._card_handler.try_send_card_for_event(
+                to_handle,
+                event,
+                send_meta,
+                compact=True,
+            )
+
+    # ------------------------------------------------------------------
+    # Process lifecycle hooks
+    # ------------------------------------------------------------------
+
     async def _on_process_completed(
         self,
         request: Any,
@@ -2009,7 +2412,7 @@ class FeishuChannel(BaseChannel):
         )
 
     async def _before_consume_process(self, request: Any) -> None:
-        """Save receive_id from webhook meta for later send."""
+        """Save receive_id and pre-create streaming card if enabled."""
         meta = getattr(request, "channel_meta", None) or {}
         receive_id = meta.get("feishu_receive_id")
         receive_id_type = meta.get("feishu_receive_id_type", "open_id")
@@ -2019,6 +2422,27 @@ class FeishuChannel(BaseChannel):
                 receive_id,
                 receive_id_type,
             )
+
+        # Pre-create streaming card for immediate feedback.
+        # Skip card-action requests (e.g. /approval from buttons).
+        if (
+            self.streaming_enabled
+            and receive_id
+            and not meta.get("from_card_action")
+        ):
+            try:
+                card_info = await self._create_streaming_card(
+                    receive_id_type,
+                    receive_id,
+                    initial_text="...",
+                )
+                if card_info:
+                    setattr(request, "_precreated_card", card_info)
+            except Exception:
+                logger.debug(
+                    "feishu streaming card pre-creation failed",
+                    exc_info=True,
+                )
 
     def _run_ws_forever(self) -> None:
         """Run WebSocket with exponential-backoff reconnection."""

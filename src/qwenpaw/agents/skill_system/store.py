@@ -610,6 +610,40 @@ def suggest_conflict_name(
     return f"{base}-{suffix}"
 
 
+def workspace_skill_name_conflict(
+    workspace_dir: Path,
+    normalized_name: str,
+) -> tuple[str, str] | None:
+    """Return ``(conflicting_name, suggested_rename)`` if a workspace
+    skill with *normalized_name* already exists, else ``None``.
+    """
+    skill_root = get_workspace_skills_dir(workspace_dir)
+    if not (skill_root / normalized_name).exists():
+        return None
+    existing = (
+        {p.name for p in skill_root.iterdir() if p.is_dir()}
+        if skill_root.exists()
+        else set()
+    )
+    return normalized_name, suggest_conflict_name(
+        normalized_name,
+        existing,
+    )
+
+
+def render_skill_md(
+    *,
+    proposed_name: str,
+    description: str,
+    body: str,
+) -> str:
+    """Render a SKILL.md document from name + description + body."""
+    post = frontmatter.Post(body or "")
+    post["name"] = proposed_name
+    post["description"] = description
+    return frontmatter.dumps(post)
+
+
 def build_import_conflict(
     skill_name: str,
     existing_names: set[str] | None = None,
