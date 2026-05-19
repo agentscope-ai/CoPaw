@@ -62,7 +62,7 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 - [2026-05-19] We've released **v1.1.8**! See the full [v1.1.8 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-  - **[v1.1.8] Added**: Official plugin resources (website download + one-click install from console); CloudPaw Alibaba Cloud deployment plugin; QwenPaw Pet desktop companion; `/make-skill` command; custom HTTP headers & auth mode; per-model token limits; Inbox batch operations; pinned chat history drawer.
+  - **[v1.1.8] Added**: Official plugin resources (website download + one-click install from console); QwenPaw Pet desktop companion; CloudPaw Alibaba Cloud deployment plugin; `/make-skill` command; custom HTTP headers & auth mode; per-model context configuration; Inbox batch operations; pinned chat history drawer.
   - **[v1.1.8] Security**: Backup trust controls; Skill & AgentMd path traversal prevention; plugin API auth.
   - **[v1.1.8] Fixed**: WeCom/WeChat/QQ channel stability; per-model rate limiter; SSE connection leak.
   - **[v1.1.8] New Contributors**: @Morxi.
