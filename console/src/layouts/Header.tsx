@@ -9,6 +9,7 @@ import api from "../api";
 import {
   GITHUB_URL,
   getDocsUrl,
+  getFeatureDemosUrl,
   getFaqUrl,
   getReleaseNotesUrl,
   PYPI_URL,
@@ -28,6 +29,7 @@ import {
   GithubOutlined,
   FileTextOutlined,
   ReadOutlined,
+  PlayCircleOutlined,
   QuestionCircleOutlined,
   DownOutlined,
 } from "@ant-design/icons";
@@ -197,6 +199,13 @@ export default function Header() {
                   icon: <ReadOutlined />,
                   label: t("header.tutorial"),
                   onClick: () => handleNavClick(getDocsUrl(i18n.language)),
+                },
+                {
+                  key: "featureDemos",
+                  icon: <PlayCircleOutlined />,
+                  label: t("header.featureDemos"),
+                  onClick: () =>
+                    handleNavClick(getFeatureDemosUrl(i18n.language)),
                 },
                 {
                   key: "changelog",

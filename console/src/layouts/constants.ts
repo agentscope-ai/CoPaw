@@ -80,6 +80,11 @@ export const getFaqUrl = (lang: string): string =>
 export const getReleaseNotesUrl = (lang: string): string =>
   `https://qwenpaw.agentscope.io/release-notes?lang=${getWebsiteLang(lang)}`;
 
+export const getFeatureDemosUrl = (lang: string): string =>
+  `https://qwenpaw.agentscope.io/docs/functiondemo?lang=${getWebsiteLang(
+    lang,
+  )}`;
+
 // ── Version helpers ────────────────────────────────────────────────────────
 
 // Filter out pre-release versions; post-releases are treated as stable.

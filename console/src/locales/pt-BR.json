@@ -1692,12 +1692,14 @@
     "modelNotConfigured": "Please configure a model in Settings before using chat"
   },
   "header": {
-    "changelog": "Changelog",
-    "docs": "Doc",
+    "changelog": "Registro de Alterações",
+    "docs": "Documentação",
     "tutorial": "Tutorial",
-    "faq": "FAQ",
+    "featureDemos": "Demonstração de Funções",
+    "faq": "Perguntas Frequentes",
     "github": "GitHub",
-    "updateAvailable": "Atualizar Available"
+    "resources": "Documentação",
+    "updateAvailable": "Atualização Disponível"
   },
   "theme": {
     "dark": "Dark",

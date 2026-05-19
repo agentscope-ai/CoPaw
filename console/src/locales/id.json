@@ -67,11 +67,13 @@
     "backups": "Cadangan"
   },
   "header": {
-    "changelog": "Changelog",
+    "changelog": "Catatan Perubahan",
     "docs": "Dokumentasi",
     "tutorial": "Tutorial",
+    "featureDemos": "Demo Fitur",
     "faq": "FAQ",
     "github": "GitHub",
+    "resources": "Dokumentasi",
     "updateAvailable": "Pembaruan Tersedia"
   },
   "theme": {
