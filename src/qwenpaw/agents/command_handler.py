@@ -40,6 +40,7 @@ class ConversationCommandHandlerMixin:
             "compact",
             "new",
             "clear",
+            "memorize",
             "history",
             "compact_str",
             "summarize_status",
@@ -247,6 +248,29 @@ class CommandHandler(ConversationCommandHandlerMixin):
             "- Memory is now empty\n"
             "- Plan state cleared",
             metadata={"clear_history": True, "clear_plan": True},
+        )
+
+    async def _process_memorize(self, messages: list[Msg], _args: str = "") -> Msg:
+        """Process /memorize command."""
+        if not messages:
+            return await self._make_system_msg(
+                "📭 **No messages to compact.**\n\n"
+                "- Current memory is empty\n"
+                "- No action taken",
+            )
+        if not self._has_memory_manager():
+            return await self._make_system_msg(
+                "🚫 **Memory/Context Manager Disabled**\n\n"
+                "- Cannot start new conversation with summary\n"
+                "- Enable memory manager to use this feature",
+            )
+
+        self.memory_manager.add_summarize_task(messages=messages)
+
+        return await self._make_system_msg(
+            "**Summary Started!**\n\n"
+            "- Summary task started in background\n"
+            "- Ready to continue the conversation",
         )
 
     async def _process_compact_str(
