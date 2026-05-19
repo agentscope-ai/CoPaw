@@ -278,6 +278,23 @@ agent.
 You can also use `qwenpaw models` for setup, downloads, and switching. See
 [CLI → Models and environment variables → qwenpaw models](https://qwenpaw.agentscope.io/docs/cli#qwenpaw-models).
 
+### Why is Discover Models unavailable for my custom provider?
+
+**Discover Models** is only available for providers whose APIs are known and
+implemented by QwenPaw for model discovery, such as supported local providers
+and selected built-in providers.
+
+For custom providers and most third-party OpenAI-compatible endpoints, QwenPaw
+cannot assume that `GET /v1/models` exists, returns the expected schema, or
+lists only models that are compatible with chat. In these cases, add models
+manually on the provider's **Models** page:
+
+1. Open **Settings → Models**.
+2. Select your custom provider.
+3. Click **Models → Add Model**.
+4. Enter the provider's exact **Model ID** and a display **Model Name**.
+5. Use **Test Connection** to verify the model.
+
 ### How to use QwenPaw-Flash series models
 
 QwenPaw-Flash is a family of models tuned by the QwenPaw team for QwenPaw's core
