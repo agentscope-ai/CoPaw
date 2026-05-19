@@ -465,7 +465,6 @@
     "invalidSkillUrlSource": "Please verify the skill URL is from a supported marketplace",
     "type": "Type",
     "installedFrom": "Installed from",
-    "installedFromLocal": "Local",
     "source": "Source",
     "path": "Path",
     "skillDescription": "Description",

@@ -199,7 +199,6 @@
     "invalidSkillUrlSource": "サポートされているマーケットプレイスのスキルURLであることを確認してください",
     "type": "タイプ",
     "installedFrom": "インストール元",
-    "installedFromLocal": "ローカル",
     "source": "ソース",
     "path": "パス",
     "skillDescription": "説明",

@@ -306,7 +306,6 @@
     "invalidSkillUrlSource": "请确认技能URL来自受支持的技能市场",
     "type": "类型",
     "installedFrom": "安装来源",
-    "installedFromLocal": "本地",
     "source": "来源",
     "path": "路径",
     "skillDescription": "描述",

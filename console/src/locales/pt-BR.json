@@ -398,7 +398,6 @@
     "invalidSkillUrlSource": "Please verify the skill URL is from a supported marketplace",
     "type": "Tipo",
     "installedFrom": "Instalado de",
-    "installedFromLocal": "Local",
     "source": "Origem",
     "path": "Caminho",
     "skillDescription": "Descricao",

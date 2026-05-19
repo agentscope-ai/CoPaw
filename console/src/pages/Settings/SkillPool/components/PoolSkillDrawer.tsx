@@ -114,7 +114,7 @@ export function PoolSkillDrawer({
               {t("skillPool.installedFrom")}
             </div>
             <div className={styles.infoBlock}>
-              {deriveInstalledFromLabel(activeSkill.installed_from, t)}
+              {deriveInstalledFromLabel(activeSkill.installed_from)}
             </div>
           </div>
         </div>

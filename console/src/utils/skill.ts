@@ -58,15 +58,11 @@ export const INSTALLED_FROM_LABELS: Record<string, string> = {
   zip: "ZIP",
 };
 
-// Skills that weren't installed from a marketplace (shipped builtins,
-// hand-created in-console, legacy entries) get a "Local" fallback so the
-// drawer row is always present and meaningful.
+// Skills without a recorded origin (builtins, hand-created, legacy entries)
+// have an empty installed_from and render as an empty string.
 export const deriveInstalledFromLabel = (
   installed_from: string | undefined,
-  t: TFunction,
 ): string => {
-  if (installed_from) {
-    return INSTALLED_FROM_LABELS[installed_from] ?? installed_from;
-  }
-  return t("skills.installedFromLocal");
+  if (!installed_from) return "";
+  return INSTALLED_FROM_LABELS[installed_from] ?? installed_from;
 };
