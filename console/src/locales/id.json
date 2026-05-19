@@ -259,6 +259,8 @@
     "enterSkillUrl": "Masukkan URL Skill",
     "invalidUrl": "URL tidak valid",
     "type": "Tipe",
+    "installedFrom": "Diinstal dari",
+    "installedFromLocal": "Lokal",
     "source": "Sumber",
     "path": "Path",
     "skillDescription": "Deskripsi",
@@ -321,6 +323,7 @@
     "version": "Versi",
     "skillName": "Nama Skill",
     "status": "Status",
+    "installedFrom": "Diinstal dari",
     "updateBuiltin": "Perbarui",
     "updateSuccess": "Berhasil diperbarui",
     "updateFailed": "Pembaruan gagal"
@@ -661,6 +664,53 @@
       "refreshBackend": "Segarkan log backend",
       "refreshSuccess": "Log disegarkan",
       "copyBackend": "Salin log backend"
+    }
+  },
+  "market": {
+    "searchPlaceholder": "Cari skill di berbagai platform",
+    "providerUnavailable": "Sumber tidak tersedia",
+    "noResults": "Tidak ada hasil",
+    "startTyping": "Ketik kata kunci di atas untuk mencari di marketplace",
+    "noDescription": "Tidak ada deskripsi",
+    "viewOnSource": "Lihat di {{source}}",
+    "targetPool": "Pool",
+    "targetWorkspace": "Workspace",
+    "install": "Pasang",
+    "installAs": "Pasang sebagai",
+    "installQueue": "Antrean instalasi",
+    "clearCompleted": "Bersihkan",
+    "retry": "Coba lagi",
+    "conflictTitle": "Konflik nama skill: {{name}}",
+    "conflictBody": "Skill dengan nama ini sudah ada. Pilih nama lain atau batalkan untuk melewati instalasi ini.",
+    "status": {
+      "queued": "Mengantre",
+      "installing": "Memasang",
+      "completed": "Selesai",
+      "failed": "Gagal",
+      "cancelled": "Dibatalkan"
+    },
+    "totalLabel": "{{count}} hasil",
+    "totalLabelMore": "Sekitar {{count}}+ hasil",
+    "detail": {
+      "title": "Detail skill",
+      "version": "Versi",
+      "author": "Penulis",
+      "description": "Deskripsi",
+      "sourceUrl": "URL instalasi",
+      "slug": "ID",
+      "missing": "—"
+    },
+    "stats": {
+      "downloads": "Unduhan",
+      "installs": "Instalasi",
+      "likes": "Suka",
+      "views": "Tampilan",
+      "category": "Kategori",
+      "updatedAt": "Diperbarui"
+    },
+    "queueMsg": {
+      "timedOut": "Instalasi habis waktu",
+      "failedPrefix": "Gagal: {{msg}}"
     }
   }
 }

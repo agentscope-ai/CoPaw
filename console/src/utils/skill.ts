@@ -43,3 +43,30 @@ export const getPoolBuiltinStatusTone = (
       return "neutral";
   }
 };
+
+// ─── Install-origin helpers ────────────────────────────────────
+
+export const INSTALLED_FROM_LABELS: Record<string, string> = {
+  "skills-sh": "skills.sh",
+  github: "GitHub",
+  lobehub: "LobeHub",
+  modelscope: "ModelScope",
+  aliyun: "Aliyun",
+  skillsmp: "SkillsMP",
+  clawhub: "ClawHub",
+  url: "URL",
+  zip: "ZIP",
+};
+
+// Skills that weren't installed from a marketplace (shipped builtins,
+// hand-created in-console, legacy entries) get a "Local" fallback so the
+// drawer row is always present and meaningful.
+export const deriveInstalledFromLabel = (
+  installed_from: string | undefined,
+  t: TFunction,
+): string => {
+  if (installed_from) {
+    return INSTALLED_FROM_LABELS[installed_from] ?? installed_from;
+  }
+  return t("skills.installedFromLocal");
+};

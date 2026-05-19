@@ -198,6 +198,8 @@
     "clickToFill": "Нажмите, чтобы заполнить URL",
     "invalidSkillUrlSource": "Пожалуйста, убедитесь, что URL навыка из поддерживаемого маркетплейса",
     "type": "Тип",
+    "installedFrom": "Установлено из",
+    "installedFromLocal": "Локально",
     "source": "Источник",
     "path": "Путь",
     "skillDescription": "Описание",
@@ -381,6 +383,7 @@
     "skillCount": "{{count}} навыков",
     "skillName": "Название навыка",
     "status": "Статус",
+    "installedFrom": "Установлено из",
     "updateBuiltin": "Обновить",
     "updateConfirmTitle": "Обновить {{name}}",
     "updateConfirmContent": "Обновить до версии {{version}}? Текущая копия в пуле будет заменена последней встроенной версией.",
@@ -2158,5 +2161,52 @@
     "detailPayload": "Данные",
     "detailExecutionTrace": "Трассировка выполнения",
     "detailTraceEmpty": "Трассировка выполнения недоступна"
+  },
+  "market": {
+    "searchPlaceholder": "Поиск навыков по платформам",
+    "providerUnavailable": "Источник недоступен",
+    "noResults": "Ничего не найдено",
+    "startTyping": "Введите запрос выше, чтобы найти навык в маркете",
+    "noDescription": "Описание отсутствует",
+    "viewOnSource": "Открыть в {{source}}",
+    "targetPool": "Пул",
+    "targetWorkspace": "Рабочее пространство",
+    "install": "Установить",
+    "installAs": "Установить как",
+    "installQueue": "Очередь установки",
+    "clearCompleted": "Очистить",
+    "retry": "Повторить",
+    "conflictTitle": "Конфликт имени навыка: {{name}}",
+    "conflictBody": "Навык с таким именем уже существует. Выберите новое имя или отмените установку.",
+    "status": {
+      "queued": "В очереди",
+      "installing": "Установка",
+      "completed": "Готово",
+      "failed": "Ошибка",
+      "cancelled": "Отменено"
+    },
+    "totalLabel": "{{count}} результатов",
+    "totalLabelMore": "Около {{count}}+ результатов",
+    "detail": {
+      "title": "Сведения о навыке",
+      "version": "Версия",
+      "author": "Автор",
+      "description": "Описание",
+      "sourceUrl": "URL установки",
+      "slug": "Идентификатор",
+      "missing": "—"
+    },
+    "stats": {
+      "downloads": "Скачивания",
+      "installs": "Установки",
+      "likes": "Лайки",
+      "views": "Просмотры",
+      "category": "Категория",
+      "updatedAt": "Обновлено"
+    },
+    "queueMsg": {
+      "timedOut": "Время установки истекло",
+      "failedPrefix": "Ошибка: {{msg}}"
+    }
   }
 }
