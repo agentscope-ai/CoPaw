@@ -25,6 +25,41 @@ def _clone_with_overrides(obj: Any, **overrides: Any) -> Any:
     return SimpleNamespace(**data)
 
 
+def _extract_reasoning_content(obj: Any) -> str | None:
+    """Read provider-specific reasoning content from object attrs/extras."""
+    for key in ("reasoning_content", "reasoning"):
+        value = getattr(obj, key, None)
+        if isinstance(value, str):
+            return value
+
+    model_extra = getattr(obj, "model_extra", None)
+    if isinstance(model_extra, dict):
+        for key in ("reasoning_content", "reasoning"):
+            value = model_extra.get(key)
+            if isinstance(value, str):
+                return value
+
+    return None
+
+
+def _ensure_delta_reasoning_attr(delta: Any) -> Any:
+    """Expose reasoning content as an attribute for AgentScope parsers."""
+    if _extract_reasoning_content(delta) is None:
+        return delta
+
+    if isinstance(
+        getattr(delta, "reasoning_content", None),
+        str,
+    ) or isinstance(
+        getattr(delta, "reasoning", None),
+        str,
+    ):
+        return delta
+
+    reasoning = _extract_reasoning_content(delta)
+    return _clone_with_overrides(delta, reasoning_content=reasoning)
+
+
 def _sanitize_tool_call(tool_call: Any) -> Any | None:
     """Normalize a tool call for parser safety, or drop it if unusable."""
     if not hasattr(tool_call, "index"):
@@ -89,12 +124,20 @@ def _sanitize_chunk(chunk: Any) -> Any:
             sanitized_choices.append(choice)
             continue
 
+        sanitized_delta = _ensure_delta_reasoning_attr(delta)
+        choice_changed = sanitized_delta is not delta
+
         raw_tool_calls = getattr(delta, "tool_calls", None)
         if not raw_tool_calls:
-            sanitized_choices.append(choice)
+            if choice_changed:
+                changed = True
+                sanitized_choices.append(
+                    _clone_with_overrides(choice, delta=sanitized_delta),
+                )
+            else:
+                sanitized_choices.append(choice)
             continue
 
-        choice_changed = False
         sanitized_tool_calls: list[Any] = []
         for tool_call in raw_tool_calls:
             sanitized = _sanitize_tool_call(tool_call)
@@ -106,7 +149,7 @@ def _sanitize_chunk(chunk: Any) -> Any:
         if choice_changed:
             changed = True
             sanitized_delta = _clone_with_overrides(
-                delta,
+                sanitized_delta,
                 tool_calls=sanitized_tool_calls,
             )
             sanitized_choice = _clone_with_overrides(
@@ -288,6 +331,35 @@ class OpenAIChatModelCompat(OpenAIChatModel):
         return super()._format_tools_json_schemas(
             _sanitize_tool_schemas(schemas),
         )
+
+    def _parse_openai_completion_response(
+        self,
+        start_datetime: datetime,
+        response: Any,
+        structured_model: Type[BaseModel] | None = None,
+    ) -> ChatResponse:
+        parsed = super()._parse_openai_completion_response(
+            start_datetime=start_datetime,
+            response=response,
+            structured_model=structured_model,
+        )
+        if any(block.get("type") == "thinking" for block in parsed.content):
+            return parsed
+
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            return parsed
+
+        message = getattr(choices[0], "message", None)
+        reasoning = _extract_reasoning_content(message)
+        if not reasoning:
+            return parsed
+
+        parsed.content = [
+            {"type": "thinking", "thinking": reasoning},
+            *parsed.content,
+        ]
+        return parsed
 
     # pylint: disable=too-many-branches, too-many-statements
     async def _parse_openai_stream_response(
