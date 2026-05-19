@@ -1269,7 +1269,7 @@
     "maxTokensLabel": "Max Tokens",
     "maxTokensHint": "Maximum output tokens per response",
     "maxInputLengthLabel": "Max Context Length",
-    "maxInputLengthHint": "Model context window size, controls context compaction threshold",
+    "maxInputLengthHint": "Model context window size, controls context compaction threshold (≥1000)",
     "protocol": "Protocol",
     "protocolHint": "Choose the provider API protocol for this configuration.",
     "selectProtocol": "Please select a protocol",

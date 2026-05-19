@@ -974,7 +974,7 @@
     "maxTokensLabel": "最大出力トークン数",
     "maxTokensHint": "1回のレスポンスあたりの最大出力トークン数",
     "maxInputLengthLabel": "最大コンテキスト長",
-    "maxInputLengthHint": "モデルのコンテキストウィンドウサイズ、コンテキスト圧縮のしきい値を制御します",
+    "maxInputLengthHint": "モデルのコンテキストウィンドウサイズ、コンテキスト圧縮のしきい値を制御します（≥1000）",
     "protocol": "プロトコル",
     "protocolHint": "この設定のプロバイダーAPIプロトコルを選択してください。",
     "selectProtocol": "プロトコルを選択してください",

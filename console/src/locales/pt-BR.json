@@ -1173,7 +1173,7 @@
     "maxTokensLabel": "Máx. Tokens",
     "maxTokensHint": "Número máximo de tokens de saída por resposta",
     "maxInputLengthLabel": "Comprimento Máximo do Contexto",
-    "maxInputLengthHint": "Tamanho da janela de contexto do modelo, controla o limite de compactação do contexto",
+    "maxInputLengthHint": "Tamanho da janela de contexto do modelo, controla o limite de compactação do contexto (≥1000)",
     "protocol": "Protocol",
     "protocolHint": "Choose the provider API protocol for this configuration.",
     "selectProtocol": "Please Selecionar a protocol",

@@ -62,8 +62,10 @@ function ModelConfigEditor({
   const { message } = useAppMessage();
   const [saving, setSaving] = useState(false);
 
-  const [maxTokens, setMaxTokens] = useState<number>(model.max_tokens ?? 8192);
-  const [maxInputLength, setMaxInputLength] = useState<number>(
+  const [maxTokens, setMaxTokens] = useState<number | null>(
+    model.max_tokens ?? 8192,
+  );
+  const [maxInputLength, setMaxInputLength] = useState<number | null>(
     model.max_input_length ?? 131072,
   );
 
@@ -85,18 +87,21 @@ function ModelConfigEditor({
     setDirty(false);
   }, [initialText, model.max_tokens, model.max_input_length]);
 
+  const effectiveMaxTokens = maxTokens ?? 8192;
+  const effectiveMaxInputLength = maxInputLength ?? 131072;
+
   const handleChange = useCallback((val: string) => {
     setText(val);
     setDirty(true);
   }, []);
 
   const handleMaxTokensChange = useCallback((val: number | null) => {
-    setMaxTokens(val ?? 8192);
+    setMaxTokens(val);
     setDirty(true);
   }, []);
 
   const handleMaxInputLengthChange = useCallback((val: number | null) => {
-    setMaxInputLength(val ?? 131072);
+    setMaxInputLength(val);
     setDirty(true);
   }, []);
 
@@ -120,8 +125,8 @@ function ModelConfigEditor({
     setSaving(true);
     try {
       await api.configureModel(providerId, model.id, {
-        max_tokens: maxTokens,
-        max_input_length: maxInputLength,
+        max_tokens: effectiveMaxTokens,
+        max_input_length: effectiveMaxInputLength,
         generate_kwargs: parsed,
       });
       message.success(t("models.modelConfigSaved", { name: model.name }));
@@ -157,6 +162,7 @@ function ModelConfigEditor({
             min={1}
             step={1024}
             value={maxTokens}
+            placeholder="8192"
             onChange={handleMaxTokensChange}
           />
           <div
@@ -178,6 +184,7 @@ function ModelConfigEditor({
             min={1000}
             step={1024}
             value={maxInputLength}
+            placeholder="131072"
             onChange={handleMaxInputLengthChange}
           />
           <div
@@ -189,7 +196,7 @@ function ModelConfigEditor({
           >
             {t(
               "models.maxInputLengthHint",
-              "模型上下文窗口大小，控制上下文压缩阈值",
+              "模型上下文窗口大小，控制上下文压缩阈值（≥1000）",
             )}
           </div>
         </div>

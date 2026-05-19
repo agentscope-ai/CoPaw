@@ -1,4 +1,10 @@
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Button, Input } from "@agentscope-ai/design";
 import { PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 import { useProviders } from "./useProviders";
@@ -35,6 +41,25 @@ function ModelsPage() {
   const refreshProvidersSilently = useCallback(() => {
     void fetchAll(false);
   }, [fetchAll]);
+
+  // Keep modal provider states in sync with the latest providers data
+  useEffect(() => {
+    if (modelsModalProvider) {
+      const fresh = providers.find((p) => p.id === modelsModalProvider.id);
+      if (fresh && fresh !== modelsModalProvider) {
+        setModelsModalProvider(fresh);
+      }
+    }
+  }, [providers, modelsModalProvider]);
+
+  useEffect(() => {
+    if (configModalProvider) {
+      const fresh = providers.find((p) => p.id === configModalProvider.id);
+      if (fresh && fresh !== configModalProvider) {
+        setConfigModalProvider(fresh);
+      }
+    }
+  }, [providers, configModalProvider]);
 
   const handleOpenConfig = useCallback((provider: ProviderInfo) => {
     setConfigModalProvider(provider);
