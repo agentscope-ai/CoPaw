@@ -401,3 +401,21 @@
     grid-template-columns: 1fr;
   }
 }
+
+.plugin-kind-block + .plugin-kind-block {
+  margin-top: 1.5rem;
+}
+
+.plugin-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

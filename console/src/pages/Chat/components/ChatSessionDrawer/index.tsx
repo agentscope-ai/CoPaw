@@ -1,7 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Drawer } from "antd";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Drawer, Spin, Tooltip } from "antd";
+import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import { IconButton } from "@agentscope-ai/design";
-import { SparkOperateRightLine } from "@agentscope-ai/icons";
+import {
+  SparkOperateRightLine,
+  SparkLockLine,
+  SparkLockFill,
+} from "@agentscope-ai/icons";
 import {
   useChatAnywhereSessionsState,
   useChatAnywhereSessions,
@@ -13,7 +24,72 @@ import { chatApi } from "../../../../api/modules/chat";
 import sessionApi from "../../sessionApi";
 import ChatSessionItem from "../ChatSessionItem";
 import { getChannelLabel } from "../../../Control/Channels/components";
+import {
+  ContextMenu,
+  useContextMenu,
+  type ContextMenuItem,
+} from "../../../../components/ContextMenu";
 import styles from "./index.module.less";
+
+/** Fixed height of each session item in pixels (matches CSS min-height) */
+const ITEM_HEIGHT = 77;
+
+/** Data passed to each row via FixedSizeList's itemData prop */
+interface SessionRowData {
+  sortedSessions: ExtendedChatSession[];
+  currentSessionId: string | undefined;
+  editingSessionId: string | null;
+  editValue: string;
+  t: ReturnType<typeof useTranslation>["t"];
+  handleSessionClick: (sessionId: string) => void;
+  handleEditStart: (sessionId: string, currentName: string) => void;
+  handleDelete: (sessionId: string) => void;
+  handlePinToggle: (sessionId: string) => void;
+  handleEditChange: (value: string) => void;
+  handleEditSubmit: () => void;
+  handleEditCancel: () => void;
+  handleItemContextMenu: (sessionId: string, event: React.MouseEvent) => void;
+}
+
+/** Memoized row renderer — only re-renders when its specific props change */
+const SessionRow = React.memo(function SessionRow({
+  index,
+  style,
+  data,
+}: ListChildComponentProps<SessionRowData>) {
+  const session = data.sortedSessions[index];
+  const channelKey = session.channel?.trim() || "";
+  const channelLabel = channelKey
+    ? getChannelLabel(channelKey, data.t)
+    : undefined;
+  const isEditing = data.editingSessionId === session.id;
+
+  return (
+    <div style={style}>
+      <ChatSessionItem
+        sessionId={session.id!}
+        name={session.name || "New Chat"}
+        time={formatCreatedAt(session.createdAt ?? null)}
+        channelKey={channelKey || undefined}
+        channelLabel={channelLabel}
+        chatStatus={session.status}
+        generating={session.generating}
+        pinned={session.pinned}
+        active={session.id === data.currentSessionId}
+        editing={isEditing}
+        editValue={isEditing ? data.editValue : undefined}
+        onClick={data.handleSessionClick}
+        onEdit={data.handleEditStart}
+        onDelete={data.handleDelete}
+        onPin={data.handlePinToggle}
+        onEditChange={data.handleEditChange}
+        onEditSubmit={data.handleEditSubmit}
+        onEditCancel={data.handleEditCancel}
+        onContextMenu={data.handleItemContextMenu}
+      />
+    </div>
+  );
+});
 
 /** Sessions from QwenPaw backend include extra fields beyond the runtime UI type */
 interface ExtendedChatSession extends IAgentScopeRuntimeWebUISession {
@@ -33,6 +109,10 @@ interface ChatSessionDrawerProps {
   open: boolean;
   /** Callback to close the drawer */
   onClose: () => void;
+  /** Whether the drawer is pinned (stays open) */
+  pinned?: boolean;
+  /** Callback to toggle the pinned state */
+  onPinChange?: (pinned: boolean) => void;
 }
 
 /** Format an ISO 8601 timestamp to YYYY-MM-DD HH:mm:ss */
@@ -63,16 +143,60 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
 
   const { createSession } = useChatAnywhereSessions();
 
-  /** Create a new session and close the drawer */
+  /** Create a new session; close the drawer only when not pinned */
   const handleCreateSession = useCallback(async () => {
     await createSession();
-    props.onClose();
-  }, [createSession, props.onClose]);
+    if (!props.pinned) {
+      props.onClose();
+    }
+  }, [createSession, props.onClose, props.pinned]);
 
   /** ID of the session currently being renamed */
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   /** Current value of the rename input */
   const [editValue, setEditValue] = useState("");
+
+  /** Whether the session list is being fetched (default true because destroyOnClose re-mounts) */
+  const [listLoading, setListLoading] = useState(true);
+
+  /** Height of the virtual list container, measured via ResizeObserver */
+  const [listHeight, setListHeight] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+
+  /** Callback ref: attach a ResizeObserver whenever the wrapper DOM node appears */
+  const listWrapperRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    if (!node) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        if (height > 0) {
+          setListHeight(height);
+        }
+      }
+    });
+
+    observer.observe(node);
+    observerRef.current = observer;
+
+    // Measure immediately in case layout is already stable
+    const initialHeight = node.clientHeight;
+    if (initialHeight > 0) {
+      setListHeight(initialHeight);
+    }
+  }, []);
+
+  /** Shared context menu — only one instance instead of one per item */
+  const sharedContextMenu = useContextMenu();
+  const [contextMenuSessionId, setContextMenuSessionId] = useState<
+    string | null
+  >(null);
 
   /** Sessions sorted by pinned first, then by createdAt descending */
   const sortedSessions = useMemo(() => {
@@ -80,11 +204,9 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
       const extA = a as ExtendedChatSession;
       const extB = b as ExtendedChatSession;
 
-      // Pinned items come first
       if (extA.pinned && !extB.pinned) return -1;
       if (!extA.pinned && extB.pinned) return 1;
 
-      // Then sort by createdAt descending
       const aTime = extA.createdAt;
       const bTime = extB.createdAt;
       if (!aTime && !bTime) return 0;
@@ -100,28 +222,44 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
     setSessions(list);
   }, [setSessions]);
 
-  /** Open drawer → refresh session list (same deduped fetch as getSessionList). */
+  /** Open drawer → refresh session list and start polling */
   useEffect(() => {
     if (!props.open) return;
 
     let isCancelled = false;
 
     const fetchSessions = async () => {
+      setListLoading(true);
       try {
         const list = await sessionApi.getSessionList();
         if (!isCancelled) {
           setSessions(list);
         }
       } catch (error) {
-        // It's good practice to log errors.
         console.error("Failed to refresh session list:", error);
+      } finally {
+        if (!isCancelled) {
+          setListLoading(false);
+        }
       }
     };
 
     void fetchSessions();
 
+    const timer = setInterval(async () => {
+      try {
+        const list = await sessionApi.getSessionList();
+        if (!isCancelled) {
+          setSessions(list);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+
     return () => {
       isCancelled = true;
+      clearInterval(timer);
     };
   }, [props.open, setSessions]);
 
@@ -168,7 +306,7 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
     setEditValue(value);
   }, []);
 
-  /** Submit rename: send a minimal patch so stale session fields cannot overwrite the title. */
+  /** Submit rename */
   const handleEditSubmit = useCallback(async () => {
     if (!editingSessionId) return;
 
@@ -218,14 +356,102 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
     [sessions, refreshSessions],
   );
 
+  /** Show shared context menu for a specific session */
+  const handleItemContextMenu = useCallback(
+    (sessionId: string, event: React.MouseEvent) => {
+      setContextMenuSessionId(sessionId);
+      sharedContextMenu.show(event);
+    },
+    [sharedContextMenu],
+  );
+
+  /** Build context menu items for the currently right-clicked session */
+  const contextMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!contextMenuSessionId) return [];
+    const session = sessions.find((s) => s.id === contextMenuSessionId) as
+      | ExtendedChatSession
+      | undefined;
+    return [
+      {
+        key: "open",
+        label: t("chat.contextMenu.open", "Open"),
+        onClick: () => handleSessionClick(contextMenuSessionId),
+      },
+      {
+        key: "rename",
+        label: t("chat.contextMenu.rename", "Rename"),
+        onClick: () =>
+          handleEditStart(contextMenuSessionId, session?.name || "New Chat"),
+      },
+      {
+        key: "pin",
+        label: session?.pinned
+          ? t("chat.contextMenu.unpin", "Unpin")
+          : t("chat.contextMenu.pin", "Pin"),
+        onClick: () => handlePinToggle(contextMenuSessionId),
+      },
+      { key: "divider-1", label: "", divider: true },
+      {
+        key: "delete",
+        label: t("chat.contextMenu.delete", "Delete"),
+        danger: true,
+        onClick: () => handleDelete(contextMenuSessionId),
+      },
+    ];
+  }, [
+    contextMenuSessionId,
+    sessions,
+    t,
+    handleSessionClick,
+    handleEditStart,
+    handlePinToggle,
+    handleDelete,
+  ]);
+
+  /** Stable data object for FixedSizeList — avoids re-creating row renderer on every render */
+  const itemData = useMemo<SessionRowData>(
+    () => ({
+      sortedSessions: sortedSessions as ExtendedChatSession[],
+      currentSessionId,
+      editingSessionId,
+      editValue,
+      t,
+      handleSessionClick,
+      handleEditStart,
+      handleDelete,
+      handlePinToggle,
+      handleEditChange,
+      handleEditSubmit,
+      handleEditCancel,
+      handleItemContextMenu,
+    }),
+    [
+      sortedSessions,
+      currentSessionId,
+      editingSessionId,
+      editValue,
+      t,
+      handleSessionClick,
+      handleEditStart,
+      handleDelete,
+      handlePinToggle,
+      handleEditChange,
+      handleEditSubmit,
+      handleEditCancel,
+      handleItemContextMenu,
+    ],
+  );
+
   return (
     <Drawer
       open={props.open}
-      onClose={props.onClose}
+      onClose={props.pinned ? undefined : props.onClose}
+      destroyOnClose={!props.pinned}
       placement="right"
       width={360}
       closable={false}
       title={null}
+      mask={!props.pinned}
       styles={{
         header: { display: "none" },
         body: {
@@ -245,11 +471,28 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
           <span className={styles.headerTitle}>{t("chat.allChats")}</span>
         </div>
         <div className={styles.headerRight}>
-          <IconButton
-            bordered={false}
-            icon={<SparkOperateRightLine />}
-            onClick={props.onClose}
-          />
+          <Tooltip
+            title={
+              props.pinned
+                ? t("chat.unpinDrawer", "Unpin")
+                : t("chat.pinDrawer", "Pin")
+            }
+            mouseEnterDelay={0.5}
+          >
+            <IconButton
+              bordered={false}
+              icon={props.pinned ? <SparkLockFill /> : <SparkLockLine />}
+              className={props.pinned ? styles.pinActive : undefined}
+              onClick={() => props.onPinChange?.(!props.pinned)}
+            />
+          </Tooltip>
+          {!props.pinned && (
+            <IconButton
+              bordered={false}
+              icon={<SparkOperateRightLine />}
+              onClick={props.onClose}
+            />
+          )}
         </div>
       </div>
 
@@ -261,45 +504,51 @@ const ChatSessionDrawer: React.FC<ChatSessionDrawerProps> = (props) => {
       </div>
 
       {/* Session list */}
-      <div className={styles.listWrapper}>
+      <div className={styles.listWrapper} ref={listWrapperRef}>
         <div className={styles.topGradient} />
-        <div className={styles.list}>
-          {sortedSessions.map((session) => {
-            const ext = session as ExtendedChatSession;
-            const channelKey = ext.channel?.trim() || "";
-            const channelLabel = channelKey
-              ? getChannelLabel(channelKey, t)
-              : undefined;
-            return (
-              <ChatSessionItem
-                key={session.id}
-                name={session.name || "New Chat"}
-                time={formatCreatedAt(ext.createdAt ?? null)}
-                channelKey={channelKey || undefined}
-                channelLabel={channelLabel}
-                chatStatus={ext.status}
-                generating={ext.generating}
-                pinned={ext.pinned}
-                active={session.id === currentSessionId}
-                editing={editingSessionId === session.id}
-                editValue={
-                  editingSessionId === session.id ? editValue : undefined
-                }
-                onClick={() => handleSessionClick(session.id!)}
-                onEdit={() =>
-                  handleEditStart(session.id!, session.name || "New Chat")
-                }
-                onDelete={() => handleDelete(session.id!)}
-                onPin={() => handlePinToggle(session.id!)}
-                onEditChange={handleEditChange}
-                onEditSubmit={handleEditSubmit}
-                onEditCancel={handleEditCancel}
-              />
-            );
-          })}
-        </div>
+        {listLoading ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: 40,
+            }}
+          >
+            <Spin />
+          </div>
+        ) : (
+          <>
+            {/* Background loading — only show when content overflows the container,
+                so it's visible through unrendered gaps during fast scroll */}
+            {sortedSessions.length * ITEM_HEIGHT > listHeight && (
+              <div className={styles.virtualListBackground}>
+                <Spin size="small" />
+              </div>
+            )}
+            <FixedSizeList
+              height={listHeight}
+              width="100%"
+              itemCount={sortedSessions.length}
+              itemSize={ITEM_HEIGHT}
+              overscanCount={20}
+              itemData={itemData}
+              className={styles.list}
+            >
+              {SessionRow}
+            </FixedSizeList>
+          </>
+        )}
         <div className={styles.bottomGradient} />
       </div>
+
+      {/* Shared context menu — single instance for all session items */}
+      <ContextMenu
+        visible={sharedContextMenu.visible}
+        x={sharedContextMenu.x}
+        y={sharedContextMenu.y}
+        items={contextMenuItems}
+        onClose={sharedContextMenu.hide}
+      />
     </Drawer>
   );
 };

@@ -163,6 +163,22 @@ $QWENPAW_WORKING_DIR/                      # 默认 ~/.qwenpaw
 - `https://github.com/...`
 - `https://modelscope.cn/skills/...`
 
+CLI 支持相同的基于 URL 的导入方式：
+
+**指定工作区：** 指定单个智能体工作区时使用 `--agent-id`；不指定时，`install` / `uninstall` 作用于技能池。
+
+```bash
+qwenpaw skills install <skill_url>
+qwenpaw skills install <skill_url> --agent-id <agent_id>
+```
+
+CLI 也支持从共享技能池或单个工作区卸载技能：
+
+```bash
+qwenpaw skills uninstall <skill_name>
+qwenpaw skills uninstall <skill_name> --agent-id <agent_id>
+```
+
 #### 步骤
 
 1. 打开 [控制台](./console) → **工作区 → 技能**，点击 **从 Skills Hub 导入技能**。
@@ -243,6 +259,28 @@ metadata:
 
 手动放置的 Skill 会在下次清单调和时被检测到，并以**禁用**状态写入 `skill.json`。
 在控制台或 CLI 中启用即可。
+
+### 6. 通过 /make-skill 从当前会话创建 (Beta)
+
+刚在对话里跑完一个工作流（试过工具、撞过错、得出可行路径）, 用这个
+命令把它存成 skill：
+
+```
+/make-skill 烹饪
+```
+
+会看到一张计划卡，展示建议的 skill 名和步骤大纲。用自然语言确认、
+修改或取消。确认后，Agent 基于会话内容写出 skill 并保存到当前
+workspace，**默认启用**。
+
+`<focus>` 会作为 skill 名，内部空格折叠为 `-`（例如
+`view image debug` → `view-image-debug`），其它字符（中文、大小写、
+数字）保留原样。
+
+`/make-skill` 本身是一个内建 skill，调用前请先在 `/skills` 中确认
+它已启用。
+
+---
 
 工作区里常见的后续操作还有：
 

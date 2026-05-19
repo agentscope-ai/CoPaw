@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../../api";
 
-interface ChannelQrcodeConfig {
-  /** Channel name used in the API path, e.g. "weixin" or "wecom" */
+export interface ChannelQrcodeConfig {
+  /** Channel name used in the API path, e.g. "wechat" or "wecom" */
   channel: string;
   /** Status value that indicates successful authorization */
   successStatus: string;
@@ -10,15 +10,15 @@ interface ChannelQrcodeConfig {
   successCredentialKey: string;
   /** Polling interval in milliseconds (default: 2000) */
   pollInterval?: number;
+  /** Extra query parameters to pass to the QR code API (e.g. domain) */
+  params?: Record<string, string>;
   /** Called when authorization succeeds with the credentials map */
   onSuccess: (credentials: Record<string, string>) => void;
-  /** Called when the QR code expires (optional) */
-  onExpired?: () => void;
-  /** Called when QR code fetch or polling fails */
+  /** Called when QR code fetch fails or polling detects expiry */
   onError: (type: "fetch" | "expired") => void;
 }
 
-interface ChannelQrcodeState {
+export interface ChannelQrcodeState {
   qrcodeImg: string;
   loading: boolean;
   fetchQrcode: () => Promise<void>;
@@ -40,8 +40,8 @@ export function useChannelQrcode(
     successStatus,
     successCredentialKey,
     pollInterval = 2000,
+    params,
     onSuccess,
-    onExpired,
     onError,
   } = config;
 
@@ -67,7 +67,7 @@ export function useChannelQrcode(
     reset();
     setLoading(true);
     try {
-      const data = await api.getChannelQrcode(channel);
+      const data = await api.getChannelQrcode(channel, params);
       if (!data.qrcode_img) {
         onError("fetch");
         return;
@@ -81,6 +81,7 @@ export function useChannelQrcode(
             const result = await api.getChannelQrcodeStatus(
               channel,
               data.poll_token,
+              params,
             );
             if (
               result.status === successStatus &&
@@ -93,7 +94,6 @@ export function useChannelQrcode(
               return;
             } else if (result.status === "expired") {
               setQrcodeImg("");
-              onExpired?.();
               onError("expired");
               return;
             }
@@ -115,8 +115,8 @@ export function useChannelQrcode(
     successStatus,
     successCredentialKey,
     pollInterval,
+    params,
     onSuccess,
-    onExpired,
     onError,
     reset,
     stopPoll,

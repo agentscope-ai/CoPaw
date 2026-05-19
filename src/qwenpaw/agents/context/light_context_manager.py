@@ -28,10 +28,10 @@ from .compactor_prompts import (
 )
 from ..model_factory import create_model_and_formatter
 from ..tools.utils import truncate_text_output, DEFAULT_MAX_BYTES
-from ..utils import check_valid_messages, get_token_counter
+from ..utils import get_token_counter
 from ..utils.estimate_token_counter import EstimatedTokenCounter
-from ...config.config import load_agent_config
-from ...constant import MEMORY_COMPACT_KEEP_RECENT, TRUNCATION_NOTICE_MARKER
+from ...config.config import load_agent_config, get_model_max_input_length
+from ...constant import TRUNCATION_NOTICE_MARKER
 
 if TYPE_CHECKING:
     from ..react_agent import QwenPawAgent
@@ -334,13 +334,13 @@ class LightContextManager(BaseContextManager):
 
         return messages
 
+    @staticmethod
     async def _check_context(
-        self,
         messages: list[Msg],
         context_compact_threshold: int,
         context_compact_reserve: int,
         as_token_counter: EstimatedTokenCounter,
-    ) -> tuple[list[Msg], list[Msg], bool, int, int]:
+    ) -> tuple[list[Msg], list[Msg], int, int]:
         """Check context size and determine if compaction is needed.
 
         Uses AsMsgHandler to analyze messages and split them into
@@ -353,11 +353,10 @@ class LightContextManager(BaseContextManager):
             as_token_counter: Token counter instance.
 
         Returns:
-            Tuple of (messages_to_compact, messages_to_keep, is_valid,
+            Tuple of (messages_to_compact, messages_to_keep,
             total_tokens, keep_tokens):
             - messages_to_compact: Older messages exceeding reserve limit.
             - messages_to_keep: Recent messages within reserve limit.
-            - is_valid: True if tool_use/tool_result ids are aligned.
             - total_tokens: Total token count of all messages.
             - keep_tokens: Token count of messages to keep.
         """
@@ -553,6 +552,54 @@ class LightContextManager(BaseContextManager):
             "after_tokens": after_tokens,
         }
 
+    async def _compact_context_safe(
+        self,
+        messages: list[Msg],
+        previous_summary: str = "",
+        extra_instruction: str = "",
+        as_llm: ChatModelBase | None = None,
+        as_llm_formatter: FormatterBase | None = None,
+        as_token_counter: EstimatedTokenCounter | None = None,
+        language: str = "en",
+        max_input_length: int = 100000,
+        compact_ratio: float = 0.5,
+        add_thinking_block: bool = True,
+        **_kwargs,
+    ) -> dict:
+        """Safe wrapper for _compact_context with fallback on failure.
+
+        Args: Same as _compact_context.
+
+        Returns:
+            Dict with same keys as _compact_context, guaranteed to return
+            a valid dict even on exception.
+        """
+        try:
+            return await self._compact_context(
+                messages=messages,
+                previous_summary=previous_summary,
+                extra_instruction=extra_instruction,
+                as_llm=as_llm,
+                as_llm_formatter=as_llm_formatter,
+                as_token_counter=as_token_counter,
+                language=language,
+                max_input_length=max_input_length,
+                compact_ratio=compact_ratio,
+                add_thinking_block=add_thinking_block,
+                **_kwargs,
+            )
+        except Exception as e:
+            logger.exception("Context compaction failed: %s", e)
+            return {
+                "success": False,
+                "reason": f"LLM error: {e}",
+                "user_message": "",
+                "history_compact": "",
+                "is_valid": False,
+                "before_tokens": 0,
+                "after_tokens": 0,
+            }
+
     async def compact_context(
         self,
         messages: list[Msg],
@@ -570,42 +617,32 @@ class LightContextManager(BaseContextManager):
             Dict with keys: success, reason, history_compact,
             before_tokens, after_tokens.
         """
-        try:
-            agent_config = load_agent_config(self.agent_id)
-            running_config = agent_config.running
-            ccc = running_config.light_context_config.context_compact_config
+        agent_config = load_agent_config(self.agent_id)
+        running_config = agent_config.running
+        ccc = running_config.light_context_config.context_compact_config
+        max_input_length = get_model_max_input_length(agent_config)
 
-            # Create model and formatter for compaction
-            model, formatter = create_model_and_formatter(self.agent_id)
+        model, formatter = create_model_and_formatter(self.agent_id)
 
-            result = await self._compact_context(
-                messages=messages,
-                previous_summary=previous_summary,
-                extra_instruction=extra_instruction,
-                as_llm=model,
-                as_llm_formatter=formatter,
-                as_token_counter=get_token_counter(agent_config),
-                language=agent_config.language,
-                max_input_length=running_config.max_input_length,
-                compact_ratio=ccc.compact_threshold_ratio,
-                add_thinking_block=ccc.compact_with_thinking_block,
-            )
-            return {
-                "success": result.get("success", False),
-                "reason": result.get("reason", ""),
-                "history_compact": result.get("history_compact", ""),
-                "before_tokens": result.get("before_tokens", 0),
-                "after_tokens": result.get("after_tokens", 0),
-            }
-        except Exception as e:
-            logger.warning("compact_context failed: %s", e)
-            return {
-                "success": False,
-                "reason": f"LLM error: {e}",
-                "history_compact": "",
-                "before_tokens": 0,
-                "after_tokens": 0,
-            }
+        result = await self._compact_context_safe(
+            messages=messages,
+            previous_summary=previous_summary,
+            extra_instruction=extra_instruction,
+            as_llm=model,
+            as_llm_formatter=formatter,
+            as_token_counter=get_token_counter(agent_config),
+            language=agent_config.language,
+            max_input_length=max_input_length,
+            compact_ratio=ccc.compact_threshold_ratio,
+            add_thinking_block=ccc.compact_with_thinking_block,
+        )
+        return {
+            "success": result.get("success", False),
+            "reason": result.get("reason", ""),
+            "history_compact": result.get("history_compact", ""),
+            "before_tokens": result.get("before_tokens", 0),
+            "after_tokens": result.get("after_tokens", 0),
+        }
 
     # ------------------------------------------------------------------
     # Agent lifecycle hook methods
@@ -646,19 +683,15 @@ class LightContextManager(BaseContextManager):
         if command_handler is not None and command_handler.is_command(query):
             return None
 
-        agent_config = load_agent_config(self.agent_id)
-        rlmc = agent_config.running.reme_light_memory_config
-        ms = rlmc.auto_memory_search_config
-
-        if not ms.enabled:
-            return None
-
         memory_manager = agent.memory_manager
         if memory_manager is None:
             return None
 
         try:
-            result = await memory_manager.retrieve(msg, agent_name=agent.name)
+            result = await memory_manager.auto_memory_search(
+                msg,
+                agent_name=agent.name,
+            )
         except BaseException as e:
             logger.warning(
                 "memory_manager.retrieve failed, skipping e=%s",
@@ -691,21 +724,27 @@ class LightContextManager(BaseContextManager):
             agent_config = load_agent_config(self.agent_id)
             running_config = agent_config.running
             token_counter = get_token_counter(agent_config)
+            max_input_length = get_model_max_input_length(agent_config)
 
             memory = agent.memory
             system_prompt = agent.sys_prompt
             compressed_summary = memory.get_compressed_summary()
-            str_token_count = await token_counter.count(
+            sys_token_count = await token_counter.count(
                 messages=[],
-                text=(system_prompt or "") + (compressed_summary or ""),
+                text=(system_prompt or ""),
             )
+            summary_token_count = await token_counter.count(
+                messages=[],
+                text=(compressed_summary or ""),
+            )
+            str_token_count = sys_token_count + summary_token_count
 
             ccc = running_config.light_context_config.context_compact_config
             context_compact_threshold = int(
-                running_config.max_input_length * ccc.compact_threshold_ratio,
+                max_input_length * ccc.compact_threshold_ratio,
             )
             context_compact_reserve = int(
-                running_config.max_input_length * ccc.reserve_threshold_ratio,
+                max_input_length * ccc.reserve_threshold_ratio,
             )
             left_compact_threshold = (
                 context_compact_threshold - str_token_count
@@ -727,7 +766,6 @@ class LightContextManager(BaseContextManager):
             (
                 messages_to_compact,
                 messages_to_keep,
-                is_valid,
                 ctx_total_tokens,
                 ctx_keep_tokens,
             ) = await self._check_context(
@@ -740,150 +778,154 @@ class LightContextManager(BaseContextManager):
             if not messages_to_compact:
                 return None
 
-            if not is_valid:
-                logger.warning(
-                    "Please include the output of the /history command when "
-                    "reporting the bug to the community. Invalid "
-                    "messages=%s",
-                    messages,
-                )
-                keep_length: int = MEMORY_COMPACT_KEEP_RECENT
-                messages_length = len(messages)
-                while keep_length > 0 and not check_valid_messages(
-                    messages[max(messages_length - keep_length, 0) :],
-                ):
-                    keep_length -= 1
-
-                if keep_length > 0:
-                    messages_to_compact = messages[
-                        : max(messages_length - keep_length, 0)
-                    ]
-                    messages_to_keep = messages[
-                        max(messages_length - keep_length, 0) :
-                    ]
-                else:
-                    messages_to_compact = messages
-                    messages_to_keep = []
-                # Token counts are no longer accurate after fallback,
-                # invalidate them.
-                ctx_total_tokens = 0
-                ctx_keep_tokens = 0
-
-            if not messages_to_compact:
-                return None
-
-            if running_config.reme_light_memory_config.summarize_when_compact:
-                memory_manager.add_summarize_task(
-                    messages=messages_to_compact,
-                )
-
             # Build context status info for printing
-            max_len = running_config.max_input_length
+            max_len = max_input_length
             total_msgs = len(messages)
             compact_count = len(messages_to_compact)
             keep_count = len(messages_to_keep)
 
-            has_token_info = ctx_total_tokens > 0
-            total_tokens = (
-                str_token_count + ctx_total_tokens if has_token_info else 0
-            )
-            keep_tokens = ctx_keep_tokens if has_token_info else 0
+            total_tokens = str_token_count + ctx_total_tokens
+            keep_tokens = ctx_keep_tokens
 
-            if has_token_info:
-                pct = total_tokens / max_len * 100 if max_len > 0 else 0
-                token_line = (
-                    f"  📝 Tokens: {_fmt_tokens(total_tokens)} / "
-                    f"{_fmt_tokens(max_len)} ({pct:.0f}%)"
-                )
-            else:
-                token_line = f"  📝 Tokens: ? / {_fmt_tokens(max_len)}"
-
-            status_prefix = (
-                f"📊 Context Status:\n\n"
-                f"{token_line}\n\n"
-                f"  💬 {total_msgs} msgs -> compact({compact_count})"
-                f" + keep({keep_count})"
+            pct = total_tokens / max_len * 100 if max_len > 0 else 0
+            token_line = (
+                f"📝 {_fmt_tokens(total_tokens)} / "
+                f"{_fmt_tokens(max_len)} ({pct:.0f}%)"
             )
 
             await self._print_status_message(
                 agent,
-                f"{status_prefix}\n\n" "🔄 Context compaction started...",
+                f"🔄 Context compaction started... Context "
+                f"Status: {token_line} 💬 {total_msgs} msgs -> "
+                f"compact({compact_count}) + keep({keep_count})",
             )
 
-            ccc = running_config.light_context_config.context_compact_config
             if ccc.enabled:
-                try:
-                    result = await self._compact_context(
-                        messages=messages_to_compact,
-                        previous_summary=memory.get_compressed_summary(),
-                        as_llm=agent.model,
-                        as_llm_formatter=agent.formatter,
-                        as_token_counter=token_counter,
-                        language=agent_config.language,
-                        max_input_length=running_config.max_input_length,
-                        compact_ratio=ccc.compact_threshold_ratio,
-                        add_thinking_block=ccc.compact_with_thinking_block,
-                    )
-                except Exception as e:
-                    logger.exception(
-                        "Context compaction LLM call failed: %s",
-                        e,
-                    )
-                    await self._print_status_message(
-                        agent,
-                        f"{status_prefix}\n\n"
-                        f"  ❌ Context compaction failed "
-                        f"(LLM error: {e}).",
-                    )
-                    return None
+                result = await self._compact_context_safe(
+                    messages=messages_to_compact,
+                    previous_summary=memory.get_compressed_summary(),
+                    as_llm=agent.model,
+                    as_llm_formatter=agent.formatter,
+                    as_token_counter=token_counter,
+                    language=agent_config.language,
+                    max_input_length=max_input_length,
+                    compact_ratio=ccc.compact_threshold_ratio,
+                    add_thinking_block=ccc.compact_with_thinking_block,
+                )
 
                 compact_content = (
                     result.get("history_compact", "")
                     if result.get("success")
                     else ""
                 )
-                if not result.get("success"):
+                if not compact_content:
                     reason = result.get("reason", "unknown")
-                    await self._print_status_message(
-                        agent,
-                        f"{status_prefix}\n\n"
-                        f"  ❌ Context compaction failed "
-                        f"({reason}).",
+                    # Fallback: retry with larger reserve to keep more history.
+                    # left_compact_threshold (~80% of max_input_length) is much
+                    # larger than context_compact_reserve (~10%), so using it
+                    # as the reserve allows keeping more messages in context.
+                    (
+                        fallback_to_compact,
+                        fallback_to_keep,
+                        ctx_total_tokens,
+                        ctx_keep_tokens,
+                    ) = await self._check_context(
+                        messages=messages,
+                        context_compact_threshold=left_compact_threshold,
+                        context_compact_reserve=left_compact_threshold,
+                        as_token_counter=token_counter,
                     )
-                else:
-                    if has_token_info:
-                        after_total = str_token_count + keep_tokens
-                        after_pct = (
-                            after_total / max_len * 100 if max_len > 0 else 0
-                        )
-                        after_token_line = (
-                            f"  📝 Tokens: {_fmt_tokens(after_total)} / "
-                            f"{_fmt_tokens(max_len)} ({after_pct:.0f}%)"
+                    messages_to_compact = fallback_to_compact
+                    messages_to_keep = fallback_to_keep
+                    compact_content = memory.get_compressed_summary() or ""
+                    keep_count = len(messages_to_keep)
+                    compact_count = len(messages_to_compact)
+                    total_tokens = str_token_count + ctx_total_tokens
+                    pct = total_tokens / max_len * 100 if max_len > 0 else 0
+                    token_line = (
+                        f"📝 {_fmt_tokens(total_tokens)} / "
+                        f"{_fmt_tokens(max_len)} ({pct:.0f}%)"
+                    )
+                    if compact_count > 0:
+                        msg_line = (
+                            f"💬 Fallback: keep({keep_count})"
+                            f" + drop({compact_count})"
                         )
                     else:
-                        after_token_line = (
-                            f"  📝 Tokens: ? / {_fmt_tokens(max_len)}"
-                        )
+                        msg_line = f"💬 Fallback: keep({keep_count}) msgs"
                     await self._print_status_message(
                         agent,
-                        f"📊 Context Status:\n\n"
-                        f"{after_token_line}\n\n"
-                        f"  💬 {keep_count} msgs\n\n"
-                        "  ✅ Context compaction completed",
+                        f"❌ Context compaction failed ({reason}) "
+                        f"Context Status: {token_line} {msg_line}",
+                    )
+                else:
+                    after_total = (
+                        sys_token_count
+                        + result.get("after_tokens", 0)
+                        + keep_tokens
+                    )
+                    after_pct = (
+                        after_total / max_len * 100 if max_len > 0 else 0
+                    )
+                    after_token_line = (
+                        f"📝 {_fmt_tokens(after_total)} / "
+                        f"{_fmt_tokens(max_len)} ({after_pct:.0f}%)"
+                    )
+                    await self._print_status_message(
+                        agent,
+                        f"✅ Context compaction completed! "
+                        f"Context Status: {after_token_line} "
+                        f"💬 {keep_count} msgs",
                     )
             else:
-                compact_content = ""
+                # Fallback: retry with larger reserve to keep more history.
+                # left_compact_threshold (~80% of max_input_length) is much
+                # larger than context_compact_reserve (~10%), so using it as
+                # the reserve allows keeping more messages in context.
+                (
+                    fallback_to_compact,
+                    fallback_to_keep,
+                    ctx_total_tokens,
+                    ctx_keep_tokens,
+                ) = await self._check_context(
+                    messages=messages,
+                    context_compact_threshold=left_compact_threshold,
+                    context_compact_reserve=left_compact_threshold,
+                    as_token_counter=token_counter,
+                )
+                messages_to_compact = fallback_to_compact
+                messages_to_keep = fallback_to_keep
+                compact_content = memory.get_compressed_summary() or ""
+                keep_count = len(messages_to_keep)
+                compact_count = len(messages_to_compact)
+                total_tokens = str_token_count + ctx_total_tokens
+                pct = total_tokens / max_len * 100 if max_len > 0 else 0
+                token_line = (
+                    f"📝 {_fmt_tokens(total_tokens)} / "
+                    f"{_fmt_tokens(max_len)} ({pct:.0f}%)"
+                )
+                if compact_count > 0:
+                    msg_line = (
+                        f"💬 Fallback: keep({keep_count})"
+                        f" + drop({compact_count})"
+                    )
+                else:
+                    msg_line = f"💬 Fallback: keep({keep_count}) msgs"
                 await self._print_status_message(
                     agent,
-                    f"{status_prefix}\n\n"
-                    "  ⏭️ Context compaction skipped "
-                    "(disabled in config).",
+                    f"⏭️ Context compaction skipped (disabled) "
+                    f"Context Status: {token_line} {msg_line}",
                 )
 
             updated_count = await memory.mark_messages_compressed(
                 messages_to_compact,
             )
             logger.info(f"Marked {updated_count} messages as compacted")
+
+            if messages_to_compact:
+                await memory_manager.summarize_when_compact(
+                    messages=messages_to_compact,
+                )
 
             await memory.update_compressed_summary(compact_content)
 
@@ -944,33 +986,13 @@ class LightContextManager(BaseContextManager):
             if memory_manager is None:
                 return None
 
-            agent_config = load_agent_config(self.agent_id)
-            rlmc = agent_config.running.reme_light_memory_config
-            auto_memory_interval = rlmc.auto_memory_interval
-
-            if auto_memory_interval is None or auto_memory_interval <= 0:
-                return None
-
             memory = agent.memory
-            # memory.content is list[tuple[Msg, marks]]
-            # Find indices of user messages to locate recent interval
-            user_msg_indices = [
-                i
-                for i, (msg, _) in enumerate(memory.content)
-                if msg.role == "user"
-            ]
+            all_messages = [msg for msg, _ in memory.content]
 
-            if (
-                len(user_msg_indices) >= auto_memory_interval
-                and len(user_msg_indices) % auto_memory_interval == 0
-            ):
-                # Get messages from the start of recent interval
-                start_index = user_msg_indices[-auto_memory_interval]
-                recent_messages = [
-                    msg for msg, _ in memory.content[start_index:]
-                ]
-                if recent_messages:
-                    memory_manager.add_summarize_task(messages=recent_messages)
+            if all_messages:
+                await memory_manager.auto_memory(
+                    all_messages=all_messages,
+                )
         except Exception as e:
             logger.warning("post_reply hook failed: %s", e)
 

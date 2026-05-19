@@ -30,6 +30,7 @@ export interface DingTalkConfig extends BaseChannelConfig {
   card_template_key: string;
   robot_code: string;
   at_sender_on_reply?: boolean;
+  streaming_enabled?: boolean;
 }
 
 export interface FeishuConfig extends BaseChannelConfig {
@@ -39,6 +40,7 @@ export interface FeishuConfig extends BaseChannelConfig {
   verification_token: string;
   media_dir: string;
   domain?: "feishu" | "lark";
+  streaming_enabled?: boolean;
 }
 
 export interface QQConfig extends BaseChannelConfig {
@@ -52,6 +54,7 @@ export interface TelegramConfig extends BaseChannelConfig {
   http_proxy: string;
   http_proxy_auth: string;
   show_typing?: boolean;
+  streaming_enabled?: boolean;
 }
 
 export interface MQTTConfig extends BaseChannelConfig {
@@ -89,7 +92,9 @@ export interface WecomConfig extends BaseChannelConfig {
   secret: string;
   media_dir?: string;
   welcome_text?: string;
+  share_session_in_group?: boolean;
   max_reconnect_attempts?: number;
+  streaming_enabled?: boolean;
 }
 
 export type ConsoleConfig = BaseChannelConfig;
@@ -138,6 +143,15 @@ export interface XiaoYiConfig extends BaseChannelConfig {
   task_timeout_ms?: number;
 }
 
+export interface WeChatConfig extends BaseChannelConfig {
+  bot_token: string;
+  bot_token_file: string;
+  base_url: string;
+  media_dir?: string;
+  message_merge_enabled?: boolean;
+  message_merge_delay_ms?: number;
+}
+
 export interface OneBotConfig extends BaseChannelConfig {
   ws_host: string;
   ws_port: number;
@@ -160,6 +174,7 @@ export interface ChannelConfig {
   voice: VoiceChannelConfig;
   sip: SIPChannelConfig;
   xiaoyi: XiaoYiConfig;
+  wechat: WeChatConfig;
   onebot: OneBotConfig;
 }
 
@@ -175,6 +190,7 @@ export type SingleChannelConfig =
   | MatrixConfig
   | MattermostConfig
   | WecomConfig
+  | WeChatConfig
   | VoiceChannelConfig
   | SIPChannelConfig
   | XiaoYiConfig

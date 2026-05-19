@@ -229,12 +229,15 @@ class DingTalkConfig(BaseChannelConfig):
     media_dir: Optional[str] = None
     card_auto_layout: bool = False
     at_sender_on_reply: bool = False
+    streaming_enabled: bool = False
 
 
 class FeishuConfig(BaseChannelConfig):
     """Feishu/Lark channel: app_id, app_secret; optional encrypt_key,
     verification_token for event handler. media_dir for received media.
     domain: 'feishu' for China, 'lark' for international.
+    streaming_enabled: enable CardKit streaming card updates for real-time
+    typewriter-style text output.
     """
 
     app_id: str = ""
@@ -243,6 +246,7 @@ class FeishuConfig(BaseChannelConfig):
     verification_token: str = ""
     media_dir: Optional[str] = None
     domain: Literal["feishu", "lark"] = "feishu"
+    streaming_enabled: bool = False
 
 
 class QQConfig(BaseChannelConfig):
@@ -267,6 +271,7 @@ class TelegramConfig(BaseChannelConfig):
     http_proxy: str = ""
     http_proxy_auth: str = ""
     show_typing: Optional[bool] = None
+    streaming_enabled: bool = False
 
 
 class MQTTConfig(BaseChannelConfig):
@@ -309,7 +314,11 @@ class WecomConfig(BaseChannelConfig):
     secret: str = ""
     media_dir: Optional[str] = None
     welcome_text: str = ""
+    # If True (default), all group members share one chat; set to
+    # False to isolate each member into their own chat.
+    share_session_in_group: bool = True
     max_reconnect_attempts: int = -1
+    streaming_enabled: bool = False
 
 
 class MatrixConfig(BaseChannelConfig):
@@ -332,7 +341,6 @@ class MatrixConfig(BaseChannelConfig):
     # When False, images are surfaced as text placeholders (no vision URL).
     vision_enabled: bool = True
     history_limit: int = 50
-    username: str = ""
     password: str = ""
     device_name: str = "qwenpaw-worker"
     # matrix-nio sync long-poll timeout (ms); typical 30s
@@ -396,20 +404,31 @@ class XiaoYiConfig(BaseChannelConfig):
     task_timeout_ms: int = 3600000  # 1 hour task timeout
 
 
-class WeixinConfig(BaseChannelConfig):
+class WeChatConfig(BaseChannelConfig):
     """WeChat (iLink Bot) personal account channel config.
 
-    bot_token:      Bearer token obtained after QR code login.
-    bot_token_file: Path to persist/load the bot_token
-                    (default ~/.qwenpaw/weixin_bot_token).
-    base_url:       iLink API base URL (leave empty to use default).
-    media_dir:      Local directory for downloaded media files.
+    bot_token:              Bearer token obtained after QR code login.
+    bot_token_file:         Path to persist/load the bot_token
+                            (default ~/.qwenpaw/wechat_bot_token).
+    base_url:               iLink API base URL (leave empty to use default).
+    media_dir:              Local directory for downloaded media files.
+    message_merge_enabled:  When True, merge multiple outgoing text messages
+                            within a single request to reduce message count
+                            (mitigates the 10-message context_token limit).
+    message_merge_delay_ms: Controls merge behaviour when merging is enabled.
+                            0  → merge ALL text messages and send once at the
+                                 end of the request (maximum savings).
+                            >0 → buffer messages for this many milliseconds;
+                                 if no new message arrives within the window
+                                 the buffer is flushed (adjacent-merge mode).
     """
 
     bot_token: str = ""
     bot_token_file: str = ""
     base_url: str = ""
     media_dir: Optional[str] = None
+    message_merge_enabled: bool = False
+    message_merge_delay_ms: Optional[int] = 0
 
 
 class ChannelConfig(BaseModel):
@@ -431,8 +450,25 @@ class ChannelConfig(BaseModel):
     sip: SIPChannelConfig = SIPChannelConfig()
     wecom: WecomConfig = WecomConfig()
     xiaoyi: XiaoYiConfig = XiaoYiConfig()
-    weixin: WeixinConfig = WeixinConfig()
+    wechat: WeChatConfig = WeChatConfig()
     onebot: OneBotConfig = OneBotConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_weixin_key(cls, data: Any) -> Any:
+        """One-shot migration: legacy ``weixin`` key -> canonical ``wechat``.
+
+        Older config files used ``weixin`` as the WeChat channel key. The
+        canonical key is now ``wechat``. When an old config is loaded we
+        rename the key in-place so validation succeeds. The on-disk file is
+        rewritten by ``load_config`` right after validation (see utils.py).
+        """
+        if isinstance(data, dict) and "weixin" in data:
+            data = dict(data)
+            legacy = data.pop("weixin")
+            if "wechat" not in data:
+                data["wechat"] = legacy
+        return data
 
 
 class LastApiConfig(BaseModel):
@@ -528,6 +564,47 @@ class EmbeddingModelConfig(BaseModel):
         default=10,
         description="Maximum batch size for embedding",
     )
+
+
+class ADBPGMemoryConfig(BaseModel):
+    """ADBPG (AnalyticDB for PostgreSQL) memory configuration."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Database connection
+    host: str = ""
+    port: int = 5432
+    user: str = ""
+    password: str = ""
+    dbname: str = ""
+
+    # LLM for server-side fact extraction
+    llm_model: str = ""
+    llm_api_key: str = ""
+    llm_base_url: str = ""
+
+    # Embedding
+    embedding_model: str = ""
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
+    embedding_dims: int = 1024
+
+    # API mode
+    api_mode: str = Field(
+        default="rest",
+        description="API mode: 'sql' (direct psycopg2) or 'rest' (HTTP API)",
+    )
+    rest_api_key: str = ""
+    rest_base_url: str = ""
+
+    # Behavior
+    memory_isolation: bool = Field(
+        default=True,
+        description="Per-agent memory isolation (True) or shared (False)",
+    )
+    search_timeout: float = 10.0
+    pool_minconn: int = 1
+    pool_maxconn: int = 5
 
 
 class ReMeLightMemoryConfig(BaseModel):
@@ -709,6 +786,38 @@ class LightContextConfig(BaseModel):
     )
 
 
+class AutoTitleConfig(BaseModel):
+    """Async chat-title generation configuration.
+
+    The console handler creates each new chat with a 10-character
+    placeholder name and spawns a background task that asks the active
+    LLM for a concise title. Each new chat costs one short extra LLM
+    call; flip ``enabled`` to ``False`` to keep the placeholder and
+    avoid the spend.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Generate a chat title via the active LLM after the first "
+            "user message. Disable to keep the truncated placeholder "
+            "and skip the extra per-chat LLM call."
+        ),
+    )
+
+    timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        description=(
+            "Hard timeout for the title-generation LLM call. The "
+            "background task is swallowed if this fires, leaving the "
+            "placeholder name in place."
+        ),
+    )
+
+
 class AgentsRunningConfig(BaseModel):
     """Agent runtime behavior configuration."""
 
@@ -816,6 +925,19 @@ class AgentsRunningConfig(BaseModel):
         ),
     )
 
+    shell_command_executable: str = Field(
+        default="",
+        description=(
+            "Path to the shell used by execute_shell_command. "
+            "Linux/macOS: e.g. /bin/bash, /bin/zsh. "
+            "Windows: supports powershell.exe, pwsh.exe, or POSIX-like "
+            "shells such as Git Bash. "
+            "When empty, falls back to the $SHELL environment variable, "
+            "then to the platform default (/bin/sh on Unix, cmd.exe on "
+            "Windows)."
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_llm_retry_backoff(self) -> "AgentsRunningConfig":
         """Validate LLM retry backoff relationships."""
@@ -849,7 +971,21 @@ class AgentsRunningConfig(BaseModel):
         default_factory=LightContextConfig,
     )
 
+    auto_title_config: AutoTitleConfig = Field(
+        default_factory=AutoTitleConfig,
+        description=(
+            "Async chat-title generation toggle and timeout. See "
+            "AutoTitleConfig."
+        ),
+    )
+
     memory_manager_backend: str = Field(default="remelight")
+
+    adbpg_memory_config: Optional[ADBPGMemoryConfig] = Field(
+        default=None,
+        description="ADBPG memory configuration (used when "
+        "memory_manager_backend='adbpg')",
+    )
 
     reme_light_memory_config: ReMeLightMemoryConfig = Field(
         default_factory=ReMeLightMemoryConfig,
@@ -858,6 +994,15 @@ class AgentsRunningConfig(BaseModel):
     daily_memory_dir: str = Field(
         default="memory",
         description="Dir name to daily summary file",
+    )
+
+    approval_level: Optional[str] = Field(
+        default=None,
+        description=(
+            "Tool execution security level (proxied from agent profile): "
+            "STRICT, SMART, AUTO, or OFF.  When set via running-config API, "
+            "the value is written back to the agent profile."
+        ),
     )
 
 
@@ -1082,6 +1227,23 @@ class LastDispatchConfig(BaseModel):
     session_id: str = ""
 
 
+class MCPOAuthConfig(BaseModel):
+    """OAuth 2.1 configuration for a remote MCP client.
+
+    Stores OAuth credentials and endpoints discovered via RFC 8414 /
+    RFC 9728.  Tokens are masked in API responses; stored plain-text in
+    agent.json (file is local to the user's workspace).
+    """
+
+    client_id: str = ""
+    scope: str = ""
+    access_token: str = ""
+    refresh_token: str = ""
+    expires_at: float = 0.0
+    token_endpoint: str = ""
+    auth_endpoint: str = ""
+
+
 class MCPClientConfig(BaseModel):
     """Configuration for a single MCP client."""
 
@@ -1097,6 +1259,7 @@ class MCPClientConfig(BaseModel):
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
     cwd: str = ""
+    oauth: Optional[MCPOAuthConfig] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1199,11 +1362,20 @@ class BuiltinToolConfig(BaseModel):
         default=None,
         description="Emoji icon for the tool",
     )
+    config: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Tool-specific configuration (e.g., API keys)",
+    )
 
 
+# pylint: disable=too-many-nested-blocks
 def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
-    """Return a fresh copy of the canonical built-in tool definitions."""
-    return {
+    """Return a fresh copy of the canonical built-in tool definitions.
+
+    This includes both hardcoded tools and dynamically registered tools
+    from plugins.
+    """
+    tools = {
         "execute_shell_command": BuiltinToolConfig(
             name="execute_shell_command",
             enabled=True,
@@ -1325,6 +1497,54 @@ def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
         ),
     }
 
+    # Merge dynamically registered tools from plugins
+    try:
+        from ..plugins.registry import PluginRegistry
+
+        registry = PluginRegistry()
+        # Access manifests via public method
+        all_manifests = registry.get_all_plugin_manifests()
+        for plugin_id, manifest in all_manifests.items():
+            meta = manifest.get("meta", {})
+            # Support old format: meta.tool_name
+            if meta.get("tool_name"):
+                tool_name = meta["tool_name"]
+                if tool_name not in tools:
+                    tools[tool_name] = BuiltinToolConfig(
+                        name=tool_name,
+                        enabled=False,
+                        description=meta.get(
+                            "tool_description",
+                            f"Tool from plugin {plugin_id}",
+                        ),
+                        display_to_user=True,
+                        async_execution=False,
+                        icon=meta.get("tool_icon", "🔧"),
+                    )
+            # Support new format: meta.tools array
+            tools_list = meta.get("tools", [])
+            if isinstance(tools_list, list):
+                for tool_info in tools_list:
+                    if isinstance(tool_info, dict) and "name" in tool_info:
+                        tool_name = tool_info["name"]
+                        if tool_name not in tools:
+                            tools[tool_name] = BuiltinToolConfig(
+                                name=tool_name,
+                                enabled=False,
+                                description=tool_info.get(
+                                    "description",
+                                    f"Tool from plugin {plugin_id}",
+                                ),
+                                display_to_user=True,
+                                async_execution=False,
+                                icon=tool_info.get("icon", "🔧"),
+                            )
+    except Exception:
+        # Plugins not loaded yet, return hardcoded tools only
+        pass
+
+    return tools
+
 
 class ToolsConfig(BaseModel):
     """Built-in tools management configuration."""
@@ -1440,6 +1660,7 @@ class ToolGuardConfig(BaseModel):
     enabled: bool = True
     guarded_tools: Optional[List[str]] = None
     denied_tools: List[str] = Field(default_factory=list)
+    auto_denied_rules: List[str] = Field(default_factory=list)
     custom_rules: List[ToolGuardRuleConfig] = Field(default_factory=list)
     disabled_rules: List[str] = Field(default_factory=list)
     shell_evasion_checks: Dict[str, bool] = Field(
@@ -1552,7 +1773,7 @@ ChannelConfigUnion = Union[
     SIPChannelConfig,
     WecomConfig,
     XiaoYiConfig,
-    WeixinConfig,
+    WeChatConfig,
 ]
 
 
@@ -1610,11 +1831,15 @@ def build_fallback_agent_profile_config(
             and config.agents.system_prompt_files
             else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
         ),
+        acp=(config.acp if hasattr(config, "acp") and config.acp else None),
     )
 
 
 def load_agent_config(agent_id: str) -> AgentProfileConfig:
-    """Load agent's complete configuration from workspace/agent.json.
+    """Load agent's complete configuration from workspace/agent.json with
+    mtime-based caching.
+
+    Uses file modification time to avoid unnecessary disk reads.
 
     Args:
         agent_id: Agent ID to load
@@ -1625,7 +1850,11 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
     Raises:
         ValueError: If agent ID not found in root config
     """
-    from .utils import load_config
+    from .utils import (
+        load_config,
+        _agent_config_cache,
+        _agent_config_lock,
+    )
 
     config = load_config()
 
@@ -1645,27 +1874,83 @@ def load_agent_config(agent_id: str) -> AgentProfileConfig:
         save_agent_config(agent_id, fallback_config)
         return fallback_config
 
-    with open(agent_config_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Normalize legacy ~/.copaw-bound paths to current WORKING_DIR.
-    # This keeps QWENPAW_WORKING_DIR effective even if existing agent.json
-    # contains older hard-coded paths like "~/.copaw/media".
+    # Check mtime to see if we can use cached config
     try:
-        from .utils import _normalize_working_dir_bound_paths
+        current_mtime = agent_config_path.stat().st_mtime
+    except OSError:
+        fallback_config = build_fallback_agent_profile_config(agent_id, config)
+        save_agent_config(agent_id, fallback_config)
+        return fallback_config
 
-        data = _normalize_working_dir_bound_paths(data)
-    except Exception:
-        pass
+    with _agent_config_lock:
+        # Return cached config if mtime hasn't changed
+        if agent_id in _agent_config_cache:
+            cached_config, cached_mtime = _agent_config_cache[agent_id]
+            if cached_mtime == current_mtime:
+                return cached_config
 
-    return AgentProfileConfig(**data)
+        # Need to reload config from disk
+        with open(agent_config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # One-shot migration: rename legacy ``channels.weixin`` key to
+        # ``channels.wechat`` and rewrite the file on disk so future loads
+        # see the canonical key directly. This rewrite must happen BEFORE
+        # any in-memory normalization (e.g. ~/.copaw path rewriting) so we
+        # only persist the key rename, not unrelated runtime transforms.
+        channels = data.get("channels")
+        if isinstance(channels, dict) and "weixin" in channels:
+            legacy = channels.pop("weixin")
+            if "wechat" not in channels:
+                channels["wechat"] = legacy
+            try:
+                import uuid as _uuid
+                import shutil as _shutil
+
+                backup_path = agent_config_path.with_suffix(
+                    f".{_uuid.uuid4().hex[:8]}.weixin-migrate.bak",
+                )
+                _shutil.copy2(agent_config_path, backup_path)
+                with open(
+                    agent_config_path,
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                # Refresh mtime cache key after rewriting the file so the
+                # cached config still reflects the on-disk state.
+                try:
+                    current_mtime = agent_config_path.stat().st_mtime
+                except OSError:
+                    pass
+            except OSError:
+                pass
+
+        # Normalize legacy ~/.copaw-bound paths to current WORKING_DIR.
+        # This keeps QWENPAW_WORKING_DIR effective even if existing agent.json
+        # contains older hard-coded paths like "~/.copaw/media".
+        # NOTE: this transform is applied in-memory only; it must not be
+        # persisted back to disk.
+        try:
+            from .utils import _normalize_working_dir_bound_paths
+
+            data = _normalize_working_dir_bound_paths(data)
+        except Exception:
+            pass
+
+        agent_config = AgentProfileConfig(**data)
+
+        # Cache the config with its mtime
+        _agent_config_cache[agent_id] = (agent_config, current_mtime)
+
+        return agent_config
 
 
 def save_agent_config(
     agent_id: str,
     agent_config: AgentProfileConfig,
 ) -> None:
-    """Save agent configuration to workspace/agent.json.
+    """Save agent configuration to workspace/agent.json and invalidate cache.
 
     Args:
         agent_id: Agent ID
@@ -1674,7 +1959,11 @@ def save_agent_config(
     Raises:
         ValueError: If agent ID not found in root config
     """
-    from .utils import load_config
+    from .utils import (
+        load_config,
+        _agent_config_cache,
+        _agent_config_lock,
+    )
 
     config = load_config()
 
@@ -1697,6 +1986,11 @@ def save_agent_config(
             ensure_ascii=False,
             indent=2,
         )
+
+    # Invalidate cache after saving
+    with _agent_config_lock:
+        if agent_id in _agent_config_cache:
+            del _agent_config_cache[agent_id]
 
 
 def migrate_legacy_config_to_multi_agent() -> bool:
@@ -1834,3 +2128,28 @@ def migrate_legacy_config_to_multi_agent() -> bool:
     print(f"  Default agent config: {agent_config_path}")
 
     return True
+
+
+def get_model_max_input_length(
+    agent_config: "AgentProfileConfig",
+) -> int:
+    """Return ``max_input_length`` from the active model's ``ModelInfo``.
+
+    Falls back to 128 * 1024 (131072) if model info is unavailable.
+    Accepts an already-loaded *agent_config* to avoid redundant file I/O
+    on hot paths (pre_reasoning, compact_context, summarize, etc.).
+    """
+    from ..providers import ProviderManager
+
+    model_slot = agent_config.active_model
+    if model_slot and model_slot.provider_id and model_slot.model:
+        try:
+            manager = ProviderManager.get_instance()
+            provider = manager.get_provider(model_slot.provider_id)
+            if provider:
+                model_info = provider.get_model_info(model_slot.model)
+                if model_info is not None:
+                    return model_info.max_input_length
+        except Exception:
+            pass
+    return 128 * 1024

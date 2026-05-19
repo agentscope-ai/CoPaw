@@ -9,9 +9,10 @@ import shutil
 import socket
 import subprocess
 import sys
-from pathlib import Path
-from typing import Optional, Tuple
+import threading
 import uuid
+from pathlib import Path
+from typing import Any, Optional, Tuple
 
 from json_repair import repair_json
 
@@ -36,6 +37,16 @@ from .config import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Config cache with mtime tracking for reducing disk IO
+_config_cache: Optional[Config] = None
+_config_mtime: Optional[float] = None
+_config_lock = threading.Lock()
+
+# Agent config cache: {agent_id: (config, mtime)}
+# Using Any for forward reference to AgentProfileConfig
+_agent_config_cache: dict[str, tuple[Any, float]] = {}
+_agent_config_lock = threading.Lock()
 
 
 def _normalize_working_dir_bound_paths(data: object) -> object:
@@ -488,17 +499,57 @@ def _read_config_data(config_path: Path) -> Optional[dict]:
     return data
 
 
-def load_config(config_path: Optional[Path] = None) -> Config:
-    """Load config from file. Returns default Config if file is missing."""
-    if config_path is None:
-        config_path = get_config_path()
-    if not config_path.is_file():
-        return Config()
+def _rewrite_legacy_weixin_key_on_disk(config_path: Path) -> None:
+    """One-shot migration: rewrite ``channels.weixin`` -> ``channels.wechat``.
 
-    data = _read_config_data(config_path)
-    if data is None:
-        return Config()
+    Re-reads the raw file to detect whether the legacy key is still
+    present on disk (in-memory data may already have been normalized by
+    the model validator). When detected, backs up the original file and
+    writes the migrated content back so subsequent loads see the
+    canonical key directly.
+    """
+    try:
+        with open(config_path, "r", encoding="utf-8") as file:
+            raw = file.read()
+        raw_data = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(raw_data, dict):
+        return
+    channels = raw_data.get("channels")
+    if not isinstance(channels, dict) or "weixin" not in channels:
+        return
 
+    legacy = channels.pop("weixin")
+    if "wechat" not in channels:
+        channels["wechat"] = legacy
+
+    try:
+        backup_path = config_path.with_suffix(
+            f".{uuid.uuid4().hex[:8]}.weixin-migrate.bak",
+        )
+        shutil.copy2(config_path, backup_path)
+        with open(config_path, "w", encoding="utf-8") as file:
+            json.dump(raw_data, file, indent=2, ensure_ascii=False)
+        logger.warning(
+            "Migrated legacy 'channels.weixin' -> 'channels.wechat' in %s "
+            "(backup: %s)",
+            config_path,
+            backup_path,
+        )
+    except OSError as exc:
+        logger.error(
+            "Failed to migrate legacy 'weixin' key in %s: %s",
+            config_path,
+            exc,
+        )
+
+
+def _load_and_validate_config(
+    config_path: Path,
+    data: dict,
+) -> Config:
+    """Load and validate config data, handling validation errors."""
     data = _normalize_working_dir_bound_paths(data)
     # Backward compat: top-level last_api_host / last_api_port -> last_api
     if "last_api_host" in data or "last_api_port" in data:
@@ -509,7 +560,7 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             la["port"] = data.get("last_api_port")
 
     try:
-        return Config.model_validate(data)
+        config = Config.model_validate(data)
     except ValidationError as exc:
         fixed_any = False
         for err in exc.errors():
@@ -519,15 +570,58 @@ def load_config(config_path: Optional[Path] = None) -> Config:
         if not fixed_any:
             _backup_config_file(config_path, "validation error")
             return Config()
+        try:
+            config = Config.model_validate(data)
+        except ValidationError:
+            _backup_config_file(
+                config_path,
+                "validation error after field removal",
+            )
+            return Config()
 
-    try:
-        return Config.model_validate(data)
-    except ValidationError:
-        _backup_config_file(
-            config_path,
-            "validation error after field removal",
-        )
+    _rewrite_legacy_weixin_key_on_disk(config_path)
+    return config
+
+
+def load_config(config_path: Optional[Path] = None) -> Config:
+    """Load config from file with mtime-based caching.
+
+    Uses file modification time to avoid unnecessary disk reads.
+    Returns default Config if file is missing.
+    """
+    global _config_cache, _config_mtime
+
+    if config_path is None:
+        config_path = get_config_path()
+
+    if not config_path.is_file():
         return Config()
+
+    # Check mtime to see if we can use cached config
+    try:
+        current_mtime = config_path.stat().st_mtime
+    except OSError:
+        return Config()
+
+    with _config_lock:
+        # Return cached config if mtime hasn't changed
+        if (
+            _config_cache is not None
+            and _config_mtime is not None
+            and _config_mtime == current_mtime
+        ):
+            return _config_cache
+
+        # Need to reload config from disk
+        data = _read_config_data(config_path)
+        if data is None:
+            config = Config()
+        else:
+            config = _load_and_validate_config(config_path, data)
+
+        _config_cache = config
+        _config_mtime = current_mtime
+        return config
 
 
 def strict_validate_config_file(
@@ -571,7 +665,9 @@ def strict_validate_config_file(
 
 
 def save_config(config: Config, config_path: Optional[Path] = None) -> None:
-    """Save the config to the file."""
+    """Save the config to the file and invalidate cache."""
+    global _config_cache, _config_mtime
+
     if config_path is None:
         config_path = get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -582,6 +678,11 @@ def save_config(config: Config, config_path: Optional[Path] = None) -> None:
             indent=2,
             ensure_ascii=False,
         )
+
+    # Invalidate cache after saving
+    with _config_lock:
+        _config_cache = None
+        _config_mtime = None
 
 
 def get_heartbeat_config(agent_id: Optional[str] = None) -> HeartbeatConfig:
@@ -702,6 +803,31 @@ def get_plugins_dir() -> Path:
     from ..constant import PLUGINS_DIR
 
     return PLUGINS_DIR
+
+
+def get_agent_dirs() -> list[Path]:
+    """Return list of all agent directories from config.
+
+    Returns canonical workspace dirs from config.agents.profiles,
+    not by scanning filesystem (which can miss custom paths or
+    include stale directories).
+
+    Returns:
+        List of Path objects for each agent's workspace directory
+    """
+    config = load_config()
+
+    agent_dirs = []
+    if config.agents and config.agents.profiles:
+        for profile in config.agents.profiles.values():
+            workspace_dir = Path(profile.workspace_dir)
+            if (
+                workspace_dir.exists()
+                and (workspace_dir / "agent.json").exists()
+            ):
+                agent_dirs.append(workspace_dir)
+
+    return agent_dirs
 
 
 def is_qwenpaw_running() -> bool:

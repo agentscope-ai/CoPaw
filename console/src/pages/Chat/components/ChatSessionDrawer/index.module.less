@@ -45,6 +45,10 @@
   gap: 12px;
 }
 
+.pinActive {
+  color: var(--color-primary, #ff9d4d);
+}
+
 /* Create new chat button area */
 .createSection {
   flex-shrink: 0;
@@ -85,6 +89,9 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
+  background: transparent;
 
   /* Hide scrollbar */
   scrollbar-width: none;
@@ -92,6 +99,17 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Background loading indicator — visible through unrendered gaps during fast scroll */
+.virtualListBackground {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* Top fade gradient overlay */

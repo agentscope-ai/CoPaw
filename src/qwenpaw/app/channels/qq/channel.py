@@ -71,6 +71,7 @@ RECONNECT_DELAYS = [1, 2, 5, 10, 30, 60]
 RATE_LIMIT_DELAY = 60
 QUICK_DISCONNECT_THRESHOLD = 5
 MAX_QUICK_DISCONNECT_COUNT = 3
+_RECOVERABLE_WS_WINERRORS = frozenset({10053, 10054, 10060})
 
 DEFAULT_API_BASE = "https://api.sgroup.qq.com"
 TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
@@ -203,6 +204,22 @@ class QQApiError(RuntimeError):
         self.status = status
         self.data = data
         super().__init__(f"API {path} {status}: {data}")
+
+
+def _is_recoverable_ws_os_error(exc: OSError) -> bool:
+    """Return True for socket errors that should trigger reconnect.
+
+    On Windows, transient remote/local disconnects often surface as plain
+    ``OSError`` subclasses such as ``ConnectionAbortedError`` with WinError
+    10053, which should be treated the same as a closed WebSocket.
+    """
+
+    if isinstance(
+        exc,
+        (ConnectionAbortedError, ConnectionResetError, BrokenPipeError),
+    ):
+        return True
+    return getattr(exc, "winerror", None) in _RECOVERABLE_WS_WINERRORS
 
 
 def _sanitize_qq_text(text: str) -> tuple[str, bool]:
@@ -1228,12 +1245,37 @@ class QQChannel(BaseChannel):
         for att in attachments:
             url = att.get("url", "")
             file_name = att.get("filename", "")
+
+            # QQ Voice Message ASR Support
+            # Check if attachment is a voice message and has ASR text.
+            att_type = att.get("content_type", att.get("type", ""))
+            file_ext = Path(file_name).suffix.lower()
+            is_voice = att_type == "voice" or file_ext in {
+                ".amr",
+                ".silk",
+                ".slk",
+            }
+
+            if is_voice:
+                asr_text = att.get("asr_refer_text", "")
+                if asr_text:
+                    # Use platform-side ASR text directly,
+                    # skipping audio download.
+                    parts.append(
+                        TextContent(type=ContentType.TEXT, text=asr_text),
+                    )
+                    continue
+                # No ASR text available: prefer the pre-converted WAV URL so
+                # the transcription pipeline can process it without needing
+                # SILK decoding.  Fall back to the original AMR/SILK URL.
+                voice_wav_url = att.get("voice_wav_url", "")
+                if voice_wav_url:
+                    url = voice_wav_url
+                    file_name = file_name.rsplit(".", 1)[0] + ".wav"
+
             if not url:
                 continue
-            att_type = att.get(
-                "content_type",
-                att.get("type", ""),
-            )
+
             resolved = self._resolve_attachment_type(
                 att_type,
                 file_name,
@@ -1618,6 +1660,29 @@ class QQChannel(BaseChannel):
             min(state.reconnect_attempts, len(RECONNECT_DELAYS) - 1)
         ]
 
+    def _wait_and_check_reconnect(self, state: _WSState) -> bool:
+        """Apply backoff delay for connection-setup failures.
+
+        Increments reconnect_attempts, respects max_reconnect_attempts,
+        and waits with exponential backoff.
+        Returns True to continue reconnecting, False to stop.
+        """
+        delay = RECONNECT_DELAYS[
+            min(state.reconnect_attempts, len(RECONNECT_DELAYS) - 1)
+        ]
+        state.reconnect_attempts += 1
+        max_attempts = self._max_reconnect_attempts
+        if max_attempts != -1 and state.reconnect_attempts >= max_attempts:
+            logger.error("qq max reconnect attempts reached")
+            return False
+        logger.info(
+            "qq reconnecting in %ss (attempt %s)",
+            delay,
+            state.reconnect_attempts,
+        )
+        self._stop_event.wait(timeout=delay)
+        return not self._stop_event.is_set()
+
     # ------------------------------------------------------------------
     # WebSocket: single connection attempt
     # ------------------------------------------------------------------
@@ -1641,13 +1706,13 @@ class QQChannel(BaseChannel):
             url = _get_channel_url_sync(token)
         except Exception as e:
             logger.warning("qq get token/gateway failed: %s", e)
-            return True
+            return self._wait_and_check_reconnect(state)
         logger.info("qq connecting to %s", url)
         try:
             ws = websocket.create_connection(url)
         except Exception as e:
             logger.warning("qq ws connect failed: %s", e)
-            return True
+            return self._wait_and_check_reconnect(state)
 
         self._ws = ws
         hb = _HeartbeatController(ws, self._stop_event, state)
@@ -1667,8 +1732,12 @@ class QQChannel(BaseChannel):
                     break
         except websocket.WebSocketConnectionClosedException:
             pass
-        except OSError:
-            if not self._stop_event.is_set():
+        except OSError as e:
+            if self._stop_event.is_set():
+                pass
+            elif _is_recoverable_ws_os_error(e):
+                logger.warning("qq ws connection lost, reconnecting: %s", e)
+            else:
                 raise
         except Exception as e:
             logger.exception("qq ws loop: %s", e)
@@ -1856,8 +1925,24 @@ class QQChannel(BaseChannel):
     @staticmethod
     def _content_type_to_media_type(
         content_type: Any,
+        source_path: str = "",
     ) -> Optional[int]:
-        """Map ContentType to QQ rich-media file_type integer."""
+        """Map ContentType to QQ rich-media file_type integer.
+
+        Distinguishes between voice messages and regular files based on
+        file extension:
+        - Voice messages (.amr, .silk, .slk) -> _MEDIA_TYPE_AUDIO (3)
+        - Regular audio files (.mp3, .wav, .m4a, etc.) -> _MEDIA_TYPE_FILE (4)
+        - Other files -> _MEDIA_TYPE_FILE (4)
+        """
+        # QQ voice message formats
+        _VOICE_EXTS = {".amr", ".silk", ".slk"}
+
+        if source_path:
+            ext = Path(source_path).suffix.lower()
+            if ext in _VOICE_EXTS:
+                return _MEDIA_TYPE_AUDIO
+
         mapping = {
             ContentType.IMAGE: _MEDIA_TYPE_IMAGE,
             ContentType.VIDEO: _MEDIA_TYPE_VIDEO,
@@ -2035,7 +2120,10 @@ class QQChannel(BaseChannel):
         token: str,
     ) -> None:
         """Upload + send rich media for c2c or group scenarios."""
-        media_type = self._content_type_to_media_type(content_type)
+        media_type = self._content_type_to_media_type(
+            content_type,
+            source_path=url or local_path or "",
+        )
         if media_type is None:
             logger.warning(
                 "qq _send_media_c2c_or_group: unknown content_type=%s",
