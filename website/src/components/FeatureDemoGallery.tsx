@@ -24,27 +24,37 @@ interface DemoVideoConfig {
 const DEFAULT_DEMO_VIDEOS: DemoVideoConfig[] = [
   {
     key: "skill",
-    zhUrl: "https://cloud.video.taobao.com/vod/1YQcdwTHy8BPw2ZDimp57qcHdyhjeJmNcF0NkKYlPtg.mp4",
-    enUrl: "https://cloud.video.taobao.com/vod/msPkfBF7ss7g3sds_79utoqnYcMxz58QnpBSmR498Ac.mp4",
+    zhUrl:
+      "https://cloud.video.taobao.com/vod/1YQcdwTHy8BPw2ZDimp57qcHdyhjeJmNcF0NkKYlPtg.mp4",
+    enUrl:
+      "https://cloud.video.taobao.com/vod/msPkfBF7ss7g3sds_79utoqnYcMxz58QnpBSmR498Ac.mp4",
     titleKey: "docs.demoVideos.skill",
-    docsLinkUrl: "https://qwenpaw.agentscope.io/docs/commands#Skill-%E8%81%8A%E5%A4%A9%E5%91%BD%E4%BB%A4",
-    docsLinkEnUrl: "https://qwenpaw.agentscope.io/docs/commands/#Skill-Chat-Commands",
+    docsLinkUrl:
+      "https://qwenpaw.agentscope.io/docs/commands#Skill-%E8%81%8A%E5%A4%A9%E5%91%BD%E4%BB%A4",
+    docsLinkEnUrl:
+      "https://qwenpaw.agentscope.io/docs/commands/#Skill-Chat-Commands",
   },
   {
     key: "doctor",
-    zhUrl: "https://cloud.video.taobao.com/vod/CniIeapTXrFL9Mgt6askQ1cJASGl9tHX01Zb9E9z2qk.mp4",
-    enUrl: "https://cloud.video.taobao.com/vod/JoYL8YwV0HXjQFuPCzDN2gaSxmSdudvc5rPWph4N_6s.mp4",
+    zhUrl:
+      "https://cloud.video.taobao.com/vod/CniIeapTXrFL9Mgt6askQ1cJASGl9tHX01Zb9E9z2qk.mp4",
+    enUrl:
+      "https://cloud.video.taobao.com/vod/JoYL8YwV0HXjQFuPCzDN2gaSxmSdudvc5rPWph4N_6s.mp4",
     titleKey: "docs.demoVideos.doctor",
     docsLinkUrl: "https://qwenpaw.agentscope.io/docs/cli#qwenpaw-doctor",
     docsLinkEnUrl: "https://qwenpaw.agentscope.io/docs/cli/#qwenpaw-doctor",
   },
   {
     key: "mission-mode",
-    zhUrl: "https://cloud.video.taobao.com/vod/t6fxutBkHZfA-VPG2DCO-TivW0uL6VcsdtDqHXopWUE.mp4",
-    enUrl: "https://cloud.video.taobao.com/vod/EBWRZkhSn9hfIY-27ctMN7vwv_mh-TNwvUMasxGvIqI.mp4",
+    zhUrl:
+      "https://cloud.video.taobao.com/vod/t6fxutBkHZfA-VPG2DCO-TivW0uL6VcsdtDqHXopWUE.mp4",
+    enUrl:
+      "https://cloud.video.taobao.com/vod/EBWRZkhSn9hfIY-27ctMN7vwv_mh-TNwvUMasxGvIqI.mp4",
     titleKey: "docs.demoVideos.missionMode",
-    docsLinkUrl: "https://qwenpaw.agentscope.io/docs/commands#Mission-Mode---%E5%A4%8D%E6%9D%82%E4%BB%BB%E5%8A%A1%E8%87%AA%E4%B8%BB%E6%89%A7%E8%A1%8C",
-    docsLinkEnUrl: "https://qwenpaw.agentscope.io/docs/commands#Mission-Mode---Autonomous-Execution-for-Complex-Tasks",
+    docsLinkUrl:
+      "https://qwenpaw.agentscope.io/docs/commands#Mission-Mode---%E5%A4%8D%E6%9D%82%E4%BB%BB%E5%8A%A1%E8%87%AA%E4%B8%BB%E6%89%A7%E8%A1%8C",
+    docsLinkEnUrl:
+      "https://qwenpaw.agentscope.io/docs/commands#Mission-Mode---Autonomous-Execution-for-Complex-Tasks",
   },
 ];
 
@@ -102,7 +112,7 @@ export function FeatureDemoGallery({ videos }: FeatureDemoGalleryProps) {
     <section>
       <div className="mx-auto max-w-6xl">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-          {demoVideos.map((item, idx) => {
+          {demoVideos.map((item) => {
             const isActive = item.id === activeVideo?.id;
             return (
               <button

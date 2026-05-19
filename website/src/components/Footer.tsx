@@ -3,7 +3,14 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { QwenpawMascot } from "@/components/QwenpawMascot";
-import { GitHubIcon, XIcon, DiscordIcon, WChatIcon, DouyinIcon, DingTalkIcon } from "./Icon";
+import {
+  GitHubIcon,
+  XIcon,
+  DiscordIcon,
+  WChatIcon,
+  DouyinIcon,
+  DingTalkIcon,
+} from "./Icon";
 
 const AGENTSCOPE_ORG = "https://github.com/agentscope-ai";
 const AGENTSCOPE_REPO = "https://github.com/agentscope-ai/agentscope";
