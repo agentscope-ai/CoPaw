@@ -9,7 +9,7 @@ import type {
 } from "../../../api/modules/market";
 
 const DEBOUNCE_MS = 350;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const CACHE_MAX = 32;
 
 export interface MarketSearchState {
@@ -188,14 +188,20 @@ export function useMarketSearch(): MarketSearchState {
     return () => clearTimeout(handle);
   }, [query]);
 
+  const lastKeyRef = useRef("");
   useEffect(() => {
-    setPageState(1);
-    cacheRef.current.clear();
-  }, [debouncedQuery, providerKeyList.join(","), lang]);
-
-  useEffect(() => {
+    const key = `${debouncedQuery}|${providerKeyList.join(",")}|${lang}`;
+    const keyChanged = lastKeyRef.current !== key;
+    lastKeyRef.current = key;
+    if (keyChanged) {
+      cacheRef.current.clear();
+      if (page !== 1) {
+        setPageState(1);
+        return;
+      }
+    }
     fetchPage(debouncedQuery, providerKeyList, page);
-  }, [debouncedQuery, providerKeyList, page, fetchPage]);
+  }, [debouncedQuery, providerKeyList, page, lang, fetchPage]);
 
   return {
     providers,
@@ -210,6 +216,10 @@ export function useMarketSearch(): MarketSearchState {
     setPage,
     hasMore,
     total,
-    pageSize: PAGE_SIZE,
+    // Each provider returns up to PAGE_SIZE items per page and the
+    // service concatenates without slicing, so a multi-provider page can
+    // contain N × PAGE_SIZE items. Scale pageSize so the pagination math
+    // (total / pageSize) matches what the user actually sees.
+    pageSize: PAGE_SIZE * Math.max(1, selectedProviderKeys.size),
   };
 }

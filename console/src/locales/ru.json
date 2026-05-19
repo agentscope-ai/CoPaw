@@ -2171,12 +2171,9 @@
     "targetPool": "Пул",
     "targetWorkspace": "Рабочее пространство",
     "install": "Установить",
-    "installAs": "Установить как",
     "installQueue": "Очередь установки",
     "clearCompleted": "Очистить",
     "retry": "Повторить",
-    "conflictTitle": "Конфликт имени навыка: {{name}}",
-    "conflictBody": "Навык с таким именем уже существует. Выберите новое имя или отмените установку.",
     "status": {
       "queued": "В очереди",
       "installing": "Установка",

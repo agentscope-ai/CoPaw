@@ -2268,12 +2268,9 @@
     "targetPool": "技能池",
     "targetWorkspace": "工作区",
     "install": "安装",
-    "installAs": "重命名安装",
     "installQueue": "安装队列",
     "clearCompleted": "清空",
     "retry": "重试",
-    "conflictTitle": "技能名称冲突：{{name}}",
-    "conflictBody": "已存在同名技能。请选择新名称，或取消跳过该项。",
     "status": {
       "queued": "排队中",
       "installing": "安装中",

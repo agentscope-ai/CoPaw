@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  Button,
-  Card,
-  Drawer,
-  Input,
-  Modal,
-  Tooltip,
-} from "@agentscope-ai/design";
+import { Button, Card, Drawer, Tooltip } from "@agentscope-ai/design";
 import { Pagination } from "antd";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
@@ -19,12 +12,6 @@ import {
 } from "./useMarketInstall";
 import type { MarketResult } from "../../../api/modules/market";
 import styles from "./index.module.less";
-
-interface ConflictPrompt {
-  itemName: string;
-  suggestedName: string;
-  resolve: (next: string | null) => void;
-}
 
 // Map provider key → display label, kept in sync with the backend
 // ProviderInfo.label so cards, badges, and filter chips all read the
@@ -94,8 +81,6 @@ function MarketPage() {
     {},
   );
   const [detailItem, setDetailItem] = useState<MarketResult | null>(null);
-  const [conflict, setConflict] = useState<ConflictPrompt | null>(null);
-  const [conflictName, setConflictName] = useState("");
 
   const cardKey = (item: MarketResult) => `${item.source}:${item.slug}`;
   const targetFor = (item: MarketResult): InstallTarget =>
@@ -104,26 +89,10 @@ function MarketPage() {
     setCardTargets((prev) => ({ ...prev, [cardKey(item)]: next }));
   };
 
-  const install = useMarketInstall({
-    selectedAgent,
-    onConflict: async (item, suggestedName) =>
-      await new Promise<string | null>((resolve) => {
-        setConflictName(suggestedName);
-        setConflict({
-          itemName: item.result.name,
-          suggestedName,
-          resolve,
-        });
-      }),
-  });
+  const install = useMarketInstall({ selectedAgent });
 
   const onInstall = (item: MarketResult) => {
     install.enqueue([item], targetFor(item));
-  };
-
-  const closeConflict = (value: string | null) => {
-    conflict?.resolve(value);
-    setConflict(null);
   };
 
   return (
@@ -274,25 +243,6 @@ function MarketPage() {
         }}
         onClose={() => setDetailItem(null)}
       />
-
-      <Modal
-        open={!!conflict}
-        title={t("market.conflictTitle", { name: conflict?.itemName ?? "" })}
-        onCancel={() => closeConflict(null)}
-        onOk={() => closeConflict(conflictName.trim() || null)}
-        okText={t("market.installAs")}
-        cancelText={t("common.cancel")}
-        destroyOnClose
-      >
-        <div style={{ display: "grid", gap: 8 }}>
-          <p style={{ margin: 0 }}>{t("market.conflictBody")}</p>
-          <Input
-            value={conflictName}
-            onChange={(e) => setConflictName(e.target.value)}
-            autoFocus
-          />
-        </div>
-      </Modal>
     </div>
   );
 }
@@ -533,6 +483,11 @@ function QueueItem({
     item.status === "completed" ||
     item.status === "failed" ||
     item.status === "cancelled";
+  // Pool install is a one-shot HTTP with no real cancellation. Allow
+  // cancel only while queued; once it's in flight the request can't be
+  // interrupted, so don't promise something we can't deliver.
+  const canCancel =
+    !isTerminal && !(item.target === "pool" && item.status === "installing");
   const canRetry = item.status === "failed" || item.status === "cancelled";
   const targetLabel = t(
     item.target === "pool" ? "market.targetPool" : "market.targetWorkspace",
@@ -563,7 +518,7 @@ function QueueItem({
         <div className={styles.queueItemMessage}>{displayMessage}</div>
       )}
       <div className={styles.queueItemActions}>
-        {!isTerminal && (
+        {canCancel && (
           <Button size="small" onClick={onCancel}>
             {t("common.cancel")}
           </Button>

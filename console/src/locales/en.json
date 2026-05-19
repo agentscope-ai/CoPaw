@@ -2260,12 +2260,9 @@
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Install",
-    "installAs": "Install as",
     "installQueue": "Install queue",
     "clearCompleted": "Clear",
     "retry": "Retry",
-    "conflictTitle": "Skill name conflict: {{name}}",
-    "conflictBody": "A skill with this name already exists. Pick a new name or cancel to skip this install.",
     "status": {
       "queued": "Queued",
       "installing": "Installing",

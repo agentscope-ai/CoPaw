@@ -15,6 +15,7 @@ import logging
 import os
 import threading
 from typing import Any
+from urllib.parse import quote
 
 from ..schema import MarketResult
 from .base import MARKET_SEARCH_TIMEOUT_S
@@ -172,14 +173,19 @@ class AliyunProvider:
                 f"missing env vars: {', '.join(missing)} "
                 "(set Aliyun AK/SK so the SDK can sign requests)"
             )
-        try:
-            __import__("alibabacloud_tea_openapi")
-        except ImportError:
-            return False, (
-                "alibabacloud-tea-openapi not installed; run "
-                "`uv add alibabacloud-tea-openapi "
-                "alibabacloud-credentials alibabacloud-tea-util`"
-            )
+        for mod in (
+            "alibabacloud_tea_openapi",
+            "alibabacloud_credentials",
+            "alibabacloud_tea_util",
+        ):
+            try:
+                __import__(mod)
+            except ImportError:
+                return False, (
+                    f"{mod.replace('_', '-')} not installed; run "
+                    "`uv add alibabacloud-tea-openapi "
+                    "alibabacloud-credentials alibabacloud-tea-util`"
+                )
         return True, None
 
     async def search(
@@ -248,7 +254,7 @@ def _to_market_result(item: dict[str, Any]) -> MarketResult | None:
     if not skill_name and not display:
         return None
     slug = skill_name or display
-    detail_url = f"{_DETAIL_HOMEPAGE}/{slug}"
+    detail_url = f"{_DETAIL_HOMEPAGE}/{quote(slug, safe='')}"
     stats: dict[str, str | int] = {}
     installs = _opt_int(item.get("installCount"))
     if installs is not None:

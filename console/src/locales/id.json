@@ -675,12 +675,9 @@
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Pasang",
-    "installAs": "Pasang sebagai",
     "installQueue": "Antrean instalasi",
     "clearCompleted": "Bersihkan",
     "retry": "Coba lagi",
-    "conflictTitle": "Konflik nama skill: {{name}}",
-    "conflictBody": "Skill dengan nama ini sudah ada. Pilih nama lain atau batalkan untuk melewati instalasi ini.",
     "status": {
       "queued": "Mengantre",
       "installing": "Memasang",

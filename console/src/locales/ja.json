@@ -2156,12 +2156,9 @@
     "targetPool": "プール",
     "targetWorkspace": "ワークスペース",
     "install": "インストール",
-    "installAs": "名前を変更してインストール",
     "installQueue": "インストールキュー",
     "clearCompleted": "クリア",
     "retry": "再試行",
-    "conflictTitle": "スキル名の競合：{{name}}",
-    "conflictBody": "同名のスキルがすでに存在します。新しい名前を入力するか、キャンセルしてスキップしてください。",
     "status": {
       "queued": "待機中",
       "installing": "インストール中",

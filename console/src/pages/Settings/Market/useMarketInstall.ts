@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../../api";
 import { invalidateSkillCache } from "../../../api/modules/skill";
 import type { MarketResult } from "../../../api/modules/market";
@@ -23,27 +23,8 @@ export interface InstallQueueItem {
 
 export interface UseMarketInstallOptions {
   selectedAgent: string;
-  onConflict?: (
-    item: InstallQueueItem,
-    suggestedName: string,
-  ) => Promise<string | null>;
   onSuccess?: (item: InstallQueueItem) => void;
   onError?: (item: InstallQueueItem, err: unknown) => void;
-}
-
-interface ConflictDetail {
-  skill_name?: string;
-  suggested_name?: string;
-}
-
-function parseConflict(error: unknown): ConflictDetail | null {
-  if (!error || typeof error !== "object") return null;
-  const detail = (error as { detail?: unknown }).detail;
-  if (detail && typeof detail === "object") {
-    const d = detail as ConflictDetail;
-    if (d.suggested_name) return d;
-  }
-  return null;
 }
 
 const POLL_MS = 1000;
@@ -55,6 +36,11 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
   const runningRef = useRef(false);
   const cancelledRef = useRef<Set<string>>(new Set());
   const currentTaskIdRef = useRef<string | null>(null);
+  const currentInstallingItemIdRef = useRef<string | null>(null);
+  const selectedAgentRef = useRef(opts.selectedAgent);
+  useEffect(() => {
+    selectedAgentRef.current = opts.selectedAgent;
+  }, [opts.selectedAgent]);
 
   const setQueue = useCallback((next: InstallQueueItem[]) => {
     queueRef.current = next;
@@ -113,34 +99,32 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
       updateItem(item.id, { status: "installing", message: "" });
       try {
         if (item.target === "pool") {
-          const result = await api.importPoolSkillFromHub({
-            bundle_url: item.result.source_url,
-            target_name: overrideName,
-          });
-          invalidateSkillCache({ pool: true });
-          updateItem(item.id, {
-            status: "completed",
-            installedName: result.name,
-            message: result.name,
-          });
-          opts.onSuccess?.({ ...item, status: "completed" });
+          currentInstallingItemIdRef.current = item.id;
+          try {
+            const result = await api.importPoolSkillFromHub({
+              bundle_url: item.result.source_url,
+              target_name: overrideName,
+            });
+            if (cancelledRef.current.has(item.id)) {
+              updateItem(item.id, { status: "cancelled", message: "" });
+              return;
+            }
+            invalidateSkillCache({ pool: true });
+            updateItem(item.id, {
+              status: "completed",
+              installedName: result.name,
+              message: result.name,
+            });
+            opts.onSuccess?.({ ...item, status: "completed" });
+          } finally {
+            if (currentInstallingItemIdRef.current === item.id) {
+              currentInstallingItemIdRef.current = null;
+            }
+          }
         } else {
           await installWorkspace(item, overrideName);
         }
       } catch (err) {
-        const conflict = parseConflict(err);
-        if (conflict?.suggested_name && opts.onConflict) {
-          const newName = await opts.onConflict(item, conflict.suggested_name);
-          if (newName) {
-            await installOne(item, newName);
-            return;
-          }
-          updateItem(item.id, { status: "cancelled", message: "" });
-          return;
-        }
-        // Real server-side error: keep the upstream text — it's
-        // diagnostic, not a state label. Prefix it on render so the
-        // user sees "Failed: <message>" / "失败：<message>".
         const msg = err instanceof Error ? err.message : String(err);
         updateItem(item.id, { status: "failed", message: msg });
         opts.onError?.({ ...item, status: "failed" }, err);
@@ -151,7 +135,7 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
 
   const installWorkspace = useCallback(
     async (item: InstallQueueItem, overrideName: string | undefined) => {
-      const agentId = opts.selectedAgent;
+      const agentId = selectedAgentRef.current;
       const task = await api.startHubSkillInstall(
         {
           bundle_url: item.result.source_url,
@@ -161,6 +145,7 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
         agentId,
       );
       currentTaskIdRef.current = task.task_id;
+      currentInstallingItemIdRef.current = item.id;
       const startedAt = Date.now();
       try {
         while (currentTaskIdRef.current === task.task_id) {
@@ -208,21 +193,22 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
         if (currentTaskIdRef.current === task.task_id) {
           currentTaskIdRef.current = null;
         }
+        if (currentInstallingItemIdRef.current === item.id) {
+          currentInstallingItemIdRef.current = null;
+        }
       }
     },
     [opts, updateItem],
   );
 
-  const cancel = useCallback(
-    (id: string) => {
-      cancelledRef.current.add(id);
-      const taskId = currentTaskIdRef.current;
-      if (taskId) {
-        void api.cancelHubSkillInstall(taskId, opts.selectedAgent);
-      }
-    },
-    [opts.selectedAgent],
-  );
+  const cancel = useCallback((id: string) => {
+    cancelledRef.current.add(id);
+    if (id !== currentInstallingItemIdRef.current) return;
+    const taskId = currentTaskIdRef.current;
+    if (taskId) {
+      void api.cancelHubSkillInstall(taskId, selectedAgentRef.current);
+    }
+  }, []);
 
   const retry = useCallback(
     (id: string) => {

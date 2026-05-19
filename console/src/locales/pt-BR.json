@@ -2191,12 +2191,9 @@
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Instalar",
-    "installAs": "Instalar como",
     "installQueue": "Fila de instalação",
     "clearCompleted": "Limpar",
     "retry": "Tentar novamente",
-    "conflictTitle": "Conflito de nome de habilidade: {{name}}",
-    "conflictBody": "Já existe uma habilidade com esse nome. Escolha um novo nome ou cancele para ignorar esta instalação.",
     "status": {
       "queued": "Na fila",
       "installing": "Instalando",
