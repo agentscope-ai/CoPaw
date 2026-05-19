@@ -225,8 +225,10 @@
       "x": "X",
       "github": "GitHub",
       "discord": "Discord",
-      "wechat": "WeChat Official Account",
-      "youtube": "YouTube"
+      "dingtalk": "DingTalk",
+      "xiaohongshu": "Xiaohongshu",
+      "wechat": "WeChat",
+      "douyin": "Douyin"
     },
     "copyright": "© 2026 Qwenpaw PRIVATE LIMITED, All rights reserved.",
     "poweredBy": {
@@ -291,6 +293,11 @@
     "onThisPage": "On this page",
     "videoNotSupported": "Your browser does not support the video tag.",
     "demoTitle": "Feature Demos",
+    "demoVideos": {
+      "skill": "/skills: On-demand agent skill invocation",
+      "doctor": "QwenPaw Doctor: One-click comprehensive system diagnostics",
+      "missionMode": "QwenPaw Mission Mode: Autonomous execution for complex tasks"
+    },
     "textVersion": "View text documentation",
     "backToTop": "Back to top",
     "copy": "Copy",

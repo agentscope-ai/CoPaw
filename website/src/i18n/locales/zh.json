@@ -225,8 +225,10 @@
       "x": "X",
       "github": "GitHub",
       "discord": "Discord",
+      "dingtalk": "钉钉",
+      "xiaohongshu": "小红书",
       "wechat": "微信公众号",
-      "youtube": "YouTube"
+      "douyin": "抖音"
     },
     "copyright": "© 2026 Qwenpaw PRIVATE LIMITED，保留所有权利。",
     "poweredBy": {
@@ -291,6 +293,11 @@
     "onThisPage": "本页目录",
     "videoNotSupported": "您的浏览器不支持 video 标签。",
     "demoTitle": "功能演示",
+    "demoVideos": {
+      "skill": "/skills：智能体技能的按需调用",
+      "doctor": "QwenPaw Doctor：一键全面系统诊断",
+      "missionMode": "QwenPaw 任务模式：复杂任务的自主执行"
+    },
     "textVersion": "查看文字版文档",
     "backToTop": "返回顶部",
     "copy": "复制",
