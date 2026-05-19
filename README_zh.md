@@ -60,13 +60,14 @@
 
 ## 新闻
 
-- [2026-05-14] 我们发布了 **v1.1.7**！完整更新说明见 [v1.1.7 发布说明](https://qwenpaw.agentscope.io/release-notes)。
+- [2026-05-19] 我们发布了 **v1.1.8**！完整更新说明见 [v1.1.8 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
-  - **[v1.1.7] 新增**：收件箱（审批与推送消息）；定时任务增强（一次性执行、日历视图、内置模板、执行历史与追踪）；Browser Use 批量操作与文件下载；远程 MCP OAuth 2.1 认证；控制台插件管理；Qwen-Image 与 Wan 2.7 插件；外部 Agent 异步执行。
-  - **[v1.1.7] 变更**：模型选择器重设计为可搜索平铺列表；聊天浮动按钮。
-  - **[v1.1.7] 性能**：文件读取时内存占用优化；Keyring 超时保护。
-  - **[v1.1.7] 修复**：会话历史路由；火山引擎模型 ID；飞书 WebSocket 保活。
-  - **[v1.1.7] 感谢新贡献者**：@weixizi、@StarTrekking、@aqilaziz、@suntp。
+  - **[v1.1.8] 新增**：官方插件资源（网站下载 + 控制台一键安装）；CloudPaw 阿里云部署插件；QwenPaw Pet 桌面宠物；`/make-skill` 命令；自定义 HTTP Headers 与鉴权模式；模型独立配置上下文；收件箱批量操作；聊天历史抽屉固定。
+  - **[v1.1.8] 安全**：备份信任控制；Skill 与 AgentMd 路径穿越防护；插件 API 认证。
+  - **[v1.1.8] 修复**：企业微信/微信/QQ 频道稳定性；按模型限速；SSE 连接泄漏。
+  - **[v1.1.8] 感谢新贡献者**：@Morxi。
+
+- [2026-05-14] 我们发布了 **v1.1.7**！完整更新说明见 [v1.1.7 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 
 - [2026-05-09] 我们发布了 **v1.1.6**！完整更新说明见 [v1.1.6 发布说明](https://qwenpaw.agentscope.io/release-notes)。
 

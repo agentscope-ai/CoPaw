@@ -60,13 +60,14 @@ Your personal AI assistant — easy to install, deploy locally or in the cloud, 
 
 ## News
 
-- [2026-05-14] We've released **v1.1.7**! See the full [v1.1.7 Release Notes](https://qwenpaw.agentscope.io/release-notes).
+- [2026-05-19] We've released **v1.1.8**! See the full [v1.1.8 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
-  - **[v1.1.7] Added**: Inbox (approvals & push messages); cron job enhancements (one-time execution, calendar view, built-in templates, execution history & traces); Browser Use batch actions & file download; remote MCP OAuth 2.1 auth; console plugin management; Qwen-Image & Wan 2.7 plugins; external agent async execution.
-  - **[v1.1.7] Changed**: Model selector redesigned as a searchable flat list; floating chat button.
-  - **[v1.1.7] Performance**: Optimized memory usage for file reads; keyring timeout protection.
-  - **[v1.1.7] Fixed**: Session history routing; Volcengine model IDs; Feishu WebSocket keepalive.
-  - **[v1.1.7] New Contributors**: @weixizi, @StarTrekking, @aqilaziz, @suntp.
+  - **[v1.1.8] Added**: Official plugin resources (website download + one-click install from console); CloudPaw Alibaba Cloud deployment plugin; QwenPaw Pet desktop companion; `/make-skill` command; custom HTTP headers & auth mode; per-model token limits; Inbox batch operations; pinned chat history drawer.
+  - **[v1.1.8] Security**: Backup trust controls; Skill & AgentMd path traversal prevention; plugin API auth.
+  - **[v1.1.8] Fixed**: WeCom/WeChat/QQ channel stability; per-model rate limiter; SSE connection leak.
+  - **[v1.1.8] New Contributors**: @Morxi.
+
+- [2026-05-14] We've released **v1.1.7**! See the full [v1.1.7 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
 - [2026-05-09] We've released **v1.1.6**! See the full [v1.1.6 Release Notes](https://qwenpaw.agentscope.io/release-notes).
 
