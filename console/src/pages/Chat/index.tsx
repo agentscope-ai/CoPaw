@@ -718,10 +718,10 @@ export default function ChatPage() {
   useEffect(() => {
     const KEY = "qwenpaw_chat_draft";
     let ta: HTMLTextAreaElement | null = null;
-    let restoring = false, done = false;
-    const el = () => document.querySelector<HTMLTextAreaElement>(
-      '[class*="sender"] textarea',
-    );
+    let restoring = false,
+      done = false;
+    const el = () =>
+      document.querySelector<HTMLTextAreaElement>('[class*="sender"] textarea');
 
     // Restore: poll until textarea appears (async render)
     const iv = setInterval(() => {
@@ -729,15 +729,30 @@ export default function ChatPage() {
       ta = el();
       if (!ta) return;
       const raw = localStorage.getItem(KEY);
-      if (!raw) { done = true; clearInterval(iv); return; }
-      let v = "", s = 0, e = 0;
-      try { const d = JSON.parse(raw); v = d.v ?? ""; s = d.s ?? 0; e = d.e ?? 0; } catch {}
+      if (!raw) {
+        done = true;
+        clearInterval(iv);
+        return;
+      }
+      let v = "",
+        s = 0,
+        e = 0;
+      try {
+        const d = JSON.parse(raw);
+        v = d.v ?? "";
+        s = d.s ?? 0;
+        e = d.e ?? 0;
+      } catch {}
       restoring = true;
       setTextareaValue(ta, v);
       requestAnimationFrame(() => {
-        ta!.selectionStart = s; ta!.selectionEnd = e; ta!.focus(); restoring = false;
+        ta!.selectionStart = s;
+        ta!.selectionEnd = e;
+        ta!.focus();
+        restoring = false;
       });
-      done = true; clearInterval(iv);
+      done = true;
+      clearInterval(iv);
     }, 150);
 
     const onInput = (e: Event) => {
@@ -745,9 +760,14 @@ export default function ChatPage() {
       const t = e.target as HTMLTextAreaElement;
       if (t?.tagName === "TEXTAREA" && t.closest('[class*="sender"]')) {
         ta = t;
-        localStorage.setItem(KEY, JSON.stringify({
-          v: t.value.trim(), s: t.selectionStart, e: t.selectionEnd,
-        }));
+        localStorage.setItem(
+          KEY,
+          JSON.stringify({
+            v: t.value.trim(),
+            s: t.selectionStart,
+            e: t.selectionEnd,
+          }),
+        );
       }
     };
     document.addEventListener("input", onInput);
@@ -756,9 +776,14 @@ export default function ChatPage() {
       document.removeEventListener("input", onInput);
       const el_ = ta || el();
       if (el_?.value?.trim()) {
-        localStorage.setItem(KEY, JSON.stringify({
-          v: el_.value.trim(), s: el_.selectionStart, e: el_.selectionEnd,
-        }));
+        localStorage.setItem(
+          KEY,
+          JSON.stringify({
+            v: el_.value.trim(),
+            s: el_.selectionStart,
+            e: el_.selectionEnd,
+          }),
+        );
       } else {
         localStorage.removeItem(KEY);
       }
