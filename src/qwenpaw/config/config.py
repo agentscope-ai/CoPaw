@@ -1060,6 +1060,26 @@ class PlanConfig(BaseModel):
     )
 
 
+class CodingModeConfig(BaseModel):
+    """Configuration for the Coding Mode feature."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Coding Mode IDE layout and tools",
+    )
+    diff_approval_enabled: bool = Field(
+        default=True,
+        description=(
+            "Require user approval before write_file / edit_file / "
+            "append_file executes (shows inline diff)"
+        ),
+    )
+    todo_write_enabled: bool = Field(
+        default=True,
+        description="Enable todo_write tool for task progress tracking",
+    )
+
+
 class AgentProfileConfig(BaseModel):
     """Complete Agent Profile configuration (stored in workspace/agent.json).
 
@@ -1140,6 +1160,10 @@ class AgentProfileConfig(BaseModel):
     plan: PlanConfig = Field(
         default_factory=PlanConfig,
         description="Plan mode configuration for this agent",
+    )
+    coding_mode: CodingModeConfig = Field(
+        default_factory=CodingModeConfig,
+        description="Coding Mode configuration for this agent",
     )
 
 

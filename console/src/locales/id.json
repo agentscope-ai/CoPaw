@@ -662,5 +662,14 @@
       "refreshSuccess": "Log disegarkan",
       "copyBackend": "Salin log backend"
     }
+  },
+  "codingMode": {
+    "title": "Mode Coding",
+    "experimental": "Fitur Eksperimental",
+    "experimentalDesc": "Mode Coding mengubah QwenPaw menjadi Web IDE ringan dengan editor kode, pohon file, integrasi Git, dan bantuan coding bertenaga AI.",
+    "experimentalNote": "Fitur ini masih eksperimental dan dalam pengembangan aktif. Beberapa fungsi mungkin terbatas atau berubah pada pembaruan mendatang.",
+    "confirmBtn": "Aktifkan Mode Coding",
+    "enterTooltip": "Masuk ke Mode Coding",
+    "exitTooltip": "Keluar dari Mode Coding"
   }
 }

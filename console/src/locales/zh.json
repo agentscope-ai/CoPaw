@@ -2254,5 +2254,14 @@
     "kindTool": "工具",
     "filterByName": "按名称筛选",
     "filterByKind": "按标签筛选"
+  },
+  "codingMode": {
+    "title": "编程模式",
+    "experimental": "实验性功能",
+    "experimentalDesc": "编程模式将 QwenPaw 转变为一个轻量级 Web IDE，提供代码编辑器、文件树、Git 集成和 AI 辅助编程能力。",
+    "experimentalNote": "该功能目前为实验性阶段，仍在持续开发中，部分功能可能受限或在后续版本中有所变动。",
+    "confirmBtn": "开启编程模式",
+    "enterTooltip": "进入编程模式",
+    "exitTooltip": "退出编程模式"
   }
 }

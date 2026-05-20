@@ -2178,5 +2178,14 @@
     "detailPayload": "Dados",
     "detailExecutionTrace": "Rastro de execução",
     "detailTraceEmpty": "Nenhum rastro de execução disponível"
+  },
+  "codingMode": {
+    "title": "Modo de Codificação",
+    "experimental": "Funcionalidade Experimental",
+    "experimentalDesc": "O Modo de Codificação transforma o QwenPaw em uma IDE Web leve com editor de código, árvore de arquivos, integração Git e assistência de codificação por IA.",
+    "experimentalNote": "Esta funcionalidade é experimental e ainda está em desenvolvimento ativo. Algumas funcionalidades podem ser limitadas ou mudar em atualizações futuras.",
+    "confirmBtn": "Ativar Modo de Codificação",
+    "enterTooltip": "Entrar no Modo de Codificação",
+    "exitTooltip": "Sair do Modo de Codificação"
   }
 }
