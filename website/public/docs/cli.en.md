@@ -182,7 +182,7 @@ Manage LLM providers and the active model.
 
 | Command                                  | What it does                                         |
 | ---------------------------------------- | ---------------------------------------------------- |
-| `qwenpaw models list`                    | Show all providers, API key status, and active model |
+| `qwenpaw models list`                    | Show all providers, API key status, and active model, with `--json` and `--configured-only` support |
 | `qwenpaw models config`                  | Full interactive setup: API keys → active model      |
 | `qwenpaw models config-key [provider]`   | Configure a single provider's API key                |
 | `qwenpaw models set-llm`                 | Switch the active model (API keys unchanged)         |
@@ -192,6 +192,10 @@ Manage LLM providers and the active model.
 
 ```bash
 qwenpaw models list                    # See what's configured
+qwenpaw models list --json             # Output providers and active model as JSON
+qwenpaw models list --configured-only  # Show only configured providers
+qwenpaw models list --json --configured-only
+                                       # Output configured providers as JSON
 qwenpaw models config                  # Full interactive setup
 qwenpaw models config-key modelscope   # Just set ModelScope's API key
 qwenpaw models config-key dashscope    # Just set DashScope's API key

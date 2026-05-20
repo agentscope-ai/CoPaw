@@ -171,7 +171,7 @@ qwenpaw doctor fix -y --only seed-missing-agent-json,reset-invalid-agent-json
 
 | 命令                                     | 说明                                   |
 | ---------------------------------------- | -------------------------------------- |
-| `qwenpaw models list`                    | 查看所有提供商、API Key 状态和当前模型 |
+| `qwenpaw models list`                    | 查看所有提供商、API Key 状态和当前模型，支持 `--json` 与 `--configured-only` |
 | `qwenpaw models config`                  | 完整交互式配置：API Key → 选择模型     |
 | `qwenpaw models config-key [provider]`   | 单独配置某个提供商的 API Key           |
 | `qwenpaw models set-llm`                 | 只切换活跃模型（不改 API Key）         |
@@ -181,6 +181,10 @@ qwenpaw doctor fix -y --only seed-missing-agent-json,reset-invalid-agent-json
 
 ```bash
 qwenpaw models list                    # 看当前状态
+qwenpaw models list --json             # 以 JSON 输出 provider 与 active model
+qwenpaw models list --configured-only  # 只看已配置的 provider
+qwenpaw models list --json --configured-only
+                                       # 以 JSON 输出已配置的 provider
 qwenpaw models config                  # 完整交互式配置
 qwenpaw models config-key modelscope   # 只配 ModelScope 的 API Key
 qwenpaw models config-key dashscope    # 只配 DashScope 的 API Key
