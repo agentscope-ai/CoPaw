@@ -498,7 +498,12 @@ export default function ProjectSelectModal({
     }
   };
 
-  const handlePathSelected = (path: string | null) => {
+  const handlePathSelected = async (path: string) => {
+    try {
+      await codingProjectApi.set(path);
+    } catch {
+      // best effort
+    }
     setProjectDir(path);
     onConfirm(path);
   };
@@ -584,7 +589,7 @@ export default function ProjectSelectModal({
         items={tabItems}
         size="small"
       />
-      <RecentProjects projects={projects} onSelect={handlePathSelected} />
+      <RecentProjects projects={projects} onSelect={(p) => void handlePathSelected(p)} />
     </Modal>
   );
 }
