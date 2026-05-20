@@ -13,7 +13,10 @@ import { useState, useRef, useEffect } from "react";
 import { Modal, Tabs, Input, Button, Alert, Progress, List } from "antd";
 import { FolderOpen, GitBranch, HardDrive, PlusCircle, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { codingProjectApi, type ProjectListItem } from "../../api/modules/codingProject";
+import {
+  codingProjectApi,
+  type ProjectListItem,
+} from "../../api/modules/codingProject";
 import { useProjectDir } from "../../stores/codingModeStore";
 import styles from "./index.module.less";
 
@@ -57,11 +60,17 @@ function WorkspaceTab({
       />
       {workspaceDir && (
         <div className={styles.currentInfo}>
-          <span className={styles.currentLabel}>{t("codingMode.workingDir")}:</span>
+          <span className={styles.currentLabel}>
+            {t("codingMode.workingDir")}:
+          </span>
           <code className={styles.currentPath}>{workspaceDir}</code>
         </div>
       )}
-      <Button type="primary" onClick={() => onSelect(null)} className={styles.actionBtn}>
+      <Button
+        type="primary"
+        onClick={() => onSelect(null)}
+        className={styles.actionBtn}
+      >
         {t("codingMode.confirmBtn")}
       </Button>
     </div>
@@ -88,7 +97,10 @@ function CloneTab({ onDone }: { onDone: (path: string) => void }) {
     setError(null);
 
     try {
-      const res = await codingProjectApi.cloneStream(url.trim(), name.trim() || undefined);
+      const res = await codingProjectApi.cloneStream(
+        url.trim(),
+        name.trim() || undefined,
+      );
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response body");
 
@@ -149,7 +161,9 @@ function CloneTab({ onDone }: { onDone: (path: string) => void }) {
         disabled={cloning}
         className={styles.input}
       />
-      {error && <Alert type="error" message={error} className={styles.alert} showIcon />}
+      {error && (
+        <Alert type="error" message={error} className={styles.alert} showIcon />
+      )}
       {logs.length > 0 && (
         <div className={styles.logBox}>
           {logs.map((l, i) => (
@@ -161,7 +175,14 @@ function CloneTab({ onDone }: { onDone: (path: string) => void }) {
           <div ref={logEndRef} />
         </div>
       )}
-      {cloning && <Progress percent={99} status="active" size="small" className={styles.progress} />}
+      {cloning && (
+        <Progress
+          percent={99}
+          status="active"
+          size="small"
+          className={styles.progress}
+        />
+      )}
       <Button
         type="primary"
         onClick={() => void handleClone()}
@@ -224,7 +245,10 @@ async function readDirFiltered(
   return result;
 }
 
-type FolderSelection = { name: string; entries: Array<{ path: string; file: File }> };
+type FolderSelection = {
+  name: string;
+  entries: Array<{ path: string; file: File }>;
+};
 
 // ---------------------------------------------------------------------------
 // Tab: Open Local Path
@@ -339,7 +363,10 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
               type="text"
               size="small"
               icon={<X size={14} />}
-              onClick={() => { setLocalSel(null); setError(null); }}
+              onClick={() => {
+                setLocalSel(null);
+                setError(null);
+              }}
             />
           </div>
           <Alert
@@ -348,7 +375,14 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
             message={t("codingMode.importCopyNote")}
             className={styles.alert}
           />
-          {error && <Alert type="error" message={error} showIcon className={styles.alert} />}
+          {error && (
+            <Alert
+              type="error"
+              message={error}
+              showIcon
+              className={styles.alert}
+            />
+          )}
           <Button
             type="primary"
             block
@@ -360,7 +394,9 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
         </>
       ) : (
         <div
-          className={`${styles.dropZone} ${dragOver ? styles.dropZoneActive : ""}`}
+          className={`${styles.dropZone} ${
+            dragOver ? styles.dropZoneActive : ""
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={(e) => void handleDrop(e)}
@@ -370,8 +406,12 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
           onKeyDown={(e) => e.key === "Enter" && dirInputRef.current?.click()}
         >
           <FolderOpen size={36} strokeWidth={1.2} className={styles.dropIcon} />
-          <span className={styles.dropPrimary}>{t("codingMode.dropPrimary")}</span>
-          <span className={styles.dropSecondary}>{t("codingMode.dropSecondary")}</span>
+          <span className={styles.dropPrimary}>
+            {t("codingMode.dropPrimary")}
+          </span>
+          <span className={styles.dropSecondary}>
+            {t("codingMode.dropSecondary")}
+          </span>
         </div>
       )}
     </div>
@@ -396,7 +436,8 @@ function NewProjectTab({ onDone }: { onDone: (path: string) => void }) {
       const res = await codingProjectApi.create(name.trim());
       onDone(res.path);
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : "Failed to create project";
+      const detail =
+        err instanceof Error ? err.message : "Failed to create project";
       setError(detail);
     } finally {
       setLoading(false);
@@ -412,7 +453,9 @@ function NewProjectTab({ onDone }: { onDone: (path: string) => void }) {
         onChange={(e) => setName(e.target.value)}
         className={styles.input}
       />
-      {error && <Alert type="error" message={error} className={styles.alert} showIcon />}
+      {error && (
+        <Alert type="error" message={error} className={styles.alert} showIcon />
+      )}
       <Button
         type="primary"
         onClick={() => void handleCreate()}
@@ -446,7 +489,9 @@ function RecentProjects({
         dataSource={projects}
         renderItem={(item) => (
           <List.Item
-            className={`${styles.recentItem} ${item.is_active ? styles.recentItemActive : ""}`}
+            className={`${styles.recentItem} ${
+              item.is_active ? styles.recentItemActive : ""
+            }`}
             onClick={() => onSelect(item.path)}
           >
             <GitBranch size={13} className={styles.recentIcon} />
@@ -476,11 +521,17 @@ export default function ProjectSelectModal({
   const [workspaceDir, setWorkspaceDir] = useState<string | null>(null);
 
   const handleOpen = () => {
-    codingProjectApi.list().then(setProjects).catch(() => undefined);
+    codingProjectApi
+      .list()
+      .then(setProjects)
+      .catch(() => undefined);
     // GET returns workspace_dir field alongside the active project
-    codingProjectApi.get().then((info) => {
-      if (info.workspace_dir) setWorkspaceDir(info.workspace_dir);
-    }).catch(() => undefined);
+    codingProjectApi
+      .get()
+      .then((info) => {
+        if (info.workspace_dir) setWorkspaceDir(info.workspace_dir);
+      })
+      .catch(() => undefined);
   };
 
   const handleConfirm = async (path: string | null) => {
@@ -589,7 +640,10 @@ export default function ProjectSelectModal({
         items={tabItems}
         size="small"
       />
-      <RecentProjects projects={projects} onSelect={(p) => void handlePathSelected(p)} />
+      <RecentProjects
+        projects={projects}
+        onSelect={(p) => void handlePathSelected(p)}
+      />
     </Modal>
   );
 }

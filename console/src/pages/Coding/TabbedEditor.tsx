@@ -11,9 +11,23 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import Editor, { DiffEditor, type Monaco, type DiffOnMount } from "@monaco-editor/react";
+import Editor, {
+  DiffEditor,
+  type Monaco,
+  type DiffOnMount,
+} from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
-import { Check, Code2, Eye, FileCode, GitCompareArrows, MessageSquarePlus, RotateCcw, Save, X } from "lucide-react";
+import {
+  Check,
+  Code2,
+  Eye,
+  FileCode,
+  GitCompareArrows,
+  MessageSquarePlus,
+  RotateCcw,
+  Save,
+  X,
+} from "lucide-react";
 import { Tooltip } from "antd";
 import FilePreview, { isPreviewable } from "./FilePreview";
 import { workspaceApi } from "../../api/modules/workspace";
@@ -86,7 +100,9 @@ function getLanguage(path: string): string {
 
 function appendToChat(text: string): void {
   const senderEl = document.querySelector('[class*="sender"]');
-  const textarea = senderEl?.querySelector("textarea") as HTMLTextAreaElement | null;
+  const textarea = senderEl?.querySelector(
+    "textarea",
+  ) as HTMLTextAreaElement | null;
   if (!textarea) return;
   const prev = textarea.value;
   setTextareaValue(textarea, prev ? `${prev}\n${text}` : text);
@@ -100,7 +116,8 @@ function formatSelectionForChat(
   endLine: number,
 ): string {
   const lang = getLanguage(filePath);
-  const lineRange = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
+  const lineRange =
+    startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
   const fileName = filePath.split("/").pop() ?? filePath;
   return `\`${fileName}\` \`${lineRange}\`\n\`\`\`${lang}\n// ${filePath}:${lineRange}\n${code}\n\`\`\``;
 }
@@ -162,7 +179,9 @@ export default function TabbedEditor({
   );
 
   const activeTab = tabs.find((t) => t.path === activeTabPath) ?? null;
-  const activeDiff = activeTabPath ? pendingDiffs.get(activeTabPath) : undefined;
+  const activeDiff = activeTabPath
+    ? pendingDiffs.get(activeTabPath)
+    : undefined;
 
   // ---- Monaco setup -------------------------------------------------------
 
@@ -211,7 +230,12 @@ export default function TabbedEditor({
           }
           navigator.clipboard
             .writeText(
-              formatSelectionForChat(filePath, code, sel.startLineNumber, sel.endLineNumber),
+              formatSelectionForChat(
+                filePath,
+                code,
+                sel.startLineNumber,
+                sel.endLineNumber,
+              ),
             )
             .catch(() => undefined);
         },
@@ -246,7 +270,12 @@ export default function TabbedEditor({
           }
           navigator.clipboard
             .writeText(
-              formatSelectionForChat(filePath, code, sel.startLineNumber, sel.endLineNumber),
+              formatSelectionForChat(
+                filePath,
+                code,
+                sel.startLineNumber,
+                sel.endLineNumber,
+              ),
             )
             .catch(() => undefined);
         },
@@ -292,10 +321,16 @@ export default function TabbedEditor({
     if (!selection) return;
     const model = editor.getModel();
     if (!model) return;
-    const code = selection.isEmpty() ? model.getValue() : model.getValueInRange(selection);
+    const code = selection.isEmpty()
+      ? model.getValue()
+      : model.getValueInRange(selection);
     const startLine = selection.isEmpty() ? 1 : selection.startLineNumber;
-    const endLine = selection.isEmpty() ? model.getLineCount() : selection.endLineNumber;
-    appendToChat(formatSelectionForChat(activeTabPath, code, startLine, endLine));
+    const endLine = selection.isEmpty()
+      ? model.getLineCount()
+      : selection.endLineNumber;
+    appendToChat(
+      formatSelectionForChat(activeTabPath, code, startLine, endLine),
+    );
   }, [activeTabPath]);
 
   // ---- Diff actions -------------------------------------------------------
@@ -386,7 +421,10 @@ export default function TabbedEditor({
           if (newModified === originalContent) return;
           setPendingDiffs((prev) => {
             const next = new Map(prev);
-            next.set(path, { original: originalContent, modified: newModified });
+            next.set(path, {
+              original: originalContent,
+              modified: newModified,
+            });
             return next;
           });
         }
@@ -407,8 +445,12 @@ export default function TabbedEditor({
 
   const shortPath = (p: string) => p.split("/").slice(-2).join("/");
 
-  const activeIsPreviewable = activeTabPath ? isPreviewable(activeTabPath) : false;
-  const activeInPreview = activeTabPath ? previewPaths.has(activeTabPath) : false;
+  const activeIsPreviewable = activeTabPath
+    ? isPreviewable(activeTabPath)
+    : false;
+  const activeInPreview = activeTabPath
+    ? previewPaths.has(activeTabPath)
+    : false;
 
   return (
     <div className={styles.wrap} onKeyDown={handleKeyDown}>
@@ -420,7 +462,9 @@ export default function TabbedEditor({
           return (
             <div
               key={tab.path}
-              className={`${styles.tab} ${active ? styles.tabActive : ""} ${hasDiff ? styles.tabDiff : ""}`}
+              className={`${styles.tab} ${active ? styles.tabActive : ""} ${
+                hasDiff ? styles.tabDiff : ""
+              }`}
               onClick={() => onTabSelect(tab.path)}
               role="tab"
               tabIndex={0}
@@ -451,7 +495,9 @@ export default function TabbedEditor({
 
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
       <div className={styles.toolbar}>
-        <span className={styles.fileName}>{activeTab ? activeTab.path : ""}</span>
+        <span className={styles.fileName}>
+          {activeTab ? activeTab.path : ""}
+        </span>
 
         {activeDiff ? (
           /* Diff mode: show Keep / Undo */
@@ -485,10 +531,14 @@ export default function TabbedEditor({
           /* Normal mode: Preview toggle + Copy-to-Chat + Save */
           <div className={styles.toolbarRight}>
             {activeIsPreviewable && (
-              <Tooltip title={activeInPreview ? "Switch to Code" : "Open Preview"}>
+              <Tooltip
+                title={activeInPreview ? "Switch to Code" : "Open Preview"}
+              >
                 <button
                   type="button"
-                  className={`${styles.iconBtn} ${activeInPreview ? styles.previewActiveBtn : ""}`}
+                  className={`${styles.iconBtn} ${
+                    activeInPreview ? styles.previewActiveBtn : ""
+                  }`}
                   onClick={() => togglePreview(activeTabPath)}
                 >
                   {activeInPreview ? <Code2 size={13} /> : <Eye size={13} />}
@@ -497,7 +547,13 @@ export default function TabbedEditor({
             )}
             {!activeInPreview && (
               <>
-                <Tooltip title={hasSelection ? "Copy selection to Chat" : "Copy file to Chat"}>
+                <Tooltip
+                  title={
+                    hasSelection
+                      ? "Copy selection to Chat"
+                      : "Copy file to Chat"
+                  }
+                >
                   <button
                     type="button"
                     className={styles.iconBtn}
@@ -528,8 +584,9 @@ export default function TabbedEditor({
         {activeTab && activeInPreview ? (
           /* ── Preview mode (image / markdown / pdf / csv) ─────────────── */
           <FilePreview filePath={activeTab.path} content={activeTab.content} />
-        ) : activeTab && (
-          activeDiff ? (
+        ) : (
+          activeTab &&
+          (activeDiff ? (
             /* ── Inline diff view (VS Code "Copilot Edits" style) ─────── */
             <DiffEditor
               height="100%"
@@ -581,10 +638,9 @@ export default function TabbedEditor({
                 gotoLocation: { multiple: "goto" },
               }}
             />
-          )
+          ))
         )}
       </div>
     </div>
   );
 }
-

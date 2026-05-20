@@ -19,7 +19,14 @@ import styles from "./FilePreview.module.less";
 // ---------------------------------------------------------------------------
 
 const IMAGE_EXTS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "svg",
+  "ico",
+  "bmp",
 ]);
 
 export type PreviewType = "image" | "pdf" | "markdown" | "csv" | "none";
@@ -115,8 +122,10 @@ function CsvPreview({ content }: { content: string }) {
     <div className={styles.csvWrap}>
       {(truncatedCols || truncatedRows) && (
         <div className={styles.csvNote}>
-          {truncatedRows && `Showing first ${MAX_CSV_ROWS} of ${rows.length - 1} rows. `}
-          {truncatedCols && `Showing first ${MAX_CSV_COLS} of ${header.length} columns.`}
+          {truncatedRows &&
+            `Showing first ${MAX_CSV_ROWS} of ${rows.length - 1} rows. `}
+          {truncatedCols &&
+            `Showing first ${MAX_CSV_COLS} of ${header.length} columns.`}
         </div>
       )}
       <div className={styles.csvScroll}>

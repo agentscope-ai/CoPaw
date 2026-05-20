@@ -73,7 +73,10 @@ function buildTree(files: MdFileInfo[]): TreeNode[] {
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
       })
-      .map((n) => ({ ...n, children: n.children ? sort(n.children) : undefined }));
+      .map((n) => ({
+        ...n,
+        children: n.children ? sort(n.children) : undefined,
+      }));
   }
   return sort(roots);
 }
@@ -125,10 +128,34 @@ function parseGitStatus(raw: string): GitStatus {
 function getFileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   const codeExts = new Set([
-    "py", "ts", "tsx", "js", "jsx", "json", "yaml", "yml",
-    "sh", "bash", "rs", "go", "cpp", "c", "h", "java", "kt",
-    "swift", "rb", "php", "html", "css", "less", "scss", "sql",
-    "toml", "ini", "env",
+    "py",
+    "ts",
+    "tsx",
+    "js",
+    "jsx",
+    "json",
+    "yaml",
+    "yml",
+    "sh",
+    "bash",
+    "rs",
+    "go",
+    "cpp",
+    "c",
+    "h",
+    "java",
+    "kt",
+    "swift",
+    "rb",
+    "php",
+    "html",
+    "css",
+    "less",
+    "scss",
+    "sql",
+    "toml",
+    "ini",
+    "env",
   ]);
   const textExts = new Set(["md", "txt", "rst", "log"]);
   if (codeExts.has(ext)) return <FileCode size={13} />;
@@ -142,11 +169,18 @@ function getFileIcon(name: string) {
 
 function GitBadge({ status }: { status: GitStatus }) {
   const label =
-    status === "modified" ? "M"
-    : status === "added" ? "A"
-    : status === "deleted" ? "D"
-    : "U";
-  return <span className={`${styles.gitBadge} ${styles[`git_${status}`]}`}>{label}</span>;
+    status === "modified"
+      ? "M"
+      : status === "added"
+      ? "A"
+      : status === "deleted"
+      ? "D"
+      : "U";
+  return (
+    <span className={`${styles.gitBadge} ${styles[`git_${status}`]}`}>
+      {label}
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +196,14 @@ interface NodeItemProps {
   onSelect: (path: string) => void;
 }
 
-function NodeItem({ node, depth, selectedPath, gitMap, dirMap, onSelect }: NodeItemProps) {
+function NodeItem({
+  node,
+  depth,
+  selectedPath,
+  gitMap,
+  dirMap,
+  onSelect,
+}: NodeItemProps) {
   const [expanded, setExpanded] = useState(false);
   const isSelected = selectedPath === node.path;
 
@@ -171,7 +212,9 @@ function NodeItem({ node, depth, selectedPath, gitMap, dirMap, onSelect }: NodeI
     return (
       <>
         <div
-          className={`${styles.node} ${dirStatus ? styles[`node_${dirStatus}`] : ""}`}
+          className={`${styles.node} ${
+            dirStatus ? styles[`node_${dirStatus}`] : ""
+          }`}
           style={{ paddingLeft: depth * 14 + 8 }}
           onClick={() => setExpanded((v) => !v)}
           role="button"
@@ -207,7 +250,9 @@ function NodeItem({ node, depth, selectedPath, gitMap, dirMap, onSelect }: NodeI
   const fileStatus = gitMap.get(node.path);
   return (
     <div
-      className={`${styles.node} ${isSelected ? styles.selected : ""} ${fileStatus ? styles[`node_${fileStatus}`] : ""}`}
+      className={`${styles.node} ${isSelected ? styles.selected : ""} ${
+        fileStatus ? styles[`node_${fileStatus}`] : ""
+      }`}
       style={{ paddingLeft: depth * 14 + 8 }}
       onClick={() => onSelect(node.path)}
       role="button"
@@ -218,7 +263,9 @@ function NodeItem({ node, depth, selectedPath, gitMap, dirMap, onSelect }: NodeI
         {getFileIcon(node.name)}
       </span>
       <span
-        className={`${styles.nodeName} ${fileStatus === "deleted" ? styles.deletedName : ""}`}
+        className={`${styles.nodeName} ${
+          fileStatus === "deleted" ? styles.deletedName : ""
+        }`}
       >
         {node.name}
       </span>
@@ -248,14 +295,19 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   // Sync displayed project name from server; cancel stale in-flight requests
   useEffect(() => {
     let cancelled = false;
-    codingProjectApi.get().then((info) => {
-      if (cancelled) return;
-      setProjectName(info.name);
-      if (projectDir === undefined && !info.is_workspace_default) {
-        setProjectDir(info.path);
-      }
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
+    codingProjectApi
+      .get()
+      .then((info) => {
+        if (cancelled) return;
+        setProjectName(info.name);
+        if (projectDir === undefined && !info.is_workspace_default) {
+          setProjectDir(info.path);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectDir]);
 
@@ -295,7 +347,10 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   // Re-fetch on any file change (structural) or file modification (git status may change)
   useWorkspaceWatch((events) => {
     const hasChange = events.some(
-      (e) => e.change === "added" || e.change === "deleted" || e.change === "modified",
+      (e) =>
+        e.change === "added" ||
+        e.change === "deleted" ||
+        e.change === "modified",
     );
     if (hasChange) {
       void load();
@@ -339,7 +394,10 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
     <div className={styles.tree}>
       {/* Project Picker (compact header bar) */}
       <div className={styles.projectBar}>
-        <span className={styles.projectName} title={projectDir ?? "default workspace"}>
+        <span
+          className={styles.projectName}
+          title={projectDir ?? "default workspace"}
+        >
           {projectName}
         </span>
         <Tooltip title="Switch Project">

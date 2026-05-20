@@ -100,7 +100,11 @@ export default function CodingModeToggle() {
   return (
     <>
       <Tooltip
-        title={codingMode ? t("codingMode.exitTooltip") : t("codingMode.enterTooltip")}
+        title={
+          codingMode
+            ? t("codingMode.exitTooltip")
+            : t("codingMode.enterTooltip")
+        }
         placement="bottom"
       >
         <button
@@ -108,7 +112,11 @@ export default function CodingModeToggle() {
           className={`${styles.toggle} ${codingMode ? styles.active : ""}`}
           onClick={() => void toggle()}
           disabled={loading}
-          aria-label={codingMode ? t("codingMode.exitTooltip") : t("codingMode.enterTooltip")}
+          aria-label={
+            codingMode
+              ? t("codingMode.exitTooltip")
+              : t("codingMode.enterTooltip")
+          }
         >
           <span className={styles.icon}>
             {codingMode ? <MessageSquare size={14} /> : <Code size={14} />}

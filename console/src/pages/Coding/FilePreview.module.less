@@ -42,21 +42,50 @@
   line-height: 1.75;
 
   // GFM styles
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-weight: 600;
     margin: 1.2em 0 0.5em;
     color: var(--text-primary, rgba(0, 0, 0, 0.88));
   }
-  h1 { font-size: 1.75em; border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08)); padding-bottom: 0.3em; }
-  h2 { font-size: 1.4em; border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.06)); padding-bottom: 0.25em; }
-  h3 { font-size: 1.15em; }
+  h1 {
+    font-size: 1.75em;
+    border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    padding-bottom: 0.3em;
+  }
+  h2 {
+    font-size: 1.4em;
+    border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    padding-bottom: 0.25em;
+  }
+  h3 {
+    font-size: 1.15em;
+  }
 
-  p { margin: 0.6em 0; }
+  p {
+    margin: 0.6em 0;
+  }
 
-  a { color: var(--primary-color, #1677ff); text-decoration: none; &:hover { text-decoration: underline; } }
+  a {
+    color: var(--primary-color, #1677ff);
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 
-  ul, ol { padding-left: 1.5em; margin: 0.5em 0; }
-  li { margin: 0.2em 0; }
+  ul,
+  ol {
+    padding-left: 1.5em;
+    margin: 0.5em 0;
+  }
+  li {
+    margin: 0.2em 0;
+  }
 
   blockquote {
     margin: 0.75em 0;
@@ -94,7 +123,8 @@
     margin: 0.75em 0;
     font-size: 0.9em;
 
-    th, td {
+    th,
+    td {
       border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
       padding: 6px 12px;
       text-align: left;
@@ -105,10 +135,15 @@
       font-weight: 600;
     }
 
-    tr:nth-child(even) { background: var(--table-row-hover, rgba(0, 0, 0, 0.02)); }
+    tr:nth-child(even) {
+      background: var(--table-row-hover, rgba(0, 0, 0, 0.02));
+    }
   }
 
-  img { max-width: 100%; border-radius: 4px; }
+  img {
+    max-width: 100%;
+    border-radius: 4px;
+  }
 
   hr {
     border: none;
@@ -146,7 +181,8 @@
   width: max-content;
   min-width: 100%;
 
-  th, td {
+  th,
+  td {
     border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
     padding: 5px 10px;
     white-space: nowrap;

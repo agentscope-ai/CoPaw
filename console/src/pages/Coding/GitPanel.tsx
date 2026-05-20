@@ -34,7 +34,12 @@ import {
   Undo2,
 } from "lucide-react";
 import { gitApi } from "../../api/modules/git";
-import type { GitStatus, BranchInfo, CommitInfo, GitChangedFile } from "../../api/modules/git";
+import type {
+  GitStatus,
+  BranchInfo,
+  CommitInfo,
+  GitChangedFile,
+} from "../../api/modules/git";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useProjectDir } from "../../stores/codingModeStore";
 import styles from "./GitPanel.module.less";
@@ -259,7 +264,9 @@ export default function GitPanel() {
   const localBranches = branches.filter((b) => !b.remote);
 
   const visibleStaged = showAllStaged ? staged : staged.slice(0, FILE_LIMIT);
-  const visibleUnstaged = showAllUnstaged ? unstaged : unstaged.slice(0, FILE_LIMIT);
+  const visibleUnstaged = showAllUnstaged
+    ? unstaged
+    : unstaged.slice(0, FILE_LIMIT);
 
   return (
     <div className={styles.panel}>
@@ -555,7 +562,14 @@ interface FileRowProps {
   actionTip: string;
 }
 
-function FileRow({ file, onStage, onDiff, onDiscard, actionIcon, actionTip }: FileRowProps) {
+function FileRow({
+  file,
+  onStage,
+  onDiff,
+  onDiscard,
+  actionIcon,
+  actionTip,
+}: FileRowProps) {
   const name = file.path.split("/").pop() ?? file.path;
   return (
     <div className={styles.fileRow}>

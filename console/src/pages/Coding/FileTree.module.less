@@ -41,7 +41,9 @@
   border-radius: 4px;
   color: var(--text-tertiary, rgba(0, 0, 0, 0.3));
   padding: 0;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   flex-shrink: 0;
 
   &:hover {
@@ -81,7 +83,9 @@
   border-radius: 4px;
   color: var(--text-secondary, rgba(0, 0, 0, 0.45));
   padding: 0;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 
   &:hover:not(:disabled) {
     background: var(--item-hover-bg, rgba(0, 0, 0, 0.04));
@@ -202,7 +206,15 @@
   opacity: 0.85;
 }
 
-.git_modified { color: #e8a84f; }
-.git_added    { color: #73c991; }
-.git_untracked { color: #73c991; }
-.git_deleted  { color: #f47e7e; }
+.git_modified {
+  color: #e8a84f;
+}
+.git_added {
+  color: #73c991;
+}
+.git_untracked {
+  color: #73c991;
+}
+.git_deleted {
+  color: #f47e7e;
+}

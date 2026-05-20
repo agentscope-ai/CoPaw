@@ -12,10 +12,7 @@
 
 import { useCallback, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import {
-  Badge,
-  Tooltip,
-} from "antd";
+import { Badge, Tooltip } from "antd";
 import {
   GitBranch,
   MessageSquare,
@@ -46,10 +43,13 @@ export default function CodingPage() {
   const [rightOpen, setRightOpen] = useState(true);
   const [leftPane, setLeftPane] = useState<LeftPane>("files");
 
-  const toggleLeft = useCallback((pane: LeftPane) => {
-    setLeftPane(pane);
-    setLeftOpen((cur) => (cur && leftPane === pane ? false : true));
-  }, [leftPane]);
+  const toggleLeft = useCallback(
+    (pane: LeftPane) => {
+      setLeftPane(pane);
+      setLeftOpen((cur) => (cur && leftPane === pane ? false : true));
+    },
+    [leftPane],
+  );
 
   // ---- Editor tabs -------------------------------------------------------
   const [tabs, setTabs] = useState<EditorTab[]>([]);
@@ -78,9 +78,7 @@ export default function CodingPage() {
   );
 
   const handleTabDirtyChange = useCallback((path: string, dirty: boolean) => {
-    setTabs((prev) =>
-      prev.map((t) => (t.path === path ? { ...t, dirty } : t)),
-    );
+    setTabs((prev) => prev.map((t) => (t.path === path ? { ...t, dirty } : t)));
   }, []);
 
   const handleTabContentChange = useCallback(
@@ -109,7 +107,9 @@ export default function CodingPage() {
         <Tooltip title="Explorer" placement="right">
           <button
             type="button"
-            className={`${styles.actBtn} ${leftOpen && leftPane === "files" ? styles.actBtnActive : ""}`}
+            className={`${styles.actBtn} ${
+              leftOpen && leftPane === "files" ? styles.actBtnActive : ""
+            }`}
             onClick={() => toggleLeft("files")}
           >
             {leftOpen && leftPane === "files" ? (
@@ -123,7 +123,9 @@ export default function CodingPage() {
         <Tooltip title="Source Control" placement="right">
           <button
             type="button"
-            className={`${styles.actBtn} ${leftOpen && leftPane === "git" ? styles.actBtnActive : ""}`}
+            className={`${styles.actBtn} ${
+              leftOpen && leftPane === "git" ? styles.actBtnActive : ""
+            }`}
             onClick={() => toggleLeft("git")}
           >
             <GitBranch size={18} />
@@ -133,7 +135,10 @@ export default function CodingPage() {
         <div className={styles.actBarSpacer} />
 
         {pendingTodos > 0 && (
-          <Tooltip title={`${pendingTodos} tasks in progress`} placement="right">
+          <Tooltip
+            title={`${pendingTodos} tasks in progress`}
+            placement="right"
+          >
             <div className={styles.actBadge}>
               <CheckSquare size={16} />
               <span className={styles.actBadgeNum}>{pendingTodos}</span>
@@ -148,11 +153,7 @@ export default function CodingPage() {
           {/* LEFT: Explorer / Git */}
           {leftOpen && (
             <>
-              <Panel
-                id="left"
-                defaultSize="15%"
-                className={styles.leftPanel}
-              >
+              <Panel id="left" defaultSize="15%" className={styles.leftPanel}>
                 {leftPane === "files" && (
                   <FileTree onFileSelect={handleFileSelect} />
                 )}
@@ -163,7 +164,16 @@ export default function CodingPage() {
           )}
 
           {/* CENTER: Editor (takes remaining space) */}
-          <Panel id="center" defaultSize={leftOpen && rightOpen ? "55%" : leftOpen || rightOpen ? "70%" : "100%"}>
+          <Panel
+            id="center"
+            defaultSize={
+              leftOpen && rightOpen
+                ? "55%"
+                : leftOpen || rightOpen
+                ? "70%"
+                : "100%"
+            }
+          >
             <TabbedEditor
               tabs={tabs}
               activeTabPath={activeTabPath}
@@ -178,11 +188,7 @@ export default function CodingPage() {
           {rightOpen && (
             <>
               <Separator className={styles.sep} />
-              <Panel
-                id="right"
-                defaultSize="30%"
-                className={styles.rightPanel}
-              >
+              <Panel id="right" defaultSize="30%" className={styles.rightPanel}>
                 <div className={styles.chatHeader}>
                   <span className={styles.chatTitle}>
                     <MessageSquare size={13} style={{ marginRight: 5 }} />

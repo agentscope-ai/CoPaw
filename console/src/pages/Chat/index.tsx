@@ -1140,7 +1140,10 @@ export default function ChatPage() {
           for (const msg of extractMessages(payload)) {
             const meta = msg.metadata as Record<string, unknown> | undefined;
             if (!meta || typeof meta !== "object") continue;
-            if (meta.message_type === "todo_update" && Array.isArray(meta.todos)) {
+            if (
+              meta.message_type === "todo_update" &&
+              Array.isArray(meta.todos)
+            ) {
               setTodos(selectedAgent, meta.todos as any);
             }
           }
