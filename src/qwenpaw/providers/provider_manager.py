@@ -883,7 +883,7 @@ PROVIDER_OPENCODE = OpenAIProvider(
             {"label": "OpenCode Go", "value": "https://opencode.ai/zen/go/v1"},
         ],
     },
-    freeze_url=True,
+    freeze_url=False,
     require_api_key=False,
 )
 
