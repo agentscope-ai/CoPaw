@@ -150,7 +150,9 @@ def _build_models_list_payload(
 ) -> dict[str, Any]:
     providers = _all_provider_objects(manager)
     if configured_only:
-        providers = [provider for provider in providers if _is_configured(provider)]
+        providers = [
+            provider for provider in providers if _is_configured(provider)
+        ]
 
     llm = manager.get_active_model()
     active_model = None
@@ -161,7 +163,9 @@ def _build_models_list_payload(
         }
 
     return {
-        "providers": [_build_provider_entry(provider) for provider in providers],
+        "providers": [
+            _build_provider_entry(provider) for provider in providers
+        ],
         "active_model": active_model,
     }
 
