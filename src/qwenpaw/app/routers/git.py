@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..agent_context import get_agent_for_request
+from ..agent_context import get_agent_for_request, get_coding_dir
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +277,7 @@ async def git_status(request: Request) -> GitStatus:
     workspace is opened if it does not already have one.
     """
     workspace = await get_agent_for_request(request)
-    cwd = workspace.workspace_dir
+    cwd = get_coding_dir(workspace)
 
     branch, needs_init = await _resolve_branch(cwd)
     if needs_init:
@@ -349,7 +349,7 @@ async def git_status(request: Request) -> GitStatus:
 async def list_branches(request: Request) -> list[BranchInfo]:
     workspace = await get_agent_for_request(request)
     rc, out, err = await _git(
-        workspace.workspace_dir,
+        get_coding_dir(workspace),
         "branch",
         "-a",
         "--format=%(refname:short)|%(HEAD)",
@@ -376,7 +376,7 @@ async def checkout_branch(body: CheckoutRequest, request: Request) -> dict:
         args += ["-b", body.branch]
     else:
         args.append(body.branch)
-    rc, _, err = await _git(workspace.workspace_dir, *args)
+    rc, _, err = await _git(get_coding_dir(workspace), *args)
     if rc != 0:
         raise HTTPException(status_code=400, detail=err.strip())
     return {"branch": body.branch}
@@ -393,7 +393,7 @@ async def get_diff(
 ) -> dict:
     """Return unified diff text."""
     workspace = await get_agent_for_request(request)
-    cwd = workspace.workspace_dir
+    cwd = get_coding_dir(workspace)
     args = ["diff"]
     if staged:
         args.append("--staged")
@@ -415,7 +415,7 @@ async def get_diff(
 async def stage_files(body: StageRequest, request: Request) -> dict:
     workspace = await get_agent_for_request(request)
     paths = body.paths if body.paths else ["."]
-    rc, _, err = await _git(workspace.workspace_dir, "add", *paths)
+    rc, _, err = await _git(get_coding_dir(workspace), "add", *paths)
     if rc != 0:
         raise HTTPException(status_code=400, detail=err.strip())
     return {"staged": paths}
@@ -426,7 +426,7 @@ async def unstage_files(body: UnstageRequest, request: Request) -> dict:
     workspace = await get_agent_for_request(request)
     paths = body.paths if body.paths else ["."]
     rc, _, err = await _git(
-        workspace.workspace_dir,
+        get_coding_dir(workspace),
         "restore",
         "--staged",
         *paths,
@@ -445,7 +445,7 @@ async def commit_changes(body: CommitRequest, request: Request) -> dict:
         )
     workspace = await get_agent_for_request(request)
     rc, out, err = await _git(
-        workspace.workspace_dir,
+        get_coding_dir(workspace),
         "commit",
         "-m",
         body.message.strip(),
@@ -464,7 +464,7 @@ async def get_log(request: Request, limit: int = 20) -> list[CommitInfo]:
     workspace = await get_agent_for_request(request)
     fmt = "%H|%an|%ad|%s"
     rc, out, err = await _git(
-        workspace.workspace_dir,
+        get_coding_dir(workspace),
         "log",
         f"-{limit}",
         f"--format={fmt}",

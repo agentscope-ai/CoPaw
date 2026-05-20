@@ -6,6 +6,52 @@
   border-right: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
 }
 
+// ---- Project bar (above file tree header) --------------------------------
+
+.projectBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  background: var(--layout-sider-background, #fafafa);
+  flex-shrink: 0;
+}
+
+.projectName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, rgba(0, 0, 0, 0.88));
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectSwitchBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--text-tertiary, rgba(0, 0, 0, 0.3));
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--item-hover-bg, rgba(0, 0, 0, 0.06));
+    color: var(--text-secondary, rgba(0, 0, 0, 0.55));
+  }
+}
+
+// --------------------------------------------------------------------------
+
 .treeHeader {
   display: flex;
   align-items: center;

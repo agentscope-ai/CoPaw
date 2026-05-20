@@ -1078,6 +1078,15 @@ class CodingModeConfig(BaseModel):
         default=True,
         description="Enable todo_write tool for task progress tracking",
     )
+    project_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Active coding project directory (absolute path). "
+            "When set, Coding Mode file / git operations use this path "
+            "instead of the agent workspace_dir. "
+            "None means use the default workspace_dir."
+        ),
+    )
 
 
 class AgentProfileConfig(BaseModel):

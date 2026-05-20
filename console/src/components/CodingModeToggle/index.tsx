@@ -2,11 +2,12 @@ import { useCallback, useState } from "react";
 import { Modal, Tooltip } from "antd";
 import { Code, FlaskConical, MessageSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useCodingMode } from "../../stores/codingModeStore";
+import { useCodingMode, useProjectDir } from "../../stores/codingModeStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { useNavigate } from "react-router-dom";
+import ProjectSelectModal from "../ProjectSelectModal";
 import styles from "./index.module.less";
 
 const CONFIRMED_KEY = "qwenpaw-coding-mode-confirmed";
@@ -16,8 +17,10 @@ export default function CodingModeToggle() {
   const { codingMode, setCodingMode } = useCodingMode();
   const { selectedAgent } = useAgentStore();
   const navigate = useNavigate();
+  const { projectDir } = useProjectDir();
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showProjectSelect, setShowProjectSelect] = useState(false);
 
   const activate = useCallback(async () => {
     if (loading) return;
@@ -73,14 +76,23 @@ export default function CodingModeToggle() {
     const confirmed = localStorage.getItem(CONFIRMED_KEY);
     if (!confirmed) {
       setShowConfirm(true);
+    } else if (!projectDir) {
+      // Already confirmed but no project selected yet → show project picker
+      setShowProjectSelect(true);
     } else {
       await activate();
     }
-  }, [codingMode, activate, deactivate]);
+  }, [codingMode, activate, deactivate, projectDir]);
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(() => {
     localStorage.setItem(CONFIRMED_KEY, "1");
     setShowConfirm(false);
+    // After confirming experimental warning, show project selection
+    setShowProjectSelect(true);
+  }, []);
+
+  const handleProjectConfirm = useCallback(async () => {
+    setShowProjectSelect(false);
     await activate();
   }, [activate]);
 
@@ -93,7 +105,7 @@ export default function CodingModeToggle() {
         <button
           type="button"
           className={`${styles.toggle} ${codingMode ? styles.active : ""}`}
-          onClick={toggle}
+          onClick={() => void toggle()}
           disabled={loading}
           aria-label={codingMode ? t("codingMode.exitTooltip") : t("codingMode.enterTooltip")}
         >
@@ -106,6 +118,7 @@ export default function CodingModeToggle() {
         </button>
       </Tooltip>
 
+      {/* Step 1: Experimental warning */}
       <Modal
         open={showConfirm}
         title={
@@ -116,7 +129,7 @@ export default function CodingModeToggle() {
         }
         okText={t("codingMode.confirmBtn")}
         cancelText={t("common.cancel")}
-        onOk={() => void handleConfirm()}
+        onOk={handleConfirm}
         onCancel={() => setShowConfirm(false)}
         confirmLoading={loading}
         width={440}
@@ -126,6 +139,17 @@ export default function CodingModeToggle() {
           <p className={styles.modalNote}>{t("codingMode.experimentalNote")}</p>
         </div>
       </Modal>
+
+      {/* Step 2: Project selection */}
+      <ProjectSelectModal
+        open={showProjectSelect}
+        onClose={() => {
+          // User dismissed → enter with default workspace
+          setShowProjectSelect(false);
+          void activate();
+        }}
+        onConfirm={() => void handleProjectConfirm()}
+      />
     </>
   );
 }

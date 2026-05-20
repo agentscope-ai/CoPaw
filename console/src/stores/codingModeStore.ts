@@ -13,9 +13,15 @@ interface CodingModeState {
   codingModeByAgent: Record<string, boolean>;
   /** Live TODO list, keyed by agentId */
   todosByAgent: Record<string, TodoItem[]>;
+  /**
+   * Active coding project directory path, keyed by agentId.
+   * undefined/null → use server default (workspace_dir).
+   */
+  projectDirByAgent: Record<string, string | null>;
 
   setCodingMode: (agentId: string, enabled: boolean) => void;
   setTodos: (agentId: string, todos: TodoItem[]) => void;
+  setProjectDir: (agentId: string, path: string | null) => void;
 }
 
 export const useCodingModeStore = create<CodingModeState>()(
@@ -23,6 +29,7 @@ export const useCodingModeStore = create<CodingModeState>()(
     (set) => ({
       codingModeByAgent: {},
       todosByAgent: {},
+      projectDirByAgent: {},
 
       setCodingMode: (agentId: string, enabled: boolean) =>
         set((state: CodingModeState) => ({
@@ -32,6 +39,11 @@ export const useCodingModeStore = create<CodingModeState>()(
       setTodos: (agentId: string, todos: TodoItem[]) =>
         set((state: CodingModeState) => ({
           todosByAgent: { ...state.todosByAgent, [agentId]: todos },
+        })),
+
+      setProjectDir: (agentId: string, path: string | null) =>
+        set((state: CodingModeState) => ({
+          projectDirByAgent: { ...state.projectDirByAgent, [agentId]: path },
         })),
     }),
     {
@@ -58,4 +70,17 @@ export function useCurrentTodos(): TodoItem[] {
   const { selectedAgent } = useAgentStore();
   const { todosByAgent } = useCodingModeStore();
   return todosByAgent[selectedAgent] ?? [];
+}
+
+/** Convenience hook: coding project directory for the currently selected agent */
+export function useProjectDir(): {
+  projectDir: string | null;
+  setProjectDir: (path: string | null) => void;
+} {
+  const { selectedAgent } = useAgentStore();
+  const { projectDirByAgent, setProjectDir } = useCodingModeStore();
+  return {
+    projectDir: projectDirByAgent[selectedAgent] ?? null,
+    setProjectDir: (path: string | null) => setProjectDir(selectedAgent, path),
+  };
 }

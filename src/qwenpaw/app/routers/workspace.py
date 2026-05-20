@@ -33,7 +33,7 @@ from ...agents.memory.agent_md_manager import AgentMdManager
 from ...agents.templates import get_workspace_md_template_id
 from ...agents.utils import copy_workspace_md_files
 from ...constant import BUILTIN_QA_AGENT_ID, SUPPORTED_AGENT_LANGUAGES
-from ..agent_context import get_agent_for_request
+from ..agent_context import get_agent_for_request, get_coding_dir
 
 
 router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -217,12 +217,12 @@ def _list_all_files(workspace_dir: Path) -> list[dict]:
     summary="List all workspace files (Coding Mode)",
 )
 async def list_code_files(request: Request) -> list[dict]:
-    """List every non-hidden file in the agent's workspace directory."""
+    """List every non-hidden file in the active coding project directory."""
     workspace = await get_agent_for_request(request)
     return await asyncio.get_event_loop().run_in_executor(
         None,
         _list_all_files,
-        workspace.workspace_dir,
+        get_coding_dir(workspace),
     )
 
 
@@ -260,7 +260,7 @@ async def read_binary_file(
     Rejects files that are not in ``_MIME_MAP`` or exceed 50 MB.
     """
     workspace = await get_agent_for_request(request)
-    root = workspace.workspace_dir.resolve()
+    root = get_coding_dir(workspace).resolve()
     target = (root / file_path).resolve()
     if not str(target).startswith(str(root)):
         raise HTTPException(
@@ -312,7 +312,7 @@ async def read_code_file(file_path: str, request: Request) -> dict:
     avoid flooding the browser with huge binary or log files.
     """
     workspace = await get_agent_for_request(request)
-    root = workspace.workspace_dir.resolve()
+    root = get_coding_dir(workspace).resolve()
     target = (root / file_path).resolve()
     if not str(target).startswith(str(root)):
         raise HTTPException(
@@ -356,7 +356,7 @@ async def write_code_file(
         {"content": "<new file content>"}
     """
     workspace = await get_agent_for_request(request)
-    root = workspace.workspace_dir.resolve()
+    root = get_coding_dir(workspace).resolve()
     target = (root / file_path).resolve()
     if not str(target).startswith(str(root)):
         raise HTTPException(
@@ -393,7 +393,7 @@ async def watch_workspace_files(request: Request) -> StreamingResponse:
     A heartbeat comment (``": heartbeat"``) is sent every 30 s when idle.
     """
     workspace = await get_agent_for_request(request)
-    watch_dir = workspace.workspace_dir
+    watch_dir = get_coding_dir(workspace)
 
     async def event_generator():
         yield 'data: {"type": "connected"}\n\n'

@@ -7,10 +7,14 @@ import {
   FileText,
   File,
   RefreshCw,
+  Settings2,
 } from "lucide-react";
 import { workspaceApi } from "../../api/modules/workspace";
 import { gitApi } from "../../api/modules/git";
+import { codingProjectApi } from "../../api/modules/codingProject";
 import { useWorkspaceWatch } from "../../hooks/useWorkspaceWatch";
+import { useProjectDir } from "../../stores/codingModeStore";
+import ProjectSelectModal from "../../components/ProjectSelectModal";
 import type { MdFileInfo } from "../../api/types";
 import styles from "./FileTree.module.less";
 
@@ -236,6 +240,21 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   const [loading, setLoading] = useState(false);
   const [selectedPath, setSelectedPath] = useState("");
   const [gitStatusMap, setGitStatusMap] = useState<GitStatusMap>(new Map());
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [projectName, setProjectName] = useState<string>("workspace");
+
+  const { projectDir, setProjectDir } = useProjectDir();
+
+  // Sync displayed project name from server
+  useEffect(() => {
+    codingProjectApi.get().then((info) => {
+      setProjectName(info.name);
+      if (!projectDir && !info.is_workspace_default) {
+        setProjectDir(info.path);
+      }
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectDir]);
 
   const loadGitStatus = useCallback(async () => {
     try {
@@ -306,8 +325,30 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
     [onFileSelect],
   );
 
+  const handleProjectConfirm = (_path: string | null) => {
+    setProjectModalOpen(false);
+    // Reload file tree after project switch
+    void load();
+  };
+
   return (
     <div className={styles.tree}>
+      {/* Project Picker (compact header bar) */}
+      <div className={styles.projectBar}>
+        <span className={styles.projectName} title={projectDir ?? "default workspace"}>
+          {projectName}
+        </span>
+        <Tooltip title="Switch Project">
+          <button
+            type="button"
+            className={styles.projectSwitchBtn}
+            onClick={() => setProjectModalOpen(true)}
+          >
+            <Settings2 size={12} />
+          </button>
+        </Tooltip>
+      </div>
+
       <div className={styles.treeHeader}>
         <span className={styles.treeTitle}>Files</span>
         <Tooltip title="Refresh">
@@ -338,6 +379,12 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
           ))}
         </div>
       )}
+
+      <ProjectSelectModal
+        open={projectModalOpen}
+        onClose={() => setProjectModalOpen(false)}
+        onConfirm={handleProjectConfirm}
+      />
     </div>
   );
 }
