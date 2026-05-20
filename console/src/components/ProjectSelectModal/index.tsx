@@ -204,16 +204,32 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
     }
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOver(true);
   };
 
-  const handleDragLeave = () => setDragOver(false);
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOver(false);
+
+    // Debug: log all data transfer types
+    console.debug("[ProjectSelectModal] drop types:", [...e.dataTransfer.types]);
+    for (const t of e.dataTransfer.types) {
+      console.debug(`[ProjectSelectModal]  ${t}:`, e.dataTransfer.getData(t));
+    }
 
     // 1. macOS Finder drag: text/uri-list = "file:///path/to/folder\r\n"
     const uriList = e.dataTransfer.getData("text/uri-list");
@@ -299,6 +315,7 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
         <>
           <div
             className={`${styles.dropZone} ${dragOver ? styles.dropZoneActive : ""}`}
+            onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
