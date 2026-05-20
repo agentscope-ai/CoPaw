@@ -49,6 +49,13 @@ class ChatSpec(BaseModel):
         default=False,
         description="Whether the chat is pinned to the top",
     )
+    deleted: bool = Field(
+        default=False,
+        description=(
+            "Soft delete flag. If True, chat is hidden "
+            "and cannot be revived."
+        ),
+    )
 
 
 class ChatUpdate(BaseModel):

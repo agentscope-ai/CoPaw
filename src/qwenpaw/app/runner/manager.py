@@ -60,10 +60,12 @@ class ChatManager:
                 f"list_chats: repo path={self._repo.path}, "
                 f"filters: user_id={user_id}, channel={channel}",
             )
-            return await self._repo.filter_chats(
+            chats = await self._repo.filter_chats(
                 user_id=user_id,
                 channel=channel,
             )
+            # Hide soft-deleted chats from the UI
+            return [c for c in chats if not c.deleted]
 
     async def get_chat(self, chat_id: str) -> Optional[ChatSpec]:
         """Get chat spec by chat_id (UUID).
@@ -110,6 +112,18 @@ class ChatManager:
                 channel,
             )
             if existing:
+                if existing.deleted:
+                    logger.warning(
+                        "get_or_create_chat: Found existing but DELETED "
+                        "chat: %s (session_id=%s). "
+                        "Blocking to prevent zombie session.",
+                        existing.id,
+                        session_id,
+                    )
+                    raise ValueError(
+                        f"Session {session_id} belongs to a deleted chat. "
+                        "Cron cannot execute on deleted sessions.",
+                    )
                 logger.debug(
                     f"get_or_create_chat: Found existing chat: {existing.id}",
                 )
@@ -206,23 +220,22 @@ class ChatManager:
         return await self.patch_chat(chat_id, ChatUpdate())
 
     async def delete_chats(self, chat_ids: list[str]) -> bool:
-        """Delete a chat spec.
+        """Soft delete chats to prevent resurrection by Cron jobs.
 
-        Note: This only deletes the spec. Redis session state is NOT deleted.
-
-        Args:
-            chat_ids: List of chat IDs
-
-        Returns:
-            True if deleted, False if not found
+        Instead of removing the record, we mark it as deleted.
+        This ensures that if a Cron job tries to use the old
+        session_id, the system rejects it instead of creating a
+        new spec for a zombie session.
         """
         async with self._lock:
-            deleted = await self._repo.delete_chats(chat_ids)
-
-            if deleted:
-                logger.debug(f"Deleted chats: {chat_ids}")
-
-            return deleted
+            success_count = 0
+            for chat_id in chat_ids:
+                chat = await self._repo.get_chat(chat_id)
+                if chat:
+                    chat.deleted = True
+                    await self._repo.upsert_chat(chat)
+                    success_count += 1
+            return success_count > 0
 
     async def count_chats(
         self,
@@ -243,7 +256,7 @@ class ChatManager:
                 user_id=user_id,
                 channel=channel,
             )
-            return len(chats)
+            return len([c for c in chats if not c.deleted])
 
     async def get_chat_id_by_session(
         self,
@@ -266,7 +279,9 @@ class ChatManager:
         async with self._lock:
             chats = await self._repo.filter_chats(channel=channel)
             matching_chats = [
-                chat for chat in chats if chat.session_id == session_id
+                chat
+                for chat in chats
+                if chat.session_id == session_id and not chat.deleted
             ]
 
             if not matching_chats:
