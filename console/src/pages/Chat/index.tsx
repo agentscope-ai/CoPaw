@@ -211,7 +211,7 @@ function useIMEComposition(isChatActive: () => boolean) {
 function useMultimodalCapabilities(
   refreshKey: number,
   locationPathname: string,
-  isChatActive: () => boolean,
+  _isChatActive: () => boolean,
   selectedAgent: string,
 ) {
   const [multimodalCaps, setMultimodalCaps] = useState<{
@@ -284,12 +284,20 @@ function useMultimodalCapabilities(
     fetchMultimodalCaps();
   }, [fetchMultimodalCaps, refreshKey]);
 
-  // Also poll caps when navigating back to chat
+  // Re-sync caps only when navigating FROM a non-chat page back to chat.
+  // Do NOT re-fetch when switching between sessions (e.g. /chat/A → /chat/B)
+  // because the agent/model config hasn't changed — avoids unnecessary
+  // models + active API calls on every session switch.
+  const prevChatPathRef = useRef(locationPathname);
   useEffect(() => {
-    if (isChatActive()) {
+    const prev = prevChatPathRef.current;
+    prevChatPathRef.current = locationPathname;
+    const wasOutsideChat = !prev.startsWith("/chat");
+    const isNowInChat = locationPathname.startsWith("/chat");
+    if (wasOutsideChat && isNowInChat) {
       fetchMultimodalCaps();
     }
-  }, [locationPathname, fetchMultimodalCaps, isChatActive]);
+  }, [locationPathname, fetchMultimodalCaps]);
 
   // Listen for model-switched event from ModelSelector
   useEffect(() => {
@@ -779,6 +787,12 @@ export default function ChatPage() {
       realId: string | null,
     ) => {
       if (!isChatActiveRef.current) return;
+
+      // Issue #4557: When a user-initiated session switch is in progress,
+      // handleSessionClick owns the navigate call. Do NOT navigate here
+      // to avoid race conditions and infinite loops.
+      if (sessionApi.isSessionSwitching) return;
+
       // Update URL when session is selected and different from current
       const targetId = realId || sessionId;
       if (!targetId) return;
@@ -808,6 +822,7 @@ export default function ChatPage() {
 
       if (targetId !== lastSessionIdRef.current) {
         lastSessionIdRef.current = targetId;
+        sessionApi.lastNavigatedChatId = targetId;
         navigateRef.current(`/chat/${targetId}`, { replace: true });
       }
     };
