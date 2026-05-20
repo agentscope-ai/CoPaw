@@ -19,9 +19,15 @@ export interface MarketSearchState {
   setQuery: (q: string) => void;
   results: MarketResult[];
   errors: MarketSearchError[];
+  globalError: string | null;
   loading: boolean;
   hasMore: boolean;
   loadMore: () => void;
+  retry: () => void;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 export function useMarketSearch(): MarketSearchState {
@@ -35,6 +41,7 @@ export function useMarketSearch(): MarketSearchState {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<MarketResult[]>([]);
   const [errors, setErrors] = useState<MarketSearchError[]>([]);
+  const [globalError, setGlobalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // null = exhausted; number = next page to request.
   const cursorsRef = useRef<Record<string, number | null>>({});
@@ -46,30 +53,28 @@ export function useMarketSearch(): MarketSearchState {
     [selectedProviderKeys],
   );
 
-  useEffect(() => {
-    let cancelled = false;
+  const providersSeqRef = useRef(0);
+  const fetchProviders = useCallback(() => {
+    const seq = ++providersSeqRef.current;
+    setGlobalError(null);
     marketApi
       .listMarketProviders()
       .then((list) => {
-        if (cancelled) return;
+        if (seq !== providersSeqRef.current) return;
         setProviders(list);
         const enabled = list.filter((p) => p.available).map((p) => p.key);
         setSelectedProviderKeys(new Set(enabled));
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (seq !== providersSeqRef.current) return;
         setProviders([]);
-        setErrors([
-          {
-            provider: "*",
-            message: err instanceof Error ? err.message : String(err),
-          },
-        ]);
+        setGlobalError(errorMessage(err));
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders]);
 
   const toggleProvider = useCallback((key: string) => {
     setSelectedProviderKeys((prev) => {
@@ -106,6 +111,8 @@ export function useMarketSearch(): MarketSearchState {
       lng: string,
     ) => {
       const seq = ++requestSeqRef.current;
+      // No providers / no query → empty search state, but preserve
+      // globalError so a failed provider list keeps surfacing.
       if (!q.trim() || Object.keys(pages).length === 0) {
         setResults([]);
         setErrors([]);
@@ -114,6 +121,7 @@ export function useMarketSearch(): MarketSearchState {
         return;
       }
       setLoading(true);
+      setGlobalError(null);
       marketApi
         .searchMarket({
           query: q.trim(),
@@ -127,12 +135,7 @@ export function useMarketSearch(): MarketSearchState {
         })
         .catch((err: unknown) => {
           if (seq !== requestSeqRef.current) return;
-          setErrors([
-            {
-              provider: "*",
-              message: err instanceof Error ? err.message : String(err),
-            },
-          ]);
+          setGlobalError(errorMessage(err));
           if (!append) {
             setResults([]);
             setHasMore(false);
@@ -153,6 +156,14 @@ export function useMarketSearch(): MarketSearchState {
     if (Object.keys(pages).length === 0) return;
     runFetch(debouncedQuery, pages, true, lang);
   }, [debouncedQuery, lang, runFetch]);
+
+  const retry = useCallback(() => {
+    if (providers.length === 0) {
+      fetchProviders();
+    } else {
+      loadMore();
+    }
+  }, [providers.length, fetchProviders, loadMore]);
 
   const setQuery = useCallback((q: string) => {
     setQueryState(q);
@@ -187,8 +198,10 @@ export function useMarketSearch(): MarketSearchState {
     setQuery,
     results,
     errors,
+    globalError,
     loading,
     hasMore,
     loadMore,
+    retry,
   };
 }

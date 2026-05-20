@@ -333,7 +333,7 @@ How it works:
 
 - Search runs in parallel across enabled providers; a failure on one provider surfaces as a banner while results from the others still render.
 - Each card has a target picker: **Pool** (shared) or **Workspace** (current agent).
-- Installs run through a queue (one at a time) with retry and cancel; name conflicts surface as a failed item with the server message — rename the existing skill (or the incoming one, by editing it after install) to retry.
+- Installs run through a queue (one at a time) with retry and cancel; name conflicts surface as a failed item with the server message — rename the existing workspace skill and retry the install.
 
 After install, every skill remembers its origin in an `installed_from` field, shown in the skill drawer as **Installed from**. Values include `clawhub`,
 `modelscope`, `aliyun`, `skills-sh`, `lobehub`, `skillsmp`, `github`, `url`, `zip`. Skills with no recorded origin (built-ins, hand-created, legacy entries) display an empty value.

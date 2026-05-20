@@ -2187,7 +2187,6 @@
     "noResults": "Nenhum resultado",
     "startTyping": "Digite uma consulta acima para buscar no mercado",
     "noDescription": "Nenhuma descrição fornecida",
-    "viewOnSource": "Ver em {{source}}",
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Instalar",
@@ -2207,7 +2206,6 @@
       "title": "Detalhes da habilidade",
       "version": "Versão",
       "author": "Autor",
-      "description": "Descrição",
       "sourceUrl": "URL de instalação",
       "slug": "Identificador",
       "missing": "—"

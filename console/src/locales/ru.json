@@ -2167,7 +2167,6 @@
     "noResults": "Ничего не найдено",
     "startTyping": "Введите запрос выше, чтобы найти навык в маркете",
     "noDescription": "Описание отсутствует",
-    "viewOnSource": "Открыть в {{source}}",
     "targetPool": "Пул",
     "targetWorkspace": "Рабочее пространство",
     "install": "Установить",
@@ -2187,7 +2186,6 @@
       "title": "Сведения о навыке",
       "version": "Версия",
       "author": "Автор",
-      "description": "Описание",
       "sourceUrl": "URL установки",
       "slug": "Идентификатор",
       "missing": "—"

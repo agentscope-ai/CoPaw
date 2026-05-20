@@ -2264,7 +2264,6 @@
     "noResults": "没有找到结果",
     "startTyping": "在上方输入关键字以搜索技能市场",
     "noDescription": "暂无描述",
-    "viewOnSource": "在 {{source}} 上查看",
     "targetPool": "技能池",
     "targetWorkspace": "工作区",
     "install": "安装",
@@ -2284,7 +2283,6 @@
       "title": "技能详情",
       "version": "版本",
       "author": "作者",
-      "description": "描述",
       "sourceUrl": "安装地址",
       "slug": "标识",
       "missing": "—"

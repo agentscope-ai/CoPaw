@@ -2152,7 +2152,6 @@
     "noResults": "結果が見つかりません",
     "startTyping": "上の検索ボックスにキーワードを入力してスキルを探します",
     "noDescription": "説明はありません",
-    "viewOnSource": "{{source}} で表示",
     "targetPool": "プール",
     "targetWorkspace": "ワークスペース",
     "install": "インストール",
@@ -2172,7 +2171,6 @@
       "title": "スキルの詳細",
       "version": "バージョン",
       "author": "作成者",
-      "description": "説明",
       "sourceUrl": "インストール URL",
       "slug": "識別子",
       "missing": "—"

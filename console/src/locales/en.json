@@ -2256,7 +2256,6 @@
     "noResults": "No results",
     "startTyping": "Type a query above to search the market",
     "noDescription": "No description provided",
-    "viewOnSource": "View on {{source}}",
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Install",
@@ -2276,7 +2275,6 @@
       "title": "Skill details",
       "version": "Version",
       "author": "Author",
-      "description": "Description",
       "sourceUrl": "Install URL",
       "slug": "Slug",
       "missing": "—"

@@ -671,7 +671,6 @@
     "noResults": "Tidak ada hasil",
     "startTyping": "Ketik kata kunci di atas untuk mencari di marketplace",
     "noDescription": "Tidak ada deskripsi",
-    "viewOnSource": "Lihat di {{source}}",
     "targetPool": "Pool",
     "targetWorkspace": "Workspace",
     "install": "Pasang",
@@ -691,7 +690,6 @@
       "title": "Detail skill",
       "version": "Versi",
       "author": "Penulis",
-      "description": "Deskripsi",
       "sourceUrl": "URL instalasi",
       "slug": "ID",
       "missing": "—"

@@ -155,6 +155,9 @@ function MarketPage() {
           })}
         </div>
 
+        {market.globalError && (
+          <div className={styles.errorRow}>{market.globalError}</div>
+        )}
         {market.errors.map((err) => {
           const provider = market.providers.find((p) => p.key === err.provider);
           const label = provider?.label ?? err.provider;
@@ -171,9 +174,10 @@ function MarketPage() {
               {t("common.loading")}
             </span>
           </div>
-        ) : market.results.length === 0 && market.errors.length > 0 ? (
+        ) : market.results.length === 0 &&
+          (market.globalError || market.errors.length > 0) ? (
           <EmptyState text={t("market.noResults")}>
-            <Button onClick={() => market.loadMore()} loading={market.loading}>
+            <Button onClick={() => market.retry()} loading={market.loading}>
               {t("market.retry")}
             </Button>
           </EmptyState>
