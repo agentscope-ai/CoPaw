@@ -30,7 +30,7 @@ from .prompt import (
     build_system_prompt_from_working_dir,
     get_active_model_supports_multimodal,
 )
-from .skills_manager import (
+from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
     get_workspace_skills_dir,
@@ -51,6 +51,7 @@ from .tools import (
     glob_search,
     grep_search,
     list_agents,
+    materialize_skill,
     read_file,
     send_file_to_user,
     set_user_timezone,
@@ -143,11 +144,27 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         running_config = agent_config.running
         self._language = agent_config.language
 
+        # Resolve effective skills once and share across toolkit /
+        # skill registration.
+        workspace_dir = self._workspace_dir or WORKING_DIR
+        ensure_skills_initialized(workspace_dir)
+        channel_name = self._request_context.get("channel", "console")
+        try:
+            effective_skills = resolve_effective_skills(
+                workspace_dir,
+                channel_name,
+            )
+        except Exception:  # pylint: disable=broad-except
+            effective_skills = []
+
         # Initialize toolkit with built-in tools
-        toolkit = self._create_toolkit(namesake_strategy=namesake_strategy)
+        toolkit = self._create_toolkit(
+            namesake_strategy=namesake_strategy,
+            effective_skills=effective_skills,
+        )
 
         # Load and register skills
-        self._register_skills(toolkit)
+        self._register_skills(toolkit, effective_skills=effective_skills)
 
         # Initialize memory_manager and context_manager for use
         # in _build_sys_prompt
@@ -217,6 +234,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
     def _create_toolkit(
         self,
         namesake_strategy: NamesakeStrategy = "skip",
+        effective_skills: list[str] | None = None,
     ) -> Toolkit:
         """Create and populate toolkit with built-in tools.
 
@@ -224,10 +242,13 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             namesake_strategy: Strategy to handle namesake tool functions.
                 Options: "override", "skip", "raise", "rename"
                 (default: "skip")
+            effective_skills: Skills enabled for this workspace + channel,
+                used to gate skill-specific tools.
 
         Returns:
             Configured toolkit instance
         """
+        effective_skills = effective_skills or []
         toolkit = Toolkit()
 
         # Check which tools are enabled from agent config
@@ -280,6 +301,12 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             "chat_with_agent": chat_with_agent,
             "submit_to_agent": submit_to_agent,
             "check_agent_task": check_agent_task,
+            # Register only when the `make-skill` skill is enabled.
+            **(
+                {"materialize_skill": materialize_skill}
+                if "make-skill" in effective_skills
+                else {}
+            ),
         }
 
         # Track hardcoded built-in tools for backward compatibility
@@ -370,27 +397,19 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         return toolkit
 
-    def _register_skills(self, toolkit: Toolkit) -> None:
+    def _register_skills(
+        self,
+        toolkit: Toolkit,
+        effective_skills: list[str],
+    ) -> None:
         """Load and register skills from workspace directory.
-
-        Uses the registry-backed skill resolver to determine effective
-        skills for the current channel.
 
         Args:
             toolkit: Toolkit to register skills to
+            effective_skills: Resolved skill names for the current
+                workspace + channel.
         """
         workspace_dir = self._workspace_dir or WORKING_DIR
-
-        ensure_skills_initialized(workspace_dir)
-
-        request_context = getattr(self, "_request_context", {})
-        channel_name = request_context.get("channel", "console")
-
-        effective_skills = resolve_effective_skills(
-            workspace_dir,
-            channel_name,
-        )
-
         working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
 
         for skill_name in effective_skills:
@@ -749,6 +768,17 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             self._fix_stringified_json_args(tool_call)
 
         nb = getattr(self, "plan_notebook", None)
+
+        # Pre-lock BEFORE executing create_plan / revise_current_plan so that
+        # parallel tool calls (asyncio.gather) cannot slip an execution
+        # tool past the gate before the lock is set.
+        # pylint: disable=protected-access
+        if nb is not None and tool_name in {
+            "create_plan",
+            "revise_current_plan",
+        }:
+            nb._plan_awaiting_user_confirm = True
+
         if nb is not None:
             err = check_plan_tool_gate(nb, tool_name)
             if err:
@@ -772,8 +802,15 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
 
         result = await super()._acting(tool_call)
 
-        if nb is not None and tool_name == "revise_current_plan":
-            nb._plan_just_mutated = True  # pylint: disable=protected-access
+        if nb is not None and tool_name in {
+            "create_plan",
+            "revise_current_plan",
+        }:
+            # Force the next post-plan reasoning pass to be text-only.  This
+            # prevents models from emitting other tools in the same turn
+            # run before the user has confirmed the plan or modified it.
+            # pylint: disable=protected-access
+            nb._plan_text_only_after_mutation = True
 
         return result
 
@@ -921,6 +958,30 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             return
         setattr(formatter, "_qwenpaw_force_strip_media", enabled)
 
+    @staticmethod
+    def _filter_plan_tools(msg: Msg, nb: Any) -> Msg:
+        """Arm `_plan_awaiting_user_confirm` before any tool runs.
+
+        Race-prevention: when the assistant message carries `create_plan` /
+        `revise_current_plan` alongside other ``tool_use`` blocks, callers
+        of ``asyncio.gather`` may hit `_acting()`` on sibling tools before
+        the mutation tool executes. Setting the lock here (before tools run)
+        makes `check_plan_tool_gate` refuse non-plan-management tools while
+        still returning a readable tool_result instead of stripping blocks.
+        """
+        if nb is None or not isinstance(msg.content, list):
+            return msg
+        mut = ("create_plan", "revise_current_plan")
+        if any(
+            isinstance(b, dict)
+            and b.get("type") == "tool_use"
+            and b.get("name", "") in mut
+            for b in msg.content
+        ):
+            # pylint: disable-next=protected-access
+            nb._plan_awaiting_user_confirm = True
+        return msg
+
     # pylint: disable=too-many-branches
     async def _reasoning(
         self,
@@ -936,10 +997,24 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
            then record the finding in the capability cache.
         3. If the model IS marked as multimodal but still errors on
            media, log a warning about possibly inaccurate capability flag.
+        4. Plan gate: `_filter_plan_tools` pre-locks when the assistant
+           schedules plan mutation tools; `_plan_text_only_after_mutation`
+           forces ``tool_choice="none"`` once so the model cannot issue
+           execution tools immediately after ``create_plan`` / revise.
 
         Calls ``super()._reasoning`` to keep the ToolGuardMixin
         interception active.
         """
+        nb = getattr(self, "plan_notebook", None)
+        if nb is not None and getattr(
+            nb,
+            "_plan_text_only_after_mutation",
+            False,
+        ):
+            # pylint: disable=protected-access
+            nb._plan_text_only_after_mutation = False
+            tool_choice = "none"
+
         # --- Proactive filtering layer ---
         should_strip = (
             not get_active_model_supports_multimodal()
@@ -1022,6 +1097,8 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         finally:
             if should_strip and self._uses_request_time_media_normalization():
                 self._set_formatter_media_strip(False)
+
+        msg = self._filter_plan_tools(msg, nb)
 
         return await self._auto_continue_if_text_only(msg, tool_choice)
 
@@ -1324,6 +1401,7 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
             set_current_workspace_dir,
             set_current_recent_max_bytes,
             set_current_shell_command_timeout,
+            set_current_shell_command_executable,
         )
 
         set_current_workspace_dir(self._workspace_dir)
@@ -1334,6 +1412,9 @@ class QwenPawAgent(ToolGuardMixin, ReActAgent):
         )
         set_current_shell_command_timeout(
             self._agent_config.running.shell_command_timeout,
+        )
+        set_current_shell_command_executable(
+            self._agent_config.running.shell_command_executable or None,
         )
 
         # Process file and media blocks in messages

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Coroutine
 
@@ -299,6 +301,56 @@ class AgentRunner(Runner):
         elif isinstance(content, str):
             last.content = new_text
 
+    async def _persist_exchange_to_session(
+        self,
+        session_id: str,
+        user_id: str,
+        channel: str,
+        msgs: list,
+        response_msg: "Msg",
+    ) -> None:
+        """Persist a user-message + response to session memory.
+
+        Used by early-exit paths (/mission info, /skill info) that bypass
+        the full agent pipeline and would otherwise leave session memory
+        unsaved — causing the response to vanish when the frontend
+        reloads the session from the backend.
+        """
+        if not session_id or not user_id:
+            return
+        try:
+            context_manager = self.context_manager
+            if context_manager is None:
+                return
+            memory = context_manager.get_agent_context()
+            if memory is None:
+                return
+            state = await self.session.get_session_state_dict(
+                session_id,
+                user_id,
+                channel,
+                allow_not_exist=True,
+            )
+            memory_state = (state or {}).get("agent", {}).get("memory", {})
+            memory.load_state_dict(memory_state, strict=False)
+            if msgs:
+                await memory.add(msgs[-1])
+            await memory.add(response_msg)
+            await self.session.update_session_state(
+                session_id=session_id,
+                key="agent.memory",
+                value=memory.state_dict(),
+                user_id=user_id,
+                channel=channel,
+            )
+            preview = session_id[:12] if len(session_id) >= 12 else session_id
+            logger.debug("Persisted exchange to session %s", preview)
+        except Exception:
+            logger.debug(
+                "Failed to persist exchange to session",
+                exc_info=True,
+            )
+
     async def query_handler(
         self,
         msgs,
@@ -368,6 +420,18 @@ class AgentRunner(Runner):
             if not isinstance(channel_meta, dict):
                 channel_meta = {}
             user_name = channel_meta.get("user_name")
+
+            # Load agent-specific configuration
+            agent_config = load_agent_config(self.agent_id)
+
+            _configured_shell = (
+                agent_config.running.shell_command_executable or None
+            )
+            _default_shell = (
+                _configured_shell
+                or os.environ.get("SHELL")
+                or ("cmd.exe" if sys.platform == "win32" else "/bin/sh")
+            )
             env_context = build_env_context(
                 session_id=session_id,
                 user_id=user_id,
@@ -378,15 +442,13 @@ class AgentRunner(Runner):
                     if self.workspace_dir
                     else str(WORKING_DIR)
                 ),
+                default_shell=_default_shell,
             )
 
             # Get MCP clients from manager (hot-reloadable)
             mcp_clients = []
             if self._mcp_manager is not None:
                 mcp_clients = await self._mcp_manager.get_clients()
-
-            # Load agent-specific configuration
-            agent_config = load_agent_config(self.agent_id)
 
             logger.debug(f"Enabled MCP: {mcp_clients}")
 
@@ -396,7 +458,11 @@ class AgentRunner(Runner):
                 "user_id": user_id,
                 "channel": channel,
                 "agent_id": self.agent_id,
+                "root_agent_id": self.agent_id,
             }
+            payload_context = getattr(request, "request_context", None)
+            if isinstance(payload_context, dict):
+                base_request_context.update(payload_context)
 
             # Extract root_session_id from request payload (agent chat)
             payload_root_session = getattr(request, "root_session_id", "")
@@ -438,6 +504,13 @@ class AgentRunner(Runner):
                 agent_name=self.agent_name,
             )
             if isinstance(mission_result, Msg):
+                await self._persist_exchange_to_session(
+                    session_id,
+                    user_id,
+                    channel,
+                    msgs,
+                    mission_result,
+                )
                 yield mission_result, True
                 return
             if isinstance(mission_result, dict):
@@ -528,6 +601,13 @@ class AgentRunner(Runner):
                         nb,
                         plan,
                     ):
+                        if getattr(nb, "_loading_from_state", False):
+                            nb._qp_had_plan = plan is not None
+                            nb._qp_prev_plan_id = (
+                                plan.id if plan is not None else None
+                            )
+                            return
+
                         had_plan = getattr(nb, "_qp_had_plan", False)
                         prev_id = getattr(nb, "_qp_prev_plan_id", None)
 
@@ -539,6 +619,7 @@ class AgentRunner(Runner):
                         else:
                             if had_plan:
                                 nb._plan_recently_finished = True
+                                nb._plan_awaiting_user_confirm = False
                             nb._qp_prev_plan_id = None
                         nb._qp_had_plan = plan is not None
 
@@ -627,6 +708,13 @@ class AgentRunner(Runner):
                     agent.toolkit.skills,
                 )
                 if skill_response is not None:
+                    await self._persist_exchange_to_session(
+                        session_id,
+                        user_id,
+                        channel,
+                        msgs,
+                        skill_response,
+                    )
                     yield skill_response, True
                     return
 
@@ -660,6 +748,12 @@ class AgentRunner(Runner):
                         exc_info=True,
                     )
 
+            if plan_notebook is not None:
+                setattr(
+                    plan_notebook,
+                    "_loading_from_state",
+                    True,  # pylint: disable=protected-access
+                )
             try:
                 await self.session.load_session_state(
                     session_id=session_id,
@@ -673,7 +767,19 @@ class AgentRunner(Runner):
                     "will save fresh state on completion to recover file",
                     e,
                 )
+            finally:
+                if plan_notebook is not None:
+                    setattr(
+                        plan_notebook,
+                        "_loading_from_state",
+                        False,  # pylint: disable=protected-access
+                    )
             session_state_loaded = True
+
+            if plan_notebook is not None:
+                from ...plan.hints import clear_plan_awaiting_user_confirm
+
+                clear_plan_awaiting_user_confirm(plan_notebook)
 
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved

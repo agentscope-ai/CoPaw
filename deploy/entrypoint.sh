@@ -4,13 +4,18 @@
 set -e
 
 # Auto-initialize if config.json is missing (bind mount with empty directory).
-if [ ! -f "${QWENPAW_WORKING_DIR}/config.json" ]; then
-  echo "⚠️  No config.json found in ${QWENPAW_WORKING_DIR}"
-  echo "📦 Running initialization..."
-  qwenpaw init --defaults --accept-security
-  echo "✅ Initialization complete!"
+# Set QWENPAW_AUTO_INITIALIZATION=0 to skip (e.g. during image warm-up).
+if [ "${QWENPAW_AUTO_INITIALIZATION:-1}" = "0" ]; then
+  echo "Skipping initialization."
 else
-  echo "✓ Config found in ${QWENPAW_WORKING_DIR}, skipping initialization."
+  if [ ! -f "${QWENPAW_WORKING_DIR}/config.json" ]; then
+    echo "⚠️  No config.json found in ${QWENPAW_WORKING_DIR}"
+    echo "📦 Running initialization..."
+    qwenpaw init --defaults --accept-security
+    echo "✅ Initialization complete!"
+  else
+    echo "✓ Config found in ${QWENPAW_WORKING_DIR}, skipping initialization."
+  fi
 fi
 
 export QWENPAW_PORT="${QWENPAW_PORT:-8088}"

@@ -21,6 +21,7 @@ export const KEY_TO_PATH: Record<string, string> = {
   chat: "/chat",
   channels: "/channels",
   sessions: "/sessions",
+  inbox: "/inbox",
   "cron-jobs": "/cron-jobs",
   heartbeat: "/heartbeat",
   skills: "/skills",
@@ -39,12 +40,14 @@ export const KEY_TO_PATH: Record<string, string> = {
   "voice-transcription": "/voice-transcription",
   debug: "/debug",
   backups: "/backups",
+  "plugin-manager": "/plugin-manager",
 };
 
 export const KEY_TO_LABEL: Record<string, string> = {
   chat: "nav.chat",
   channels: "nav.channels",
   sessions: "nav.sessions",
+  inbox: "nav.inbox",
   "cron-jobs": "nav.cronJobs",
   heartbeat: "nav.heartbeat",
   skills: "nav.skills",
@@ -76,6 +79,11 @@ export const getFaqUrl = (lang: string): string =>
 
 export const getReleaseNotesUrl = (lang: string): string =>
   `https://qwenpaw.agentscope.io/release-notes?lang=${getWebsiteLang(lang)}`;
+
+export const getFeatureDemosUrl = (lang: string): string =>
+  `https://qwenpaw.agentscope.io/docs/functiondemo?lang=${getWebsiteLang(
+    lang,
+  )}`;
 
 // ── Version helpers ────────────────────────────────────────────────────────
 
@@ -156,7 +164,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 升级后重启服务 qwenpaw app。`,
@@ -188,7 +196,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,
@@ -220,7 +228,7 @@ pip install -e .
 
 \`\`\`
 docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working agentscope/qwenpaw:latest
+docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
 \`\`\`
 
 After upgrading, restart the service with \`qwenpaw app\`.`,

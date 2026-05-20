@@ -134,8 +134,10 @@ class WeChatChannel(BaseChannel):
         self._client: Optional[ILinkClient] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._poll_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._poll_task: Optional[asyncio.Task] = None
         self._poll_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._loop_accepting = threading.Event()  # cleared on stop
 
         # Cursor for long-polling (get_updates_buf)
         self._cursor: str = ""
@@ -159,6 +161,45 @@ class WeChatChannel(BaseChannel):
             Callable[[], None],
         ] = {}  # user_id -> stop function
         self._typing_stop_lock = threading.Lock()
+
+    # ------------------------------------------------------------------
+    # Thread-safe helpers
+    # ------------------------------------------------------------------
+
+    def _dispatch_to_main_loop(
+        self,
+        coro: Any,
+        *,
+        description: str = "",
+    ) -> bool:
+        """Safely dispatch a coroutine to the main event loop from poll thread.
+
+        Returns True if successfully dispatched, False if loop is unavailable.
+        Prevents RuntimeError when the main loop has already stopped.
+        If dispatch fails, the coroutine is closed to suppress
+        'coroutine was never awaited' warnings.
+        """
+        if not self._loop_accepting.is_set():
+            logger.debug(
+                "wechat: skipping dispatch (loop not accepting): %s",
+                description,
+            )
+            coro.close()
+            return False
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            coro.close()
+            return False
+        try:
+            asyncio.run_coroutine_threadsafe(coro, loop)
+            return True
+        except RuntimeError:
+            logger.debug(
+                "wechat: dispatch failed (loop stopped): %s",
+                description,
+            )
+            coro.close()
+            return False
 
     # ------------------------------------------------------------------
     # Factory methods
@@ -454,10 +495,15 @@ class WeChatChannel(BaseChannel):
         asyncio.set_event_loop(poll_loop)
         self._poll_loop = poll_loop
         try:
-            poll_loop.run_until_complete(self._poll_loop_async())
+            # Wrap in a task so stop() can cancel it gracefully
+            self._poll_task = poll_loop.create_task(self._poll_loop_async())
+            poll_loop.run_until_complete(self._poll_task)
+        except asyncio.CancelledError:
+            logger.info("wechat: poll task cancelled (graceful stop)")
         except Exception:
             logger.exception("wechat: poll thread failed")
         finally:
+            self._poll_task = None
             try:
                 pending = asyncio.all_tasks(poll_loop)
                 for task in pending:
@@ -481,6 +527,11 @@ class WeChatChannel(BaseChannel):
         )
         await client.start()
         cursor = self._cursor
+
+        # Circuit breaker: exponential backoff on consecutive failures
+        consecutive_failures = 0
+        max_backoff_seconds = 120  # cap at 2 minutes
+
         try:
             while not self._stop_event.is_set():
                 try:
@@ -493,6 +544,10 @@ class WeChatChannel(BaseChannel):
                     msgs: List[Dict[str, Any]] = data.get("msgs") or []
                     for msg in msgs:
                         await self._on_message(msg, client)
+
+                    # Reset circuit breaker on any successful poll
+                    consecutive_failures = 0
+
                     # ret=-1 is normal long-poll timeout (no new messages)
                     if ret != 0 and not msgs:
                         if ret == -1:
@@ -510,9 +565,18 @@ class WeChatChannel(BaseChannel):
                 except asyncio.CancelledError:
                     break
                 except Exception:
-                    logger.exception("wechat poll error, retry in 5s")
+                    consecutive_failures += 1
+                    backoff = min(
+                        5 * (2 ** (consecutive_failures - 1)),
+                        max_backoff_seconds,
+                    )
+                    logger.exception(
+                        "wechat poll error (%d consecutive), retry in %ds",
+                        consecutive_failures,
+                        backoff,
+                    )
                     if not self._stop_event.is_set():
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(backoff)
         finally:
             await client.stop()
 
@@ -743,16 +807,15 @@ class WeChatChannel(BaseChannel):
                     is_group,
                 )
                 if error_msg and context_token:
-                    if self._loop:
-                        asyncio.run_coroutine_threadsafe(
-                            self._send_text_direct(
-                                from_user_id,
-                                error_msg,
-                                context_token,
-                                client,
-                            ),
-                            self._loop,
-                        )
+                    self._dispatch_to_main_loop(
+                        self._send_text_direct(
+                            from_user_id,
+                            error_msg,
+                            context_token,
+                            client,
+                        ),
+                        description="send deny message",
+                    )
                 return
 
             # Save latest context_token for proactive sends (heartbeat/cron)
@@ -781,11 +844,10 @@ class WeChatChannel(BaseChannel):
                     with self._typing_stop_lock:
                         self._typing_stop_funcs[from_user_id] = stop_func
 
-                if self._loop and self._loop.is_running():
-                    asyncio.run_coroutine_threadsafe(
-                        _start_typing_on_receive(),
-                        self._loop,
-                    )
+                self._dispatch_to_main_loop(
+                    _start_typing_on_receive(),
+                    description="start typing indicator",
+                )
 
             session_id = self.resolve_session_id(from_user_id, meta)
             native = {
@@ -1614,6 +1676,7 @@ class WeChatChannel(BaseChannel):
 
         self._loop = asyncio.get_running_loop()
         self._stop_event.clear()
+        self._loop_accepting.set()  # main loop is ready to accept tasks
 
         # Launch background long-poll thread
         self._poll_thread = threading.Thread(
@@ -1630,10 +1693,13 @@ class WeChatChannel(BaseChannel):
     async def stop(self) -> None:
         if not self.enabled:
             return
+        # Signal poll thread to stop accepting new work BEFORE stopping loop
+        self._loop_accepting.clear()
         self._stop_event.set()
-        if self._poll_loop is not None:
+        # Cancel the poll task gracefully instead of brute-force stopping loop
+        if self._poll_loop is not None and self._poll_task is not None:
             try:
-                self._poll_loop.call_soon_threadsafe(self._poll_loop.stop)
+                self._poll_loop.call_soon_threadsafe(self._poll_task.cancel)
             except Exception:
                 pass
         if self._poll_thread:

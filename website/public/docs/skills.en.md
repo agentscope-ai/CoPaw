@@ -281,6 +281,30 @@ This skill is used for…
 Manually placed skills are detected on the next manifest reconcile and added
 to `skill.json` as **disabled**. Enable them in the Console or CLI.
 
+### 6. Create from current session via /make-skill (Beta)
+
+When you've just walked through a workflow in chat: tried tools, hit
+errors, found a working approach.
+Turn that session into a skill:
+
+```
+/make-skill cooking
+```
+
+You'll see a short plan card with the proposed skill name and step
+outline. Approve, refine, or cancel in natural language. After approval
+the agent writes the skill based on the conversation and saves it to
+your workspace, **enabled by default**.
+
+`<focus>` becomes the skill name; internal spaces collapse to `-`
+(e.g. `view image debug` → `view-image-debug`). Other characters
+(Chinese, case, digits) are kept as-is.
+
+`/make-skill` is itself a built-in skill — make sure it's enabled in
+your workspace via `/skills` before invoking.
+
+---
+
 Common workspace operations:
 
 - **Enable / disable:** Turn a skill on or off without changing its files.

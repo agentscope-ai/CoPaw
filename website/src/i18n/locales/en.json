@@ -225,8 +225,10 @@
       "x": "X",
       "github": "GitHub",
       "discord": "Discord",
-      "wechat": "WeChat Official Account",
-      "youtube": "YouTube"
+      "dingtalk": "DingTalk",
+      "xiaohongshu": "Xiaohongshu",
+      "wechat": "WeChat",
+      "douyin": "Douyin"
     },
     "copyright": "© 2026 Qwenpaw PRIVATE LIMITED, All rights reserved.",
     "poweredBy": {
@@ -254,6 +256,7 @@
     "intro": "Introduction",
     "quickstart": "Quick start",
     "desktop": "Desktop App",
+    "demo": "Feature Demos",
     "console": "Console",
     "multiAgent": "Multi-Agent",
     "models": "Models",
@@ -266,6 +269,7 @@
     "context": "Context",
     "commands": "Magic commands",
     "plan": "Plan mode",
+    "cron": "Cron Jobs",
     "heartbeat": "Heartbeat",
     "config": "Config & working dir",
     "security": "Security",
@@ -288,6 +292,13 @@
     "closeSidebar": "Close sidebar",
     "onThisPage": "On this page",
     "videoNotSupported": "Your browser does not support the video tag.",
+    "demoTitle": "Feature Demos",
+    "demoVideos": {
+      "skill": "/skills: On-demand agent skill invocation",
+      "doctor": "QwenPaw Doctor: One-click comprehensive system diagnostics",
+      "missionMode": "QwenPaw Mission Mode: Autonomous execution for complex tasks"
+    },
+    "textVersion": "View text documentation",
     "backToTop": "Back to top",
     "copy": "Copy",
     "copied": "Copied",
@@ -471,7 +482,12 @@
     "helpTitle": "Need Help?",
     "helpPrefix": "See the",
     "helpLink": "installation guide",
-    "helpSuffix": "for detailed setup instructions."
+    "helpSuffix": "for detailed setup instructions.",
+    "pluginsTitle": "Plugins",
+    "pluginsDesc": "Bundled and tool plugins discovered in the QwenPaw repository. Download a .zip package to install manually.",
+    "kindBundle": "Bundle",
+    "kindTool": "Tool",
+    "downloadZip": "Download .zip"
   },
   "releaseNotes": {
     "title": "Release Notes",
