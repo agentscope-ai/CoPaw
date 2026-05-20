@@ -79,14 +79,18 @@ async def get_project(request: Request) -> dict:
     """Return the active coding project path.
 
     Also indicates whether it differs from the workspace default.
+    The ``workspace_dir`` field always contains the agent's default workspace
+    directory so callers can display it without a separate request.
     """
     workspace = await get_agent_for_request(request)
     coding_dir = get_coding_dir(workspace)
-    is_workspace = coding_dir.resolve() == workspace.workspace_dir.resolve()
+    workspace_dir = workspace.workspace_dir
+    is_workspace = coding_dir.resolve() == workspace_dir.resolve()
     return {
         "path": str(coding_dir),
         "name": coding_dir.name,
         "is_workspace_default": is_workspace,
+        "workspace_dir": str(workspace_dir),
         "exists": coding_dir.exists(),
     }
 

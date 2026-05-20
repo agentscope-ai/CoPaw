@@ -6,6 +6,7 @@ export interface CodingProjectInfo {
   path: string;
   name: string;
   is_workspace_default: boolean;
+  workspace_dir?: string;
   exists?: boolean;
 }
 

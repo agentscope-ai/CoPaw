@@ -40,10 +40,10 @@ interface CloneEvent {
 // ---------------------------------------------------------------------------
 
 function WorkspaceTab({
-  currentProjectDir,
+  workspaceDir,
   onSelect,
 }: {
-  currentProjectDir: string | null;
+  workspaceDir: string | null;
   onSelect: (path: null) => void;
 }) {
   const { t } = useTranslation();
@@ -55,10 +55,10 @@ function WorkspaceTab({
         message={t("codingMode.workspaceDesc")}
         className={styles.workspaceAlert}
       />
-      {currentProjectDir && (
+      {workspaceDir && (
         <div className={styles.currentInfo}>
-          <span className={styles.currentLabel}>{t("codingMode.currentProject")}:</span>
-          <code className={styles.currentPath}>{currentProjectDir}</code>
+          <span className={styles.currentLabel}>{t("codingMode.workingDir")}:</span>
+          <code className={styles.currentPath}>{workspaceDir}</code>
         </div>
       )}
       <Button type="primary" onClick={() => onSelect(null)} className={styles.actionBtn}>
@@ -342,6 +342,12 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
               onClick={() => { setLocalSel(null); setError(null); }}
             />
           </div>
+          <Alert
+            type="warning"
+            showIcon
+            message={t("codingMode.importCopyNote")}
+            className={styles.alert}
+          />
           {error && <Alert type="error" message={error} showIcon className={styles.alert} />}
           <Button
             type="primary"
@@ -463,22 +469,18 @@ export default function ProjectSelectModal({
   onConfirm,
 }: ProjectSelectModalProps) {
   const { t } = useTranslation();
-  const { projectDir, setProjectDir } = useProjectDir();
+  const { setProjectDir } = useProjectDir();
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [activeTab, setActiveTab] = useState("workspace");
-
-  // Load recent projects when modal opens
-  const loadProjects = async () => {
-    try {
-      const list = await codingProjectApi.list();
-      setProjects(list);
-    } catch {
-      // ignore
-    }
-  };
+  // The agent's default workspace directory (fetched from backend)
+  const [workspaceDir, setWorkspaceDir] = useState<string | null>(null);
 
   const handleOpen = () => {
-    void loadProjects();
+    codingProjectApi.list().then(setProjects).catch(() => undefined);
+    // GET returns workspace_dir field alongside the active project
+    codingProjectApi.get().then((info) => {
+      if (info.workspace_dir) setWorkspaceDir(info.workspace_dir);
+    }).catch(() => undefined);
   };
 
   const handleConfirm = async (path: string | null) => {
@@ -522,7 +524,7 @@ export default function ProjectSelectModal({
       ),
       children: (
         <WorkspaceTab
-          currentProjectDir={projectDir ?? null}
+          workspaceDir={workspaceDir}
           onSelect={() => void handleConfirm(null)}
         />
       ),

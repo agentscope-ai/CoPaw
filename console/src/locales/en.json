@@ -2282,6 +2282,8 @@
     "dropSecondary": "Drag from Finder or paste a path below",
     "pathHint": "Please enter the full absolute path (starting with / or ~)",
     "importing": "Importing...",
-    "dropFailed": "Failed to read folder"
+    "dropFailed": "Failed to read folder",
+    "workingDir": "Working directory",
+    "importCopyNote": "The folder will be copied into coding_projects/. Original files will not be modified."
   }
 }
