@@ -37,6 +37,7 @@ _active_desktop_base: str | None = None
 # monotonic deadline to avoid hammering localhost on every chat token.
 _DESKTOP_UNREACHABLE_UNTIL = 0.0
 _HEALTH_RETRY_SEC = 3.0
+_EVENT_SERIAL = 0
 
 
 def _mark_desktop_owned() -> None:
@@ -80,23 +81,6 @@ TOKEN_PATH = Path(
         str(Path.home() / ".qwenpaw-pet/runtime/update-token"),
     ),
 )
-
-EVENT_TO_STATE = {
-    "qwenpaw.startup": "waving",
-    "qwenpaw.shutdown": "idle",
-    "query.received": "jumping",
-    "query.running": "running",
-    "query.first_token": "review",
-    "query.done": "review",
-    "tool.detected": "running",
-    "tool.result": "review",
-    "query.cancelled": "waiting",
-    "query.error": "failed",
-    "approval.pending": "waiting",
-    "approval.resolved": "idle",
-    "approval.bulk_cancel": "idle",
-    "idle": "idle",
-}
 
 
 def _read_token() -> str | None:
@@ -598,11 +582,15 @@ def emit_pet_event(event: str, **payload: Any) -> None:
         )
         return
 
-    state = payload.pop("state", None) or EVENT_TO_STATE.get(event, "idle")
+    global _EVENT_SERIAL
+    _EVENT_SERIAL += 1
+    # Do not pre-resolve ``state`` here — the desktop pet maps ``event`` via
+    # its own ``EVENT_TO_STATE`` so animation tweaks in ``sprites.py`` take
+    # effect after restarting the pet desktop only.
     body = {
         "event": event,
-        "state": state,
         "source": "qwenpaw",
+        "serial": _EVENT_SERIAL,
         **payload,
     }
     base = _active_desktop_base
