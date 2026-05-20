@@ -82,8 +82,7 @@ async def set_user_timezone(timezone_name: str) -> ToolResponse:
     save_config(config)
 
     time_str = (
-        f"{now.strftime('%Y-%m-%d %H:%M:%S')} "
-        f"{tz_name} ({now.strftime('%A')})"
+        f"{now.strftime('%Y-%m-%d %H:%M:%S')} {tz_name} ({now.strftime('%A')})"
     )
     return ToolResponse(
         content=[
