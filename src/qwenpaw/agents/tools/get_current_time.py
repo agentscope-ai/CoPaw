@@ -34,8 +34,7 @@ async def get_current_time() -> ToolResponse:
         user_tz = "UTC"
 
     time_str = (
-        f"{now.strftime('%Y-%m-%d %H:%M:%S')} "
-        f"{user_tz} ({now.strftime('%A')})"
+        f"{now.strftime('%Y-%m-%d %H:%M:%S')} {user_tz} ({now.strftime('%A')})"
     )
 
     return ToolResponse(
