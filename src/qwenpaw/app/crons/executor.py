@@ -22,6 +22,77 @@ class CronExecutor:
         self._runner = runner
         self._channel_manager = channel_manager
 
+    @staticmethod
+    def _run_session_id(
+        *,
+        job_id: str | None,
+        target_session_id: str | None,
+        run_id: str,
+    ) -> str:
+        """Return a fresh cron execution session id."""
+        base_session_id = (
+            f"{target_session_id}:cron:{job_id}"
+            if target_session_id
+            else f"cron:{job_id}"
+        )
+        return f"{base_session_id}:run:{run_id}"
+
+    async def _target_session_exists(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        channel: str,
+    ) -> bool | None:
+        """Return whether the target session is still an active chat."""
+        chat_manager = getattr(self._runner, "_chat_manager", None)
+        list_chats = getattr(chat_manager, "list_chats", None)
+        if not callable(list_chats):
+            return None
+
+        chats = await list_chats(user_id=user_id, channel=channel)
+        return any(chat.session_id == session_id for chat in chats)
+
+    async def _resolve_agent_session_id(
+        self,
+        *,
+        job: CronJobSpec,
+        target_session_id: str | None,
+        target_user_id: str,
+        target_channel: str,
+        run_id: str,
+    ) -> str:
+        """Resolve which session id a cron agent run should use."""
+        if not job.runtime.share_session:
+            return self._run_session_id(
+                job_id=job.id,
+                target_session_id=target_session_id,
+                run_id=run_id,
+            )
+
+        if not target_session_id:
+            return f"cron:{job.id}"
+
+        exists = await self._target_session_exists(
+            session_id=target_session_id,
+            user_id=target_user_id,
+            channel=target_channel,
+        )
+        if exists is False:
+            logger.info(
+                "cron agent: target session no longer exists; "
+                "using fresh run session job_id=%s session_id=%s",
+                job.id,
+                target_session_id[:40],
+            )
+            return self._run_session_id(
+                job_id=job.id,
+                target_session_id=target_session_id,
+                run_id=run_id,
+            )
+
+        return target_session_id
+
     # pylint: disable=too-many-statements
     async def execute(self, job: CronJobSpec) -> dict[str, Any]:
         """Execute one job once.
@@ -89,18 +160,15 @@ class CronExecutor:
         req["channel"] = target_channel
         req["user_id"] = target_user_id or "cron"
 
-        # Determine session_id based on share_session
-        share_session = job.runtime.share_session
         run_id = str(uuid.uuid4())
-        if share_session:
-            req["session_id"] = target_session_id or f"cron:{job.id}"
-        else:
-            req["session_id"] = (
-                f"{target_session_id}:cron:{run_id}"
-                if target_session_id
-                else f"cron:{run_id}"
-            )
 
+        req["session_id"] = await self._resolve_agent_session_id(
+            job=job,
+            target_session_id=target_session_id,
+            target_user_id=req["user_id"],
+            target_channel=target_channel,
+            run_id=run_id,
+        )
         delivery_error: str | None = None
         baseline_messages = await read_session_messages(
             runner=self._runner,

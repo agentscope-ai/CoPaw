@@ -33,6 +33,7 @@ export interface CronJobRuntime {
   max_concurrency?: number;
   timeout_seconds?: number;
   misfire_grace_seconds?: number;
+  share_session?: boolean;
 }
 
 export interface CronJobRequest {
