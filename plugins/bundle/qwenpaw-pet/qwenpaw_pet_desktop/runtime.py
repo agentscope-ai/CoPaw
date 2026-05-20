@@ -156,6 +156,21 @@ def read_pid() -> int | None:
     return pid if isinstance(pid, int) and pid > 0 else None
 
 
+def _tasklist_has_no_matching_pid(stdout: str) -> bool:
+    text = stdout.strip()
+    if not text:
+        return True
+    lower = text.lower()
+    if lower.startswith("info:"):
+        return True
+    if "no tasks are running" in lower:
+        return True
+    # Localized Windows (e.g. zh-CN): "没有运行的任务匹配指定标准。"
+    if "没有" in text and "任务" in text:
+        return True
+    return False
+
+
 def _pid_exists_win32(pid: int) -> bool:
     try:
         result = subprocess.run(
@@ -166,14 +181,26 @@ def _pid_exists_win32(pid: int) -> bool:
             check=False,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        # If we cannot probe, assume it exists so shutdown still tries
+        # ``taskkill`` rather than skipping a live pet window.
+        return True
+    stdout = result.stdout or ""
+    if _tasklist_has_no_matching_pid(stdout):
         return False
-    line = (result.stdout or "").strip()
-    if not line or "No tasks are running" in line:
-        return False
-    try:
-        return int(line.split(",")[1].strip().strip('"')) == pid
-    except (IndexError, ValueError):
-        return str(pid) in line
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line or line.lower().startswith("info:"):
+            continue
+        parts = line.split(",")
+        if len(parts) >= 2:
+            try:
+                if int(parts[1].strip().strip('"')) == pid:
+                    return True
+            except (IndexError, ValueError):
+                pass
+        if str(pid) in line:
+            return True
+    return False
 
 
 def _pid_exists_posix(pid: int) -> bool:
@@ -210,7 +237,25 @@ def _wait_for_pid_exit(pid: int, grace: float) -> bool:
     return not pid_exists(pid)
 
 
-def _terminate_process_tree_win32(pid: int, *, grace: float) -> bool:
+def _terminate_process_tree_win32(
+    pid: int,
+    *,
+    grace: float,
+    aggressive: bool = False,
+) -> bool:
+    if aggressive:
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return not pid_exists(pid)
+
     try:
         subprocess.run(
             ["taskkill", "/T", "/PID", str(pid)],
@@ -228,7 +273,7 @@ def _terminate_process_tree_win32(pid: int, *, grace: float) -> bool:
             ["taskkill", "/F", "/T", "/PID", str(pid)],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=15,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -277,7 +322,12 @@ def _terminate_process_tree_unix(  # pylint: disable=too-many-return-statements
     return True
 
 
-def terminate_process_tree(pid: int, *, grace: float = 2.0) -> bool:
+def terminate_process_tree(
+    pid: int,
+    *,
+    grace: float = 2.0,
+    aggressive: bool = False,
+) -> bool:
     """Best-effort terminate ``pid`` (and children on Windows).
 
     Returns ``True`` when the process is no longer running by the end.
@@ -285,7 +335,11 @@ def terminate_process_tree(pid: int, *, grace: float = 2.0) -> bool:
     if not pid_exists(pid):
         return True
     if sys.platform == "win32":
-        return _terminate_process_tree_win32(pid, grace=grace)
+        return _terminate_process_tree_win32(
+            pid,
+            grace=grace,
+            aggressive=aggressive,
+        )
     return _terminate_process_tree_unix(pid, grace=grace)
 
 

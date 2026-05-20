@@ -335,13 +335,22 @@ def _spawn_desktop_background() -> tuple[bool, str | None]:
         return False, f"failed to start desktop: {exc}"
 
 
-def _stop_pid(pid: int, *, grace: float = 2.0) -> bool:
+def _stop_pid(
+    pid: int,
+    *,
+    grace: float = 2.0,
+    aggressive: bool = False,
+) -> bool:
     """Best-effort terminate ``pid`` (delegates to runtime helpers)."""
     try:
         from qwenpaw_pet_desktop import runtime as pet_rt
     except ImportError:
         return False
-    return pet_rt.terminate_process_tree(pid, grace=grace)
+    return pet_rt.terminate_process_tree(
+        pid,
+        grace=grace,
+        aggressive=aggressive,
+    )
 
 
 def _stop_desktop_skip_reason(*, force: bool) -> str | None:
@@ -352,7 +361,12 @@ def _stop_desktop_skip_reason(*, force: bool) -> str | None:
     return None
 
 
-def stop_desktop(*, force: bool = False) -> dict[str, Any]:
+def stop_desktop(
+    *,
+    force: bool = False,
+    aggressive: bool = False,
+    grace: float = 2.0,
+) -> dict[str, Any]:
     """Stop the pet desktop process that this QwenPaw process manages.
 
     Called from ``_shutdown`` so the floating pet exits together with
@@ -366,6 +380,9 @@ def stop_desktop(*, force: bool = False) -> dict[str, Any]:
     responding at startup / explicit ``desktop/start`` time. Pass
     ``force=True`` to stop a desktop that QwenPaw never observed (e.g.
     started just now by another tool while QwenPaw was already up).
+
+    ``aggressive=True`` skips gentle shutdown (important on Windows
+    where Qt may ignore ``taskkill`` without ``/F``).
     """
     skip = _stop_desktop_skip_reason(force=force)
     if skip is not None:
@@ -381,6 +398,12 @@ def stop_desktop(*, force: bool = False) -> dict[str, Any]:
         }
 
     pid = pet_rt.read_pid()
+    if not pid and force:
+        health = desktop_health()
+        if isinstance(health, dict):
+            health_pid = health.get("pid")
+            if isinstance(health_pid, int) and health_pid > 0:
+                pid = health_pid
     if not pid:
         _clear_desktop_base_url_cache()
         return {"ok": True, "stopped": False, "reason": "no pid file"}
@@ -391,11 +414,16 @@ def stop_desktop(*, force: bool = False) -> dict[str, Any]:
         )
         _clear_desktop_base_url_cache()
         return {"ok": True, "stopped": False, "reason": "pid is qwenpaw"}
-    if not pet_rt.is_pid_running(pid):
+    running = pet_rt.is_pid_running(pid)
+    if not running and not force:
         _clear_desktop_base_url_cache()
         return {"ok": True, "stopped": False, "reason": "not running"}
 
-    stopped = _stop_pid(pid)
+    stopped = _stop_pid(
+        pid,
+        grace=grace,
+        aggressive=aggressive or not running,
+    )
     _clear_desktop_base_url_cache()
     return {"ok": True, "stopped": stopped, "pid": pid}
 
@@ -611,6 +639,8 @@ def emit_pet_event(event: str, **payload: Any) -> None:
                 event,
                 (response.text or "")[:200],
             )
+        else:
+            _mark_desktop_owned()
     except Exception:
         _mark_desktop_unreachable()
         logger.warning(
