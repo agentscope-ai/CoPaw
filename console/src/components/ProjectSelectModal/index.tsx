@@ -10,8 +10,10 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { Modal, Tabs, Input, Button, Alert, Progress, List } from "antd";
+import { Modal, Tabs, Input, Button, Alert, Progress, List, Typography } from "antd";
 import { FolderOpen, GitBranch, HardDrive, PlusCircle, X } from "lucide-react";
+
+const { Text } = Typography;
 import { useTranslation } from "react-i18next";
 import { codingProjectApi, type ProjectListItem } from "../../api/modules/codingProject";
 import { useProjectDir } from "../../stores/codingModeStore";
@@ -181,7 +183,10 @@ function CloneTab({ onDone }: { onDone: (path: string) => void }) {
 
 function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
   const { t } = useTranslation();
+  // null = no selection; string = either absolute path or just a folder name hint
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  // When browser can only give us a folder name (not absolute path), let user edit it
+  const [editPath, setEditPath] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,20 +207,28 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
     };
   }, []);
 
+  const applyPath = (p: string) => {
+    setSelectedPath(p);
+    setEditPath(p);
+    setError(null);
+  };
+
   const handleDirPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     // Electron / PyWebView exposes the absolute path via file.path
     const absPath = (file as File & { path?: string }).path;
     if (absPath) {
-      const rel = file.webkitRelativePath; // "foldername/..."
+      const rel = file.webkitRelativePath;
       const folder = rel
         ? absPath.slice(0, absPath.length - rel.length).replace(/\/$/, "")
         : absPath;
-      setSelectedPath(folder || absPath);
+      applyPath(folder || absPath);
     } else {
-      // Standard browser: only folder name available; user can adjust in confirm step
-      setSelectedPath(file.webkitRelativePath.split("/")[0] || file.name);
+      // Standard browser: only the folder name is available.
+      // Pre-fill the edit input so the user can type/paste the full path.
+      const name = file.webkitRelativePath.split("/")[0] || file.name;
+      applyPath(name);
     }
     e.target.value = "";
   };
@@ -238,37 +251,35 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
     setDragOver(false);
 
     const items = Array.from(e.dataTransfer.items);
-    if (items.length === 0) return;
-
-    const entry = items[0].webkitGetAsEntry();
-    if (entry?.isDirectory) {
-      // macOS Finder: extract file:// URI from text/uri-list
-      const uriList = e.dataTransfer.getData("text/uri-list");
-      if (uriList?.trim()) {
-        const fileUri = uriList.split(/\r?\n/).find((l) => l.startsWith("file://"));
+    if (items.length > 0) {
+      const entry = items[0].webkitGetAsEntry();
+      if (entry?.isDirectory) {
+        // macOS Finder: extract file:// URI from text/uri-list
+        const uriList = e.dataTransfer.getData("text/uri-list");
+        const fileUri = uriList?.split(/\r?\n/).find((l) => l.startsWith("file://"));
         if (fileUri) {
           try {
-            setSelectedPath(decodeURIComponent(fileUri.replace(/^file:\/\//, "")));
+            applyPath(decodeURIComponent(fileUri.replace(/^file:\/\//, "")));
             return;
           } catch { /* fall through */ }
         }
+        applyPath(entry.name);
+        return;
       }
-      setSelectedPath(entry.name);
-      return;
     }
 
-    // Terminal drag (text/plain path string)
+    // Terminal drag (text/plain absolute path)
     const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
-    if (text?.trim()) { setSelectedPath(text.trim()); return; }
+    if (text?.trim()) { applyPath(text.trim()); return; }
 
     // Electron: File.path
     const file = e.dataTransfer.files[0];
     const filePath = file && (file as File & { path?: string }).path;
-    if (filePath) setSelectedPath(filePath);
+    if (filePath) applyPath(filePath);
   };
 
-  const handleConfirm = async (path: string) => {
-    const trimmed = path.trim();
+  const handleConfirm = async () => {
+    const trimmed = editPath.trim();
     if (!trimmed) return;
     setLoading(true);
     setError(null);
@@ -280,6 +291,8 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
       setLoading(false);
     }
   };
+
+  const isAbsolute = editPath.startsWith("/") || editPath.startsWith("~");
 
   return (
     <div className={styles.tabContent}>
@@ -294,27 +307,41 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
         onChange={handleDirPicked}
       />
 
-      {selectedPath ? (
+      {selectedPath !== null ? (
         <>
           <div className={styles.selectionCard}>
             <FolderOpen size={18} />
             <span className={styles.selectionName}>
-              {selectedPath.split("/").pop() || selectedPath}
+              {(editPath || selectedPath).split("/").pop() || editPath}
             </span>
             <Button
               type="text"
               size="small"
               icon={<X size={14} />}
-              onClick={() => { setSelectedPath(null); setError(null); }}
+              onClick={() => { setSelectedPath(null); setEditPath(""); setError(null); }}
             />
           </div>
+          {/* Editable path input — always shown so user can correct if needed */}
+          <Input
+            value={editPath}
+            onChange={(e) => setEditPath(e.target.value)}
+            placeholder={t("codingMode.localPathPlaceholder")}
+            prefix={<FolderOpen size={13} style={{ color: "var(--ant-color-text-quaternary)" }} />}
+            allowClear
+            onPressEnter={() => void handleConfirm()}
+          />
+          {!isAbsolute && editPath && (
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              {t("codingMode.pathHint")}
+            </Text>
+          )}
           {error && <Alert type="error" message={error} showIcon className={styles.alert} />}
           <Button
             type="primary"
             block
-            style={{ marginTop: 8 }}
             loading={loading}
-            onClick={() => void handleConfirm(selectedPath)}
+            disabled={!editPath.trim()}
+            onClick={() => void handleConfirm()}
           >
             {t("codingMode.openBtn")}
           </Button>

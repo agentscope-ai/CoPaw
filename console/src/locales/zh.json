@@ -2287,6 +2287,7 @@
     "currentProject": "当前项目",
     "resetToWorkspace": "重置为默认工作区",
     "dropPrimary": "拖入文件夹，或点击浏览",
-    "dropSecondary": "支持从 Finder 直接拖入"
+    "dropSecondary": "支持从 Finder 直接拖入",
+    "pathHint": "请输入完整的绝对路径（以 / 或 ~ 开头）"
   }
 }

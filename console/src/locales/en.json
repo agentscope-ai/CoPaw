@@ -2279,6 +2279,7 @@
     "currentProject": "Current Project",
     "resetToWorkspace": "Reset to Default Workspace",
     "dropPrimary": "Drag a folder here, or click to browse",
-    "dropSecondary": "Drag from Finder or paste a path below"
+    "dropSecondary": "Drag from Finder or paste a path below",
+    "pathHint": "Please enter the full absolute path (starting with / or ~)"
   }
 }
