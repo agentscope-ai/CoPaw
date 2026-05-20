@@ -145,6 +145,20 @@ class AsMsgHandler:
                     ),
                 )
 
+            elif block_type == "file":
+                file_path = block.get("path", "") or block.get("url", "")
+                file_name = block.get("name", file_path)
+                text = f"[file] {file_name}: {file_path}"
+                token_count = await self.count_str_token(file_path)
+                blocks.append(
+                    AsBlockStat(
+                        block_type=block_type,
+                        text=text,
+                        token_count=token_count,
+                        media_url=file_path,
+                    ),
+                )
+
             elif block_type == "tool_use":
                 tool_name = block.get("name", "")
                 tool_input = block.get("input", "")
