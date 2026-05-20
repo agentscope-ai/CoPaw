@@ -280,7 +280,7 @@ class AppServer:
 
 
 @pytest.fixture(scope="module")
-def app_server(  # pylint: disable=too-many-statements
+def app_server(  # pylint: disable=too-many-statements,too-many-branches
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[AppServer]:
     """Start one isolated qwenpaw app process per test module.
@@ -397,11 +397,19 @@ def app_server(  # pylint: disable=too-many-statements
         finally:
             client.close()
             if process.poll() is None:
-                # SIGINT lets uvicorn shut down cleanly so subprocess
-                # coverage data flushes (SIGTERM often skips atexit
-                # / data-file write).
+                # On POSIX, SIGINT lets uvicorn shut down cleanly so
+                # subprocess coverage data flushes (SIGTERM often skips
+                # atexit / data-file write). On Windows, SIGINT is not
+                # delivered reliably to subprocesses (CTRL_C_EVENT only
+                # works for console process groups created with
+                # CREATE_NEW_PROCESS_GROUP), so use terminate directly.
+                # Windows CI does not enable subprocess coverage, so the
+                # graceful-shutdown nicety isn't needed there.
                 try:
-                    process.send_signal(signal.SIGINT)
+                    if sys.platform == "win32":
+                        process.terminate()
+                    else:
+                        process.send_signal(signal.SIGINT)
                     process.wait(timeout=15)
                 except subprocess.TimeoutExpired:
                     process.terminate()
