@@ -10,8 +10,8 @@
  */
 
 import { useState, useRef } from "react";
-import { Modal, Tabs, Input, Button, Alert, Progress, List } from "antd";
-import { FolderOpen, GitBranch, HardDrive, PlusCircle } from "lucide-react";
+import { Modal, Tabs, Input, Button, Alert, Progress, List, type InputRef } from "antd";
+import { FolderOpen, GitBranch, HardDrive, PlusCircle, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { codingProjectApi, type ProjectListItem } from "../../api/modules/codingProject";
 import { useProjectDir } from "../../stores/codingModeStore";
@@ -183,36 +183,80 @@ function CloneTab({ onDone }: { onDone: (path: string) => void }) {
 function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
   const { t } = useTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [showBrowser, setShowBrowser] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pathInputRef = useRef<InputRef>(null);
 
   const handleConfirm = async (path: string) => {
-    if (!path.trim()) return;
+    const trimmed = path.trim();
+    if (!trimmed) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await codingProjectApi.set(path.trim());
+      const res = await codingProjectApi.set(trimmed);
       onSelect(res.path);
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : "Failed to open path";
       setError(detail);
-    } finally {
       setLoading(false);
     }
   };
 
-  const handlePickerSelect = (path: string) => {
-    setSelectedPath(path);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = () => setDragOver(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    // Accept text/plain drops (path strings dragged from terminal etc.)
+    const text = e.dataTransfer.getData("text/plain") ||
+      e.dataTransfer.getData("text");
+    if (text?.trim()) {
+      setSelectedPath(text.trim());
+      return;
+    }
+    // Accept file entries (some environments expose path via File.path in Electron-like shells)
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      // Electron / desktop wrapper may expose a `path` property
+      const filePath = (file as File & { path?: string }).path;
+      if (filePath) {
+        setSelectedPath(filePath);
+        return;
+      }
+      // Fallback: use file name as hint and focus the text input
+      if (pathInputRef.current?.input) {
+        pathInputRef.current.input.value = file.name;
+        pathInputRef.current.focus();
+      }
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedPath(null);
+    setShowBrowser(false);
+    setError(null);
   };
 
   return (
     <div className={styles.tabContent}>
-      {/* Folder picker browser */}
-      <FolderPicker onSelect={handlePickerSelect} />
-
-      {/* Selected path + confirm */}
-      {selectedPath && (
+      {selectedPath ? (
+        /* ── Selected state (like plugin selectionCard) ─────────────── */
         <>
+          <div className={styles.selectionCard}>
+            <FolderOpen size={18} />
+            <span className={styles.selectionName}>{selectedPath.split("/").pop() || selectedPath}</span>
+            <span className={styles.selectionPath}>{selectedPath}</span>
+            <button type="button" className={styles.clearBtn} onClick={handleClearSelection}>
+              <X size={14} />
+            </button>
+          </div>
           {error && <Alert type="error" message={error} className={styles.alert} showIcon />}
           <Button
             type="primary"
@@ -220,23 +264,67 @@ function LocalPathTab({ onSelect }: { onSelect: (path: string) => void }) {
             loading={loading}
             className={styles.actionBtn}
           >
-            {t("codingMode.openBtn")}: {selectedPath.split("/").pop() || selectedPath}
+            {t("codingMode.openBtn")}
           </Button>
         </>
-      )}
+      ) : showBrowser ? (
+        /* ── Server-side directory browser ──────────────────────────── */
+        <>
+          <FolderPicker
+            onSelect={(p) => { setSelectedPath(p); setShowBrowser(false); }}
+          />
+          <button type="button" className={styles.backLink} onClick={() => setShowBrowser(false)}>
+            ← Back
+          </button>
+        </>
+      ) : (
+        /* ── Drop zone (like plugin import) ─────────────────────────── */
+        <>
+          <div
+            className={`${styles.dropZone} ${dragOver ? styles.dropZoneActive : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => setShowBrowser(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && setShowBrowser(true)}
+          >
+            <FolderOpen size={36} strokeWidth={1.2} className={styles.dropFolderIcon} />
+            <span className={styles.dropPrimary}>
+              Drag a folder here, or click to browse
+            </span>
+            <span className={styles.dropSecondary}>
+              You can also drag a path string from your terminal
+            </span>
+          </div>
 
-      {/* Manual input fallback */}
-      <details className={styles.manualDetails}>
-        <summary className={styles.manualSummary}>
-          {t("codingMode.localPathHint")}
-        </summary>
-        <Input
-          placeholder={t("codingMode.localPathPlaceholder")}
-          className={`${styles.input} ${styles.manualInput}`}
-          onPressEnter={(e) => void handleConfirm((e.target as HTMLInputElement).value)}
-          onBlur={(e) => e.target.value && void handleConfirm(e.target.value)}
-        />
-      </details>
+          {/* Manual paste as fallback */}
+          <div className={styles.orDivider}>— or paste a path —</div>
+          <Input
+            ref={pathInputRef}
+            placeholder={t("codingMode.localPathPlaceholder")}
+            className={styles.input}
+            allowClear
+            onPressEnter={(e) => {
+              const val = ((e.target) as HTMLInputElement).value.trim();
+              if (val) setSelectedPath(val);
+            }}
+            suffix={
+              <button
+                type="button"
+                className={styles.pasteConfirmBtn}
+                onClick={() => {
+                  const val = pathInputRef.current?.input?.value.trim();
+                  if (val) setSelectedPath(val);
+                }}
+              >
+                Open
+              </button>
+            }
+          />
+        </>
+      )}
     </div>
   );
 }
