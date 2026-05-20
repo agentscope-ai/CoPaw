@@ -2076,7 +2076,11 @@
     "catalogUpgrade": "Доступно обновление",
     "catalogUpgradeBtn": "Обновить",
     "catalogInstalled": "Установлен",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "Пакет",
+    "kindTool": "Инструмент",
+    "filterByName": "Фильтр по имени",
+    "filterByKind": "Фильтр по типу"
   },
   "plan": {
     "title": "План",

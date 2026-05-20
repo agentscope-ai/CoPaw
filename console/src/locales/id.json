@@ -634,7 +634,11 @@
     "catalogUpgrade": "Pembaruan tersedia",
     "catalogUpgradeBtn": "Perbarui",
     "catalogInstalled": "Terinstal",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "Bundel",
+    "kindTool": "Alat",
+    "filterByName": "Filter berdasarkan nama",
+    "filterByKind": "Filter berdasarkan jenis"
   },
   "debug": {
     "title": "Debug",

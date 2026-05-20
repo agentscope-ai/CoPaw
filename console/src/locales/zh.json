@@ -2249,6 +2249,10 @@
     "catalogUpgrade": "可升级",
     "catalogUpgradeBtn": "升级",
     "catalogInstalled": "已安装",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "插件包",
+    "kindTool": "工具",
+    "filterByName": "按名称筛选",
+    "filterByKind": "按标签筛选"
   }
 }
