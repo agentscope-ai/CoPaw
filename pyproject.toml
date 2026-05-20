@@ -118,6 +118,9 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "p0: critical user flows (messaging, CRUD, global config, security); PR smoke gate",
+    "p1: supported features (settings, scoped overrides, helpers); nightly regression",
+    "p2: error paths, 404 handling, validation, contracts, metadata",
     "unit: marks tests as unit tests",
     "contract: marks tests as contract tests",
     "integration: marks tests as integration tests",
