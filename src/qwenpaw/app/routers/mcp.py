@@ -434,42 +434,6 @@ async def toggle_mcp_client(
 
 
 # ---------------------------------------------------------------------------
-# Deprecated legacy routes (client_key before action segment)
-#
-# Kept for backward compatibility with older frontend builds / external
-# callers that use the old URL pattern: /mcp/{key}/tools, /mcp/{key}/toggle.
-# These only match keys without '/' (single path segment).
-# Will be removed in a future release.
-# ---------------------------------------------------------------------------
-
-
-@router.get(
-    "/{client_key}/tools",
-    response_model=List[MCPToolInfo],
-    include_in_schema=False,
-    deprecated=True,
-)
-async def list_mcp_tools_legacy(
-    request: Request,
-    client_key: str = Path(...),
-) -> List[MCPToolInfo]:
-    return await list_mcp_tools(request, client_key)
-
-
-@router.patch(
-    "/{client_key}/toggle",
-    response_model=MCPClientInfo,
-    include_in_schema=False,
-    deprecated=True,
-)
-async def toggle_mcp_client_legacy(
-    request: Request,
-    client_key: str = Path(...),
-) -> MCPClientInfo:
-    return await toggle_mcp_client(request, client_key)
-
-
-# ---------------------------------------------------------------------------
 # Catch-all routes using {client_key:path} — MUST be registered last
 # because :path greedily matches any remaining path segments including '/'.
 # ---------------------------------------------------------------------------
