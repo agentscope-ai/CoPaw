@@ -245,14 +245,17 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
 
   const { projectDir, setProjectDir } = useProjectDir();
 
-  // Sync displayed project name from server
+  // Sync displayed project name from server; cancel stale in-flight requests
   useEffect(() => {
+    let cancelled = false;
     codingProjectApi.get().then((info) => {
+      if (cancelled) return;
       setProjectName(info.name);
       if (projectDir === undefined && !info.is_workspace_default) {
         setProjectDir(info.path);
       }
     }).catch(() => undefined);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectDir]);
 
