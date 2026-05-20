@@ -2,8 +2,10 @@ import {
   AgentScopeRuntimeWebUI,
   IAgentScopeRuntimeWebUIOptions,
   type IAgentScopeRuntimeWebUIRef,
+  type IAgentScopeRuntimeWebUIMessage,
 } from "@agentscope-ai/chat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import { Button, Modal, Result, Tooltip } from "antd";
 import { useAppMessage } from "../../hooks/useAppMessage";
 import { ExclamationCircleOutlined, SettingOutlined } from "@ant-design/icons";
@@ -22,7 +24,10 @@ import type { ProviderInfo, ModelInfo } from "../../api/types";
 import ModelSelector from "./ModelSelector";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
-import { useChatAnywhereInput } from "@agentscope-ai/chat";
+import {
+  useChatAnywhereInput,
+  useChatAnywhereSessionsState,
+} from "@agentscope-ai/chat";
 import styles from "./index.module.less";
 import { IconButton } from "@agentscope-ai/design";
 import ChatActionGroup from "./components/ChatActionGroup";
@@ -32,6 +37,13 @@ import { ApprovalCard } from "../../components/ApprovalCard/ApprovalCard";
 import { commandsApi } from "../../api/modules/commands";
 import { useApprovalContext } from "../../contexts/ApprovalContext";
 import { planApi } from "../../api/modules/plan";
+import TokenUsageBadge, {
+  loadTokenBadgeSnapshot,
+  migrateTokenBadgeSnapshot,
+  resolveTokenBadgeStorageKey,
+  saveTokenBadgeSnapshot,
+} from "./components/TokenUsageBadge";
+import type { TokenUsageBadgeSnapshot } from "./components/TokenUsageBadge";
 
 interface ApprovalMessageData {
   requestId: string;
@@ -60,6 +72,7 @@ import {
   extractUserMessageText,
   extractTextFromMessage,
   setTextareaValue,
+  messageHasUsageNote,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
 } from "./utils";
@@ -124,6 +137,32 @@ function payloadCompletesResponse(payload: unknown): boolean {
 
   const record = payload as Record<string, unknown>;
   return record.object === "response" && record.status === "completed";
+}
+
+function toSnapshotFromUsagePayload(
+  usage: unknown,
+  ctx: unknown,
+): TokenUsageBadgeSnapshot | null {
+  // Normalize usage: ensure it has at least one meaningful token field
+  const hasUsage =
+    usage &&
+    typeof usage === "object" &&
+    (typeof (usage as Record<string, unknown>).total_tokens === "number" ||
+      typeof (usage as Record<string, unknown>).prompt_tokens === "number" ||
+      typeof (usage as Record<string, unknown>).completion_tokens === "number");
+
+  const hasCtx =
+    ctx &&
+    typeof ctx === "object" &&
+    typeof (ctx as Record<string, unknown>).estimated_tokens === "number";
+
+  if (!hasUsage && !hasCtx) return null;
+
+  return {
+    usage: hasUsage ? (usage as TokenUsageBadgeSnapshot["usage"]) : null,
+    context: hasCtx ? (ctx as TokenUsageBadgeSnapshot["context"]) : null,
+    receivedAt: Date.now(),
+  };
 }
 
 function renderSuggestionLabel(command: string, description: string) {
@@ -498,7 +537,7 @@ function RuntimeLoadingBridge({
 }
 
 export default function ChatPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark } = useTheme();
@@ -506,6 +545,15 @@ export default function ChatPage() {
     const match = location.pathname.match(/^\/chat\/(.+)$/);
     return match?.[1];
   }, [location.pathname]);
+
+  /** Canonical id for token-badge sessionStorage (UUID when resolved). */
+  const storageIdForTokenBadge = useCallback((raw: string) => {
+    if (!raw) return "";
+    return sessionApi.getRealIdForSession(raw) ?? raw;
+  }, []);
+
+  const { sessions } = useChatAnywhereSessionsState();
+
   const [showModelPrompt, setShowModelPrompt] = useState(false);
   const { selectedAgent } = useAgentStore();
   const { toolRenderConfig } = usePlugins();
@@ -517,6 +565,64 @@ export default function ChatPage() {
     Map<string, ApprovalMessageData>
   >(new Map());
   const [planEnabled, setPlanEnabled] = useState(false);
+  const [tokenSnapshot, setTokenSnapshot] =
+    useState<TokenUsageBadgeSnapshot | null>(null);
+  const tokenSnapshotRef = useRef<TokenUsageBadgeSnapshot | null>(null);
+  tokenSnapshotRef.current = tokenSnapshot;
+  /** All ids the badge snapshot may be keyed under during ID resolution. */
+  const tokenBadgeAliases = useCallback((rawSessionId: string): string[] => {
+    const aliases = new Set<string>();
+    if (rawSessionId) aliases.add(rawSessionId);
+    if (window.currentSessionId) aliases.add(window.currentSessionId);
+    if (chatIdRef.current) aliases.add(chatIdRef.current);
+    return [...aliases];
+  }, []);
+  const readTokenSnapshotForSession = useCallback(
+    (rawSessionId: string) => {
+      let latest: TokenUsageBadgeSnapshot | null = null;
+      for (const id of tokenBadgeAliases(rawSessionId)) {
+        const loaded = loadTokenBadgeSnapshot(id);
+        if (!loaded) continue;
+        if (!latest || (loaded.receivedAt || 0) >= (latest.receivedAt || 0)) {
+          latest = loaded;
+        }
+      }
+      return latest;
+    },
+    [tokenBadgeAliases],
+  );
+  const saveTokenSnapshotForSession = useCallback(
+    (rawSessionId: string, snapshot: TokenUsageBadgeSnapshot) => {
+      for (const id of tokenBadgeAliases(rawSessionId)) {
+        const key = resolveTokenBadgeStorageKey(id);
+        if (key) saveTokenBadgeSnapshot(key, snapshot);
+      }
+    },
+    [tokenBadgeAliases],
+  );
+  const applyTokenSnapshotUpdate = useCallback(
+    (usage: unknown, ctx: unknown, preferredSessionId?: string) => {
+      const base = toSnapshotFromUsagePayload(usage, ctx);
+      if (!base) return;
+      // Merge with the previous snapshot so a backend event carrying only
+      // one half (e.g. just usage) doesn't blank out the other half.
+      setTokenSnapshot((prev) => {
+        const next: TokenUsageBadgeSnapshot = {
+          usage: base.usage ?? prev?.usage ?? null,
+          context: base.context ?? prev?.context ?? null,
+          receivedAt: Date.now(),
+        };
+        const id =
+          preferredSessionId ||
+          chatIdRef.current ||
+          window.currentSessionId ||
+          "";
+        if (id) saveTokenSnapshotForSession(id, next);
+        return next;
+      });
+    },
+    [saveTokenSnapshotForSession],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -536,6 +642,13 @@ export default function ChatPage() {
     location.pathname === "/" || location.pathname.startsWith("/chat");
 
   const isChatActive = useCallback(() => isChatActiveRef.current, []);
+
+  useEffect(() => {
+    if (!isChatActiveRef.current) return;
+    const id = storageIdForTokenBadge(chatId || "");
+    const loaded = readTokenSnapshotForSession(id);
+    if (loaded) setTokenSnapshot(loaded);
+  }, [chatId, storageIdForTokenBadge, sessions, readTokenSnapshotForSession]);
 
   // Consume approvals from Context and filter by current session.
   // Uses a serialized key to avoid creating a new Map (and triggering
@@ -753,12 +866,20 @@ export default function ChatPage() {
   // Register session API event callbacks for URL synchronization
 
   useEffect(() => {
-    sessionApi.onSessionIdResolved = (realId) => {
+    sessionApi.onSessionIdResolved = (tempId, resolvedRealId) => {
       if (!isChatActiveRef.current) return;
       // Update URL when realId is resolved, regardless of current chatId
       // (chatId may be undefined if URL was cleared in onSessionCreated)
-      lastSessionIdRef.current = realId;
-      navigateRef.current(`/chat/${realId}`, { replace: true });
+      lastSessionIdRef.current = resolvedRealId;
+      migrateTokenBadgeSnapshot(tempId, resolvedRealId);
+      const fromStorage = readTokenSnapshotForSession(resolvedRealId);
+      if (!fromStorage && tokenSnapshotRef.current) {
+        saveTokenSnapshotForSession(resolvedRealId, tokenSnapshotRef.current);
+        setTokenSnapshot(tokenSnapshotRef.current);
+      } else {
+        setTokenSnapshot(fromStorage);
+      }
+      navigateRef.current(`/chat/${resolvedRealId}`, { replace: true });
     };
 
     sessionApi.onSessionRemoved = (removedId) => {
@@ -770,6 +891,7 @@ export default function ChatPage() {
       );
       if (chatIdRef.current === removedId || currentRealId === removedId) {
         lastSessionIdRef.current = null;
+        setTokenSnapshot(null);
         navigateRef.current("/chat", { replace: true });
       }
     };
@@ -808,6 +930,8 @@ export default function ChatPage() {
 
       if (targetId !== lastSessionIdRef.current) {
         lastSessionIdRef.current = targetId;
+        const storeId = storageIdForTokenBadge(targetId);
+        setTokenSnapshot(readTokenSnapshotForSession(storeId));
         navigateRef.current(`/chat/${targetId}`, { replace: true });
       }
     };
@@ -816,6 +940,7 @@ export default function ChatPage() {
       if (!isChatActiveRef.current) return;
       // Clear URL when creating new session, wait for realId resolution to update
       lastSessionIdRef.current = null;
+      setTokenSnapshot(null);
       navigateRef.current("/chat", { replace: true });
     };
 
@@ -916,6 +1041,7 @@ export default function ChatPage() {
         session_id: window.currentSessionId || session?.session_id || "",
         user_id: window.currentUserId || session?.user_id || DEFAULT_USER_ID,
         channel: window.currentChannel || session?.channel || DEFAULT_CHANNEL,
+        language: i18n.resolvedLanguage || i18n.language,
         stream: true,
         ...biz_params,
       };
@@ -944,7 +1070,7 @@ export default function ChatPage() {
 
       return response;
     },
-    [selectedAgent],
+    [i18n.language, i18n.resolvedLanguage, selectedAgent],
   );
 
   const handleFileUpload = useCallback(
@@ -989,6 +1115,76 @@ export default function ChatPage() {
       }
     },
     [multimodalCaps, t],
+  );
+
+  const handleStopChat = useCallback(
+    (sessionId: string) => {
+      const chatId = sessionApi.getRealIdForSession(sessionId) ?? sessionId;
+      if (!chatId) return;
+
+      chatApi
+        .stopChat(chatId, i18n.language)
+        .then((res) => {
+          applyTokenSnapshotUpdate(res?.usage, res?.context_usage, chatId);
+
+          const note = res?.usage_note;
+          if (!note) return;
+
+          // Cache for reload fallback under both id aliases, since the URL
+          // may resolve to either id depending on when reload happens.
+          for (const id of sessionId && sessionId !== chatId
+            ? [chatId, sessionId]
+            : [chatId]) {
+            sessionApi.setLastStopUsageNote(id, note);
+          }
+
+          // Append the note inline to the last assistant message's response
+          // card so the user sees the breakdown immediately. The runner's
+          // ``finally`` adds the same body to ``agent.memory``, so a session
+          // reload produces the same shape.
+          const messagesApi = chatRef.current?.messages;
+          const allMessages = messagesApi?.getMessages() ?? [];
+          const lastAssistantMsg = [...allMessages]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (
+            !messagesApi ||
+            !lastAssistantMsg ||
+            messageHasUsageNote(lastAssistantMsg, note) // dedupe duplicate cancel
+          ) {
+            return;
+          }
+          const updatedMsg = JSON.parse(
+            JSON.stringify(lastAssistantMsg),
+          ) as IAgentScopeRuntimeWebUIMessage;
+          const responseCard = (
+            updatedMsg.cards as Array<{
+              code?: string;
+              data?: { output?: Array<Record<string, unknown>> };
+            }>
+          )?.find((c) => c?.code === "AgentScopeRuntimeResponseCard");
+          if (!responseCard?.data) return;
+          if (!Array.isArray(responseCard.data.output)) {
+            responseCard.data.output = [];
+          }
+          responseCard.data.output.push({
+            id: `stop-usage-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 11)}`,
+            type: "message",
+            role: "assistant",
+            content: [{ type: "text", text: note, status: "completed" }],
+            status: "completed",
+          });
+          ReactDOM.flushSync(() => {
+            messagesApi.updateMessage(updatedMsg);
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to stop chat:", err);
+        });
+    },
+    [i18n.language, applyTokenSnapshotUpdate],
   );
 
   const options = useMemo(() => {
@@ -1098,6 +1294,17 @@ export default function ChatPage() {
         fetch: customFetch,
         responseParser: (chunk: string) => {
           const payload = JSON.parse(chunk) as Record<string, unknown>;
+          // Some channels wrap the event under `data`; check both shapes.
+          const nested =
+            payload.data &&
+            typeof payload.data === "object" &&
+            !Array.isArray(payload.data)
+              ? (payload.data as Record<string, unknown>)
+              : null;
+          applyTokenSnapshotUpdate(
+            nested?.usage ?? payload.usage,
+            nested?.context_usage ?? payload.context_usage,
+          );
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;
@@ -1111,13 +1318,7 @@ export default function ChatPage() {
           return toDisplayUrl(url);
         },
         cancel(data: { session_id: string }) {
-          const resolvedChatId =
-            sessionApi.getRealIdForSession(data.session_id) ?? data.session_id;
-          if (resolvedChatId) {
-            chatApi.stopChat(resolvedChatId).catch((err) => {
-              console.error("Failed to stop chat:", err);
-            });
-          }
+          handleStopChat(data.session_id);
         },
         async reconnect(data: { session_id: string; signal?: AbortSignal }) {
           const headers: Record<string, string> = {
@@ -1133,6 +1334,7 @@ export default function ChatPage() {
               session_id: window.currentSessionId || data.session_id,
               user_id: window.currentUserId || DEFAULT_USER_ID,
               channel: window.currentChannel || DEFAULT_CHANNEL,
+              language: i18n.resolvedLanguage || i18n.language,
             }),
             signal: data.signal,
           });
@@ -1166,6 +1368,8 @@ export default function ChatPage() {
     toolRenderConfig,
     scheduleHistoryClear,
     planEnabled,
+    applyTokenSnapshotUpdate,
+    handleStopChat,
   ]);
 
   return (
@@ -1177,12 +1381,13 @@ export default function ChatPage() {
         flexDirection: "column",
       }}
     >
-      <div className={styles.chatMessagesArea}>
+      <div className={styles.chatMessagesArea} style={{ position: "relative" }}>
         <AgentScopeRuntimeWebUI
           ref={chatRef}
           key={refreshKey}
           options={options}
         />
+        <TokenUsageBadge snapshot={tokenSnapshot} />
       </div>
 
       {/* Render approval cards as overlays */}
@@ -1222,11 +1427,9 @@ export default function ChatPage() {
                 sessionId;
 
               if (resolvedChatId) {
-                console.log("[Chat] Calling stopChat with:", resolvedChatId);
                 chatApi
                   .stopChat(resolvedChatId)
                   .then(() => {
-                    console.log("[Chat] stopChat succeeded");
                     setApprovals((prev) =>
                       prev.filter(
                         (item) =>

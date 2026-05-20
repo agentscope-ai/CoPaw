@@ -318,6 +318,7 @@ const resolveRealId = (
 // ---------------------------------------------------------------------------
 
 const STORAGE_PREFIX = "qwenpaw_pending_user_msg_";
+const STOP_USAGE_NOTE_PREFIX = "qwenpaw_stop_usage_note_";
 
 function savePendingUserMessage(sessionId: string, text: string): void {
   try {
@@ -341,6 +342,50 @@ function clearPendingUserMessage(sessionId: string): void {
   } catch {
     /* ignore */
   }
+}
+
+function savePendingStopUsageNote(sessionId: string, markdown: string): void {
+  try {
+    sessionStorage.setItem(`${STOP_USAGE_NOTE_PREFIX}${sessionId}`, markdown);
+  } catch {
+    /* quota exceeded – ignore */
+  }
+}
+
+function loadPendingStopUsageNote(sessionId: string): string {
+  try {
+    return (
+      sessionStorage.getItem(`${STOP_USAGE_NOTE_PREFIX}${sessionId}`) || ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingStopUsageNote(sessionId: string): void {
+  try {
+    sessionStorage.removeItem(`${STOP_USAGE_NOTE_PREFIX}${sessionId}`);
+  } catch {
+    /* ignore */
+  }
+}
+
+function extractAssistantCardOutputText(
+  msg: IAgentScopeRuntimeWebUIMessage,
+): string {
+  if (msg?.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) return "";
+  let text = "";
+  for (const card of msg.cards as unknown as Array<Record<string, unknown>>) {
+    if (card?.code !== CARD_RESPONSE) continue;
+    const output = (card.data as Record<string, unknown> | undefined)?.output;
+    if (!Array.isArray(output)) continue;
+    for (const item of output) {
+      text += extractTextFromContent(
+        (item as Record<string, unknown> | undefined)?.content,
+      );
+    }
+  }
+  return text;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,6 +439,16 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   setLastUserMessage(sessionId: string, text: string): void {
     if (!sessionId || !text) return;
     savePendingUserMessage(sessionId, text);
+  }
+
+  /**
+   * Cache the latest usage note returned by stop API for this chat. This keeps
+   * interrupted turn stats visible when backend history lags behind.
+   */
+  setLastStopUsageNote(sessionId: string, markdown: string): void {
+    const note = markdown?.trim();
+    if (!sessionId || !note) return;
+    savePendingStopUsageNote(sessionId, note);
   }
 
   /**
@@ -452,14 +507,21 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     generating: boolean,
     backendSessionId: string,
   ): void {
-    if (!generating) {
-      clearPendingUserMessage(backendSessionId);
-      return;
-    }
-
     const cachedText = loadPendingUserMessage(backendSessionId);
     if (!cachedText) return;
 
+    const hasCachedUserInHistory = messages.some((msg) => {
+      if (msg?.role !== ROLE_USER) return false;
+      const text = extractTextFromContent(
+        msg?.cards?.[0]?.data?.input?.[0]?.content,
+      );
+      return text?.trim() === cachedText.trim();
+    });
+
+    if (hasCachedUserInHistory) {
+      if (!generating) clearPendingUserMessage(backendSessionId);
+      return;
+    }
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === ROLE_USER) {
       const text = extractTextFromContent(
@@ -478,6 +540,49 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
           role: ROLE_USER,
         } as Message),
       );
+    }
+  }
+
+  private patchLastStopUsageNote(
+    messages: IAgentScopeRuntimeWebUIMessage[],
+    backendSessionId: string,
+  ): void {
+    const cachedNote = loadPendingStopUsageNote(backendSessionId).trim();
+    if (!cachedNote) return;
+
+    // If memory already contains the note, drop the cache and bail.
+    const alreadyPresent = messages.some(
+      (msg) =>
+        msg?.role === ROLE_ASSISTANT &&
+        extractAssistantCardOutputText(msg).includes(cachedNote),
+    );
+    if (alreadyPresent) {
+      clearPendingStopUsageNote(backendSessionId);
+      return;
+    }
+
+    // Append inline to the last assistant message's response card.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role !== ROLE_ASSISTANT || !Array.isArray(msg.cards)) continue;
+
+      const responseCard = (
+        msg.cards as unknown as Array<Record<string, unknown>>
+      ).find((card) => card?.code === CARD_RESPONSE);
+      const data = responseCard?.data as Record<string, unknown> | undefined;
+      if (!data) continue;
+
+      if (!Array.isArray(data.output)) data.output = [];
+      (data.output as Array<Record<string, unknown>>).push({
+        id: `stop-usage-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 11)}`,
+        type: "message",
+        role: ROLE_ASSISTANT,
+        content: [{ type: "text", text: cachedNote, status: "completed" }],
+        status: "completed",
+      });
+      return;
     }
   }
 
@@ -634,6 +739,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const generating = isGenerating(chatHistory);
     const messages = convertMessages(chatHistory.messages || []);
     this.patchLastUserMessage(messages, generating, backendId);
+    this.patchLastStopUsageNote(messages, backendId);
 
     const session: ExtendedSession = {
       id: displayId,

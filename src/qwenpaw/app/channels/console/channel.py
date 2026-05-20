@@ -13,6 +13,7 @@ pretty-printed to the terminal.
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import sys
@@ -316,18 +317,88 @@ class ConsoleChannel(BaseChannel):
                 )
         return media_message
 
-    def _extract_token_usage(
+    async def _emit_trailing_usage(
         self,
-        session_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
-        from ....token_usage import TokenRecordingModelWrapper
+        session_id: str,
+        language: Optional[str],
+        last_response: Optional[Any],
+    ) -> AsyncGenerator[str, None]:
+        """Yield SSE events that carry the post-turn usage snapshot.
 
-        if not session_id:
+        Reads ``runner._pending_usage_for_stream``, which the runner's
+        ``finally``/cancel paths populate before this generator runs. Emits
+        (1) a clone of the terminal response event augmented with ``usage``
+        and ``context_usage`` — the frontend ``responseParser`` updates the
+        badge from this — and (2) a markdown chat-note message.
+        """
+        runner = getattr(self._workspace, "runner", None)
+        turn, ctx = (
+            getattr(runner, "_pending_usage_for_stream", (None, None))
+            if runner is not None
+            else (None, None)
+        )
+        if turn is None and ctx is None:
+            return
+
+        if turn:
+            logger.info("Usage for session %s: %s", session_id, turn)
+            if ctx:
+                self._print_status_line(turn, ctx)
+
+        if last_response is not None:
+            data = json.loads(self._serialize_event_for_sse(last_response))
+            if turn is not None:
+                data["usage"] = turn
+            if ctx is not None:
+                data["context_usage"] = ctx
+            yield f"data: {json.dumps(data, ensure_ascii=True)}\n\n"
+
+        note = self._usage_stats_chat_message(turn, ctx, language)
+        if note is not None:
+            yield f"data: {note.model_dump_json()}\n\n"
+
+    def _print_status_line(
+        self,
+        turn: Dict[str, Any],
+        ctx: Dict[str, Any],
+    ) -> None:
+        """Print a one-line terminal summary of turn + context usage."""
+        from ....token_usage import fmt_tokens
+
+        pt = turn.get("prompt_tokens", 0)
+        ct = turn.get("completion_tokens", 0)
+        tt = turn.get("total_tokens", 0)
+        est = int(ctx.get("estimated_tokens", 0) or 0)
+        mx = int(ctx.get("max_input_length", 0) or 0)
+        ratio = ctx.get("context_usage_ratio", 0) or 0
+        turn_line = (
+            f"{_GREEN}Turn {_BOLD}{fmt_tokens(tt)}{_RESET} "
+            f"(in {fmt_tokens(pt)} · out {fmt_tokens(ct)})"
+        )
+        ctx_line = (
+            f" · Context {_BOLD}{fmt_tokens(est)}{_RESET} / "
+            f"{fmt_tokens(mx)} ({ratio:.1f}%)"
+        )
+        self._safe_print(f"📝 {turn_line}{ctx_line}")
+
+    @staticmethod
+    def _usage_stats_chat_message(
+        turn: Optional[Dict[str, Any]],
+        ctx: Optional[Dict[str, Any]],
+        language: Optional[str] = None,
+    ) -> Optional[Message]:
+        from ....token_usage import format_usage_chat_note
+
+        body = format_usage_chat_note(turn, ctx, language)
+        if not body:
             return None
-
-        usage = TokenRecordingModelWrapper.pop_usage_for_session(session_id)
-        logger.info("Usage for session %s (cleaned up): %s", session_id, usage)
-        return usage
+        msg = Message(
+            type=MessageType.MESSAGE,
+            role="assistant",
+            content=[TextContent(type=ContentType.TEXT, text=body)],
+        )
+        completed = getattr(msg, "completed", None)
+        return completed() if callable(completed) else msg
 
     async def stream_one(self, payload: Any) -> AsyncGenerator[str, None]:
         """Process one payload and yield SSE-formatted events"""
@@ -363,6 +434,7 @@ class ConsoleChannel(BaseChannel):
         try:
             send_meta = getattr(request, "channel_meta", None) or {}
             send_meta.setdefault("bot_prefix", self.bot_prefix)
+            language = send_meta.get("language")
             last_response = None
             event_count = 0
 
@@ -395,11 +467,6 @@ class ConsoleChannel(BaseChannel):
                             if media_message:
                                 event.output.append(media_message)
 
-                if obj == "response":
-                    usage_data = self._extract_token_usage(session_id)
-                    if usage_data and hasattr(event, "usage"):
-                        setattr(event, "usage", usage_data)
-
                 data = self._serialize_event_for_sse(event)
                 yield f"data: {data}\n\n"
 
@@ -416,6 +483,16 @@ class ConsoleChannel(BaseChannel):
 
                 elif obj == "response":
                     last_response = event
+
+            # Stream completed normally — runner's ``finally`` has populated
+            # ``_pending_usage_for_stream``. Emit usage as a trailing augment
+            # of the last response event so the frontend updates the badge.
+            async for sse in self._emit_trailing_usage(
+                session_id,
+                language,
+                last_response,
+            ):
+                yield sse
 
             logger.info(
                 "console stream done: event_count=%s has_response=%s",
