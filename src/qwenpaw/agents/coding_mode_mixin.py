@@ -25,8 +25,19 @@ logger = logging.getLogger(__name__)
 _CODING_SYSTEM_PROMPT_TEMPLATE = """\
 ## Coding Mode
 
-You are currently operating in **Coding Mode**.  The user is working inside \
-the code workspace at: `{workspace_dir}`
+You are currently operating in **Coding Mode**.
+
+### Active project
+The user's active coding project directory is: `{project_dir}`
+
+All file operations (`read_file`, `write_file`, `edit_file`, `list_directory`,
+etc.) should use paths **relative to the project directory above** unless the
+user explicitly specifies an absolute path.  Do NOT read or write outside this
+directory unless explicitly asked.
+
+### Agent workspace
+The internal QwenPaw workspace (configs, sessions, memory) is located at:
+`{workspace_dir}` — do NOT touch files here unless the user explicitly asks.
 
 ### Working guidelines
 1. **Break large tasks down** — use `todo_write` for any task with more than \
@@ -61,11 +72,30 @@ class CodingModeMixin:
         base: str = super()._build_sys_prompt()  # type: ignore[misc]
         if not self._coding_mode_enabled():
             return base
-        workspace_dir = str(getattr(self, "_workspace_dir", ""))
+        workspace_dir = str(getattr(self, "_workspace_dir", "") or "(unknown)")
+        # Resolve the active coding project dir from agent config
+        project_dir = self._get_coding_project_dir() or workspace_dir
         coding_block = _CODING_SYSTEM_PROMPT_TEMPLATE.format(
-            workspace_dir=workspace_dir or "(unknown)",
+            project_dir=project_dir,
+            workspace_dir=workspace_dir,
         )
         return base + "\n\n" + coding_block
+
+    def _get_coding_project_dir(self) -> str | None:
+        """Return the active coding project dir.
+
+        Returns None when no project has been set (use workspace default).
+        """
+        agent_config = getattr(self, "_agent_config", None)
+        if agent_config is None:
+            return None
+        if isinstance(agent_config, dict):
+            cm = agent_config.get("coding_mode") or {}
+            return cm.get("project_dir") or None
+        cm = getattr(agent_config, "coding_mode", None)
+        if cm is None:
+            return None
+        return getattr(cm, "project_dir", None) or None
 
     # ------------------------------------------------------------------
     # Helpers: config access
