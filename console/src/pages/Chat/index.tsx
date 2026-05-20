@@ -717,41 +717,12 @@ export default function ChatPage() {
 
   const onFileCardClick = useCallback(
     (fileInfo: { name?: string; size?: number; url?: string }) => {
-      console.log("[onFileCardClick]", fileInfo);
-      message.info(`${t("common.download")}: ${fileInfo.name || fileInfo.url}`);
       if (fileInfo.url) {
         openExternalLink(fileInfo.url);
       }
     },
-    [message, t],
+    [],
   );
-
-  // Override window.open to use openExternalLink in desktop app (pywebview)
-  useEffect(() => {
-    const originalOpen = window.open.bind(window);
-    (window as any).open = (
-      url?: string | URL,
-      target?: string,
-      features?: string,
-    ) => {
-      if (url) {
-        const urlStr = String(url);
-        console.log("[window.open intercepted]", urlStr);
-        message.info(
-          `${t("common.download")}: ${urlStr.split("/").pop() || urlStr}`,
-        );
-        openExternalLink(
-          urlStr,
-          target || "_blank",
-          features || "noopener,noreferrer",
-        );
-      }
-      return null;
-    };
-    return () => {
-      (window as any).open = originalOpen;
-    };
-  }, [message, t]);
 
   // Shortcut key for voice recording (Ctrl+Shift+M or Cmd+Shift+M on Mac)
   useEffect(() => {
