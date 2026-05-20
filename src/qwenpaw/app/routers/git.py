@@ -264,6 +264,17 @@ class CommitRequest(BaseModel):
     message: str
 
 
+class DiscardRequest(BaseModel):
+    paths: list[str] = Field(
+        default_factory=list,
+        description="File paths to discard (empty = discard all)",
+    )
+
+
+class RevertRequest(BaseModel):
+    commit_hash: str = Field(description="Commit hash to revert")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -453,6 +464,63 @@ async def commit_changes(body: CommitRequest, request: Request) -> dict:
     if rc != 0:
         raise HTTPException(status_code=400, detail=err.strip() or out.strip())
     return {"committed": True, "output": out.strip()}
+
+
+@router.post("/discard", summary="Discard working-directory changes")
+async def discard_changes(body: DiscardRequest, request: Request) -> dict:
+    """Discard unstaged changes.
+
+    *  For tracked modified files: ``git restore <paths>``
+    *  For untracked files: ``git clean -fd <paths>``
+
+    Pass an empty ``paths`` list to discard **all** changes.
+    """
+    workspace = await get_agent_for_request(request)
+    cwd = get_coding_dir(workspace)
+    targets = body.paths if body.paths else ["."]
+    rc, _, err = await _git(cwd, "restore", *targets)
+    # Also try to remove untracked files; errors here are non-fatal
+    await _git(cwd, "clean", "-fd", *targets)
+    if rc != 0 and err.strip():
+        raise HTTPException(status_code=400, detail=err.strip())
+    return {"discarded": targets}
+
+
+@router.get("/commit-diff", summary="Show diff introduced by a commit")
+async def get_commit_diff(request: Request, commit_hash: str) -> dict:
+    """Return ``git show`` output (stat + unified patch) for *commit_hash*."""
+    workspace = await get_agent_for_request(request)
+    cwd = get_coding_dir(workspace)
+    rc, out, err = await _git(cwd, "show", "--stat", "--patch", commit_hash)
+    if rc != 0:
+        raise HTTPException(status_code=400, detail=err.strip())
+    return {"diff": out, "hash": commit_hash}
+
+
+@router.post(
+    "/revert",
+    summary="Revert a commit (creates a new revert commit)",
+)
+async def revert_commit(body: RevertRequest, request: Request) -> dict:
+    """Run ``git revert --no-edit <hash>``.
+
+    Creates a new commit that reverses the changes introduced by *hash*.
+    """
+    workspace = await get_agent_for_request(request)
+    cwd = get_coding_dir(workspace)
+    rc, out, err = await _git(
+        cwd,
+        "-c",
+        "user.email=qwenpaw@localhost",
+        "-c",
+        "user.name=QwenPaw",
+        "revert",
+        "--no-edit",
+        body.commit_hash,
+    )
+    if rc != 0:
+        raise HTTPException(status_code=400, detail=err.strip() or out.strip())
+    return {"reverted": body.commit_hash, "output": out.strip()}
 
 
 @router.get(

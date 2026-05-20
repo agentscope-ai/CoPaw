@@ -178,13 +178,34 @@
 
   &:hover {
     background: var(--item-hover-bg, rgba(0, 0, 0, 0.03));
+
+    .logActions {
+      opacity: 1;
+    }
   }
+}
+
+.logEntryTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.logActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
 }
 
 .logHash {
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 11px;
   color: var(--primary-color, #1677ff);
+  flex-shrink: 0;
 }
 
 .logMsg {
@@ -193,11 +214,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 
 .logMeta {
   font-size: 11px;
   color: var(--text-tertiary, rgba(0, 0, 0, 0.35));
+  padding-left: 2px;
 }
 
 // ---- Shared utilities ----------------------------------------------------

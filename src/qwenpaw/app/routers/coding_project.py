@@ -392,6 +392,13 @@ async def upload_zip(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    # Auto-init git repo if the extracted folder has no repo
+    from ..routers.git import _auto_init_repo, _resolve_branch
+
+    _, needs_init = await _resolve_branch(project_path)
+    if needs_init:
+        await _auto_init_repo(project_path)
+
     await asyncio.to_thread(
         _save_project_dir,
         workspace.agent_id,

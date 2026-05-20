@@ -66,4 +66,24 @@ export const gitApi = {
 
   log: (limit = 20) =>
     request<CommitInfo[]>(`/workspace/git/log?limit=${limit}`),
+
+  /** Discard unstaged working-directory changes for the given paths (or all). */
+  discard: (paths: string[] = []) =>
+    request<{ discarded: string[] }>("/workspace/git/discard", {
+      method: "POST",
+      body: JSON.stringify({ paths }),
+    }),
+
+  /** Get the unified diff introduced by a specific commit hash. */
+  commitDiff: (hash: string) =>
+    request<{ diff: string; hash: string }>(
+      `/workspace/git/commit-diff?commit_hash=${encodeURIComponent(hash)}`,
+    ),
+
+  /** Revert a commit by hash (creates a new revert commit). */
+  revert: (hash: string) =>
+    request<{ reverted: string; output: string }>("/workspace/git/revert", {
+      method: "POST",
+      body: JSON.stringify({ commit_hash: hash }),
+    }),
 };

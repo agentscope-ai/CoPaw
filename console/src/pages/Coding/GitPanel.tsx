@@ -15,6 +15,7 @@ import {
   Input,
   message,
   Modal,
+  Popconfirm,
   Select,
   Tabs,
   Tag,
@@ -29,10 +30,13 @@ import {
   Plus,
   Minus,
   FileDiff,
+  RotateCcw,
+  Undo2,
 } from "lucide-react";
 import { gitApi } from "../../api/modules/git";
 import type { GitStatus, BranchInfo, CommitInfo, GitChangedFile } from "../../api/modules/git";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useProjectDir } from "../../stores/codingModeStore";
 import styles from "./GitPanel.module.less";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -56,6 +60,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function GitPanel() {
   const { isDark } = useTheme();
+  const { projectDir } = useProjectDir();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
@@ -66,6 +71,7 @@ export default function GitPanel() {
     path: string;
     staged: boolean;
     diff: string;
+    title?: string;
   } | null>(null);
   const [newBranchModal, setNewBranchModal] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
@@ -89,21 +95,27 @@ export default function GitPanel() {
 
   const refreshLog = useCallback(async () => {
     try {
-      setLog(await gitApi.log());
+      setLog(await gitApi.log(50));
     } catch {
       setLog([]);
     }
   }, []);
 
+  // Re-fetch everything when the active coding project changes
   useEffect(() => {
+    setStatus(null);
+    setLog([]);
     void refresh();
     void refreshLog();
+  }, [projectDir, refresh, refreshLog]);
+
+  useEffect(() => {
     // Poll every 10 s — reduced from 5 s to cut API load
     pollingRef.current = setInterval(() => void refresh(), 10000);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [refresh, refreshLog]);
+  }, [refresh]);
 
   // ---- Branch actions -------------------------------------------------------
 
@@ -156,16 +168,66 @@ export default function GitPanel() {
     await refresh();
   }, [refresh]);
 
+  // ---- Discard --------------------------------------------------------------
+
+  const handleDiscard = useCallback(
+    async (file: GitChangedFile) => {
+      try {
+        await gitApi.discard([file.path]);
+        await refresh();
+        void msgApi.success(`Discarded changes in ${file.path}`);
+      } catch (e: unknown) {
+        void msgApi.error(String(e));
+      }
+    },
+    [refresh, msgApi],
+  );
+
   // ---- Diff -----------------------------------------------------------------
 
   const handleShowDiff = useCallback(async (file: GitChangedFile) => {
     try {
       const res = await gitApi.diff(file.path, file.staged);
-      setDiffFile({ path: file.path, staged: file.staged, diff: res.diff });
+      setDiffFile({
+        path: file.path,
+        staged: file.staged,
+        diff: res.diff,
+        title: `${file.path}${file.staged ? " (staged)" : ""}`,
+      });
     } catch {
       // ignore
     }
   }, []);
+
+  const handleShowCommitDiff = useCallback(async (commit: CommitInfo) => {
+    try {
+      const res = await gitApi.commitDiff(commit.hash);
+      setDiffFile({
+        path: commit.hash,
+        staged: false,
+        diff: res.diff,
+        title: `${commit.hash} · ${commit.message}`,
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // ---- Revert ---------------------------------------------------------------
+
+  const handleRevert = useCallback(
+    async (commit: CommitInfo) => {
+      try {
+        await gitApi.revert(commit.hash);
+        await refresh();
+        await refreshLog();
+        void msgApi.success(`Reverted commit ${commit.hash}`);
+      } catch (e: unknown) {
+        void msgApi.error(String(e));
+      }
+    },
+    [refresh, refreshLog, msgApi],
+  );
 
   // ---- Commit ---------------------------------------------------------------
 
@@ -325,6 +387,7 @@ export default function GitPanel() {
                         file={f}
                         onStage={() => void handleStage(f)}
                         onDiff={() => void handleShowDiff(f)}
+                        onDiscard={() => void handleDiscard(f)}
                         actionIcon={<Plus size={11} />}
                         actionTip="Stage"
                       />
@@ -375,7 +438,7 @@ export default function GitPanel() {
           },
           {
             key: "log",
-            label: "Log",
+            label: "History",
             children: (
               <div className={styles.logPane}>
                 {log.length === 0 ? (
@@ -383,8 +446,35 @@ export default function GitPanel() {
                 ) : (
                   log.map((c) => (
                     <div key={c.hash} className={styles.logEntry}>
-                      <span className={styles.logHash}>{c.hash}</span>
-                      <span className={styles.logMsg}>{c.message}</span>
+                      <div className={styles.logEntryTop}>
+                        <span className={styles.logHash}>{c.hash}</span>
+                        <span className={styles.logMsg}>{c.message}</span>
+                        <div className={styles.logActions}>
+                          <Tooltip title="View diff">
+                            <button
+                              type="button"
+                              className={styles.iconBtn}
+                              onClick={() => void handleShowCommitDiff(c)}
+                            >
+                              <FileDiff size={11} />
+                            </button>
+                          </Tooltip>
+                          <Popconfirm
+                            title={`Revert commit "${c.message}"?`}
+                            description="This creates a new commit that undoes these changes."
+                            onConfirm={() => void handleRevert(c)}
+                            okText="Revert"
+                            cancelText="Cancel"
+                            placement="topRight"
+                          >
+                            <Tooltip title="Revert this commit">
+                              <button type="button" className={styles.iconBtn}>
+                                <Undo2 size={11} />
+                              </button>
+                            </Tooltip>
+                          </Popconfirm>
+                        </div>
+                      </div>
                       <span className={styles.logMeta}>
                         {c.author} · {c.date}
                       </span>
@@ -403,7 +493,7 @@ export default function GitPanel() {
         title={
           <span>
             <FileDiff size={14} style={{ marginRight: 6 }} />
-            {diffFile?.path} {diffFile?.staged ? "(staged)" : ""}
+            {diffFile?.title ?? diffFile?.path}
           </span>
         }
         onCancel={() => setDiffFile(null)}
@@ -460,11 +550,12 @@ interface FileRowProps {
   file: GitChangedFile;
   onStage: () => void;
   onDiff: () => void;
+  onDiscard?: () => void;
   actionIcon: React.ReactNode;
   actionTip: string;
 }
 
-function FileRow({ file, onStage, onDiff, actionIcon, actionTip }: FileRowProps) {
+function FileRow({ file, onStage, onDiff, onDiscard, actionIcon, actionTip }: FileRowProps) {
   const name = file.path.split("/").pop() ?? file.path;
   return (
     <div className={styles.fileRow}>
@@ -478,6 +569,23 @@ function FileRow({ file, onStage, onDiff, actionIcon, actionTip }: FileRowProps)
             <FileDiff size={11} />
           </button>
         </Tooltip>
+        {onDiscard && (
+          <Popconfirm
+            title="Discard changes?"
+            description={`Discard all changes in ${file.path}?`}
+            onConfirm={onDiscard}
+            okText="Discard"
+            cancelText="Cancel"
+            okButtonProps={{ danger: true }}
+            placement="topRight"
+          >
+            <Tooltip title="Discard changes">
+              <button type="button" className={styles.iconBtn}>
+                <RotateCcw size={11} />
+              </button>
+            </Tooltip>
+          </Popconfirm>
+        )}
         <Tooltip title={actionTip}>
           <button type="button" className={styles.iconBtn} onClick={onStage}>
             {actionIcon}
