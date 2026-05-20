@@ -5,12 +5,18 @@ Covers:
 - is_first_user_interaction
 - prepend_to_message_content
 """
-# pylint: disable=redefined-outer-name
+# pylint: disable=protected-access
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+from agentscope.message import Msg
+
 from qwenpaw.agents.utils.message_processing import (
+    _extract_source_and_filename,
     is_first_user_interaction,
     prepend_to_message_content,
+    process_file_and_media_blocks_in_message,
 )
 
 
@@ -143,3 +149,92 @@ class TestPrependToMessageContent:
         prepend_to_message_content(msg, "guidance")
         assert len(msg.content) == 2
         assert msg.content[1]["type"] == "image"
+
+
+# ---------------------------------------------------------------------------
+# audio source extraction
+# ---------------------------------------------------------------------------
+
+
+class TestAudioDataSource:
+    def test_audio_top_level_data_local_path_becomes_file_url(self, tmp_path):
+        audio_path = tmp_path / "voice.oga"
+        audio_path.write_bytes(b"audio")
+
+        source, filename = _extract_source_and_filename(
+            {
+                "type": "audio",
+                "data": str(audio_path),
+                "format": "ogg",
+            },
+            "audio",
+        )
+
+        assert source == {
+            "type": "url",
+            "url": audio_path.resolve().as_uri(),
+            "media_type": "audio/ogg",
+        }
+        assert filename == "voice.oga"
+
+    def test_audio_top_level_data_base64_stays_base64(self):
+        source, filename = _extract_source_and_filename(
+            {
+                "type": "audio",
+                "data": "YXVkaW8=",
+                "format": "mp3",
+            },
+            "audio",
+        )
+
+        assert source == {
+            "type": "base64",
+            "data": "YXVkaW8=",
+            "media_type": "audio/mp3",
+        }
+        assert filename is None
+
+    @pytest.mark.asyncio
+    async def test_audio_top_level_data_is_transcribed(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        audio_path = tmp_path / "voice.oga"
+        audio_path.write_bytes(b"audio")
+
+        async def fake_transcribe(path):
+            assert path == str(audio_path.resolve())
+            return "hello from voice"
+
+        monkeypatch.setattr(
+            "qwenpaw.agents.utils.audio_transcription.transcribe_audio",
+            fake_transcribe,
+        )
+        monkeypatch.setattr(
+            "qwenpaw.agents.utils.message_processing.load_config",
+            lambda: SimpleNamespace(
+                agents=SimpleNamespace(audio_mode="auto", language="en"),
+            ),
+        )
+
+        msg = Msg(
+            name="user",
+            role="user",
+            content=[
+                {
+                    "type": "audio",
+                    "data": str(audio_path),
+                    "format": "ogg",
+                },
+            ],
+        )
+
+        await process_file_and_media_blocks_in_message(msg)
+
+        assert msg.content == [
+            {
+                "type": "text",
+                "text": "[Voice message]: hello from voice",
+            },
+        ]
