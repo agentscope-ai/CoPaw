@@ -2241,6 +2241,10 @@
     "catalogUpgrade": "Upgrade available",
     "catalogUpgradeBtn": "Upgrade",
     "catalogInstalled": "Installed",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "Bundle",
+    "kindTool": "Tool",
+    "filterByName": "Filter by name",
+    "filterByKind": "Filter by kind"
   }
 }

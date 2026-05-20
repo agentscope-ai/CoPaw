@@ -2096,7 +2096,11 @@
     "catalogUpgrade": "Atualização disponível",
     "catalogUpgradeBtn": "Atualizar",
     "catalogInstalled": "Instalado",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "Pacote",
+    "kindTool": "Ferramenta",
+    "filterByName": "Filtrar por nome",
+    "filterByKind": "Filtrar por tipo"
   },
   "plan": {
     "title": "Plan",

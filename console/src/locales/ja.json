@@ -2061,7 +2061,11 @@
     "catalogUpgrade": "アップグレード可能",
     "catalogUpgradeBtn": "アップグレード",
     "catalogInstalled": "インストール済み",
-    "catalogSha256": "SHA256"
+    "catalogSha256": "SHA256",
+    "kindBundle": "バンドル",
+    "kindTool": "ツール",
+    "filterByName": "名前で絞り込み",
+    "filterByKind": "タグで絞り込み"
   },
   "plan": {
     "title": "プラン",
