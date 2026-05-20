@@ -14,7 +14,9 @@ export function openExternalLink(
   if (!url) return;
 
   // Resolve relative URLs to absolute (needed for pywebview which runs outside the WebView context)
-  const fullUrl = url.startsWith("http") ? url : `${window.location.origin}${url}`;
+  const fullUrl = url.startsWith("http")
+    ? url
+    : `${window.location.origin}${url}`;
 
   const pywebview = (window as any).pywebview;
   if (pywebview?.api?.open_external_link) {
