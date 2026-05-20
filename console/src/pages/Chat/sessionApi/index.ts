@@ -406,9 +406,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
    * Used by handleSessionClick to load data BEFORE setting currentSessionId,
    * so the library's automatic getSession call hits the result cache.
    */
-  async preloadSession(
-    sessionId: string,
-  ): Promise<{
+  async preloadSession(sessionId: string): Promise<{
     session: IAgentScopeRuntimeWebUISession;
     realId: string | null;
   }> {

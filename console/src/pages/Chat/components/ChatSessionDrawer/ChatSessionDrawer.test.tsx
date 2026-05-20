@@ -62,8 +62,19 @@ vi.mock("@/api/modules/chat", () => ({
 }));
 
 vi.mock("../../sessionApi", () => ({
-  default: { getSessionList: mockGetSessionList },
+  default: {
+    getSessionList: mockGetSessionList,
+    isSessionSwitching: false,
+    preloadSession: vi.fn().mockResolvedValue({ session: {}, realId: null }),
+    finishSessionSwitch: vi.fn(),
+    lastNavigatedChatId: null,
+  },
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return { ...actual, useNavigate: () => vi.fn() };
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
