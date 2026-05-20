@@ -12,6 +12,7 @@ from ..utils.file_handling import read_text_file_with_encoding_fallback
 from .models import SkillInfo
 from .registry import (
     get_packaged_builtin_versions,
+    reconcile_workspace_manifest,
     resolve_effective_skills,
 )
 from .store import (
@@ -513,20 +514,19 @@ class SkillService:
                     imported.append(skill_name)
 
             if imported:
+                reconcile_workspace_manifest(self.workspace_dir)
 
-                def _add_imported_entries(payload: dict[str, Any]) -> None:
+                def _mark_imported_entries(payload: dict[str, Any]) -> None:
+                    skills = payload.setdefault("skills", {})
                     for name in imported:
-                        _register_workspace_skill_entry(
-                            payload,
-                            name,
-                            skill_root / name,
-                            installed_from="zip",
-                        )
+                        entry = skills.get(name)
+                        if entry is not None:
+                            entry["installed_from"] = "zip"
 
                 mutate_json(
                     get_workspace_skill_manifest_path(self.workspace_dir),
                     default_workspace_manifest(),
-                    _add_imported_entries,
+                    _mark_imported_entries,
                 )
 
                 if enable:

@@ -270,15 +270,18 @@ def _to_market_result(item: dict[str, Any]) -> MarketResult | None:
     updated_at = _opt_str(item.get("updatedAt"))
     if updated_at:
         stats["updated_at"] = updated_at
+    # Aliyun SearchSkills response only carries the fields below; the
+    # upstream schema has no version/author/iconUrl, so we leave those
+    # MarketResult slots null instead of pretending to read them.
     return MarketResult(
         source="aliyun",
         slug=slug,
         name=display or skill_name,
         description=_opt_str(item.get("description")),
         source_url=detail_url,
-        version=_opt_str(item.get("version")),
-        author=_opt_str(item.get("author")),
-        icon_url=_opt_str(item.get("iconUrl")),
+        version=None,
+        author=None,
+        icon_url=None,
         stats=stats or None,
     )
 

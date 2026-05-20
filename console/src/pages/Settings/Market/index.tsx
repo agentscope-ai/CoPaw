@@ -25,8 +25,9 @@ function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
 }
 
-// ModelScope & Aliyun openapi don't return per-skill logos fall back
-// to a colored provider monogram so cards stay visually distinguishable.
+// Most upstream skills don't expose a per-skill logo (Aliyun's schema has no
+// icon field at all; ModelScope's logo_url is empty for ~99% of skills), so
+// cards almost always fall back to a colored provider monogram.
 const PROVIDER_FALLBACK: Record<string, { letter: string; color: string }> = {
   clawhub: { letter: "C", color: "#f59e0b" },
   modelscope: { letter: "M", color: "#4f46e5" },
@@ -49,6 +50,8 @@ function SkillIcon({
         className={styles.skillIcon}
         src={url}
         alt={alt}
+        loading="lazy"
+        referrerPolicy="no-referrer"
         onError={() => setImgFailed(true)}
       />
     );
