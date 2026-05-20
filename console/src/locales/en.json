@@ -2277,6 +2277,8 @@
     "createBtn": "Create Project",
     "switchProject": "Switch Project",
     "currentProject": "Current Project",
-    "resetToWorkspace": "Reset to Default Workspace"
+    "resetToWorkspace": "Reset to Default Workspace",
+    "dropPrimary": "Drag a folder here, or click to browse",
+    "dropSecondary": "Drag from Finder or paste a path below"
   }
 }

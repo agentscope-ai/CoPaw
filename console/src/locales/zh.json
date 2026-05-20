@@ -2285,6 +2285,8 @@
     "createBtn": "创建项目",
     "switchProject": "切换项目",
     "currentProject": "当前项目",
-    "resetToWorkspace": "重置为默认工作区"
+    "resetToWorkspace": "重置为默认工作区",
+    "dropPrimary": "拖入文件夹，或点击浏览",
+    "dropSecondary": "支持从 Finder 直接拖入"
   }
 }
