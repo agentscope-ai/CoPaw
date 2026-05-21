@@ -46,8 +46,9 @@ _MAX_DIRECT_URL_DOWNLOAD_BYTES = 10 * 1024 * 1024
 _CDP_CONNECT_TIMEOUT_SECONDS = 30.0
 _HEADLESS_VERIFICATION_WARNING = (
     "Headless browser launches are more likely to trigger verification. "
-    "If verification appears, try stopping the current browser first, "
-    "then start a visible browser and operate there."
+    "If verification appears, call browser_use with action='stop' to stop "
+    "the current browser, then call browser_use with action='start' and "
+    "headed=true to open a visible browser and continue there."
 )
 
 
