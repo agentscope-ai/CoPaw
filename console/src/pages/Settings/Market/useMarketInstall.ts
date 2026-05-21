@@ -57,83 +57,6 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
     [setQueue],
   );
 
-  const enqueue = useCallback(
-    (results: MarketResult[], target: InstallTarget) => {
-      const items: InstallQueueItem[] = results.map((r) => ({
-        id: `${r.source}:${r.slug}:${Date.now()}:${Math.random()
-          .toString(36)
-          .slice(2, 7)}`,
-        result: r,
-        target,
-        status: "queued",
-        message: "",
-      }));
-      setQueue([...queueRef.current, ...items]);
-      void runQueue();
-      return items;
-    },
-    [setQueue],
-  );
-
-  const runQueue = useCallback(async () => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    try {
-      while (true) {
-        const next = queueRef.current.find((it) => it.status === "queued");
-        if (!next) break;
-        if (cancelledRef.current.has(next.id)) {
-          // Status tag already says "cancelled"; no extra English label.
-          updateItem(next.id, { status: "cancelled", message: "" });
-          continue;
-        }
-        await installOne(next, undefined);
-      }
-    } finally {
-      runningRef.current = false;
-    }
-  }, [updateItem]);
-
-  const installOne = useCallback(
-    async (item: InstallQueueItem, overrideName: string | undefined) => {
-      updateItem(item.id, { status: "installing", message: "" });
-      try {
-        if (item.target === "pool") {
-          currentInstallingItemIdRef.current = item.id;
-          try {
-            const result = await api.importPoolSkillFromHub({
-              bundle_url: item.result.source_url,
-              version: item.result.version || undefined,
-              target_name: overrideName,
-            });
-            if (cancelledRef.current.has(item.id)) {
-              updateItem(item.id, { status: "cancelled", message: "" });
-              return;
-            }
-            invalidateSkillCache({ pool: true });
-            updateItem(item.id, {
-              status: "completed",
-              installedName: result.name,
-              message: result.name,
-            });
-            opts.onSuccess?.({ ...item, status: "completed" });
-          } finally {
-            if (currentInstallingItemIdRef.current === item.id) {
-              currentInstallingItemIdRef.current = null;
-            }
-          }
-        } else {
-          await installWorkspace(item, overrideName);
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        updateItem(item.id, { status: "failed", message: msg });
-        opts.onError?.({ ...item, status: "failed" }, err);
-      }
-    },
-    [opts, updateItem],
-  );
-
   const installWorkspace = useCallback(
     async (item: InstallQueueItem, overrideName: string | undefined) => {
       const agentId = selectedAgentRef.current;
@@ -201,6 +124,83 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
       }
     },
     [opts, updateItem],
+  );
+
+  const installOne = useCallback(
+    async (item: InstallQueueItem, overrideName: string | undefined) => {
+      updateItem(item.id, { status: "installing", message: "" });
+      try {
+        if (item.target === "pool") {
+          currentInstallingItemIdRef.current = item.id;
+          try {
+            const result = await api.importPoolSkillFromHub({
+              bundle_url: item.result.source_url,
+              version: item.result.version || undefined,
+              target_name: overrideName,
+            });
+            if (cancelledRef.current.has(item.id)) {
+              updateItem(item.id, { status: "cancelled", message: "" });
+              return;
+            }
+            invalidateSkillCache({ pool: true });
+            updateItem(item.id, {
+              status: "completed",
+              installedName: result.name,
+              message: result.name,
+            });
+            opts.onSuccess?.({ ...item, status: "completed" });
+          } finally {
+            if (currentInstallingItemIdRef.current === item.id) {
+              currentInstallingItemIdRef.current = null;
+            }
+          }
+        } else {
+          await installWorkspace(item, overrideName);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        updateItem(item.id, { status: "failed", message: msg });
+        opts.onError?.({ ...item, status: "failed" }, err);
+      }
+    },
+    [installWorkspace, opts, updateItem],
+  );
+
+  const runQueue = useCallback(async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      while (true) {
+        const next = queueRef.current.find((it) => it.status === "queued");
+        if (!next) break;
+        if (cancelledRef.current.has(next.id)) {
+          // Status tag already says "cancelled"; no extra English label.
+          updateItem(next.id, { status: "cancelled", message: "" });
+          continue;
+        }
+        await installOne(next, undefined);
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  }, [installOne, updateItem]);
+
+  const enqueue = useCallback(
+    (results: MarketResult[], target: InstallTarget) => {
+      const items: InstallQueueItem[] = results.map((r) => ({
+        id: `${r.source}:${r.slug}:${Date.now()}:${Math.random()
+          .toString(36)
+          .slice(2, 7)}`,
+        result: r,
+        target,
+        status: "queued",
+        message: "",
+      }));
+      setQueue([...queueRef.current, ...items]);
+      void runQueue();
+      return items;
+    },
+    [runQueue, setQueue],
   );
 
   const cancel = useCallback(
