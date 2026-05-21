@@ -1113,7 +1113,6 @@ class WeChatChannel(BaseChannel):
             if raise_on_error:
                 raise
             return
-
         if isinstance(resp, dict):
             ret = resp.get("ret", 0)
             errcode = resp.get("errcode", 0)
@@ -1428,7 +1427,9 @@ class WeChatChannel(BaseChannel):
         api_send = bool(m.get("_api_send"))
         for chunk in split_text(body):
             await self._send_text_direct(
-                to_user_id, chunk, context_token,
+                to_user_id,
+                chunk,
+                context_token,
                 raise_on_error=api_send,
             )
 
