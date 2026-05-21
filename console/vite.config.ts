@@ -19,10 +19,19 @@ export default defineConfig(({ mode }) => {
   // Empty = same-origin; frontend and backend served together, no hardcoded host.
   // Use a dedicated Vite-prefixed key so unrelated shell BASE_URL values don't leak into the build.
   const apiBaseUrl = env.VITE_API_BASE_URL ?? "";
+  // Tauri sets TAURI_ENV_PLATFORM during build and TAURI_DEV_HOST during dev;
+  // in both contexts the Python sidecar port is only known at runtime.
+  const isTauriContext =
+    mode === "tauri" ||
+    Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_DEV_HOST);
+  const apiBaseUrlDefine = isTauriContext
+    ? `(globalThis.__QWENPAW_API_BASE_URL__ ?? ${JSON.stringify(apiBaseUrl)})`
+    : JSON.stringify(apiBaseUrl);
 
   return {
     define: {
-      VITE_API_BASE_URL: JSON.stringify(apiBaseUrl),
+      VITE_API_BASE_URL: apiBaseUrlDefine,
+      __QWENPAW_CONFIGURED_API_BASE_URL__: JSON.stringify(apiBaseUrl),
       TOKEN: JSON.stringify(env.TOKEN || ""),
       MOBILE: false,
     },

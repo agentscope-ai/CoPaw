@@ -23,6 +23,7 @@ from ...config.context import (
     get_current_shell_command_timeout,
     get_current_workspace_dir,
 )
+from ...desktop_env import DESKTOP_APP_ENV
 
 
 def _kill_process_tree_win32(pid: int) -> None:
@@ -40,6 +41,14 @@ def _kill_process_tree_win32(pid: int) -> None:
         )
     except Exception:
         pass
+
+
+def _windows_shell_creationflags() -> int:
+    """Return Windows process flags for shell commands."""
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if os.environ.get(DESKTOP_APP_ENV):
+        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return flags
 
 
 def _collapse_newlines_outside_quotes(cmd: str) -> str:
@@ -295,7 +304,7 @@ def _execute_subprocess_sync(
             text=False,
             cwd=cwd,
             env=env,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            creationflags=_windows_shell_creationflags(),
         )
 
         # Parent copies are no longer needed — the child inherited its own
