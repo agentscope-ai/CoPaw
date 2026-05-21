@@ -22,6 +22,8 @@ from .desktop_screenshot import desktop_screenshot
 from .view_media import view_image, view_video
 from .get_current_time import get_current_time, set_user_timezone
 from .get_token_usage import get_token_usage
+from .get_context_usage import get_context_usage
+from .reset_my_context import reset_my_context
 from .agent_management import (
     list_agents,
     chat_with_agent,
@@ -53,6 +55,8 @@ __all__ = [
     "get_current_time",
     "set_user_timezone",
     "get_token_usage",
+    "get_context_usage",
+    "reset_my_context",
     "delegate_external_agent",
     "list_agents",
     "chat_with_agent",

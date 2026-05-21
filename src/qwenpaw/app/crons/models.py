@@ -162,6 +162,17 @@ class JobRuntimeSpec(BaseModel):
             "If False, creates isolated context with unique run ID."
         ),
     )
+    auto_reset: bool = Field(
+        default=False,
+        description=(
+            "When True, each cron trigger creates a fresh session. "
+            "Previous session messages are checkpointed before reset."
+        ),
+    )
+    reset_checkpoint_dir: str = Field(
+        default="checkpoints",
+        description="Directory to store pre-reset checkpoints.",
+    )
 
 
 class CronJobRequest(BaseModel):
