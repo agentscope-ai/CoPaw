@@ -59,6 +59,7 @@ include-package-data = true
 # Dockerfile copies console build output to src/qwenpaw/console/ (no dist subdir).
 "qwenpaw" = [
     "console/**",
+    "cli/assets/**",
     "agents/md_files/**",
     "agents/skills/**",
     "tokenizer/**",
@@ -89,6 +90,13 @@ dev = [
     "pytest-cov>=6.2.1",
     "hypothesis>=6.0.0",
 ]
+desktop_win32 = [
+    # Windows IPC support (named pipes)
+    # for desktop-systray pywebview process
+    "pywin32>=306; sys_platform == 'win32'",
+    # System tray support (Windows)
+    "pystray>=0.19.0",
+]
 local = [
     "huggingface_hub>=0.20.0",
 ]
@@ -99,7 +107,7 @@ whisper = [
     "openai-whisper>=20231117",
 ]
 full = [
-    "qwenpaw[local,whisper]",
+    "qwenpaw[local,whisper,desktop_win32]",
 ]
 sip = [
     "pyVoIP>=1.6.0",
