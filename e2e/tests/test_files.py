@@ -185,20 +185,30 @@ class TestFileToggleReorderMemory:
 
         # ── 步骤4: 切换开关并硬断言 ──
         log_test_step("4. 切换开关并验证")
-        # 滚动到开关可见位置并使用 force click 防止被遮挡
+        # 滚动到开关可见位置
         toggle.scroll_into_view_if_needed()
         page.wait_for_timeout(500)
-        toggle.click(force=True)
-        page.wait_for_timeout(1000)
+        # 使用常规点击（force=True 可能绕过 React 事件）
+        toggle.click()
+        page.wait_for_timeout(1500)
 
-        # 处理可能的确认弹窗
-        popconfirm = page.locator('.qwenpaw-popconfirm-buttons button.qwenpaw-btn-primary, .qwenpaw-modal-footer button.qwenpaw-btn-primary')
-        if popconfirm.count() > 0 and popconfirm.first.is_visible():
+        # 处理可能的确认弹窗（Ant Popconfirm 或 Modal）
+        popconfirm = page.locator(
+            '.qwenpaw-popconfirm-buttons button.qwenpaw-btn-primary, '
+            '.qwenpaw-modal-footer button.qwenpaw-btn-primary, '
+            '.ant-popconfirm-buttons button.ant-btn-primary, '
+            '.ant-modal-footer button.ant-btn-primary, '
+            '.qwenpaw-popover button:has-text("OK"), '
+            '.qwenpaw-popover button:has-text("Yes"), '
+            '.ant-popover button:has-text("OK"), '
+            '.ant-popover button:has-text("Yes")'
+        )
+        if popconfirm.count() > 0 and popconfirm.first.is_visible(timeout=3000):
             popconfirm.first.click()
             logger.info("已确认开关切换弹窗")
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(2000)
         else:
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(1500)
 
         # 重新获取开关引用（DOM 可能已更新）
         file_items = get_file_items(page)
@@ -214,11 +224,11 @@ class TestFileToggleReorderMemory:
         log_test_step("5. 恢复初始状态")
         toggle.scroll_into_view_if_needed()
         page.wait_for_timeout(500)
-        toggle.click(force=True)
+        toggle.click()
         page.wait_for_timeout(1000)
 
         # 处理可能的确认弹窗
-        if popconfirm.count() > 0 and popconfirm.first.is_visible():
+        if popconfirm.count() > 0 and popconfirm.first.is_visible(timeout=2000):
             popconfirm.first.click()
             logger.info("已确认开关恢复弹窗")
             page.wait_for_timeout(1500)

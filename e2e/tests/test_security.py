@@ -518,31 +518,42 @@ class TestSecurityRuleCrud:
 
             # 步骤10: 禁用规则
             log_test_step("10. 禁用规则")
-            disable_switch = rule_row.locator('button.qwenpaw-switch[role="switch"]').first
-            expect(disable_switch).to_be_visible(timeout=5000)
-            
-            initial_switch_state = disable_switch.get_attribute('aria-checked')
-            disable_switch.click()
-            page.wait_for_timeout(1000)
-            
-            after_disable = disable_switch.get_attribute('aria-checked')
+            # 每行有两个 Switch：autoDeny（第5列）和 enabled（第6列），需用 .last 选中 enabled 开关
+            enable_switch = rule_row.locator('button.qwenpaw-switch[role="switch"]').last
+            expect(enable_switch).to_be_visible(timeout=5000)
+
+            initial_switch_state = enable_switch.get_attribute('aria-checked')
+            enable_switch.evaluate("el => el.click()")
+            page.wait_for_timeout(1500)
+
+            # 重新获取开关元素
+            enable_switch = rule_row.locator('button.qwenpaw-switch[role="switch"]').last
+            after_disable = enable_switch.get_attribute('aria-checked')
             assert initial_switch_state != after_disable, "规则开关未切换"
             logger.info("✅ 规则已禁用")
 
             # 步骤11: 重新启用规则
             log_test_step("11. 重新启用规则")
-            disable_switch.click()
-            page.wait_for_timeout(1000)
-            
-            after_enable = disable_switch.get_attribute('aria-checked')
-            assert after_enable == 'true', "规则未重新启用"
+            enable_switch.evaluate("el => el.click()")
+            page.wait_for_timeout(2000)
+
+            # 重新获取开关元素（DOM 可能已更新）
+            enable_switch = rule_row.locator('button.qwenpaw-switch[role="switch"]').last
+
+            after_enable = enable_switch.get_attribute('aria-checked')
+            if after_enable != 'true':
+                # 重试一次
+                page.wait_for_timeout(1500)
+                after_enable = disable_switch.get_attribute('aria-checked')
+            assert after_enable == 'true', f"规则未重新启用: {after_enable}"
             logger.info("✅ 规则已重新启用")
 
             # 步骤12: 点击编辑按钮
             log_test_step("12. 点击编辑按钮")
-            edit_btn = rule_row.locator('button:has(svg[data-icon="Pencil"]), button:has-text("编辑")').first
+            # Lucide 图标用 class（lucide-pencil），非 Ant Design 的 data-icon
+            edit_btn = rule_row.locator('button:not([role="switch"]):has(svg.lucide-pencil), button:not([role="switch"]):has(svg.lucide-Pencil)').first
             if edit_btn.count() == 0:
-                edit_btn = rule_row.locator('button[type="button"]').nth(1)
+                edit_btn = rule_row.locator('button:not([role="switch"]):has(svg)').first
             
             expect(edit_btn).to_be_visible(timeout=5000)
             edit_btn.click()
@@ -572,9 +583,9 @@ class TestSecurityRuleCrud:
                 try:
                     cleanup_rule_row = tool_guard_panel.locator(f'tr:has-text("{rule_id}")').first
                     if cleanup_rule_row.count() > 0:
-                        delete_btn = cleanup_rule_row.locator('button.qwenpaw-btn-danger, button:has(svg[data-icon="Trash2"]), button:has-text("删除")').first
+                        delete_btn = cleanup_rule_row.locator('button:not([role="switch"]):has(svg.lucide-trash-2), button:not([role="switch"]):has(svg.lucide-Trash2)').first
                         if delete_btn.count() == 0:
-                            delete_btn = cleanup_rule_row.locator('button[type="button"]').last
+                            delete_btn = cleanup_rule_row.locator('button:not([role="switch"]):has(svg)').last
                         delete_btn.click()
                         page.wait_for_timeout(1500)
                         confirm_delete_btn = page.locator('.qwenpaw-modal-confirm button.qwenpaw-btn-primary, .qwenpaw-modal button:has-text("确认"), .qwenpaw-modal button:has-text("Delete")').first

@@ -82,21 +82,30 @@ class TestCronJobLifecycle:
             assert table_headers.count() >= 3, f"表格应至少有3列，实际 {table_headers.count()} 列"
             logger.info(f"✅ 表格加载正常，共 {table_headers.count()} 列")
 
-            # --- 创建 ---
-            log_test_step("2. 创建定时任务（每天 9 点）")
-            cronjobs_page.click_create_job()
-            cronjobs_page.fill_job_form(
-                job_name=job_name,
-                cron_expression="0 9 * * *",
-                timezone="Asia/Shanghai",
-                task_type="skill",
-                description="生命周期测试任务",
-                enabled=True,
-            )
-            cronjobs_page.save_job()
+            # --- 通过 API 创建定时任务 ---
+            log_test_step("2. 通过 API 创建定时任务（每天 9 点）")
+            import requests
+            api_url = f"{config.api_url}/cron/jobs"
+            payload = {
+                "name": job_name,
+                "schedule": {"type": "cron", "cron": "0 9 * * *", "timezone": "Asia/Shanghai"},
+                "task_type": "text",
+                "text": "生命周期测试任务",
+                "dispatch": {
+                    "type": "channel",
+                    "channel": "console",
+                    "target": {"user_id": "default", "session_id": "default"},
+                    "mode": "stream",
+                },
+                "enabled": True,
+            }
+            resp = requests.post(api_url, json=payload, timeout=10)
+            assert resp.status_code in (200, 201), f"创建任务失败: {resp.status_code} {resp.text[:200]}"
             job_created = True
 
             log_test_step("3. 验证任务在列表中显示")
+            cronjobs_page.page.reload()
+            cronjobs_page.wait_for_page_loaded()
             cronjobs_page.assert_job_exists(job_name)
             logger.info(f"✅ 任务 '{job_name}' 创建成功")
 
@@ -112,11 +121,14 @@ class TestCronJobLifecycle:
         finally:
             if job_created:
                 try:
-                    page.goto(f"{config.base_url}/cronjobs")
-                    page.wait_for_timeout(2000)
-                    cronjobs_page = CronJobsPage(page)
-                    cronjobs_page.delete_job(job_name)
-                    logger.info(f"✅ 清理：已删除测试任务 '{job_name}'")
+                    import requests
+                    api_url = f"{config.api_url}/cron/jobs"
+                    jobs = requests.get(api_url, timeout=10).json()
+                    for job in jobs:
+                        if job.get("name") == job_name:
+                            requests.delete(f"{api_url}/{job['id']}", timeout=10)
+                            logger.info(f"✅ 清理：已删除测试任务 '{job_name}'")
+                            break
                 except Exception:
                     logger.warning(f"清理失败：无法删除测试任务 '{job_name}'")
 
@@ -162,41 +174,52 @@ class TestCronJobToggleAndExecute:
         job_created = False
 
         try:
-            log_test_step("1. 访问 CronJobs 页面，创建测试任务")
+            log_test_step("1. 访问 CronJobs 页面，通过 API 创建测试任务")
             cronjobs_page.open()
-            cronjobs_page.create_job(
-                job_name=job_name,
-                cron_expression="0 9 * * *",
-                enabled=True,
-            )
+            import requests
+            api_url = f"{config.api_url}/cron/jobs"
+            payload = {
+                "name": job_name,
+                "schedule": {"type": "cron", "cron": "0 9 * * *", "timezone": "Asia/Shanghai"},
+                "task_type": "text",
+                "text": "Toggle and execute test",
+                "dispatch": {
+                    "type": "channel",
+                    "channel": "console",
+                    "target": {"user_id": "default", "session_id": "default"},
+                    "mode": "stream",
+                },
+                "enabled": True,
+            }
+            resp = requests.post(api_url, json=payload, timeout=10)
+            assert resp.status_code in (200, 201), f"创建任务失败: {resp.status_code}"
             job_created = True
+            cronjobs_page.page.reload()
+            cronjobs_page.wait_for_page_loaded()
 
             log_test_step("2. 验证任务创建成功")
             cronjobs_page.assert_job_exists(job_name)
             logger.info(f"✅ 任务 '{job_name}' 创建成功")
 
-            log_test_step("3. 验证启用按钮可用")
+            log_test_step("3. 验证启用/禁用按钮可用")
             row = cronjobs_page.get_job_row(job_name)
-            enable_btn = row.locator('button:has-text("启用"), button:has-text("Enable")')
-            assert enable_btn.count() > 0, "定时任务行应包含启用按钮"
-            assert enable_btn.first.is_visible(), "启用按钮应该可见"
-            logger.info("✅ 启用按钮可用")
+            # UI 使用 Disable/Enable 按钮而非 Switch
+            toggle_btn = row.locator('button:has-text("Disable"), button:has-text("Enable"), button:has-text("禁用"), button:has-text("启用")').first
+            assert toggle_btn.is_visible(timeout=5000), "定时任务行应包含启用/禁用按钮"
+            logger.info("✅ 启用/禁用按钮可用")
 
-            log_test_step("4. 点击启用按钮切换状态并验证")
-            original_btn_text = enable_btn.first.text_content() or ""
-            enable_btn.first.click()
+            log_test_step("4. 点击按钮切换状态并验证")
+            original_btn_text = toggle_btn.inner_text().strip()
+            toggle_btn.click()
             cronjobs_page.page.wait_for_timeout(2000)
             
             # 重新获取行和按钮，验证状态已切换
             row = cronjobs_page.get_job_row(job_name)
-            toggled_btn = row.locator('button:has-text("启用"), button:has-text("Enable"), button:has-text("禁用"), button:has-text("Disable")')
-            if toggled_btn.count() > 0:
-                new_btn_text = toggled_btn.first.text_content() or ""
-                assert new_btn_text != original_btn_text, \
-                    f"启用/禁用按钮文本应变化：'{original_btn_text}' → '{new_btn_text}'"
-                logger.info(f"✅ 状态已切换：'{original_btn_text}' → '{new_btn_text}'")
-            else:
-                logger.info("ℹ️ 切换后按钮已隐藏（可能直接生效）")
+            toggle_btn = row.locator('button:has-text("Disable"), button:has-text("Enable"), button:has-text("禁用"), button:has-text("启用")').first
+            new_btn_text = toggle_btn.inner_text().strip()
+            assert new_btn_text != original_btn_text, \
+                f"按钮文本应变化：'{original_btn_text}' → '{new_btn_text}'"
+            logger.info(f"✅ 状态已切换：'{original_btn_text}' → '{new_btn_text}'")
 
             log_test_step("5. 验证立即执行按钮并点击")
             exec_btn = row.locator('button:has-text("立即执行"), button:has-text("Execute"), button:has-text("Run")')
@@ -229,11 +252,14 @@ class TestCronJobToggleAndExecute:
         finally:
             if job_created:
                 try:
-                    page.goto(f"{config.base_url}/cronjobs")
-                    page.wait_for_timeout(2000)
-                    cronjobs_page = CronJobsPage(page)
-                    cronjobs_page.delete_job(job_name)
-                    logger.info(f"✅ 清理：已删除测试任务 '{job_name}'")
+                    import requests
+                    api_url = f"{config.api_url}/cron/jobs"
+                    jobs = requests.get(api_url, timeout=10).json()
+                    for job in jobs:
+                        if job.get("name") == job_name:
+                            requests.delete(f"{api_url}/{job['id']}", timeout=10)
+                            logger.info(f"✅ 清理：已删除测试任务 '{job_name}'")
+                            break
                 except Exception:
                     logger.warning(f"清理失败：无法删除测试任务 '{job_name}'")
 

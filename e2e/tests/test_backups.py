@@ -56,7 +56,7 @@ class TestBackupPageDisplay:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
             logger.info("备份管理页面已加载")
 
@@ -144,7 +144,7 @@ class TestCreateBackupModalAndCancel:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 点击创建备份按钮
@@ -251,7 +251,7 @@ class TestCreateFullBackup:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 记录初始备份数量
@@ -344,7 +344,7 @@ class TestCreateFullBackup:
             # ================================================================
             log_test_step("7. 恢复刚创建的备份")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             restore_succeeded = False
@@ -457,7 +457,7 @@ class TestCreateFullBackup:
                 try:
                     logger.info("🧹 开始清理：删除测试创建的备份")
                     page.goto(f"{config.base_url}/backups")
-                    page.wait_for_load_state("networkidle", timeout=30000)
+                    page.wait_for_load_state("commit", timeout=30000)
                     page.wait_for_timeout(1500)
 
                     # 关闭可能残留的模态框
@@ -542,7 +542,7 @@ class TestImportBackupEntry:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 查找导入按钮/上传入口
@@ -616,7 +616,7 @@ class TestBackupSearchAndFilter:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 查找搜索输入框
@@ -703,7 +703,7 @@ class TestBackupRestoreModal:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 检查是否有备份记录
@@ -819,7 +819,7 @@ class TestBackupDeleteAndCancel:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 检查是否有备份记录
@@ -924,7 +924,7 @@ class TestBackupExport:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 检查是否有备份记录
@@ -1028,7 +1028,7 @@ class TestCreatePartialBackup:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 打开创建备份模态框
@@ -1125,7 +1125,7 @@ class TestBackupListRefreshAndEmpty:
             # 1. 访问备份管理页面
             log_test_step("1. 访问备份管理页面")
             page.goto(f"{config.base_url}/backups")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 2. 记录当前状态
@@ -1137,7 +1137,7 @@ class TestBackupListRefreshAndEmpty:
 
             # 3. 刷新页面
             log_test_step("3. 刷新页面")
-            page.reload(wait_until="networkidle", timeout=15000)
+            page.reload(wait_until="commit", timeout=15000)
             page.wait_for_timeout(1500)
 
             # 4. 验证状态保持

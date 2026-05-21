@@ -54,7 +54,7 @@ class TestAgentStatsPageDisplay:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
             logger.info("智能体统计页面已加载")
 
@@ -66,9 +66,9 @@ class TestAgentStatsPageDisplay:
                 logger.info(f"面包屑内容: {breadcrumb_text}")
                 assert ("Settings" in breadcrumb_text or "设置" in breadcrumb_text), \
                     "面包屑应包含 Settings/设置"
-                assert ("Agent Stats" in breadcrumb_text or "统计" in breadcrumb_text
-                        or "Stats" in breadcrumb_text), \
-                    "面包屑应包含 Agent Stats/统计"
+                assert ("Agent Stats" in breadcrumb_text or "Statistics" in breadcrumb_text
+                        or "统计" in breadcrumb_text or "Stats" in breadcrumb_text), \
+                    "面包屑应包含 Agent Stats/Statistics/统计"
                 logger.info("✅ 面包屑验证通过")
             else:
                 logger.warning("未找到面包屑元素，跳过验证")
@@ -156,7 +156,7 @@ class TestAgentStatsDatePicker:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 查找日期范围选择器
@@ -238,7 +238,7 @@ class TestAgentStatsCharts:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 查找图表区域
@@ -321,7 +321,7 @@ class TestAgentStatsChannelDistribution:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 查找渠道分布区域
@@ -400,7 +400,7 @@ class TestAgentStatsDateFilter:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 查找日期选择器
@@ -501,7 +501,7 @@ class TestAgentStatsCardTooltip:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 查找汇总卡片
@@ -593,7 +593,7 @@ class TestAgentStatsEmptyAndLoading:
             else:
                 logger.info("ℹ️ 未捕获到加载状态（可能加载过快）")
 
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(1500)
 
             # 3. 检查空状态
@@ -660,7 +660,7 @@ class TestAgentStatsRefresh:
             # 1. 访问智能体统计页面
             log_test_step("1. 访问智能体统计页面")
             page.goto(f"{config.base_url}/agent-stats")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("commit", timeout=30000)
             page.wait_for_timeout(2000)
 
             # 2. 记录初始状态
@@ -674,7 +674,7 @@ class TestAgentStatsRefresh:
 
             # 3. 刷新页面
             log_test_step("3. 刷新页面")
-            page.reload(wait_until="networkidle", timeout=15000)
+            page.reload(wait_until="commit", timeout=15000)
             page.wait_for_timeout(2000)
 
             # 4. 验证数据保持

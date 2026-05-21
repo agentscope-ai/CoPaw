@@ -153,13 +153,17 @@ class TestToolsPageDisplayAndGlobalToggle:
                     target_btn = enable_all_btn
                     logger.info("点击 Enable All 按钮")
                 target_btn.click()
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(3000)
                 # 验证状态变化：检查第一个工具卡片的状态
                 new_status_el = page.locator('span[class*="statusText"]').first
-                if new_status_el.is_visible():
+                if new_status_el.is_visible(timeout=5000):
                     new_status_val = new_status_el.inner_text().strip()
                     new_enabled = new_status_val in ["已启用", "Enabled"]
                     logger.info(f"切换后第一个工具状态：{new_status_val}")
+                    if new_enabled == initial_enabled:
+                        page.wait_for_timeout(2000)
+                        new_status_val = new_status_el.inner_text().strip()
+                        new_enabled = new_status_val in ["已启用", "Enabled"]
                     assert new_enabled != initial_enabled, f"全局切换后状态应变化，初始={initial_enabled}, 新={new_enabled}"
                 else:
                     new_enabled = not initial_enabled

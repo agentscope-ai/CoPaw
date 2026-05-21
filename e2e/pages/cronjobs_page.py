@@ -54,7 +54,7 @@ class CronJobsPage(BasePage):
     # 抽屉/弹窗
     DRAWER = ".ant-drawer, .qwenpaw-drawer, [class*=drawer]"
     DRAWER_TITLE = ".ant-drawer-title, .qwenpaw-drawer-title"
-    DRAWER_SAVE_BTN = '.ant-drawer .ant-btn-primary:has-text("Save"), .ant-drawer button:has-text("OK"), [class*=drawer] button:has-text("保存"), [class*=drawer] button:has-text("保 存"), [class*=drawer] button:has-text("确定")'
+    DRAWER_SAVE_BTN = '.ant-drawer .ant-btn-primary:has-text("Save"), .ant-drawer button:has-text("OK"), [class*=drawer] button:has-text("Save"), [class*=drawer] button:has-text("OK"), [class*=drawer] button:has-text("保存"), [class*=drawer] button:has-text("保 存"), [class*=drawer] button:has-text("确定"), [class*=drawer] .qwenpaw-btn-primary'
     DRAWER_CANCEL_BTN = '.ant-drawer .ant-btn:has-text("Cancel"), [class*=drawer] button:has-text("取消"), [class*=drawer] button:has-text("取 消")'
     
     # 表单字段
@@ -68,6 +68,38 @@ class CronJobsPage(BasePage):
     # 过滤和搜索
     SEARCH_INPUT = 'input[placeholder*="Search" i], input[placeholder*="搜索" i]'
     
+    # ========== 辅助方法 ==========
+
+    def _select_option(self, field_id: str, value: str) -> None:
+        """与 Ant Design Select (showSearch) 组件交互：
+        检查当前值 → 如需修改则点击 → 输入搜索 → 选择选项"""
+        select = self.page.locator(f'{field_id}')
+        if select.count() == 0 or not select.first.is_visible():
+            return
+        # 检查 Select 当前是否已有目标值
+        current_value = select.first.locator('.qwenpaw-select-selection-item, .ant-select-selection-item')
+        if current_value.count() > 0 and current_value.first.is_visible():
+            current_text = current_value.first.inner_text().strip()
+            if current_text == value:
+                return  # 已有正确值，跳过
+        # 点击 Select 的 selector 区域打开下拉（通过 JS 绕过遮挡）
+        selector = select.first.locator('.qwenpaw-select-selector, .ant-select-selector')
+        if selector.count() > 0:
+            selector.first.evaluate("el => el.click()")
+        else:
+            select.first.evaluate("el => el.click()")
+        self.page.wait_for_timeout(500)
+        # 输入搜索值（使用 type 而非 fill，因为 input 可能是 readonly）
+        self.page.keyboard.type(value, delay=50)
+        self.page.wait_for_timeout(500)
+        # 尝试点击匹配选项
+        option = self.page.locator(f'.qwenpaw-select-item-option-content:has-text("{value}")').first
+        if option.is_visible(timeout=1500):
+            option.click()
+        else:
+            self.page.keyboard.press("Enter")
+        self.page.wait_for_timeout(300)
+
     # ========== 导航方法 ==========
     
     def open(self) -> "CronJobsPage":
@@ -132,11 +164,11 @@ class CronJobsPage(BasePage):
         job_name: str,
         cron_expression: str = "0 9 * * *",
         timezone: str = "Asia/Shanghai",
-        task_type: str = "skill",
+        task_type: str = "text",
         description: str = "",
         enabled: bool = True,
         request_input: str = '[{"role":"user","content":[{"type":"text","text":"Hello"}]}]',
-        target_user_id: str = "admin",
+        target_user_id: str = "default",
         target_session_id: str = "default",
         dispatch_channel: str = "console",
     ) -> "CronJobsPage":
@@ -147,52 +179,59 @@ class CronJobsPage(BasePage):
         - dispatch.channel: 分发渠道 (required)
         - dispatch.target.user_id: 目标用户ID (required)
         - dispatch.target.session_id: 目标会话ID (required)
-        - task_type: 任务类型 (required)
+        - task_type: 任务类型 (text/agent, required)
         - text: 文本内容 (task_type=text 时 required)
-        - request.input: 请求内容 (task_type=agent 时 required)
+        - request.input: 请求内容 (task_type=agent 时 required, 须为有效 JSON)
         """
         # 填写任务名称
         job_name_input = self.page.locator('#name')
         if job_name_input.count() > 0:
             job_name_input.fill(job_name)
-        
+
+        # 选择任务类型（Ant Design Select，默认 agent）
+        self._select_option('#task_type', task_type)
+        self.page.wait_for_timeout(500)
+
         # 默认使用"每天"调度类型，不切换到自定义 Cron
-        # 如果 Cron 输入框可见则填写，否则跳过（使用默认调度）
         cron_input = self.page.locator(self.CRON_EXPRESSION_INPUT)
         if cron_input.count() > 0 and cron_input.first.is_visible():
             cron_input.first.click()
             cron_input.first.fill(cron_expression)
-        
+
         # 填写文本内容（text 类型任务的必填字段）
         text_textarea = self.page.locator('#text')
         if text_textarea.count() > 0 and text_textarea.first.is_visible():
             text_textarea.first.fill(description or "E2E test task content")
-        
-        # 填写请求内容
+
+        # 填写请求内容（agent 类型任务的必填字段，需为有效 JSON）
         request_textarea = self.page.locator('#request_input')
         if request_textarea.count() > 0 and request_textarea.first.is_visible():
             request_textarea.first.fill(request_input)
-        
-        # 填写分发渠道（必填）
-        channel_input = self.page.locator('#dispatch_channel')
-        if channel_input.count() > 0 and channel_input.first.is_visible():
-            channel_input.first.fill(dispatch_channel)
-        
-        # 填写目标用户ID（必填）
-        target_user_input = self.page.locator('#dispatch_target_user_id')
-        if target_user_input.count() > 0 and target_user_input.first.is_visible():
-            target_user_input.first.fill(target_user_id)
-        
-        # 填写目标会话ID（必填）
-        target_session_input = self.page.locator('#dispatch_target_session_id')
-        if target_session_input.count() > 0 and target_session_input.first.is_visible():
-            target_session_input.first.fill(target_session_id)
+
+        # 填写分发渠道（Ant Design Select 组件，showSearch）
+        self._select_option('#dispatch_channel', dispatch_channel)
+
+        # 填写目标用户ID（Ant Design Select 组件，showSearch）
+        self._select_option('#dispatch_target_user_id', target_user_id)
+
+        # 填写目标会话ID（Ant Design Select 组件，showSearch）
+        self._select_option('#dispatch_target_session_id', target_session_id)
         
         return self
     
     def save_job(self) -> "CronJobsPage":
         """保存任务"""
-        self.page.locator(self.DRAWER_SAVE_BTN).first.click()
+        # 关闭所有下拉菜单
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_timeout(300)
+        # 通过 JS 触发保存按钮点击，绕过 Select 组件遮挡
+        save_btn = self.page.locator(self.DRAWER_SAVE_BTN).first
+        save_btn.evaluate("""el => {
+            // React 需要通过原生事件触发，dispatchEvent + 原生 click 都试
+            const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+            el.dispatchEvent(evt);
+            el.click();
+        }""")
         self.page.wait_for_timeout(2000)
         # 如果抽屉仍然可见，手动关闭
         drawer = self.page.locator('.qwenpaw-drawer:visible, .ant-drawer:visible')

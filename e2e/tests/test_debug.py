@@ -31,7 +31,7 @@ BASE_URL = config.server.base_url
 def navigate_to_debug(page: Page):
     """导航到 Debug 页面"""
     page.goto(f"{BASE_URL}/debug")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 

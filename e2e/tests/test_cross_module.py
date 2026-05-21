@@ -29,35 +29,35 @@ BASE_URL = config.base_url
 def navigate_to_skills(page: Page):
     """导航到技能管理页面"""
     page.goto(f"{BASE_URL}/skills")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 
 def navigate_to_agents(page: Page):
     """导航到智能体管理页面"""
     page.goto(f"{BASE_URL}/agents")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 
 def navigate_to_security(page: Page):
     """导航到安全防护页面"""
     page.goto(f"{BASE_URL}/security")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 
 def navigate_to_files(page: Page):
     """导航到文件管理页面"""
     page.goto(f"{BASE_URL}/workspace")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 
 def navigate_to_chat(page: Page):
     """导航到聊天页面"""
     page.goto(f"{BASE_URL}/chat")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_load_state("commit")
     page.wait_for_timeout(2000)
 
 
@@ -641,7 +641,7 @@ class TestEnvAndRuntimeConfigFlow:
 
         log_test_step("1. 导航到环境变量页面")
         page.goto(f"{BASE_URL}/environments")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("commit")
         page.wait_for_timeout(2000)
 
         log_test_step("2. 记录环境变量数量")
@@ -655,7 +655,7 @@ class TestEnvAndRuntimeConfigFlow:
 
         log_test_step("3. 导航到运行时配置页面")
         page.goto(f"{BASE_URL}/settings/runtime-config")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("commit")
         page.wait_for_timeout(2000)
 
         log_test_step("4. 验证运行时配置页面加载")
@@ -672,7 +672,7 @@ class TestEnvAndRuntimeConfigFlow:
 
         log_test_step("5. 回到环境变量页面验证数据未变")
         page.goto(f"{BASE_URL}/environments")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("commit")
         page.wait_for_timeout(2000)
 
         env_rows_after = page.locator(
