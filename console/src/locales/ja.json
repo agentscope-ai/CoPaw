@@ -2143,15 +2143,5 @@
     "detailPayload": "追加情報",
     "detailExecutionTrace": "実行トレース",
     "detailTraceEmpty": "実行トレースはありません"
-  },
-  "startup": {
-    "starting": "バックエンドを起動中...",
-    "checking": "バックエンドに接続中...",
-    "error": "バックエンドの起動に失敗しました。",
-    "errorHint": "バックエンドプロセスを起動できませんでした。詳細はアプリケーションログを確認してください。",
-    "errorDetails": "エラーの詳細を表示",
-    "timeout": "{{seconds}} 秒以内にバックエンドの起動に失敗しました。",
-    "timeoutHint": "バックエンドの起動に失敗しました。再試行するか、アプリケーションのログを確認してください。",
-    "retry": "再試行"
   }
 }
