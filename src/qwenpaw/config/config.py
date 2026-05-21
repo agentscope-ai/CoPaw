@@ -1462,6 +1462,18 @@ def _default_builtin_tools() -> Dict[str, BuiltinToolConfig]:
             description="Get llm token usage",
             icon="📊",
         ),
+        "get_context_usage": BuiltinToolConfig(
+            name="get_context_usage",
+            enabled=True,
+            description="Get current session context token usage and health",
+            icon="📐",
+        ),
+        "reset_my_context": BuiltinToolConfig(
+            name="reset_my_context",
+            enabled=True,
+            description="Reset current session context with checkpoint",
+            icon="🔄",
+        ),
         "delegate_external_agent": BuiltinToolConfig(
             name="delegate_external_agent",
             enabled=False,
