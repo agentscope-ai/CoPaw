@@ -211,11 +211,12 @@ class SkillService:
         overwrite: bool = False,
     ) -> dict[str, Any]:
         """Edit-in-place or rename-save a workspace skill."""
+        validate_skill_content(content)
         try:
             skill_name = normalize_skill_dir_name(skill_name)
-            final_name = normalize_skill_dir_name(target_name or skill_name)
         except SkillsError:
             return {"success": False, "reason": "not_found"}
+        final_name = normalize_skill_dir_name(target_name or skill_name)
         manifest = self._read_manifest()
         old_entry = manifest.get("skills", {}).get(skill_name)
         if old_entry is None:
@@ -443,6 +444,9 @@ class SkillService:
             planned: list[tuple[Path, str]] = []
             seen_names: set[str] = set()
             for skill_dir, skill_name in found:
+                validate_skill_content(
+                    (skill_dir / "SKILL.md").read_text(encoding="utf-8"),
+                )
                 scan_skill_dir_or_raise(skill_dir, skill_name)
                 if skill_name in seen_names:
                     conflicts.append(

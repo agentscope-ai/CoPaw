@@ -193,6 +193,9 @@ class SkillPoolService:
                 )
             )
             for skill_dir, skill_name in found:
+                validate_skill_content(
+                    (skill_dir / "SKILL.md").read_text(encoding="utf-8"),
+                )
                 scan_skill_dir_or_raise(skill_dir, skill_name)
             conflicts: list[dict[str, Any]] = []
             planned: list[tuple[Path, str]] = []
@@ -332,11 +335,11 @@ class SkillPoolService:
     ) -> dict[str, Any]:
         try:
             skill_name = normalize_skill_dir_name(skill_name)
-            normalized_target = normalize_skill_dir_name(
-                target_name or skill_name,
-            )
         except SkillsError:
             return {"success": False, "reason": "not_found"}
+        normalized_target = normalize_skill_dir_name(
+            target_name or skill_name,
+        )
         manifest = read_skill_pool_manifest()
         entry = manifest.get("skills", {}).get(skill_name)
         if entry is None:
