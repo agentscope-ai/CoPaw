@@ -1,3 +1,4 @@
+import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -62,6 +63,19 @@ vi.mock("@agentscope-ai/design", () => ({
   }) => <button onClick={onClick}>{icon}</button>,
 }));
 
+vi.mock("@agentscope-ai/icons", () => ({
+  SparkOperateRightLine: () => <span data-testid="icon">icon</span>,
+  SparkLockLine: () => <span data-testid="icon">lock</span>,
+  SparkLockFill: () => <span data-testid="icon">lock-fill</span>,
+}));
+
+vi.mock("../../../../components/ContextMenu", () => ({
+  ContextMenu: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  useContextMenu: () => ({ show: vi.fn(), hide: vi.fn() }),
+}));
+
 vi.mock("../ChatSessionItem", () => ({
   default: ({
     name,
@@ -95,6 +109,9 @@ vi.mock("../ChatSessionItem", () => ({
 
 vi.mock("../../../../Control/Channels/components", () => ({
   getChannelLabel: () => undefined,
+  ChannelIcon: ({ channelKey }: { channelKey: string }) => (
+    <span data-testid="channel-icon">{channelKey}</span>
+  ),
 }));
 
 const defaultProps = { open: true, onClose: vi.fn() };

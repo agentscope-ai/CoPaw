@@ -1,3 +1,4 @@
+import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -14,9 +15,12 @@ vi.mock("@agentscope-ai/design", () => ({
   }) => <button onClick={onClick}>{icon}</button>,
 }));
 
-// mock getChannelIconUrl to avoid network requests
+// mock getChannelIconUrl and ChannelIcon to avoid network requests
 vi.mock("../../../Control/Channels/components", () => ({
   getChannelIconUrl: (key: string) => `/icons/${key}.png`,
+  ChannelIcon: ({ channelKey }: { channelKey: string }) => (
+    <span data-testid="channel-icon">{channelKey}</span>
+  ),
 }));
 
 const baseProps = {
