@@ -58,6 +58,8 @@ export default defineConfig(({ mode }) => {
         inline: [/@agentscope-ai\/(?!icons|chat|design)/],
       },
       alias: {
+        // react-window needs a stub because jsdom has no layout for virtual lists
+        "react-window": path.resolve(__dirname, "src/test/react-window-mock.ts"),
         // chat is aliased to a tiny stub to avoid OOM from the 2.3MB real package
         // Tests that need specific behavior override with vi.mock('@agentscope-ai/chat', factory)
         "@agentscope-ai/chat": path.resolve(__dirname, "src/test/chat-mock.ts"),
