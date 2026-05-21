@@ -40,6 +40,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        timeout?: number;
+        sse_read_timeout?: number;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
@@ -73,6 +75,8 @@ export function useMCP() {
         transport?: "stdio" | "streamable_http" | "sse";
         url?: string;
         headers?: Record<string, string>;
+        timeout?: number;
+        sse_read_timeout?: number;
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;

@@ -49,6 +49,13 @@ function normalizeClientData(key: string, rawData: Record<string, unknown>) {
     transport,
     url: (rawData.url || rawData.baseUrl || "") as string,
     headers: (rawData.headers as Record<string, string>) || {},
+    timeout: typeof rawData.timeout === "number" ? rawData.timeout : 30,
+    sse_read_timeout:
+      typeof rawData.sse_read_timeout === "number"
+        ? rawData.sse_read_timeout
+        : typeof rawData.sseReadTimeout === "number"
+        ? rawData.sseReadTimeout
+        : 300,
     command,
     args: Array.isArray(rawData.args) ? (rawData.args as string[]) : [],
     env: (rawData.env as Record<string, string>) || {},
@@ -70,6 +77,8 @@ const defaultForm = {
   args: "",
   env: "",
   cwd: "",
+  timeout: "30",
+  sseReadTimeout: "300",
 };
 
 function MCPPage() {
@@ -221,6 +230,16 @@ function MCPPage() {
       alert(t("mcp.form.commandRequired"));
       return;
     }
+    const timeout = Number(form.timeout);
+    const sseReadTimeout = Number(form.sseReadTimeout);
+    if (isHttp && (!Number.isFinite(timeout) || timeout <= 0)) {
+      alert(t("mcp.form.timeoutRequired"));
+      return;
+    }
+    if (isHttp && (!Number.isFinite(sseReadTimeout) || sseReadTimeout <= 0)) {
+      alert(t("mcp.form.sseReadTimeoutRequired"));
+      return;
+    }
 
     // Parse args: split on newlines, commas, or spaces
     const args = form.args
@@ -246,6 +265,8 @@ function MCPPage() {
       description: form.description,
       transport: form.transport,
       url: isHttp ? form.url.trim() : "",
+      timeout: isHttp ? timeout : 30,
+      sse_read_timeout: isHttp ? sseReadTimeout : 300,
       command: form.transport === "stdio" ? form.command.trim() : "",
       args,
       env,
@@ -422,17 +443,45 @@ function MCPPage() {
 
                   {/* URL (HTTP/SSE) or Command (stdio) */}
                   {isHttpTransport ? (
-                    <div>
-                      <label style={labelStyle}>
-                        {t("mcp.form.url")}
-                        <span style={{ color: "#c0392b" }}> *</span>
-                      </label>
-                      <Input
-                        placeholder="https://mcp.example.com/mcp"
-                        value={form.url}
-                        onChange={(e) => setField("url", e.target.value)}
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <label style={labelStyle}>
+                          {t("mcp.form.url")}
+                          <span style={{ color: "#c0392b" }}> *</span>
+                        </label>
+                        <Input
+                          placeholder="https://mcp.example.com/mcp"
+                          value={form.url}
+                          onChange={(e) => setField("url", e.target.value)}
+                        />
+                      </div>
+                      <div style={rowStyle}>
+                        <div style={fieldStyle}>
+                          <label style={labelStyle}>
+                            {t("mcp.form.timeout")}
+                          </label>
+                          <Input
+                            placeholder="30"
+                            value={form.timeout}
+                            onChange={(e) =>
+                              setField("timeout", e.target.value)
+                            }
+                          />
+                        </div>
+                        <div style={fieldStyle}>
+                          <label style={labelStyle}>
+                            {t("mcp.form.sseReadTimeout")}
+                          </label>
+                          <Input
+                            placeholder="300"
+                            value={form.sseReadTimeout}
+                            onChange={(e) =>
+                              setField("sseReadTimeout", e.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div>
