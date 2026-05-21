@@ -95,11 +95,14 @@ class CronExecutor:
         if share_session:
             req["session_id"] = target_session_id or f"cron:{job.id}"
         else:
+            # Use job.id (not run_id) so all runs of this job accumulate in the
+            # same dedicated session, giving users a complete history.
             req["session_id"] = (
-                f"{target_session_id}:cron:{run_id}"
+                f"{target_session_id}:cron:{job.id}"
                 if target_session_id
-                else f"cron:{run_id}"
+                else f"cron:{job.id}"
             )
+            req["cron_isolated"] = True
 
         delivery_error: str | None = None
         baseline_messages = await read_session_messages(

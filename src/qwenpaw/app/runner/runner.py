@@ -395,6 +395,7 @@ class AgentRunner(Runner):
         agent = None
         chat = None
         session_state_loaded = False
+        _cron_memory_snapshot = None
         try:
             session_id = request.session_id
             user_id = request.user_id
@@ -781,6 +782,20 @@ class AgentRunner(Runner):
 
                 clear_plan_awaiting_user_confirm(plan_notebook)
 
+            # Isolated cron: run without any prior context so each execution
+            # is independent (saves tokens, avoids stale-context interference).
+            _extra = getattr(request, "model_extra", None) or {}
+            if _extra.get("cron_isolated") and agent.memory is not None:
+                # Snapshot the full history before clearing
+                _cron_memory_snapshot = agent.memory.state_dict()
+                await agent.memory.clear()
+                logger.debug(
+                    "Isolated cron execution: snapshotted and cleared agent "
+                    "memory (%d items) for session_id=%s",
+                    len(_cron_memory_snapshot.get("memory", [])),
+                    session_id,
+                )
+
             # Rebuild system prompt so it always reflects the latest
             # AGENTS.md / SOUL.md / PROFILE.md, not the stale one saved
             # in the session state.
@@ -891,6 +906,24 @@ class AgentRunner(Runner):
             raise converted from e
         finally:
             if agent is not None and session_state_loaded:
+                # For isolated cron: restore the full history (snapshot) plus
+                # the new messages produced by this execution
+                if (
+                    _cron_memory_snapshot is not None
+                    and agent.memory is not None
+                ):
+                    new_messages = await agent.memory.get_memory()
+                    agent.memory.load_state_dict(_cron_memory_snapshot)
+                    if new_messages:
+                        await agent.memory.add(new_messages)
+                    logger.debug(
+                        "Isolated cron: restored %d historical + %d new "
+                        "messages for session_id=%s",
+                        len(_cron_memory_snapshot.get("memory", [])),
+                        len(new_messages) if new_messages else 0,
+                        session_id,
+                    )
+
                 await self.session.save_session_state(
                     session_id=session_id,
                     user_id=user_id,
