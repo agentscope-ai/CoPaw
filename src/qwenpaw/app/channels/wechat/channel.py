@@ -1095,8 +1095,14 @@ class WeChatChannel(BaseChannel):
         text: str,
         context_token: str,
         client: Optional[ILinkClient] = None,
+        raise_on_error: bool = False,
     ) -> None:
-        """Send text using the shared ILinkClient (or create a temp one)."""
+        """Send text using the shared ILinkClient (or create a temp one).
+
+        Args:
+            raise_on_error: If True, raise ChannelError on API rejection
+                instead of only logging. Used by API-initiated sends.
+        """
         _client = client or self._client
         if not _client or not to_user_id or not text:
             return
@@ -1104,6 +1110,8 @@ class WeChatChannel(BaseChannel):
             resp = await _client.send_text(to_user_id, text, context_token)
         except Exception:
             logger.exception("wechat _send_text_direct failed")
+            if raise_on_error:
+                raise
             return
 
         if isinstance(resp, dict):
@@ -1119,12 +1127,12 @@ class WeChatChannel(BaseChannel):
                 )
                 # ret=-2 means context_token is expired/consumed;
                 # continuing to retry is pointless and floods logs.
-                if ret == -2:
+                if ret == -2 or raise_on_error:
                     raise ChannelError(
                         channel_name="wechat",
                         message=(
-                            f"context_token expired (ret=-2) "
-                            f"for user {to_user_id}"
+                            f"iLink API rejected: ret={ret} "
+                            f"errcode={errcode} response={resp}"
                         ),
                     )
 
@@ -1417,8 +1425,12 @@ class WeChatChannel(BaseChannel):
         if not body:
             return
 
+        api_send = bool(m.get("_api_send"))
         for chunk in split_text(body):
-            await self._send_text_direct(to_user_id, chunk, context_token)
+            await self._send_text_direct(
+                to_user_id, chunk, context_token,
+                raise_on_error=api_send,
+            )
 
     async def _on_process_completed(
         self,
