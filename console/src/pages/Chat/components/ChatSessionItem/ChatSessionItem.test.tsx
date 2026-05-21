@@ -24,6 +24,7 @@ vi.mock("../../../Control/Channels/components", () => ({
 }));
 
 const baseProps = {
+  sessionId: "test-session-id",
   name: "Test Session",
   time: "2024-01-01 12:00:00",
 };

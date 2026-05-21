@@ -9,7 +9,7 @@ export const FixedSizeList = ({
   itemData: any;
   itemCount: number;
 }) => {
-  const Row = children as React.ComponentType<any>;
+  const Row = children as unknown as React.ComponentType<any>;
   return (
     <>
       {Array.from({ length: itemCount }, (_, i) => (
