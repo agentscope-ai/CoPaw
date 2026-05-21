@@ -159,7 +159,9 @@ vi.mock("../../../../Control/Channels/components", () => ({
 }));
 
 vi.mock("@agentscope-ai/icons", () => ({
-  SparkOperateRightLine: () => <span data-icon="SparkOperateRightLine">icon</span>,
+  SparkOperateRightLine: () => (
+    <span data-icon="SparkOperateRightLine">icon</span>
+  ),
   SparkLockLine: () => <span data-testid="icon">lock</span>,
   SparkLockFill: () => <span data-testid="icon">lock-fill</span>,
 }));
