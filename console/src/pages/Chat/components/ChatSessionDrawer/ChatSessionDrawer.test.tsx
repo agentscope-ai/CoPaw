@@ -1,10 +1,26 @@
-import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/common_setup";
 import ChatSessionDrawer from "./index";
 import { useChatAnywhereSessionsState } from "@agentscope-ai/chat";
+
+// Mock react-window's FixedSizeList to render all items directly
+// (jsdom has no layout, so the virtual list never renders rows)
+vi.mock("react-window", () => ({
+  FixedSizeList: ({ children, itemData, itemCount }: any) => {
+    // children is a React component passed as JSX child: <FixedSizeList>{Row}</FixedSizeList>
+    // react-window passes itemData as "data" prop to the row component
+    const Row = children;
+    return (
+      <>
+        {Array.from({ length: itemCount }, (_, i) => (
+          <Row key={i} index={i} style={{}} data={itemData} />
+        ))}
+      </>
+    );
+  },
+}));
 
 const {
   mockCreateSession,
@@ -46,8 +62,19 @@ vi.mock("@/api/modules/chat", () => ({
 }));
 
 vi.mock("../../sessionApi", () => ({
-  default: { getSessionList: mockGetSessionList },
+  default: {
+    getSessionList: mockGetSessionList,
+    isSessionSwitching: false,
+    preloadSession: vi.fn().mockResolvedValue({ session: {}, realId: null }),
+    finishSessionSwitch: vi.fn(),
+    lastNavigatedChatId: null,
+  },
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return { ...actual, useNavigate: () => vi.fn() };
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -63,21 +90,38 @@ vi.mock("@agentscope-ai/design", () => ({
   }) => <button onClick={onClick}>{icon}</button>,
 }));
 
-vi.mock("@agentscope-ai/icons", () => ({
-  SparkOperateRightLine: () => <span data-testid="icon">icon</span>,
-  SparkLockLine: () => <span data-testid="icon">lock</span>,
-  SparkLockFill: () => <span data-testid="icon">lock-fill</span>,
-}));
+// Mock ResizeObserver so FixedSizeList gets a non-zero height and renders rows.
+const mockResizeObserver = vi.fn().mockImplementation(function (
+  this: unknown,
+  callback: (entries: ResizeObserverEntry[]) => void,
+) {
+  return {
+    observe: vi.fn((el: HTMLElement) => {
+      callback([
+        {
+          target: el,
+          contentRect: { height: 600 },
+        } as unknown as ResizeObserverEntry,
+      ]);
+    }),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  };
+});
+(globalThis as any).ResizeObserver = mockResizeObserver;
 
-vi.mock("../../../../components/ContextMenu", () => ({
-  ContextMenu: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  useContextMenu: () => ({ show: vi.fn(), hide: vi.fn() }),
-}));
+// jsdom returns 0 for clientHeight; the drawer uses it as a fallback to
+// set listHeight when ResizeObserver hasn't fired yet.
+Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+  configurable: true,
+  get(this: HTMLElement) {
+    return 600;
+  },
+});
 
 vi.mock("../ChatSessionItem", () => ({
   default: ({
+    sessionId,
     name,
     onClick,
     onEdit,
@@ -87,14 +131,14 @@ vi.mock("../ChatSessionItem", () => ({
     onEditCancel,
   }: any) => (
     <div data-testid="session-item">
-      <span onClick={onClick}>{name}</span>
-      <button data-testid="edit-btn" onClick={onEdit}>
+      <span onClick={() => onClick?.(sessionId)}>{name}</span>
+      <button data-testid="edit-btn" onClick={() => onEdit?.(sessionId, name)}>
         edit
       </button>
-      <button data-testid="delete-btn" onClick={onDelete}>
+      <button data-testid="delete-btn" onClick={() => onDelete?.(sessionId)}>
         delete
       </button>
-      <button data-testid="pin-btn" onClick={onPin}>
+      <button data-testid="pin-btn" onClick={() => onPin?.(sessionId)}>
         pin
       </button>
       <button data-testid="edit-submit-btn" onClick={onEditSubmit}>
@@ -112,6 +156,19 @@ vi.mock("../../../../Control/Channels/components", () => ({
   ChannelIcon: ({ channelKey }: { channelKey: string }) => (
     <span data-testid="channel-icon">{channelKey}</span>
   ),
+}));
+
+vi.mock("@agentscope-ai/icons", () => ({
+  SparkOperateRightLine: () => <span data-testid="icon">icon</span>,
+  SparkLockLine: () => <span data-testid="icon">lock</span>,
+  SparkLockFill: () => <span data-testid="icon">lock-fill</span>,
+}));
+
+vi.mock("../../../../components/ContextMenu", () => ({
+  ContextMenu: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  useContextMenu: () => ({ show: vi.fn(), hide: vi.fn() }),
 }));
 
 const defaultProps = { open: true, onClose: vi.fn() };
@@ -146,16 +203,21 @@ describe("ChatSessionDrawer", () => {
     expect(mockCreateSession).toHaveBeenCalledOnce();
   });
 
-  it("renders ChatSessionItem for each session", () => {
+  it("renders ChatSessionItem for each session", async () => {
     withSession();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
-    expect(screen.getByText("Session One")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("Session One")).toBeInTheDocument(),
+    );
   });
 
   it("clicking a session item calls setCurrentSessionId", async () => {
     withSession();
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByText("Session One")).toBeInTheDocument(),
+    );
     await user.click(screen.getByText("Session One"));
     expect(mockSetCurrentSessionId).toHaveBeenCalledWith("s1");
   });
@@ -176,6 +238,9 @@ describe("ChatSessionDrawer", () => {
     withSession({ realId: "uuid-1" });
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("delete-btn")).toBeInTheDocument(),
+    );
     await user.click(screen.getByTestId("delete-btn"));
     expect(mockDeleteChat).toHaveBeenCalledWith("uuid-1");
     expect(mockGetSessionList).toHaveBeenCalled();
@@ -185,6 +250,9 @@ describe("ChatSessionDrawer", () => {
     withSession({ id: "12345" });
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("delete-btn")).toBeInTheDocument(),
+    );
     await user.click(screen.getByTestId("delete-btn"));
     expect(mockDeleteChat).not.toHaveBeenCalled();
   });
@@ -193,6 +261,9 @@ describe("ChatSessionDrawer", () => {
     withSession({ realId: "uuid-1" });
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("edit-btn")).toBeInTheDocument(),
+    );
     await user.click(screen.getByTestId("edit-btn"));
     await user.click(screen.getByTestId("edit-submit-btn"));
     expect(mockUpdateChat).toHaveBeenCalledWith("uuid-1", {
@@ -204,6 +275,9 @@ describe("ChatSessionDrawer", () => {
     withSession({ realId: "uuid-1" });
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("edit-btn")).toBeInTheDocument(),
+    );
     await user.click(screen.getByTestId("edit-btn"));
     await user.click(screen.getByTestId("edit-cancel-btn"));
     expect(mockUpdateChat).not.toHaveBeenCalled();
@@ -213,6 +287,9 @@ describe("ChatSessionDrawer", () => {
     withSession({ realId: "uuid-1", pinned: false });
     const user = userEvent.setup();
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("pin-btn")).toBeInTheDocument(),
+    );
     await user.click(screen.getByTestId("pin-btn"));
     expect(mockUpdateChat).toHaveBeenCalledWith("uuid-1", { pinned: true });
   });
@@ -222,7 +299,7 @@ describe("ChatSessionDrawer", () => {
     await vi.waitFor(() => expect(mockGetSessionList).toHaveBeenCalled());
   });
 
-  it("pinned sessions sort before unpinned", () => {
+  it("pinned sessions sort before unpinned", async () => {
     vi.mocked(useChatAnywhereSessionsState).mockReturnValue({
       sessions: [
         { id: "s1", name: "Unpinned" },
@@ -233,7 +310,7 @@ describe("ChatSessionDrawer", () => {
       setSessions: mockSetSessions,
     } as any);
     renderWithProviders(<ChatSessionDrawer {...defaultProps} />);
-    const items = screen.getAllByTestId("session-item");
+    const items = await screen.findAllByTestId("session-item");
     expect(items[0]).toHaveTextContent("Pinned");
     expect(items[1]).toHaveTextContent("Unpinned");
   });
