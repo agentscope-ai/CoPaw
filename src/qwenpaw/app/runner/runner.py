@@ -648,6 +648,14 @@ class AgentRunner(Runner):
                     )
                     plan_notebook = None
 
+            # Allow fork subagents to override workspace with a git worktree.
+            _worktree_path = base_request_context.get("worktree_path", "")
+            _effective_workspace = (
+                Path(_worktree_path)
+                if _worktree_path and Path(_worktree_path).is_dir()
+                else self.workspace_dir
+            )
+
             agent = QwenPawAgent(
                 agent_config=agent_config,
                 env_context=env_context,
@@ -655,7 +663,7 @@ class AgentRunner(Runner):
                 memory_manager=self.memory_manager,
                 context_manager=self.context_manager,
                 request_context=base_request_context,
-                workspace_dir=self.workspace_dir,
+                workspace_dir=_effective_workspace,
                 task_tracker=self._task_tracker,
                 plan_notebook=plan_notebook,
             )

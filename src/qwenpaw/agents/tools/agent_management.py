@@ -419,6 +419,298 @@ def format_background_status_text(
     return "\n".join(parts)
 
 
+def _generate_subagent_session_id() -> str:
+    """Generate a short session ID for a spawned subagent."""
+    return f"sub-{str(uuid4())[:8]}"
+
+
+async def spawn_subagent(
+    task: str,
+    fork: bool = False,
+    background: bool = False,
+    timeout: int = 600,
+) -> ToolResponse:
+    """Spawn a subagent that runs within the CURRENT workspace.
+
+    Unlike ``chat_with_agent`` (which calls a *different* agent with its own
+    separate workspace), this tool always targets the same agent identity and
+    operates inside the same working directory.
+
+    Use this when the sub-task needs to read or write files in the current
+    project. Use ``chat_with_agent`` when you need a specialist agent (QA,
+    code-reviewer, etc.) that lives in a different workspace.
+
+    Args:
+        task: Description of the sub-task for the subagent to perform.
+        fork: If False (default), the subagent starts with a fresh, empty
+            session in the same workspace directory — ideal for clean,
+            independent sub-tasks that do not need context from the current
+            conversation.
+            If True, the subagent inherits the full parent conversation history
+            and runs in an isolated git worktree, so its file changes do not
+            affect the parent's working directory.
+            Use fork=True when the sub-task needs background context and may
+            modify files.
+        background: If False (default), block until the subagent finishes and
+            return its result directly.
+            If True, submit the task in the background and return
+            ``[TASK_ID: ...]`` + ``[SESSION: ...]`` immediately. Use
+            ``check_agent_task(task_id=...)`` to poll for the result.
+            Note: fork=True with background=True skips automatic worktree
+            cleanup — check and merge manually via the returned FORK_BRANCH.
+        timeout: Foreground wait timeout in seconds (ignored when
+            background=True). Default 600.
+
+    Returns:
+        Foreground (background=False): subagent result text, always prefixed
+        with ``[SESSION: <id>]`` for later resume via::
+
+            chat_with_agent(
+                to_agent=<current_agent_id>,
+                session_id=<id>,
+                text="follow-up message",
+            )
+
+        Background (background=True): ``[TASK_ID: <id>]`` + ``[SESSION: <id>]``
+        for polling with ``check_agent_task``.
+
+        fork=True foreground: also includes ``[FORK_WORKTREE: <path>]`` and
+        ``[FORK_BRANCH: <branch>]`` when file changes were detected.
+
+    Decision guide::
+
+        spawn_subagent(fork=False) — clean subtask, no context needed:
+            "Research all API endpoints in the codebase and list them"
+            "Run the test suite and summarize failures"
+
+        spawn_subagent(fork=True)  — context-aware side task:
+            "Based on our discussion, write unit tests for the parser"
+            "Try the alternative approach we discussed in a branch"
+
+        spawn_subagent(background=True) — fire-and-forget long task:
+            "Analyze the entire codebase and produce a report"
+
+        chat_with_agent(to_agent=X) — specialist in another workspace:
+            "Ask the QA agent to review this PR"
+    """
+    if not task or not task.strip():
+        return _tool_text_response(
+            "ERROR: 'task' is required for spawn_subagent",
+        )
+
+    from ...app.agent_context import get_current_agent_id
+
+    current_agent_id = get_current_agent_id()
+    if not current_agent_id:
+        return _tool_text_response("ERROR: unable to resolve current agent ID")
+
+    subagent_session_id = _generate_subagent_session_id()
+
+    if fork:
+        return await _spawn_forked_subagent(
+            task=task,
+            current_agent_id=current_agent_id,
+            subagent_session_id=subagent_session_id,
+            background=background,
+            timeout=timeout,
+        )
+
+    request_payload = {
+        "session_id": subagent_session_id,
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": task}],
+            },
+        ],
+        "request_context": {},
+    }
+
+    if background:
+        result = await asyncio.to_thread(
+            submit_agent_chat_task,
+            None,
+            request_payload,
+            current_agent_id,
+            int(DEFAULT_AGENT_API_TIMEOUT),
+        )
+        return _tool_text_response(
+            format_background_submission_text(result, subagent_session_id),
+        )
+
+    response_data = await asyncio.to_thread(
+        collect_final_agent_chat_response,
+        None,
+        request_payload,
+        current_agent_id,
+        timeout,
+    )
+    if not response_data:
+        return _tool_text_response("(No response received from subagent)")
+
+    return _tool_text_response(
+        format_agent_chat_text(response_data, session_id=subagent_session_id),
+    )
+
+
+async def _call_fork_api(
+    agent_id: str,
+    parent_session_id: str,
+    user_id: Optional[str] = None,
+    channel: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Call POST /api/fork/agent to prepare fork session + worktree."""
+    url = _normalize_api_base_url(base_url).rstrip("/api") + "/api/fork/agent"
+    payload = {
+        "agent_id": agent_id,
+        "parent_session_id": parent_session_id,
+        "user_id": user_id,
+        "channel": channel,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+async def _maybe_cleanup_worktree(
+    worktree_path: str,
+    workspace: str,
+) -> bool:
+    """Remove the worktree if it has no uncommitted changes.
+
+    Returns True if cleaned up, False if kept (has changes).
+    """
+    import subprocess as _subprocess
+
+    try:
+        result = _subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode != 0 or result.stdout.strip():
+            return False
+        # No changes — remove worktree
+        _subprocess.run(
+            ["git", "worktree", "remove", "--force", worktree_path],
+            cwd=workspace,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def _spawn_forked_subagent(
+    task: str,
+    current_agent_id: str,
+    subagent_session_id: str,
+    background: bool,
+    timeout: int,
+) -> ToolResponse:
+    """Internal: fork=True path — calls /api/fork/agent then dispatches."""
+    from ...app.agent_context import get_current_session_id
+    from ...config.config import load_agent_config
+    from ...constant import WORKING_DIR
+
+    parent_session_id = get_current_session_id() or ""
+
+    # Step 1: Call fork API to copy history + create worktree
+    fork_result = await _call_fork_api(
+        agent_id=current_agent_id,
+        parent_session_id=parent_session_id,
+    )
+    if not fork_result or "error" in fork_result:
+        err = (fork_result or {}).get("error", "unknown error")
+        return _tool_text_response(f"ERROR: fork API failed: {err}")
+
+    fork_session_id = fork_result.get("fork_session_id", subagent_session_id)
+    worktree_path = fork_result.get("worktree_path", "")
+    worktree_branch = fork_result.get("worktree_branch", "")
+
+    # Step 2: Dispatch subagent with worktree context
+    request_payload = {
+        "session_id": fork_session_id,
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": task}],
+            },
+        ],
+        "request_context": {
+            "worktree_path": worktree_path,
+        },
+    }
+
+    if background:
+        # Fire-and-forget: skip worktree cleanup (user manages manually)
+        result = await asyncio.to_thread(
+            submit_agent_chat_task,
+            None,
+            request_payload,
+            current_agent_id,
+            int(DEFAULT_AGENT_API_TIMEOUT),
+        )
+        submission_text = format_background_submission_text(
+            result,
+            fork_session_id,
+        )
+        if worktree_path:
+            submission_text += (
+                f"\n\n[FORK_WORKTREE: {worktree_path}]"
+                f"\n[FORK_BRANCH: {worktree_branch}]"
+                "\nWorktree cleanup is not automatic in background mode. "
+                "Merge or remove manually when done."
+            )
+        return _tool_text_response(submission_text)
+
+    response_data = await asyncio.to_thread(
+        collect_final_agent_chat_response,
+        None,
+        request_payload,
+        current_agent_id,
+        timeout,
+    )
+
+    # Step 3: Check if worktree has changes; clean up if not
+    try:
+        workspace = str(load_agent_config(current_agent_id).workspace_dir)
+    except Exception:  # noqa: BLE001
+        workspace = str(WORKING_DIR)
+
+    cleaned = await _maybe_cleanup_worktree(worktree_path, workspace)
+
+    if not response_data:
+        return _tool_text_response(
+            "(No response received from forked subagent)",
+        )
+
+    result_text = format_agent_chat_text(
+        response_data,
+        session_id=fork_session_id,
+    )
+
+    if not cleaned and worktree_path:
+        result_text += (
+            f"\n\n[FORK_WORKTREE: {worktree_path}]"
+            f"\n[FORK_BRANCH: {worktree_branch}]"
+            "\nThe forked worktree has uncommitted changes. "
+            "Review and merge manually when ready."
+        )
+
+    return _tool_text_response(result_text)
+
+
 async def list_agents(
     base_url: Optional[str] = None,
 ) -> ToolResponse:
