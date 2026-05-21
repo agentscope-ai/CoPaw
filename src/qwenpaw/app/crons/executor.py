@@ -91,7 +91,6 @@ class CronExecutor:
 
         # Determine session_id based on share_session
         share_session = job.runtime.share_session
-        run_id = str(uuid.uuid4())
         if share_session:
             req["session_id"] = target_session_id or f"cron:{job.id}"
         else:
@@ -102,7 +101,7 @@ class CronExecutor:
                 if target_session_id
                 else f"cron:{job.id}"
             )
-            req["cron_isolated"] = True
+            req["session_source"] = "cron"
 
         delivery_error: str | None = None
         baseline_messages = await read_session_messages(
@@ -112,6 +111,8 @@ class CronExecutor:
             channel=target_channel,
         )
         baseline_count = len(baseline_messages)
+
+        run_id = str(uuid.uuid4())
         await create_trace(
             run_id,
             meta={

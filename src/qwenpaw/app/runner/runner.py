@@ -683,16 +683,20 @@ class AgentRunner(Runner):
             )
 
             if self._chat_manager is not None:
+                _req_extra = getattr(request, "model_extra", None) or {}
+                _session_source = _req_extra.get("session_source", "chat")
                 logger.debug(
                     f"Runner: Calling get_or_create_chat for "
                     f"session_id={session_id}, user_id={user_id}, "
-                    f"channel={channel}, name={name}",
+                    f"channel={channel}, name={name}, "
+                    f"source={_session_source}",
                 )
                 chat = await self._chat_manager.get_or_create_chat(
                     session_id,
                     user_id,
                     channel,
                     name=name,
+                    source=_session_source,
                 )
                 logger.debug(f"Runner: Got chat: {chat.id}")
             else:
@@ -785,7 +789,10 @@ class AgentRunner(Runner):
             # Isolated cron: run without any prior context so each execution
             # is independent (saves tokens, avoids stale-context interference).
             _extra = getattr(request, "model_extra", None) or {}
-            if _extra.get("cron_isolated") and agent.memory is not None:
+            if (
+                _extra.get("session_source") == "cron"
+                and agent.memory is not None
+            ):
                 # Snapshot the full history before clearing
                 _cron_memory_snapshot = agent.memory.state_dict()
                 await agent.memory.clear()
