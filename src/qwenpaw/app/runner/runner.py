@@ -30,6 +30,14 @@ from .mission_dispatch import (
     maybe_handle_mission_command,
     detect_active_mission_phase,
 )
+from ..goal_dispatch import (
+    build_goal_continuation,
+    build_goal_refresher,
+    detect_active_goal,
+    maybe_handle_goal_command,
+    should_continue_goal,
+    update_goal_from_message,
+)
 from .session import SafeJSONSession
 from .utils import build_env_context
 from ..channels.schema import DEFAULT_CHANNEL
@@ -104,6 +112,58 @@ async def _stream_printing_messages_interruptible(
         raise
     finally:
         await _cancel_streaming_agent_task(task)
+
+
+def _goal_user_msg(text: str) -> Msg:
+    return Msg(
+        name="user",
+        role="user",
+        content=[TextBlock(type="text", text=text)],
+    )
+
+
+async def _stream_goal_auto_continuation(
+    *,
+    agent: Any,
+    initial_msgs: list,
+    goal_info: dict[str, Any] | None,
+) -> AsyncGenerator[tuple[Msg, bool], None]:
+    """Run a bounded goal loop on the standard main-agent path."""
+    current_msgs = initial_msgs
+    active_goal_info = goal_info
+    while True:
+        final_goal_msg = None
+        async for msg, last in _stream_printing_messages_interruptible(
+            agents=[agent],
+            coroutine_task=agent(current_msgs),
+        ):
+            if active_goal_info is not None and last:
+                final_goal_msg = msg
+                continue
+            yield msg, last
+
+        if active_goal_info is None:
+            break
+
+        if final_goal_msg is None:
+            break
+
+        active_goal_info = update_goal_from_message(
+            active_goal_info,
+            final_goal_msg,
+        )
+        continue_goal = should_continue_goal(active_goal_info)
+        yield final_goal_msg, not continue_goal
+
+        if not continue_goal:
+            break
+
+        if active_goal_info is None:
+            break
+
+        current_msgs = [
+            _goal_user_msg(build_goal_continuation(active_goal_info)),
+        ]
 
 
 class AgentRunner(Runner):
@@ -493,6 +553,7 @@ class AgentRunner(Runner):
             # Mission Mode: /mission
             _ws = self.workspace_dir or WORKING_DIR
             mission_info: dict | None = None
+            goal_info: dict | None = None
 
             mission_result = await maybe_handle_mission_command(
                 query=query,
@@ -555,6 +616,42 @@ class AgentRunner(Runner):
                 self._rewrite_last_message_text(
                     msgs,
                     refresher + original,
+                )
+
+            # Goal Mode: lightweight session objective on the normal path.
+            if mission_info is None:
+                goal_result = await maybe_handle_goal_command(
+                    query=query,
+                    workspace_dir=_ws,
+                    session_id=session_id,
+                    user_id=user_id,
+                    channel=channel,
+                    agent_name=self.agent_name,
+                )
+                if isinstance(goal_result, Msg):
+                    yield goal_result, True
+                    return
+                if isinstance(goal_result, dict):
+                    goal_info = goal_result
+
+            # Active goal: inject a reminder into ordinary follow-ups.
+            if (
+                mission_info is None
+                and goal_info is None
+                and query
+                and not query.strip().startswith("/")
+            ):
+                goal_info = detect_active_goal(
+                    _ws,
+                    session_id=session_id,
+                    user_id=user_id,
+                    channel=channel,
+                )
+
+            if mission_info is None and goal_info is not None:
+                self._rewrite_last_message_text(
+                    msgs,
+                    build_goal_refresher(goal_info, query or ""),
                 )
 
             # --- Plan Mode ------------------------------------------
@@ -819,9 +916,10 @@ class AgentRunner(Runner):
                     ):
                         yield msg, last
             else:
-                async for msg, last in _stream_printing_messages_interruptible(
-                    agents=[agent],
-                    coroutine_task=agent(msgs),
+                async for msg, last in _stream_goal_auto_continuation(
+                    agent=agent,
+                    initial_msgs=msgs,
+                    goal_info=goal_info,
                 ):
                     yield msg, last
 
