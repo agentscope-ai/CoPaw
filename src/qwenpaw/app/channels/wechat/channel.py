@@ -155,6 +155,9 @@ class WeChatChannel(BaseChannel):
 
         # Cache last context_token per user for proactive sends
         self._user_context_tokens: Dict[str, str] = {}
+        # Flag: set when context_token is invalid (ret=-2) during a request,
+        # so subsequent sends in the same request are skipped silently.
+        self._context_token_invalid: bool = False
 
         # Cache typing tickets per user (24h TTL)
         self._typing_tickets: Dict[
@@ -1095,22 +1098,24 @@ class WeChatChannel(BaseChannel):
         text: str,
         context_token: str,
         client: Optional[ILinkClient] = None,
-        raise_on_error: bool = False,
+        api_initiated: bool = False,
     ) -> None:
         """Send text using the shared ILinkClient (or create a temp one).
 
         Args:
-            raise_on_error: If True, raise ChannelError on API rejection
-                instead of only logging. Used by API-initiated sends.
+            api_initiated: If True, raise ChannelError on send failure.
+                Used by /api/messages/send to provide accurate error feedback.
         """
         _client = client or self._client
         if not _client or not to_user_id or not text:
+            return
+        if self._context_token_invalid and not api_initiated:
             return
         try:
             resp = await _client.send_text(to_user_id, text, context_token)
         except Exception:
             logger.exception("wechat _send_text_direct failed")
-            if raise_on_error:
+            if api_initiated:
                 raise
             return
         if isinstance(resp, dict):
@@ -1124,9 +1129,7 @@ class WeChatChannel(BaseChannel):
                     errcode,
                     to_user_id,
                 )
-                # ret=-2 means context_token is expired/consumed;
-                # continuing to retry is pointless and floods logs.
-                if ret == -2 or raise_on_error:
+                if api_initiated:
                     raise ChannelError(
                         channel_name="wechat",
                         message=(
@@ -1134,6 +1137,10 @@ class WeChatChannel(BaseChannel):
                             f"errcode={errcode} response={resp}"
                         ),
                     )
+                # ret=-2 means context_token is invalid/consumed;
+                # mark flag so subsequent sends in this request are skipped.
+                if ret == -2:
+                    self._context_token_invalid = True
 
     async def _send_media_file(
         self,
@@ -1150,6 +1157,8 @@ class WeChatChannel(BaseChannel):
             file_path: Local path to the media file.
             content_type: Type of media (IMAGE/FILE/VIDEO).
         """
+        if self._context_token_invalid:
+            return
         if not self._client or not to_user_id or not context_token:
             logger.warning(
                 "wechat _send_media_file: missing required parameters",
@@ -1430,7 +1439,7 @@ class WeChatChannel(BaseChannel):
                 to_user_id,
                 chunk,
                 context_token,
-                raise_on_error=api_send,
+                api_initiated=api_send,
             )
 
     async def _on_process_completed(
@@ -1440,6 +1449,9 @@ class WeChatChannel(BaseChannel):
         send_meta: Dict[str, Any],
     ) -> None:
         """Flush merge buffer (if any) and stop typing indicator."""
+        # Reset context_token_invalid flag for the next request.
+        self._context_token_invalid = False
+
         # Flush any remaining merged messages before finishing
         if self._message_merge_enabled:
             await self._flush_merge_buffer(to_handle)
@@ -1459,6 +1471,9 @@ class WeChatChannel(BaseChannel):
         err_text: str,
     ) -> None:
         """Flush merge buffer, stop typing, and send error message."""
+        # Reset context_token_invalid flag for the next request.
+        self._context_token_invalid = False
+
         # Flush any buffered messages before sending the error
         if self._message_merge_enabled:
             await self._flush_merge_buffer(to_handle)
