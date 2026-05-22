@@ -380,6 +380,18 @@ class ACPService:
                     await conversation.prompt_task
                 except Exception:
                     pass
+            # Send ACP close_session so the agent can gracefully clean up
+            # child processes; without this, exit_stack.aclose() only kills
+            # the direct subprocess, leaving orphans (see #4611).
+            try:
+                await asyncio.wait_for(
+                    conversation.conn.close_session(
+                        session_id=conversation.acp_session_id,
+                    ),
+                    timeout=5.0,
+                )
+            except Exception:
+                pass
         finally:
             await conversation.exit_stack.aclose()
 
