@@ -787,6 +787,7 @@ export default function ChatPage() {
   const pendingClearHistoryRef = useRef(false);
   const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
   const [whisperEnabled, setWhisperEnabled] = useState(false);
+  const [whisperChecked, setWhisperChecked] = useState(false);
 
   // Check if Whisper transcription is configured
   useEffect(() => {
@@ -795,7 +796,8 @@ export default function ChatPage() {
       .then((res) => {
         setWhisperEnabled(res.transcription_provider_type !== "disabled");
       })
-      .catch(() => setWhisperEnabled(false));
+      .catch(() => setWhisperEnabled(false))
+      .finally(() => setWhisperChecked(true));
   }, []);
 
   const handleWhisperTranscription = useCallback((text: string) => {
@@ -1162,7 +1164,7 @@ export default function ChatPage() {
       sender: {
         ...(i18nConfig as any)?.sender,
         beforeSubmit: handleBeforeSubmit,
-        allowSpeech: !whisperEnabled,
+        allowSpeech: whisperChecked && !whisperEnabled,
         prefix: whisperEnabled ? (
           <WhisperSpeechButton
             ref={whisperSpeechRef}
@@ -1273,6 +1275,9 @@ export default function ChatPage() {
     toolRenderConfig,
     scheduleHistoryClear,
     planEnabled,
+    whisperChecked,
+    whisperEnabled,
+    handleWhisperTranscription,
   ]);
 
   return (
